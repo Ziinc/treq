@@ -312,6 +312,22 @@ pub fn create_workspace(
     // None and an empty list both mean a full checkout.
     let sparse_patterns = sparse_patterns.filter(|patterns| !patterns.is_empty());
 
+    // Workspace creation mutates the same JJ operation graph as commits and
+    // auto-rebases. Keep the guard through JJ creation and DB registration so
+    // an in-process retry cannot observe a half-registered workspace.
+    let repo_mutation_lock = commit_lock_for_repo(repo_path);
+    let _repo_mutation_guard = repo_mutation_lock.lock().unwrap();
+
+    if local_db::get_workspace_by_branch(repo_path, branch_name)
+        .map_err(|e| format!("Failed to check existing workspace: {e}"))?
+        .is_some()
+    {
+        return Err(format!(
+            "Workspace '{}' is already registered; refusing to recreate it",
+            branch_name
+        ));
+    }
+
     // Moved files outside the sparse cone would land in the commit but be invisible on disk.
     if let (Some(patterns), Some(files)) = (&sparse_patterns, &moved_files) {
         for file in files {
@@ -416,11 +432,6 @@ pub fn create_workspace(
             .map_err(|e| format!("Failed to create .claude dir in workspace: {}", e))?;
         std::fs::copy(&claude_src, claude_dst_dir.join("settings.local.json"))
             .map_err(|e| format!("Failed to copy .claude/settings.local.json: {}", e))?;
-    }
-
-    // Remove any stale db record for this branch so re-creates don't leave duplicates.
-    if let Ok(Some(existing)) = local_db::get_workspace_by_branch(repo_path, branch_name) {
-        let _ = local_db::delete_workspace(repo_path, existing.id);
     }
 
     let workspace_id = local_db::add_workspace(
@@ -934,6 +945,8 @@ mod tests {
     };
     use crate::local_db::Workspace;
     use rusqlite::Connection;
+    use std::fs;
+    use std::process::Command;
     use std::sync::{Mutex, OnceLock};
     use tempfile::TempDir;
 
@@ -959,6 +972,68 @@ mod tests {
             not_on_remote: false,
             sparse_patterns: None,
         }
+    }
+
+    fn init_workspace_creation_repo(temp: &TempDir) -> String {
+        let status = Command::new("jj")
+            .current_dir(temp.path())
+            .args(["git", "init", "--colocate", "."])
+            .status()
+            .expect("jj init");
+        assert!(status.success());
+        let repo_path = temp.path().to_str().expect("utf8 path").to_string();
+        crate::jj::jj_set_bookmark(&repo_path, "main", "@").expect("set main bookmark");
+        repo_path
+    }
+
+    #[test]
+    fn create_workspace_rejects_registered_retry_without_changing_existing_work() {
+        let temp = TempDir::new().expect("tempdir");
+        let repo_path = init_workspace_creation_repo(&temp);
+        let created =
+            super::create_workspace(&repo_path, "fix/example", None, None, None, None, None)
+                .expect("create workspace");
+        let marker = temp
+            .path()
+            .join(".treq/workspaces")
+            .join(&created.workspace_path)
+            .join("keep-me.txt");
+        fs::write(&marker, "existing work").expect("write marker");
+        let before =
+            crate::jj::jj_get_commit_id(&repo_path, "fix/example").expect("bookmark target");
+
+        let err = super::create_workspace(&repo_path, "fix/example", None, None, None, None, None)
+            .expect_err("retry must fail");
+
+        assert!(
+            err.contains("already registered"),
+            "unexpected error: {err}"
+        );
+        assert_eq!(
+            fs::read_to_string(marker).expect("marker retained"),
+            "existing work"
+        );
+        assert_eq!(
+            crate::jj::jj_get_commit_id(&repo_path, "fix/example")
+                .expect("bookmark target unchanged"),
+            before
+        );
+    }
+
+    #[test]
+    fn create_workspace_recovers_orphaned_partial_directory() {
+        let temp = TempDir::new().expect("tempdir");
+        let repo_path = init_workspace_creation_repo(&temp);
+        let partial = temp.path().join(".treq/workspaces/fix-partial");
+        fs::create_dir_all(partial.join(".jj")).expect("create partial");
+        fs::write(partial.join("partial"), "incomplete").expect("write marker");
+
+        let created =
+            super::create_workspace(&repo_path, "fix/partial", None, None, None, None, None)
+                .expect("recover partial workspace");
+
+        assert_eq!(created.branch_name, "fix/partial");
+        assert!(!partial.join("partial").exists());
     }
 
     #[test]

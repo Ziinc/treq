@@ -1158,7 +1158,21 @@ pub fn create_workspace(
         .join("workspaces")
         .join(&sanitized_name);
 
-    // If a prior (possibly partial) workspace init left a .jj behind, tear it down cleanly so init can proceed.
+    // Never tear down a registered workspace. A retry may arrive after the JJ
+    // transaction committed but before the caller persisted its database row.
+    // Treat JJ's workspace registry as authoritative in that window.
+    if list_jj_workspaces(repo_path)?
+        .iter()
+        .any(|name| name == &sanitized_name)
+    {
+        return Err(JjError::GitWorkspaceError(format!(
+            "Workspace '{}' is already registered; refusing to recreate it",
+            branch_name
+        )));
+    }
+
+    // A .jj directory which is not present in JJ's registry is demonstrably a
+    // partial initialization and is safe to clean up before retrying.
     if workspace_dir.join(".jj").exists() {
         let workspace_dir_str = workspace_dir.to_string_lossy();
         // Attempt a full jj-aware teardown first; fall back to raw removal for orphans.
@@ -1448,14 +1462,85 @@ pub fn create_workspace(
     // Export to git refs (colocated repo)
     let _ = git::export_refs(tx.repo_mut());
 
-    let final_repo = block_on(tx.commit("create_workspace"))
+    let _committed_repo = block_on(tx.commit("create_workspace"))
         .map_err(|e| JjError::GitWorkspaceError(format!("Failed to commit transaction: {}", e)))?;
+
+    let final_repo =
+        verify_created_workspace_bookmark(&new_workspace, branch_name, &new_ws_name, new_wc.id())?;
 
     // Update the physical working copy to match the new wc commit
     block_on(new_workspace.check_out(final_repo.op_id().clone(), None, &new_wc))
         .map_err(|e| JjError::GitWorkspaceError(format!("Failed to checkout workspace: {}", e)))?;
 
     Ok(sanitized_name)
+}
+
+/// Reload the operation head after creation. JJ reconciles concurrent operation
+/// heads during this load, so verification must use this repo rather than the
+/// transaction's returned snapshot.
+fn verify_created_workspace_bookmark(
+    workspace: &Workspace,
+    branch_name: &str,
+    workspace_name: &WorkspaceNameBuf,
+    expected_wc_id: &jj_lib::backend::CommitId,
+) -> Result<Arc<ReadonlyRepo>, JjError> {
+    let latest = block_on(workspace.repo_loader().load_at_head()).map_err(|e| {
+        JjError::GitWorkspaceError(format!(
+            "Failed to reload repository after workspace creation: {e}"
+        ))
+    })?;
+    let registered_wc = latest
+        .view()
+        .get_wc_commit_id(workspace_name)
+        .ok_or_else(|| {
+            JjError::GitWorkspaceError(format!(
+                "Workspace '{}' is no longer registered after creation; manual recovery is required",
+                branch_name
+            ))
+        })?;
+    if registered_wc != expected_wc_id {
+        return Err(JjError::GitWorkspaceError(format!(
+            "Workspace '{}' changed during creation; manual recovery is required",
+            branch_name
+        )));
+    }
+
+    let target = latest.view().get_local_bookmark(RefName::new(branch_name));
+    if target.as_normal() == Some(registered_wc) {
+        return Ok(latest);
+    }
+
+    if target.has_conflict() && target.added_ids().any(|id| id == registered_wc) {
+        let mut tx = latest.start_transaction();
+        tx.repo_mut().set_local_bookmark_target(
+            RefName::new(branch_name),
+            RefTarget::normal(registered_wc.clone()),
+        );
+        git::export_refs(tx.repo_mut()).map_err(|e| {
+            JjError::GitWorkspaceError(format!(
+                "Failed to export recovered bookmark '{}': {e}",
+                branch_name
+            ))
+        })?;
+        let resolved = block_on(tx.commit("resolve workspace creation bookmark conflict"))
+            .map_err(|e| {
+                JjError::GitWorkspaceError(format!(
+                    "Failed to resolve bookmark '{}' after workspace creation: {e}",
+                    branch_name
+                ))
+            })?;
+        let resolved_target = resolved
+            .view()
+            .get_local_bookmark(RefName::new(branch_name));
+        if resolved_target.as_normal() == Some(registered_wc) {
+            return Ok(resolved);
+        }
+    }
+
+    Err(JjError::GitWorkspaceError(format!(
+        "Bookmark '{}' is ambiguous after workspace creation and cannot be resolved without choosing between unrelated changes; manual recovery is required",
+        branch_name
+    )))
 }
 
 /// Result of a workspace recovery operation
@@ -1538,14 +1623,14 @@ fn list_registered_workspaces(repo_path: &str) -> Result<Vec<RegisteredWorkspace
             .store()
             .get_commit(wc_commit_id)
             .map_err(|e| JjError::IoError(format!("Failed to load working-copy commit: {}", e)))?;
-        let branch_name =
+        let (branch_name, bookmark_has_conflicts) =
             branch_name_for_workspace_commit(repo.as_ref(), workspace_name.as_str(), &wc_commit);
 
         workspaces.push(RegisteredWorkspace {
             workspace_name: workspace_name.as_str().to_string(),
             workspace_path,
             branch_name,
-            has_conflicts: !wc_commit.tree_ids().is_resolved(),
+            has_conflicts: bookmark_has_conflicts || !wc_commit.tree_ids().is_resolved(),
         });
     }
 
@@ -1565,7 +1650,7 @@ fn branch_name_for_workspace_commit(
     repo: &dyn jj_lib::repo::Repo,
     workspace_name: &str,
     wc_commit: &jj_lib::commit::Commit,
-) -> String {
+) -> (String, bool) {
     let bookmark_matches_workspace = |bookmark_name: &str| {
         bookmark_name == workspace_name || sanitize_workspace_name(bookmark_name) == workspace_name
     };
@@ -1581,7 +1666,19 @@ fn branch_name_for_workspace_commit(
         .iter()
         .find(|name| bookmark_matches_workspace(name.as_str()))
     {
-        return name.clone();
+        return (name.clone(), false);
+    }
+
+    // A conflicted bookmark does not appear as an exact bookmark because it is
+    // not a normal RefTarget. Still retain its canonical (possibly slash-
+    // containing) name when the registered working-copy commit is one of the
+    // conflict's targets, and surface the ambiguity to callers.
+    if let Some((name, _)) = repo.view().local_bookmarks().find(|(name, target)| {
+        bookmark_matches_workspace(name.as_str())
+            && target.has_conflict()
+            && target.added_ids().any(|id| id == wc_commit.id())
+    }) {
+        return (name.as_str().to_string(), true);
     }
 
     let parent_bookmarks: Vec<String> = wc_commit
@@ -1599,10 +1696,10 @@ fn branch_name_for_workspace_commit(
         .iter()
         .find(|name| bookmark_matches_workspace(name.as_str()))
     {
-        return name.clone();
+        return (name.clone(), false);
     }
 
-    workspace_name.to_string()
+    (workspace_name.to_string(), false)
 }
 
 pub fn discover_workspaces_with_conflicts(
@@ -6646,6 +6743,200 @@ mod tests {
                 msg
             );
         }
+    }
+
+    #[test]
+    fn create_workspace_retry_rejects_registered_workspace_without_deleting_files() {
+        let temp = TempDir::new().expect("tempdir");
+        init_jj_repo(&temp);
+        let repo_path = temp.path().to_str().expect("utf8 path");
+        jj_set_bookmark(repo_path, "main", "@").expect("set main bookmark");
+        create_workspace(
+            repo_path,
+            "fix/example",
+            "fix/example",
+            true,
+            None,
+            Some("main"),
+            None,
+        )
+        .expect("first creation");
+        let workspace_dir = temp.path().join(".treq/workspaces/fix-example");
+        let marker = workspace_dir.join("keep-me.txt");
+        fs::write(&marker, "existing work").expect("write marker");
+        let before = jj_get_commit_id(repo_path, "fix/example").expect("bookmark target");
+
+        let err = create_workspace(
+            repo_path,
+            "fix/example",
+            "fix/example",
+            true,
+            None,
+            Some("main"),
+            None,
+        )
+        .expect_err("retry must be rejected");
+
+        assert!(format!("{err}").contains("already registered"));
+        assert_eq!(
+            fs::read_to_string(marker).expect("marker retained"),
+            "existing work"
+        );
+        assert_eq!(
+            jj_get_commit_id(repo_path, "fix/example").expect("bookmark remains normal"),
+            before
+        );
+    }
+
+    #[test]
+    fn create_workspace_recovers_unregistered_partial_directory() {
+        let temp = TempDir::new().expect("tempdir");
+        init_jj_repo(&temp);
+        let repo_path = temp.path().to_str().expect("utf8 path");
+        jj_set_bookmark(repo_path, "main", "@").expect("set main bookmark");
+        let workspace_dir = temp.path().join(".treq/workspaces/fix-partial");
+        fs::create_dir_all(workspace_dir.join(".jj")).expect("create partial directory");
+        fs::write(workspace_dir.join("partial"), "incomplete").expect("write partial marker");
+
+        create_workspace(
+            repo_path,
+            "fix/partial",
+            "fix/partial",
+            true,
+            None,
+            Some("main"),
+            None,
+        )
+        .expect("orphaned partial directory should be recreated");
+
+        assert!(workspace_dir.join(".jj").exists());
+        assert!(!workspace_dir.join("partial").exists());
+        assert!(list_jj_workspaces(repo_path)
+            .expect("list workspaces")
+            .contains(&"fix-partial".to_string()));
+    }
+
+    #[test]
+    fn creation_verification_resolves_stale_operation_conflict_to_registered_wc() {
+        let temp = TempDir::new().expect("tempdir");
+        init_jj_repo(&temp);
+        let repo_path = temp.path().to_str().expect("utf8 path");
+        jj_set_bookmark(repo_path, "main", "@").expect("set main bookmark");
+
+        let stale = load_workspace_repo(repo_path).expect("load stale repo");
+        let stale_target = stale
+            .repo
+            .view()
+            .get_wc_commit_id(stale.workspace.workspace_name())
+            .expect("default wc")
+            .clone();
+        let mut stale_tx = stale.repo.start_transaction();
+        stale_tx.repo_mut().set_local_bookmark_target(
+            RefName::new("fix/concurrent"),
+            RefTarget::normal(stale_target),
+        );
+
+        create_workspace(
+            repo_path,
+            "fix/concurrent",
+            "fix/concurrent",
+            true,
+            None,
+            Some("main"),
+            None,
+        )
+        .expect("create workspace");
+        block_on(stale_tx.commit("stale concurrent workspace creation"))
+            .expect("commit stale operation");
+
+        let workspace_path = temp.path().join(".treq/workspaces/fix-concurrent");
+        let loaded = load_workspace_repo(workspace_path.to_str().expect("utf8 path"))
+            .expect("load created workspace");
+        let workspace_name: WorkspaceNameBuf = "fix-concurrent".into();
+        let expected = loaded
+            .repo
+            .view()
+            .get_wc_commit_id(&workspace_name)
+            .expect("registered wc")
+            .clone();
+        let resolved = verify_created_workspace_bookmark(
+            &loaded.workspace,
+            "fix/concurrent",
+            &workspace_name,
+            &expected,
+        )
+        .expect("registered target should resolve conflict");
+
+        assert_eq!(
+            resolved
+                .view()
+                .get_local_bookmark(RefName::new("fix/concurrent"))
+                .as_normal(),
+            Some(&expected)
+        );
+    }
+
+    #[test]
+    fn creation_verification_reports_unrelated_ambiguous_bookmark_without_resolving() {
+        let temp = TempDir::new().expect("tempdir");
+        init_jj_repo(&temp);
+        let repo_path = temp.path().to_str().expect("utf8 path");
+        jj_set_bookmark(repo_path, "main", "@").expect("set main bookmark");
+        create_workspace(
+            repo_path,
+            "fix/ambiguous",
+            "fix/ambiguous",
+            true,
+            None,
+            Some("main"),
+            None,
+        )
+        .expect("create workspace");
+
+        let workspace_path = temp.path().join(".treq/workspaces/fix-ambiguous");
+        let base = load_workspace_repo(workspace_path.to_str().expect("utf8 path"))
+            .expect("load workspace");
+        let workspace_name: WorkspaceNameBuf = "fix-ambiguous".into();
+        let expected = base
+            .repo
+            .view()
+            .get_wc_commit_id(&workspace_name)
+            .expect("registered wc")
+            .clone();
+        let main_id = base
+            .repo
+            .view()
+            .get_local_bookmark(RefName::new("main"))
+            .as_normal()
+            .expect("main target")
+            .clone();
+        let root_id = base.repo.store().root_commit_id().clone();
+        let mut left = base.repo.start_transaction();
+        left.repo_mut()
+            .set_local_bookmark_target(RefName::new("fix/ambiguous"), RefTarget::normal(main_id));
+        let mut right = base.repo.start_transaction();
+        right
+            .repo_mut()
+            .set_local_bookmark_target(RefName::new("fix/ambiguous"), RefTarget::normal(root_id));
+        block_on(left.commit("unrelated left target")).expect("commit left");
+        block_on(right.commit("unrelated right target")).expect("commit right");
+
+        let err = verify_created_workspace_bookmark(
+            &base.workspace,
+            "fix/ambiguous",
+            &workspace_name,
+            &expected,
+        )
+        .expect_err("unrelated conflict must not be guessed");
+        assert!(format!("{err}").contains("manual recovery is required"));
+        let latest = block_on(base.workspace.repo_loader().load_at_head()).expect("reload repo");
+        assert!(
+            latest
+                .view()
+                .get_local_bookmark(RefName::new("fix/ambiguous"))
+                .has_conflict(),
+            "unrelated conflict must remain intact"
+        );
     }
 
     #[test]
