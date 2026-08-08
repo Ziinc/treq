@@ -147,16 +147,17 @@ it("captures red Review pill for conflicts", async () => {
 
 	await waitFor(() => {
 		const pill = reviewPill();
-		expect(pill.className).toContain("bg-destructive");
+		expect(pill.className).toContain("bg-destructive/20");
+		expect(pill.className).toContain("text-destructive");
 		expect(pill.className).not.toContain("bg-yellow-500");
 	});
 
 	await captureDocument(document, {
 		name: "review-tab-pill-03-red-conflict",
 		expectations: [
-			"The Review tab shows a red (destructive) number pill next to the Review label.",
+			"The Review tab shows a soft destructive-red number pill next to the Review label.",
 			"The workspace header / sidebar indicates a conflict for this branch.",
-			"The pill is red (not yellow or grey), signalling unresolved conflicts.",
+			"The pill uses a muted destructive tint (not solid filled red, and not yellow or grey).",
 		],
 	});
 }, 60000);

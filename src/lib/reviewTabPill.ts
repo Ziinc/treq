@@ -64,7 +64,7 @@ export function getReviewTabPill(
 export function reviewTabPillClassName(tone: ReviewTabPillTone): string {
 	switch (tone) {
 		case "conflict":
-			return "bg-destructive text-destructive-foreground";
+			return "bg-destructive/20 text-destructive";
 		case "uncommitted":
 			return "bg-yellow-500 text-yellow-950";
 		case "committed":

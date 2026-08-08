@@ -293,7 +293,8 @@ describe("ShowWorkspace Review tab pill colors", () => {
 		await waitFor(() => {
 			const pill = reviewPill();
 			expect(pill).toBeTruthy();
-			expect(pill?.className).toContain("bg-destructive");
+			expect(pill?.className).toContain("bg-destructive/20");
+			expect(pill?.className).toContain("text-destructive");
 			expect(pill?.className).not.toContain("bg-yellow-500");
 		});
 	});

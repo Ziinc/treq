@@ -98,7 +98,7 @@ describe("getReviewTabPill", () => {
 describe("reviewTabPillClassName", () => {
 	it("maps tones to pill color classes", () => {
 		expect(reviewTabPillClassName("conflict")).toBe(
-			"bg-destructive text-destructive-foreground",
+			"bg-destructive/20 text-destructive",
 		);
 		expect(reviewTabPillClassName("uncommitted")).toBe(
 			"bg-yellow-500 text-yellow-950",
