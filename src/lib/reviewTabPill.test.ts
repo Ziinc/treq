@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-	getReviewTabPill,
-	reviewTabPillClassName,
-} from "./reviewTabPill";
+import { getReviewTabPill, reviewTabPillClassName } from "./reviewTabPill";
 
 const base = {
 	conflictCount: 0,

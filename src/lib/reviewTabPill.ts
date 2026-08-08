@@ -69,5 +69,9 @@ export function reviewTabPillClassName(tone: ReviewTabPillTone): string {
 			return "bg-yellow-500 text-yellow-950";
 		case "committed":
 			return "bg-muted text-muted-foreground";
+		default: {
+			const _exhaustive: never = tone;
+			return _exhaustive;
+		}
 	}
 }
