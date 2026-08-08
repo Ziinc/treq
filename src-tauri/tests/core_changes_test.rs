@@ -406,11 +406,9 @@ fn test_detects_conflicts_in_committed_tip_when_tree_diff_is_empty() {
 
     // Querying with the workspace branch as target makes before/after trees
     // identical — pairwise diff finds nothing. Tree.conflicts() must still win.
-    let conflicted_files = treq_lib::jj::get_conflicted_files(
-        workspace_path_str,
-        Some("feat/committed-conflict"),
-    )
-    .expect("get_conflicted_files should succeed for committed-tip conflicts");
+    let conflicted_files =
+        treq_lib::jj::get_conflicted_files(workspace_path_str, Some("feat/committed-conflict"))
+            .expect("get_conflicted_files should succeed for committed-tip conflicts");
     assert!(
         conflicted_files.contains(&"shared.txt".to_string()),
         "committed-tip conflict must be reported even when tree-diff is empty, got {:?}",
@@ -424,9 +422,7 @@ fn test_detects_conflicts_in_committed_tip_when_tree_diff_is_empty() {
         "workspace status must flag conflicts that live in committed tip"
     );
     assert!(
-        status
-            .conflicted_files
-            .contains(&"shared.txt".to_string()),
+        status.conflicted_files.contains(&"shared.txt".to_string()),
         "workspace status must list committed-tip conflicted files, got {:?}",
         status.conflicted_files
     );

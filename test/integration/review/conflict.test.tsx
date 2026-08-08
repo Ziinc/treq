@@ -361,18 +361,17 @@ describe("Review - conflict rendering contract", () => {
 		await navigateToReviewTab(user, fixture.branchName);
 		await screen.findByText("Conflicts");
 
-		const committedToggle = await screen.findByRole("button", {
-			name: /Committed/,
+		const [committedToggle] = screen.getAllByRole("button", {
+			name: /^Committed$/,
 		});
-		// Default is shown; hide the Committed section. Conflict cards live in
-		// committed hunks after a rebase, so they must still render via Conflicts.
+		if (!committedToggle) {
+			throw new Error("Committed toggle button not found");
+		}
 		await user.click(committedToggle);
 
 		await clickFileInSection(user, "Conflicts", "README.md");
 		await screen.findByText(/^Conflict 1 of 1$/);
-		expect(
-			screen.queryByText("No changes to review"),
-		).not.toBeInTheDocument();
+		expect(screen.queryByText("No changes to review")).not.toBeInTheDocument();
 	});
 
 	it("conflicted file with no diff hunks shows an explicit placeholder", async () => {

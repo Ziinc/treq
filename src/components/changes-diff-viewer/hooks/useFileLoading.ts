@@ -109,8 +109,7 @@ export function useFileLoading({
 				// When Committed is hidden, still keep conflicted committed files —
 				// rebase conflicts live in committed hunks, not dirty WC changes.
 				let committed = (diff.committed_files ?? []).filter(
-					(file) =>
-						showCommittedChanges || conflictedHint.has(file.path),
+					(file) => showCommittedChanges || conflictedHint.has(file.path),
 				);
 				for (const path of conflictedHint) {
 					if (

@@ -56,7 +56,6 @@ export const ChangesDiffViewer = memo(
 			},
 			ref,
 		) => {
-			void conflictedFiles;
 			const { addToast } = useToast();
 			const { fontSize: diffFontSize } = useDiffSettings();
 

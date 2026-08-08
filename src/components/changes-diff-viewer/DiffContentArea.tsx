@@ -141,7 +141,6 @@ export function DiffContentArea({
 	allFileHunks,
 	committedFileHunks,
 	committedFiles,
-	showCommittedChanges,
 	largeChangesetExpanded,
 	setLargeChangesetExpanded,
 	actualConflictedFiles,
@@ -411,56 +410,56 @@ export function DiffContentArea({
 									/>
 								))}
 								{committedFiles.map((file) => (
-										<FileRowComponent
-											key={`committed-${file.path}`}
-											file={
-												{
-													...file,
-													stagedStatus: "",
-													workspaceStatus: file.status,
-													isUntracked: false,
-												} as ParsedFileChange
-											}
-											allFileHunks={allFileHunks}
-											overrideFileHunks={committedFileHunks}
-											collapsedFiles={collapsedFiles}
-											viewedFiles={viewedFiles}
-											expandedLargeDiffs={expandedLargeDiffs}
-											diffFontSize={diffFontSize}
-											readOnly={true}
-											fileActionTarget={null}
-											selectedUnstagedFiles={new Set()}
-											actualConflictedFiles={actualConflictedFiles}
-											workspacePath={workspacePath}
-											toggleFileCollapse={toggleFileCollapse}
-											toggleLargeDiff={toggleLargeDiff}
-											handleMarkFileViewed={handleMarkFileViewed}
-											handleUnmarkFileViewed={handleUnmarkFileViewed}
-											handleDiscardFiles={handleDiscardFiles}
-											handleContextMenu={handleContextMenu}
-											renderHunkLines={renderHunkLines}
-											addToast={addToast}
-											getOutdatedCommentsForFile={getOutdatedCommentsForFile}
-											getFileCommentsForFile={getFileCommentsForFile}
-											deleteComment={deleteComment}
-											getThreadsForLine={getThreadsForLine}
-											getUnplacedThreadsForFile={getUnplacedThreadsForFile}
-											collapsedThreadIds={collapsedThreadIds}
-											toggleThreadCollapse={toggleThreadCollapse}
-											expandedOutdatedGroups={expandedOutdatedGroups}
-											toggleOutdatedGroup={toggleOutdatedGroup}
-											showCommentInput={showCommentInput}
-											pendingComment={pendingComment}
-											editingCommentId={editingCommentId}
-											setPendingComment={setPendingComment}
-											setShowCommentInput={setShowCommentInput}
-											addComment={addComment}
-											cancelComment={cancelComment}
-											startEditComment={startEditComment}
-											cancelEditComment={cancelEditComment}
-											saveEditComment={saveEditComment}
-										/>
-									))}
+									<FileRowComponent
+										key={`committed-${file.path}`}
+										file={
+											{
+												...file,
+												stagedStatus: "",
+												workspaceStatus: file.status,
+												isUntracked: false,
+											} as ParsedFileChange
+										}
+										allFileHunks={allFileHunks}
+										overrideFileHunks={committedFileHunks}
+										collapsedFiles={collapsedFiles}
+										viewedFiles={viewedFiles}
+										expandedLargeDiffs={expandedLargeDiffs}
+										diffFontSize={diffFontSize}
+										readOnly={true}
+										fileActionTarget={null}
+										selectedUnstagedFiles={new Set()}
+										actualConflictedFiles={actualConflictedFiles}
+										workspacePath={workspacePath}
+										toggleFileCollapse={toggleFileCollapse}
+										toggleLargeDiff={toggleLargeDiff}
+										handleMarkFileViewed={handleMarkFileViewed}
+										handleUnmarkFileViewed={handleUnmarkFileViewed}
+										handleDiscardFiles={handleDiscardFiles}
+										handleContextMenu={handleContextMenu}
+										renderHunkLines={renderHunkLines}
+										addToast={addToast}
+										getOutdatedCommentsForFile={getOutdatedCommentsForFile}
+										getFileCommentsForFile={getFileCommentsForFile}
+										deleteComment={deleteComment}
+										getThreadsForLine={getThreadsForLine}
+										getUnplacedThreadsForFile={getUnplacedThreadsForFile}
+										collapsedThreadIds={collapsedThreadIds}
+										toggleThreadCollapse={toggleThreadCollapse}
+										expandedOutdatedGroups={expandedOutdatedGroups}
+										toggleOutdatedGroup={toggleOutdatedGroup}
+										showCommentInput={showCommentInput}
+										pendingComment={pendingComment}
+										editingCommentId={editingCommentId}
+										setPendingComment={setPendingComment}
+										setShowCommentInput={setShowCommentInput}
+										addComment={addComment}
+										cancelComment={cancelComment}
+										startEditComment={startEditComment}
+										cancelEditComment={cancelEditComment}
+										saveEditComment={saveEditComment}
+									/>
+								))}
 							</div>
 						</div>
 					);

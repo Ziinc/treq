@@ -68,7 +68,13 @@ it("captures committed-tip conflict after hiding Committed changes", async () =>
 		],
 	});
 
-	await user.click(await screen.findByRole("button", { name: /Committed/ }));
+	const [committedToggle] = screen.getAllByRole("button", {
+		name: /^Committed$/,
+	});
+	if (!committedToggle) {
+		throw new Error("Committed toggle button not found");
+	}
+	await user.click(committedToggle);
 
 	const conflictsToggle = await screen.findByRole("button", {
 		name: "Conflicts",
