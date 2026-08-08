@@ -5,6 +5,7 @@ import type {
 	FileSearchResult,
 	LineComment,
 	PendingReview,
+	PrInfo,
 	Session,
 } from "./api-types";
 
@@ -261,3 +262,42 @@ export const describeCommit = (
 	});
 
 export const getTreqBinDir = (): Promise<string> => invoke("get_treq_bin_dir");
+
+/**
+ * Force-fetch PR info via `gh pr view` and warm the Rust cache.
+ * Prefer cache reads (`getCachedPrInfo` / `listCachedPrStatuses`) for UI
+ * polling; use this only after mutations that need an immediate refresh.
+ */
+export const getPrInfoViaGh = (
+	repoPath: string,
+	branchName: string,
+): Promise<PrInfo | null> =>
+	invoke("get_pr_info_via_gh", { repoPath, branchName });
+
+/** Start Rust-side background PR-status polling for a repo's workspaces. */
+export const startPrStatusPolling = (repoPath: string): Promise<void> =>
+	invoke("start_pr_status_polling", { repoPath });
+
+/** Stop Rust-side background PR-status polling for a repo. */
+export const stopPrStatusPolling = (repoPath: string): Promise<void> =>
+	invoke("stop_pr_status_polling", { repoPath });
+
+/**
+ * Cached PR statuses (`branch -> PrInfo | null`) maintained by the Rust
+ * background poller. Never shells out to `gh` from the UI thread.
+ */
+export const listCachedPrStatuses = (
+	repoPath: string,
+): Promise<Record<string, PrInfo | null>> =>
+	invoke("list_cached_pr_statuses", { repoPath });
+
+/** Single-branch read from the Rust PR-status cache (no `gh` call). */
+export const getCachedPrInfo = (
+	repoPath: string,
+	branchName: string,
+): Promise<PrInfo | null> =>
+	invoke("get_cached_pr_info", { repoPath, branchName });
+
+/** Force a full-repo cache refresh (e.g. after bulk workspace changes). */
+export const refreshPrStatuses = (repoPath: string): Promise<void> =>
+	invoke("refresh_pr_statuses", { repoPath });

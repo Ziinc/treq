@@ -6,6 +6,7 @@ import {
 	getGitRemoteUrl,
 	getPrChecksForPr,
 	getPrChecksViaGh,
+	getPrInfoViaGh,
 	listCachedPrStatuses,
 	refreshPrStatuses,
 	startPrStatusPolling,
@@ -160,8 +161,15 @@ export function usePrInfoViaGh(
 export async function invalidatePrStatuses(
 	queryClient: ReturnType<typeof useQueryClient>,
 	repoPath: string,
+	branchName?: string,
 ) {
-	await refreshPrStatuses(repoPath);
+	if (branchName) {
+		// Single-branch force-fetch warms the Rust cache without re-polling
+		// every workspace.
+		await getPrInfoViaGh(repoPath, branchName);
+	} else {
+		await refreshPrStatuses(repoPath);
+	}
 	await queryClient.invalidateQueries({
 		queryKey: cachedPrStatusesKey(repoPath),
 	});

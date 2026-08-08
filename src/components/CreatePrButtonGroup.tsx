@@ -92,7 +92,7 @@ export function CreatePrButtonGroup({
 	const createPr = async (draft: boolean) => {
 		try {
 			const number = await createPrMutation.mutateAsync(draft);
-			await invalidatePrStatuses(queryClient, repoPath);
+			await invalidatePrStatuses(queryClient, repoPath, workspace.branch_name);
 			// Broad refresh so `not_on_remote`/sync status update everywhere,
 			// matching the existing manual "Push to remote" flow.
 			queryClient.invalidateQueries();
