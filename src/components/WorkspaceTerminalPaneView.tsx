@@ -290,6 +290,7 @@ export const WorkspaceTerminalPaneView: React.FC<
 			{!collapsed && (
 				<div
 					ref={scrollContainerRef as React.Ref<HTMLDivElement>}
+					data-testid="terminal-scroll-container"
 					className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden flex"
 					style={{ backgroundColor: "#1e1e1e" }}
 				>

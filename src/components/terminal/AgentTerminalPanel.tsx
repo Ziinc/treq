@@ -294,7 +294,6 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
 					width: width != null ? width : undefined,
 				}}
 				onMouseDown={onFocus}
-				onDoubleClick={onDoubleClick}
 			>
 				{/* Header */}
 				<div
@@ -302,6 +301,7 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
 						"h-7 min-h-[28px] flex items-center justify-between px-2 border-b border-r border-border flex-shrink-0",
 						isActive ? "bg-primary/40" : "bg-gray-700",
 					)}
+					onDoubleClick={onDoubleClick}
 				>
 					<div className="flex items-center gap-1 text-sm font-medium text-gray-200">
 						{sessionData.agent === "codex" ? (

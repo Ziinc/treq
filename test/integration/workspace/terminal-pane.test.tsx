@@ -157,15 +157,13 @@ describe("WorkspaceTerminalPane integration", () => {
 			return el as HTMLElement;
 		});
 
-		const scrollContainer = shellPanel.closest(
-			".overflow-x-auto",
-		) as HTMLElement | null;
-		expect(scrollContainer).not.toBeNull();
+		const scrollContainer = screen.getByTestId("terminal-scroll-container");
+		expect(scrollContainer.contains(shellPanel)).toBe(true);
 
 		const scrollBy = vi.fn();
-		scrollContainer!.scrollBy = scrollBy;
+		scrollContainer.scrollBy = scrollBy;
 
-		vi.spyOn(scrollContainer!, "getBoundingClientRect").mockReturnValue({
+		vi.spyOn(scrollContainer, "getBoundingClientRect").mockReturnValue({
 			x: 0,
 			y: 0,
 			top: 0,
@@ -188,7 +186,7 @@ describe("WorkspaceTerminalPane integration", () => {
 			toJSON: () => ({}),
 		});
 
-		await user.dblClick(shellPanel);
+		await user.dblClick(within(shellPanel).getByText("Shell"));
 
 		expect(scrollBy).toHaveBeenCalledWith({
 			left: 250,
