@@ -63,9 +63,16 @@ describe("Review tab - discard changes", () => {
 			expect(screen.getAllByText(fileName).length).toBeGreaterThan(0),
 		);
 
+		// Opens the confirmation dialog
 		await user.click(
 			await screen.findByRole("button", { name: /discard all changes/i }),
 		);
+		await screen.findByText("Discard all changes?");
+		// Confirm in the dialog (last matching button is the destructive action)
+		const confirmButtons = screen.getAllByRole("button", {
+			name: /discard all changes/i,
+		});
+		await user.click(confirmButtons[confirmButtons.length - 1]);
 
 		await waitFor(() => {
 			expect(screen.queryAllByText(fileName)).toHaveLength(0);

@@ -57,6 +57,11 @@ it("captures Review tab discard-all clearing the changes list", async () => {
 	await user.click(
 		await screen.findByRole("button", { name: /discard all changes/i }),
 	);
+	await screen.findByText("Discard all changes?");
+	const confirmButtons = screen.getAllByRole("button", {
+		name: /discard all changes/i,
+	});
+	await user.click(confirmButtons[confirmButtons.length - 1]);
 
 	await waitFor(() => {
 		expect(screen.queryAllByText(FILE_NAME)).toHaveLength(0);

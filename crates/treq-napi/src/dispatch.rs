@@ -708,13 +708,13 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
             Ok(Value::String(result))
         }
 
-        "jj_snapshot_working_copy" => {
+        "jj_snapshot_working_copy" | "snapshot_working_copy" => {
             let workspace_path = get_str(&args, "workspacePath")?;
             let result = treq_lib::core::snapshot_working_copy(&workspace_path)?;
             Ok(Value::String(result))
         }
 
-        "jj_restore_snapshot" => {
+        "jj_restore_snapshot" | "restore_working_copy_snapshot" => {
             let workspace_path = get_str(&args, "workspacePath")?;
             let snapshot_id = get_str(&args, "snapshotId")?;
             let result =

@@ -185,13 +185,13 @@ export const jjRestoreAll = (workspacePath: string): Promise<string> =>
 	invoke("discard_workspace_changes", { workspacePath });
 
 export const jjSnapshotWorkingCopy = (workspacePath: string): Promise<string> =>
-	invoke("jj_snapshot_working_copy", { workspacePath });
+	invoke("snapshot_working_copy", { workspacePath });
 
 export const jjRestoreSnapshot = (
 	workspacePath: string,
 	snapshotId: string,
 ): Promise<string> =>
-	invoke("jj_restore_snapshot", { workspacePath, snapshotId });
+	invoke("restore_working_copy_snapshot", { workspacePath, snapshotId });
 
 export const discardWorkspaceChanges = (
 	workspacePath: string,
