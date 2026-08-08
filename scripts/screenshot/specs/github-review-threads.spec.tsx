@@ -1,10 +1,11 @@
 /**
  * Verifies GitHub PR review comment threads rendered inline in the Review
- * tab: read-only, styled distinctly from local comments (avatar + author +
- * "GitHub" badge), resolved threads collapsed by default, threads that no
- * longer map onto a visible diff line grouped into a collapsed "Outdated"
- * banner per file, and selecting text inside a comment body surfaces a
- * floating "Quote" button that seeds a normal local draft comment.
+ * tab: read-only, styled distinctly from local comments (larger avatar +
+ * linked author + per-comment GitHub icon), resolved threads collapsed by
+ * default, threads that no longer map onto a visible diff line grouped into
+ * a collapsed "Outdated" banner per file (no GitHub icon on the group), and
+ * selecting text inside a comment body surfaces a floating "Quote" button
+ * that seeds a normal local draft comment.
  *
  * The GitHub side (remote info / PR lookup / review threads) all shell out
  * to a real `gh` CLI the desktop harness can't reach, so those three API
