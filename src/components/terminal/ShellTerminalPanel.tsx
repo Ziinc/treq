@@ -18,6 +18,7 @@ interface ShellTerminalPanelProps {
 	collapsed: boolean;
 	isActive?: boolean;
 	onFocus?: () => void;
+	onDoubleClick?: () => void;
 	onClose?: () => void;
 	canClose: boolean;
 	onSessionError?: (message: string) => void;
@@ -31,6 +32,7 @@ export const ShellTerminalPanel = memo<ShellTerminalPanelProps>(
 		collapsed,
 		isActive,
 		onFocus,
+		onDoubleClick,
 		onClose,
 		canClose,
 		onSessionError,
@@ -63,6 +65,7 @@ export const ShellTerminalPanel = memo<ShellTerminalPanelProps>(
 					width: width != null ? width : undefined,
 				}}
 				onMouseDown={onFocus}
+				onDoubleClick={onDoubleClick}
 			>
 				{/* Header */}
 				<div

@@ -14,6 +14,7 @@ import { useKeyboardShortcut } from "../hooks/useKeyboard";
 import { type ClaudeSessionData } from "./terminal/types";
 import { WorkspaceTerminalPaneView } from "./WorkspaceTerminalPaneView";
 import { buildWorkspaceGroups } from "./workspace-terminal-pane/buildWorkspaceGroups";
+import { scrollTerminalFullyIntoView } from "./workspace-terminal-pane/scrollTerminalFullyIntoView";
 import { useTerminalPaneHeightResize } from "./workspace-terminal-pane/useTerminalPaneHeightResize";
 import { useScrollContainerWidth } from "./workspace-terminal-pane/useScrollContainerWidth";
 import {
@@ -115,6 +116,17 @@ const WorkspaceTerminalPaneInner = forwardRef<
 					}
 				});
 			});
+		}, []);
+
+		const handleTerminalDoubleClick = useCallback((terminalId: string) => {
+			const container = scrollContainerRef.current;
+			if (!container) return;
+			const el = container.querySelector(
+				`[data-terminal-id="${CSS.escape(terminalId)}"]`,
+			);
+			if (el instanceof HTMLElement) {
+				scrollTerminalFullyIntoView(container, el);
+			}
 		}, []);
 
 		// Auto-mount active session when it changes (after creation or selection)
@@ -587,6 +599,7 @@ const WorkspaceTerminalPaneInner = forwardRef<
 				terminalWidths={terminalWidths}
 				handleTerminalResize={handleTerminalResize}
 				handleCloseClaudeSession={handleCloseClaudeSession}
+				onTerminalDoubleClick={handleTerminalDoubleClick}
 			/>
 		);
 	},

@@ -69,6 +69,7 @@ interface WorkspaceTerminalPaneViewProps {
 		deltaX: number,
 	) => void;
 	handleCloseClaudeSession: (sessionId: number) => void | Promise<void>;
+	onTerminalDoubleClick: (terminalId: string) => void;
 }
 
 export const WorkspaceTerminalPaneView: React.FC<
@@ -99,6 +100,7 @@ export const WorkspaceTerminalPaneView: React.FC<
 	terminalWidths,
 	handleTerminalResize,
 	handleCloseClaudeSession,
+	onTerminalDoubleClick,
 }) => (
 	<div
 		ref={paneRef as React.Ref<HTMLDivElement>}
@@ -356,6 +358,9 @@ export const WorkspaceTerminalPaneView: React.FC<
 														collapsed={collapsed}
 														isActive={activePtySessionId === terminalId}
 														onFocus={() => setActivePtySessionId(terminalId)}
+														onDoubleClick={() =>
+															onTerminalDoubleClick(terminalId)
+														}
 														onClose={() => handleCloseShell(terminalId)}
 														canClose={true}
 														onSessionError={onSessionError}
@@ -394,6 +399,9 @@ export const WorkspaceTerminalPaneView: React.FC<
 													collapsed={collapsed}
 													isActive={activePtySessionId === ptyId}
 													onFocus={() => setActivePtySessionId(ptyId)}
+													onDoubleClick={() =>
+														onTerminalDoubleClick(terminalId)
+													}
 													onClose={() =>
 														handleCloseClaudeSession(terminal.data.sessionId)
 													}

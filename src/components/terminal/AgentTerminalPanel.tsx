@@ -49,6 +49,7 @@ export interface AgentTerminalPanelProps {
 	collapsed: boolean;
 	isActive?: boolean;
 	onFocus?: () => void;
+	onDoubleClick?: () => void;
 	onClose?: () => void;
 	onSessionError?: (message: string) => void;
 	onTerminalOutput?: (output: string) => void;
@@ -65,6 +66,7 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
 		collapsed,
 		isActive,
 		onFocus,
+		onDoubleClick,
 		onClose,
 		onSessionError,
 		onTerminalOutput,
@@ -292,6 +294,7 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
 					width: width != null ? width : undefined,
 				}}
 				onMouseDown={onFocus}
+				onDoubleClick={onDoubleClick}
 			>
 				{/* Header */}
 				<div
