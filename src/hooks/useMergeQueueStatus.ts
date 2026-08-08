@@ -163,12 +163,17 @@ export async function invalidatePrStatuses(
 	repoPath: string,
 	branchName?: string,
 ) {
-	if (branchName) {
-		// Single-branch force-fetch warms the Rust cache without re-polling
-		// every workspace.
-		await getPrInfoViaGh(repoPath, branchName);
-	} else {
-		await refreshPrStatuses(repoPath);
+	try {
+		if (branchName) {
+			// Single-branch force-fetch warms the Rust cache without re-polling
+			// every workspace. Failures must not fail the caller (e.g. create PR
+			// already succeeded and still needs its success toast).
+			await getPrInfoViaGh(repoPath, branchName);
+		} else {
+			await refreshPrStatuses(repoPath);
+		}
+	} catch {
+		// Cache warm is best-effort; background poller will catch up.
 	}
 	await queryClient.invalidateQueries({
 		queryKey: cachedPrStatusesKey(repoPath),
