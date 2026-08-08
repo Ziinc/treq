@@ -8,6 +8,7 @@ import { ChevronDown, Github, Loader2 } from "lucide-react";
 import { useState } from "react";
 import {
 	createPrMutationKey,
+	invalidatePrStatuses,
 	useGitRemoteInfo,
 	usePrInfoViaGh,
 } from "../hooks/useMergeQueueStatus";
@@ -91,9 +92,7 @@ export function CreatePrButtonGroup({
 	const createPr = async (draft: boolean) => {
 		try {
 			const number = await createPrMutation.mutateAsync(draft);
-			await queryClient.invalidateQueries({
-				queryKey: ["pr-info-gh", repoPath, workspace.branch_name],
-			});
+			await invalidatePrStatuses(queryClient, repoPath, workspace.branch_name);
 			// Broad refresh so `not_on_remote`/sync status update everywhere,
 			// matching the existing manual "Push to remote" flow.
 			queryClient.invalidateQueries();

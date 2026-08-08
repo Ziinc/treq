@@ -26,9 +26,9 @@ vi.mock("../../../src/lib/features", () => ({
 	},
 }));
 
-const { mockGetPrInfoViaGh, mockGetPrChecksViaGh, mockGetGitRemoteUrl } =
+const { mockGetCachedPrInfo, mockGetPrChecksViaGh, mockGetGitRemoteUrl } =
 	vi.hoisted(() => ({
-		mockGetPrInfoViaGh: vi.fn(),
+		mockGetCachedPrInfo: vi.fn(),
 		mockGetPrChecksViaGh: vi.fn(),
 		mockGetGitRemoteUrl: vi.fn(),
 	}));
@@ -39,7 +39,10 @@ vi.mock("../../../src/lib/api", async () => {
 	);
 	return {
 		...actual,
-		getPrInfoViaGh: mockGetPrInfoViaGh,
+		getCachedPrInfo: mockGetCachedPrInfo,
+		startPrStatusPolling: vi.fn(async () => undefined),
+		stopPrStatusPolling: vi.fn(async () => undefined),
+		refreshPrStatuses: vi.fn(async () => undefined),
 		getPrChecksViaGh: mockGetPrChecksViaGh,
 		// createTestRepo's remote is a local bare repo, so the real
 		// get_git_remote_url returns null and the PR/CI hooks short-circuit.
@@ -70,7 +73,7 @@ function ciStatus(overrides: Partial<PrCiStatus> = {}): PrCiStatus {
 }
 
 function stubPr() {
-	mockGetPrInfoViaGh.mockResolvedValue({
+	mockGetCachedPrInfo.mockResolvedValue({
 		number: 42,
 		title: "Merge button demo",
 		state: "OPEN",

@@ -12,6 +12,7 @@ import { memo, useCallback, useMemo, useState } from "react";
 import {
 	useGitRemoteInfo,
 	useMergeQueueEnabled,
+	usePrStatusPolling,
 } from "../hooks/useMergeQueueStatus";
 import {
 	getWorkspaceStatus,
@@ -20,6 +21,7 @@ import {
 	type Workspace,
 } from "../lib/api";
 import type {
+	PrInfo,
 	QueueEntryStatus,
 	WorkspaceSidebarStatus,
 } from "../lib/api-types";
@@ -133,6 +135,9 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 
 		const { data: remoteInfo } = useGitRemoteInfo(repoPath);
 		const { data: queueEnabled } = useMergeQueueEnabled(repoPath);
+		// Single Rust-backed cache for all workspace PR statuses — no per-row
+		// `gh pr view` polling from the WebView.
+		const { data: prStatusesByBranch = {} } = usePrStatusPolling(repoPath);
 		const { data: branchQueueStatuses } = useQuery({
 			queryKey: ["repo-branch-queue-statuses", remoteInfo?.full_name],
 			queryFn: async () => {
@@ -445,6 +450,12 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 												queueStatus={branchQueueStatuses?.get(
 													node.status.current.branch_name,
 												)}
+												prInfo={
+													(prStatusesByBranch as Record<string, PrInfo | null>)[
+														node.status.current.branch_name
+													] ?? null
+												}
+												hasRemote={!!remoteInfo}
 											/>
 										))}
 										{droppableProvided.placeholder}

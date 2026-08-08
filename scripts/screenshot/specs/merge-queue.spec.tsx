@@ -19,14 +19,14 @@ const BRANCH_NAME = "feat/merge-queue-demo";
 // repo, real Rust dispatch, real React tree. Only the Supabase boundary and the
 // `gh` subprocess are stubbed, and the stub is driven by a mutable holder so the
 // spec can walk the workspace through each queue state the backend can emit.
-const { queueState, mockInvoke, mockGetPrInfoViaGh, mockGetGitRemoteUrl } =
+const { queueState, mockInvoke, mockGetCachedPrInfo, mockGetGitRemoteUrl } =
 	vi.hoisted(() => ({
 		queueState: {
 			current: null as WorkspaceQueueStatus | null,
 			enabled: true,
 		},
 		mockInvoke: vi.fn(),
-		mockGetPrInfoViaGh: vi.fn(),
+		mockGetCachedPrInfo: vi.fn(),
 		mockGetGitRemoteUrl: vi.fn(),
 	}));
 
@@ -94,7 +94,10 @@ vi.mock("../../../src/lib/api", async () => {
 	);
 	return {
 		...actual,
-		getPrInfoViaGh: mockGetPrInfoViaGh,
+		getCachedPrInfo: mockGetCachedPrInfo,
+		startPrStatusPolling: vi.fn(async () => undefined),
+		stopPrStatusPolling: vi.fn(async () => undefined),
+		refreshPrStatuses: vi.fn(async () => undefined),
 		// createTestRepo's remote is a local bare repo, so the real
 		// get_git_remote_url returns null and every queue code path short-circuits
 		// on "Repository or branch not detected". Stub it to the GitHub remote a
@@ -188,7 +191,7 @@ async function createAndPushWorkspace(
 }
 
 function stubHappyPath() {
-	mockGetPrInfoViaGh.mockResolvedValue({
+	mockGetCachedPrInfo.mockResolvedValue({
 		number: 42,
 		title: "Merge queue demo",
 		state: "OPEN",
@@ -326,7 +329,7 @@ it("captures the error toast when the branch has no open PR", async () => {
 	stubHappyPath();
 	// gh positively reports the branch's PR is closed -- the hook should refuse
 	// to enqueue and surface the reason rather than calling the edge function.
-	mockGetPrInfoViaGh.mockResolvedValue({
+	mockGetCachedPrInfo.mockResolvedValue({
 		number: 7,
 		title: "Closed PR",
 		state: "CLOSED",

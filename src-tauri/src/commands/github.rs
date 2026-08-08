@@ -11,6 +11,7 @@ fn gh_bin() -> Result<String, String> {
 
 /// Run `gh pr view` for the given branch in the given repo directory.
 /// Returns None if gh is not installed, not authenticated, or no PR exists.
+/// Also updates the background PR-status cache so sidebar reads stay fresh.
 #[tauri::command]
 pub fn get_pr_info_via_gh(
     repo_path: String,
@@ -20,7 +21,65 @@ pub fn get_pr_info_via_gh(
         .or_else(|| detect_binary("gh"))
         .ok_or_else(|| "gh CLI not found".to_string())?;
 
-    crate::github::get_pr_info_via_gh_impl(&gh, &repo_path, &branch_name, &get_extended_path())
+    let info = crate::github::get_pr_info_via_gh_impl(
+        &gh,
+        &repo_path,
+        &branch_name,
+        &get_extended_path(),
+    )?;
+    crate::pr_status::global().put_cached(&repo_path, &branch_name, info.clone());
+    Ok(info)
+}
+
+/// Start background PR-status polling for every workspace branch in `repo_path`.
+/// Safe to call repeatedly; the first call also starts the poller thread.
+#[tauri::command]
+pub fn start_pr_status_polling(repo_path: String) -> Result<(), String> {
+    crate::pr_status::global().watch_repo(&repo_path);
+    Ok(())
+}
+
+/// Stop background PR-status polling for `repo_path`.
+#[tauri::command]
+pub fn stop_pr_status_polling(repo_path: String) -> Result<(), String> {
+    crate::pr_status::global().unwatch_repo(&repo_path);
+    Ok(())
+}
+
+/// Return the cached PR statuses for a repo (`branch_name -> Option<PrInfo>`).
+/// Never shells out to `gh` — the background poller owns that work.
+#[tauri::command]
+pub fn list_cached_pr_statuses(
+    repo_path: String,
+) -> Result<std::collections::HashMap<String, Option<PrInfo>>, String> {
+    Ok(crate::pr_status::global().list_cached(&repo_path))
+}
+
+/// Return a single cached PR. `None` means not yet polled or no PR (callers
+/// that need to distinguish should use `list_cached_pr_statuses`).
+#[tauri::command]
+pub fn get_cached_pr_info(
+    repo_path: String,
+    branch_name: String,
+) -> Result<Option<PrInfo>, String> {
+    Ok(crate::pr_status::global()
+        .get_cached(&repo_path, &branch_name)
+        .flatten())
+}
+
+/// Force a refresh of all workspace PR statuses for a repo.
+/// Used after creating a PR so the sidebar updates immediately.
+/// Runs off the UI/command thread via `spawn_blocking`.
+#[tauri::command]
+pub async fn refresh_pr_statuses(repo_path: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        // Ensure the repo is watched so subsequent background polls continue.
+        crate::pr_status::global().watch_repo(&repo_path);
+        crate::pr_status::global().refresh_repo_now(&repo_path);
+    })
+    .await
+    .map_err(|e| format!("Failed to join refresh_pr_statuses task: {e}"))?;
+    Ok(())
 }
 
 /// Run `gh pr checks` for the given branch in the given repo directory and

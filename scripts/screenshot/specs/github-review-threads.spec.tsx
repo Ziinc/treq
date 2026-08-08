@@ -30,12 +30,15 @@ import { captureDocument } from "../capture";
 
 const BRANCH_NAME = "feat/github-review-threads";
 
-const { mockGetGitRemoteUrl, mockGetPrInfoViaGh, mockGhListPrReviewThreads } =
-	vi.hoisted(() => ({
-		mockGetGitRemoteUrl: vi.fn(),
-		mockGetPrInfoViaGh: vi.fn(),
-		mockGhListPrReviewThreads: vi.fn(),
-	}));
+const {
+	mockGetGitRemoteUrl,
+	mockGetCachedPrInfo,
+	mockGhListPrReviewThreads,
+} = vi.hoisted(() => ({
+	mockGetGitRemoteUrl: vi.fn(),
+	mockGetCachedPrInfo: vi.fn(),
+	mockGhListPrReviewThreads: vi.fn(),
+}));
 
 vi.mock("../../../src/lib/api", async () => {
 	const actual = await vi.importActual<typeof import("../../../src/lib/api")>(
@@ -44,7 +47,10 @@ vi.mock("../../../src/lib/api", async () => {
 	return {
 		...actual,
 		getGitRemoteUrl: mockGetGitRemoteUrl,
-		getPrInfoViaGh: mockGetPrInfoViaGh,
+		getCachedPrInfo: mockGetCachedPrInfo,
+		startPrStatusPolling: vi.fn(async () => undefined),
+		stopPrStatusPolling: vi.fn(async () => undefined),
+		refreshPrStatuses: vi.fn(async () => undefined),
 		ghListPrReviewThreads: mockGhListPrReviewThreads,
 	};
 });
@@ -129,7 +135,7 @@ it("captures GitHub review comment threads in the Review tab", async () => {
 	openRepo(repoPath);
 
 	mockGetGitRemoteUrl.mockResolvedValue(REMOTE_INFO);
-	mockGetPrInfoViaGh.mockResolvedValue(PR_INFO);
+	mockGetCachedPrInfo.mockResolvedValue(PR_INFO);
 	mockGhListPrReviewThreads.mockResolvedValue(THREADS);
 
 	// Incidental background state: the workspace/file aren't what's under

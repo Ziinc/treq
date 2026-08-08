@@ -9,7 +9,6 @@ import type {
 	GhReviewThread,
 	GitRemoteInfo,
 	PrCiStatus,
-	PrInfo,
 	HomeRebaseDryRunResult,
 	JjBranch,
 	JjCommitsAhead,
@@ -112,12 +111,6 @@ export const detectEditorApps = (): Promise<EditorAppsResponse> =>
 export const getGitRemoteUrl = (
 	repoPath: string,
 ): Promise<GitRemoteInfo | null> => invoke("get_git_remote_url", { repoPath });
-
-export const getPrInfoViaGh = (
-	repoPath: string,
-	branchName: string,
-): Promise<PrInfo | null> =>
-	invoke("get_pr_info_via_gh", { repoPath, branchName });
 
 export const getPrChecksViaGh = (
 	repoPath: string,

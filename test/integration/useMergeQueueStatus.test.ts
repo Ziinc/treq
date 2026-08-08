@@ -120,18 +120,17 @@ describe("useGitRemoteInfo", () => {
 });
 
 describe("usePrInfoViaGh", () => {
-	it("surfaces gh operational failures", async () => {
+	it("reads from the Rust PR-status cache", async () => {
 		const { repoPath } = createTestRepo(false);
-		const spy = vi
-			.spyOn(api, "getPrInfoViaGh")
-			.mockRejectedValue(new Error("gh authentication failed"));
+		const spy = vi.spyOn(api, "getCachedPrInfo").mockResolvedValue(OPEN_PR);
+		vi.spyOn(api, "startPrStatusPolling").mockResolvedValue(undefined);
 
-		const { result } = renderHook(
-			() => usePrInfoViaGh(repoPath, "non-existent-branch"),
-			{ wrapper: makeWrapper() },
-		);
-		await waitFor(() => expect(result.current.isError).toBe(true));
-		expect(result.current.error).toEqual(new Error("gh authentication failed"));
+		const { result } = renderHook(() => usePrInfoViaGh(repoPath, "feat"), {
+			wrapper: makeWrapper(),
+		});
+		await waitFor(() => expect(result.current.isSuccess).toBe(true));
+		expect(result.current.data).toEqual(OPEN_PR);
+		expect(spy).toHaveBeenCalledWith(repoPath, "feat");
 		spy.mockRestore();
 	});
 
@@ -198,7 +197,8 @@ describe("useEnqueueWorkspace", () => {
 	beforeEach(() => {
 		mockEdgeFn.mockReset();
 		queueEnabled.current = true;
-		ghSpy = vi.spyOn(api, "getPrInfoViaGh");
+		ghSpy = vi.spyOn(api, "getCachedPrInfo");
+		vi.spyOn(api, "startPrStatusPolling").mockResolvedValue(undefined);
 	});
 
 	afterEach(() => {

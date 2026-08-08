@@ -1,10 +1,16 @@
+import { listen } from "@tauri-apps/api/event";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import {
+	getCachedPrInfo,
 	getGitRemoteUrl,
 	getPrChecksForPr,
 	getPrChecksViaGh,
 	getPrInfoViaGh,
+	listCachedPrStatuses,
+	refreshPrStatuses,
+	startPrStatusPolling,
+	stopPrStatusPolling,
 } from "../lib/api";
 import type {
 	PrCiStatus,
@@ -20,6 +26,12 @@ export const mergeQueueEnabledKey = (repoFullName: string | undefined) => [
 	repoFullName,
 ];
 
+/** Query key for the Rust-side cached PR statuses map for a repo. */
+export const cachedPrStatusesKey = (repoPath: string | undefined) => [
+	"cached-pr-statuses",
+	repoPath,
+];
+
 /**
  * Shared mutation key for "create a PR for this workspace" actions. Multiple
  * surfaces can trigger PR creation for the same workspace (the header's
@@ -33,6 +45,22 @@ export const createPrMutationKey = (
 	workspaceId: number | null | undefined,
 ) => ["create-pr", repoPath, workspaceId ?? null] as const;
 
+type PrStatusesPayload = {
+	repo_path: string;
+	statuses: Record<string, PrInfo | null>;
+};
+
+function applyPrStatusesToQueryCache(
+	queryClient: ReturnType<typeof useQueryClient>,
+	repoPath: string,
+	statuses: Record<string, PrInfo | null>,
+) {
+	queryClient.setQueryData(cachedPrStatusesKey(repoPath), statuses);
+	for (const [branch, info] of Object.entries(statuses)) {
+		queryClient.setQueryData(["pr-info-gh", repoPath, branch], info);
+	}
+}
+
 export function useGitRemoteInfo(repoPath: string | undefined) {
 	return useQuery({
 		queryKey: ["git-remote-info", repoPath],
@@ -42,18 +70,115 @@ export function useGitRemoteInfo(repoPath: string | undefined) {
 	});
 }
 
-/** Try `gh pr view`; null means the command positively reported no PR. */
+/**
+ * Ensure the Rust background poller is watching this repo, and keep the
+ * React Query cache in sync via `pr-statuses-updated` events. Cache reads
+ * never shell out to `gh`, so the sidebar can refresh without UI stutter.
+ */
+export function usePrStatusPolling(repoPath: string | undefined) {
+	const queryClient = useQueryClient();
+
+	useEffect(() => {
+		if (!repoPath) return;
+		void startPrStatusPolling(repoPath);
+		return () => {
+			void stopPrStatusPolling(repoPath);
+		};
+	}, [repoPath]);
+
+	useEffect(() => {
+		if (!repoPath) return;
+		let unlisten: (() => void) | undefined;
+		void listen<PrStatusesPayload>("pr-statuses-updated", (event) => {
+			if (event.payload.repo_path !== repoPath) return;
+			applyPrStatusesToQueryCache(
+				queryClient,
+				repoPath,
+				event.payload.statuses,
+			);
+		}).then((fn) => {
+			unlisten = fn;
+		});
+		return () => {
+			unlisten?.();
+		};
+	}, [repoPath, queryClient]);
+
+	return useQuery({
+		queryKey: cachedPrStatusesKey(repoPath),
+		queryFn: () => listCachedPrStatuses(repoPath!),
+		enabled: !!repoPath,
+		// Cheap cache read only — the Rust poller owns the refresh cadence.
+		staleTime: 5_000,
+		refetchInterval: 15_000,
+	});
+}
+
+/**
+ * PR info for a branch, served from the Rust background cache.
+ * Starts the poller if needed; never invokes `gh` from the UI thread.
+ */
 export function usePrInfoViaGh(
 	repoPath: string | undefined,
 	branchName: string | undefined,
 ) {
+	const queryClient = useQueryClient();
+
+	useEffect(() => {
+		if (!repoPath) return;
+		void startPrStatusPolling(repoPath);
+	}, [repoPath]);
+
+	useEffect(() => {
+		if (!repoPath) return;
+		let unlisten: (() => void) | undefined;
+		void listen<PrStatusesPayload>("pr-statuses-updated", (event) => {
+			if (event.payload.repo_path !== repoPath) return;
+			applyPrStatusesToQueryCache(
+				queryClient,
+				repoPath,
+				event.payload.statuses,
+			);
+		}).then((fn) => {
+			unlisten = fn;
+		});
+		return () => {
+			unlisten?.();
+		};
+	}, [repoPath, queryClient]);
+
 	return useQuery<PrInfo | null>({
 		queryKey: ["pr-info-gh", repoPath, branchName],
-		queryFn: () => getPrInfoViaGh(repoPath!, branchName!),
+		queryFn: () => getCachedPrInfo(repoPath!, branchName!),
 		enabled: !!repoPath && !!branchName,
-		staleTime: 30_000,
-		refetchInterval: 60_000,
+		staleTime: 5_000,
+		// Cache-only refetch; Rust owns the `gh` polling.
+		refetchInterval: 15_000,
 	});
+}
+
+/** Force-refresh PR statuses after mutations (create PR, etc.). */
+export async function invalidatePrStatuses(
+	queryClient: ReturnType<typeof useQueryClient>,
+	repoPath: string,
+	branchName?: string,
+) {
+	try {
+		if (branchName) {
+			// Single-branch force-fetch warms the Rust cache without re-polling
+			// every workspace. Failures must not fail the caller (e.g. create PR
+			// already succeeded and still needs its success toast).
+			await getPrInfoViaGh(repoPath, branchName);
+		} else {
+			await refreshPrStatuses(repoPath);
+		}
+	} catch {
+		// Cache warm is best-effort; background poller will catch up.
+	}
+	await queryClient.invalidateQueries({
+		queryKey: cachedPrStatusesKey(repoPath),
+	});
+	await queryClient.invalidateQueries({ queryKey: ["pr-info-gh", repoPath] });
 }
 
 /**
