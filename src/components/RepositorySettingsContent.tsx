@@ -1,5 +1,4 @@
 import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
-import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
 import { Label } from "./ui/label";
@@ -25,10 +24,9 @@ export const RepositorySettingsContent = forwardRef<
 	const [defaultAgent, setDefaultAgent] = useState<string>("");
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
-	const [availableFiles, setAvailableFiles] = useState<string[]>([]);
 	const { addToast } = useToast();
 
-	// Load settings and available gitignored files when repo path changes
+	// Load settings when repo path changes
 	useEffect(() => {
 		if (repoPath) {
 			setLoading(true);
@@ -45,8 +43,6 @@ export const RepositorySettingsContent = forwardRef<
 					setIncludedFiles(includedPatterns || "");
 					setDefaultModel(model || "");
 					setDefaultAgent(agent || "");
-					// Note: gitignored files listing removed - was git-specific
-					setAvailableFiles([]);
 				})
 				.catch((err) => {
 					setError(`Failed to load settings: ${err}`);
@@ -54,7 +50,6 @@ export const RepositorySettingsContent = forwardRef<
 					setIncludedFiles("");
 					setDefaultModel("");
 					setDefaultAgent("");
-					setAvailableFiles([]);
 				})
 				.finally(() => {
 					setLoading(false);
@@ -93,14 +88,6 @@ export const RepositorySettingsContent = forwardRef<
 
 	useImperativeHandle(ref, () => ({ save: handleSave }));
 
-	const addPattern = (pattern: string) => {
-		if (includedFiles.trim()) {
-			setIncludedFiles(`${includedFiles}\n${pattern}`);
-		} else {
-			setIncludedFiles(pattern);
-		}
-	};
-
 	if (loading) {
 		return (
 			<div className="py-8 text-center text-muted-foreground">
@@ -131,34 +118,15 @@ export const RepositorySettingsContent = forwardRef<
 					id="included-files"
 					value={includedFiles}
 					onChange={(e) => setIncludedFiles(e.target.value)}
-					placeholder="e.g., node_modules&#10;**/target/**&#10;.env"
-					rows={6}
+					placeholder="e.g., .env&#10;.env.local"
+					rows={4}
 					className="font-mono text-sm mt-2"
 				/>
 				<p className="text-sm text-muted-foreground mt-1">
-					Patterns to copy (e.g., node_modules, .env*)
+					Paths to copy into each new workspace (e.g. .env). For heavy dirs like
+					node_modules, use Symlink from home repo under Advanced when creating
+					a workspace.
 				</p>
-				{availableFiles.length > 0 && (
-					<div className="flex flex-wrap gap-2 mt-2">
-						{availableFiles.map((file) => (
-							<Button
-								key={file}
-								type="button"
-								variant="outline"
-								size="sm"
-								onClick={() => addPattern(file)}
-								className="text-sm h-7"
-							>
-								+ {file}
-							</Button>
-						))}
-					</div>
-				)}
-				{availableFiles.length === 0 && !loading && (
-					<p className="text-sm text-muted-foreground italic mt-2">
-						No .gitignored files found in repository root
-					</p>
-				)}
 			</div>
 
 			<div>

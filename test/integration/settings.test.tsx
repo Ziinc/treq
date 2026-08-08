@@ -53,6 +53,9 @@ describe("Settings integration", () => {
 		await user.click(repositoryTab);
 		await screen.findByLabelText(/branch name pattern/i);
 		await screen.findByLabelText(/claude code model/i);
+		expect(
+			screen.queryByLabelText(/symlinked directories/i),
+		).not.toBeInTheDocument();
 		expect(screen.queryByLabelText(/theme/i)).not.toBeInTheDocument();
 	});
 

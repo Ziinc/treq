@@ -54,14 +54,15 @@ pub async fn create_workspace(
 ) -> Result<i64, String> {
     let started_at = Instant::now();
     let parsed_metadata = crate::core::parse_workspace_metadata(metadata.as_deref());
-    let (title, description, moved_files, sparse_patterns) = (
+    let (title, description, moved_files, sparse_patterns, symlinked_dirs) = (
         parsed_metadata.title,
         parsed_metadata.description,
         parsed_metadata.moved_files,
         parsed_metadata.sparse_patterns,
+        parsed_metadata.symlinked_dirs,
     );
 
-    // Read included_copy_files setting from DB
+    // Read included_copy_files setting from DB (small files to copy into every workspace)
     let included_copy_files: Option<Vec<String>> = {
         let db = state.db.lock().unwrap();
         db.get_repo_setting(&repo_path, "included_copy_files")
@@ -78,7 +79,7 @@ pub async fn create_workspace(
     let repo_path_for_task = repo_path.clone();
     let branch_name_for_task = branch_name.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
-        let workspace = crate::core::create_workspace(
+        let workspace = crate::core::create_workspace_with_symlinked_dirs(
             &repo_path_for_task,
             &branch_name_for_task,
             description,
@@ -86,6 +87,7 @@ pub async fn create_workspace(
             source_branch.as_deref(),
             included_copy_files,
             sparse_patterns,
+            symlinked_dirs,
         )?;
         if let Some(t) = title {
             local_db::update_workspace_title(&repo_path_for_task, workspace.id, &t)?;
