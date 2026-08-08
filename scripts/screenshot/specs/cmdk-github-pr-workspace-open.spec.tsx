@@ -9,13 +9,13 @@ import { captureDocument } from "../capture";
 
 const BRANCH_NAME = "feat/pr-cmdk-demo";
 
-// getPrInfoViaGh really shells out to `gh pr view`, which isn't installed/authed
+// getCachedPrInfo reads from the Rust PR-status cache, which isn't populated
 // in the sandbox. Stub it at the src/lib/api boundary (the same seam
 // merge-queue.spec.tsx uses) so usePrInfoViaGh can resolve a real PrInfo without
 // touching the `gh` subprocess. Everything else -- repo, workspace, Dashboard,
 // Rust dispatch -- stays real.
-const { mockGetPrInfoViaGh } = vi.hoisted(() => ({
-	mockGetPrInfoViaGh: vi.fn(),
+const { mockGetCachedPrInfo } = vi.hoisted(() => ({
+	mockGetCachedPrInfo: vi.fn(),
 }));
 
 vi.mock("../../../src/lib/api", async () => {
@@ -24,7 +24,10 @@ vi.mock("../../../src/lib/api", async () => {
 	);
 	return {
 		...actual,
-		getPrInfoViaGh: mockGetPrInfoViaGh,
+		getCachedPrInfo: mockGetCachedPrInfo,
+		startPrStatusPolling: vi.fn(async () => undefined),
+		stopPrStatusPolling: vi.fn(async () => undefined),
+		refreshPrStatuses: vi.fn(async () => undefined),
 	};
 });
 
@@ -42,7 +45,7 @@ async function setupSelectedWorkspace() {
 }
 
 it("captures the workspace PR commands in the command palette when a PR exists", async () => {
-	mockGetPrInfoViaGh.mockResolvedValue({
+	mockGetCachedPrInfo.mockResolvedValue({
 		number: 99,
 		title: "Add cmdk PR shortcuts",
 		state: "OPEN",

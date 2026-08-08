@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Dashboard } from "../../../src/components/Dashboard";
 import {
 	createWorkspace,
-	getPrInfoViaGh,
+	getCachedPrInfo,
 	getWorkspaces,
 	ghCreatePr,
 	ghViewPr,
@@ -23,7 +23,10 @@ vi.mock("../../../src/lib/api", async (importOriginal) => {
 		await importOriginal<typeof import("../../../src/lib/api")>();
 	return {
 		...original,
-		getPrInfoViaGh: vi.fn().mockResolvedValue(null),
+		getCachedPrInfo: vi.fn().mockResolvedValue(null),
+		startPrStatusPolling: vi.fn(async () => undefined),
+		stopPrStatusPolling: vi.fn(async () => undefined),
+		refreshPrStatuses: vi.fn(async () => undefined),
 		getPrChecksForPr: vi.fn().mockResolvedValue(null),
 		ghCreatePr: vi.fn().mockResolvedValue(42),
 		ghViewPr: vi.fn(),
@@ -58,7 +61,7 @@ describe("ShowWorkspace - Create PR", () => {
 		({ repoPath } = createTestRepo(true));
 		openRepo(repoPath);
 		user = userEvent.setup();
-		vi.mocked(getPrInfoViaGh).mockReset().mockResolvedValue(null);
+		vi.mocked(getCachedPrInfo).mockReset().mockResolvedValue(null);
 		vi.mocked(ghCreatePr).mockReset().mockResolvedValue(42);
 		vi.mocked(openUrl).mockReset();
 	});
@@ -358,7 +361,7 @@ describe("ShowWorkspace - Create PR", () => {
 
 	it("navigates to in-app GitHub PR detail on View PR; Open on Web opens browser", async () => {
 		await setupPushedWorkspaceWithGitHub();
-		vi.mocked(getPrInfoViaGh).mockResolvedValue({
+		vi.mocked(getCachedPrInfo).mockResolvedValue({
 			number: 9,
 			title: "Existing",
 			state: "OPEN",
@@ -410,7 +413,7 @@ describe("ShowWorkspace - Create PR", () => {
 
 	it("shows tooltips for the View PR controls", async () => {
 		await setupPushedWorkspaceWithGitHub();
-		vi.mocked(getPrInfoViaGh).mockResolvedValue({
+		vi.mocked(getCachedPrInfo).mockResolvedValue({
 			number: 9,
 			title: "Existing",
 			state: "OPEN",
@@ -450,7 +453,7 @@ describe("ShowWorkspace - Create PR", () => {
 
 	it("uses draft label when PR is a draft", async () => {
 		await setupPushedWorkspaceWithGitHub();
-		vi.mocked(getPrInfoViaGh).mockResolvedValue({
+		vi.mocked(getCachedPrInfo).mockResolvedValue({
 			number: 12,
 			title: "Draft PR",
 			state: "OPEN",
@@ -471,7 +474,7 @@ describe("ShowWorkspace - Create PR", () => {
 
 	it("styles View PR for closed and merged states", async () => {
 		await setupPushedWorkspaceWithGitHub();
-		vi.mocked(getPrInfoViaGh).mockResolvedValue({
+		vi.mocked(getCachedPrInfo).mockResolvedValue({
 			number: 10,
 			title: "Closed",
 			state: "CLOSED",
@@ -490,7 +493,7 @@ describe("ShowWorkspace - Create PR", () => {
 		expect(closed.className).toMatch(/border-red-600/);
 
 		view.unmount();
-		vi.mocked(getPrInfoViaGh).mockResolvedValue({
+		vi.mocked(getCachedPrInfo).mockResolvedValue({
 			number: 11,
 			title: "Merged",
 			state: "MERGED",

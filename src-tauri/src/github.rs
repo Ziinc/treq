@@ -7,7 +7,7 @@ pub struct GitRemoteInfo {
     pub full_name: String,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct PrInfo {
     pub number: u64,
     pub title: String,

@@ -7,7 +7,7 @@ import { Dashboard } from "../../../src/components/Dashboard";
 import {
 	createWorkspace,
 	getWorkspaces,
-	getPrInfoViaGh,
+	getCachedPrInfo,
 	ghListPrs,
 	ghViewPr,
 	pushWorkspaceToRemote,
@@ -25,7 +25,10 @@ vi.mock("../../../src/lib/api", async (importOriginal) => {
 		await importOriginal<typeof import("../../../src/lib/api")>();
 	return {
 		...original,
-		getPrInfoViaGh: vi.fn().mockResolvedValue(null),
+		getCachedPrInfo: vi.fn().mockResolvedValue(null),
+		startPrStatusPolling: vi.fn(async () => undefined),
+		stopPrStatusPolling: vi.fn(async () => undefined),
+		refreshPrStatuses: vi.fn(async () => undefined),
 		ghViewPr: vi.fn(),
 		ghListPrs: vi.fn().mockResolvedValue({ items: [], hasMore: false }),
 		ghListIssues: vi.fn().mockResolvedValue({ items: [], hasMore: false }),
@@ -65,7 +68,7 @@ it("captures View PR landing on the filter tab matching a CLOSED PR's state", as
 	);
 	if (!workspace) throw new Error("workspace not found");
 
-	vi.mocked(getPrInfoViaGh).mockResolvedValue({
+	vi.mocked(getCachedPrInfo).mockResolvedValue({
 		number: 10,
 		title: "Closed PR",
 		state: "CLOSED",

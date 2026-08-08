@@ -8,11 +8,11 @@ import { createTestRepo, findSidebarBranchElement, openRepo } from "../../../tes
 import { captureDocument } from "../capture";
 
 // Real jj repo, real Rust dispatch, real React tree throughout. The only
-// stubbed boundary is the GitHub-facing `getPrInfoViaGh`, since the real
+// stubbed boundary is the GitHub-facing cached PR status, since the real
 // version shells out to the real `gh` CLI, which doesn't exist in this
-// harness.
-const { mockGetPrInfoViaGh } = vi.hoisted(() => ({
-	mockGetPrInfoViaGh: vi.fn(),
+// harness. Polling itself runs on the Rust side.
+const { mockListCachedPrStatuses } = vi.hoisted(() => ({
+	mockListCachedPrStatuses: vi.fn(),
 }));
 
 vi.mock("../../../src/lib/api", async () => {
@@ -21,7 +21,17 @@ vi.mock("../../../src/lib/api", async () => {
 	);
 	return {
 		...actual,
-		getPrInfoViaGh: mockGetPrInfoViaGh,
+		listCachedPrStatuses: mockListCachedPrStatuses,
+		getCachedPrInfo: async (_repoPath: string, branchName: string) => {
+			const map = (await mockListCachedPrStatuses()) as Record<
+				string,
+				PrInfo | null
+			>;
+			return map[branchName] ?? null;
+		},
+		startPrStatusPolling: vi.fn(async () => undefined),
+		stopPrStatusPolling: vi.fn(async () => undefined),
+		refreshPrStatuses: vi.fn(async () => undefined),
 	};
 });
 
@@ -40,10 +50,10 @@ const OPEN_PR: PrInfo = {
 };
 
 it("captures the Copy link to GitHub PR context menu item", async () => {
-	mockGetPrInfoViaGh.mockImplementation(
-		async (_repoPath: string, branchName: string) =>
-			branchName === OPEN_PR_BRANCH ? OPEN_PR : null,
-	);
+	mockListCachedPrStatuses.mockResolvedValue({
+		[OPEN_PR_BRANCH]: OPEN_PR,
+		[NO_PR_BRANCH]: null,
+	});
 
 	const { repoPath } = createTestRepo(false);
 	openRepo(repoPath);
