@@ -63,7 +63,7 @@ export function SelectionQuoteToolbar({
 			<Button
 				size="sm"
 				variant="secondary"
-				className="gap-1.5 shadow-lg border border-border"
+				className="gap-1.5 shadow-lg border border-border font-sans"
 				// Prevent the browser from collapsing the selection (and thus
 				// unmounting this button via selectionchange) before click fires.
 				onMouseDown={(event) => event.preventDefault()}
