@@ -59,9 +59,9 @@ const WorkspaceTerminalPaneInner = forwardRef<
 			useScrollTerminalIntoView(scrollContainerRef);
 
 		// Track which terminal is focused (last-clicked)
-		const [activePtySessionId, setActivePtySessionId] = useState<
-			string | null
-		>(null);
+		const [activePtySessionId, setActivePtySessionId] = useState<string | null>(
+			null,
+		);
 
 		// Clear active terminal when clicking outside the pane
 		useEffect(() => {
@@ -404,13 +404,16 @@ const WorkspaceTerminalPaneInner = forwardRef<
 
 		// Track last-activity timestamp + streaming state per terminal id, for
 		// the sidebar's terminal sessions list (ordering, idle icon, spinner).
-		const { handleTerminalOutput, handleTerminalIdlePulse, terminalSummariesRef } =
-			useTerminalSessionSummaries({
-				allTerminals,
-				workspaceBranchByPath,
-				currentBranch,
-				onTerminalsChange,
-			});
+		const {
+			handleTerminalOutput,
+			handleTerminalIdlePulse,
+			terminalSummariesRef,
+		} = useTerminalSessionSummaries({
+			allTerminals,
+			workspaceBranchByPath,
+			currentBranch,
+			onTerminalsChange,
+		});
 
 		const {
 			handleFocusTerminalById,
