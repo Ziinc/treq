@@ -1,3 +1,0 @@
-[workspace]
-members = ["src-tauri", "crates/treq-napi"]
-resolver = "3"
