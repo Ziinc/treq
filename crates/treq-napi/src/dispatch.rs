@@ -952,6 +952,38 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
             Ok(Value::Null)
         }
 
+        // ── FileBrowser review (separate session from pending_reviews) ─────
+        "load_file_browser_review" => {
+            let repo_path = get_str(&args, "repoPath")?;
+            let workspace_id: i64 = get_i64(&args, "workspaceId")?;
+            let review = treq_lib::local_db::get_file_browser_review(&repo_path, workspace_id)?;
+            serde_json::to_value(review).map_err(|e| e.to_string())
+        }
+
+        "save_file_browser_review" => {
+            let repo_path = get_str(&args, "repoPath")?;
+            let workspace_id: i64 = get_i64(&args, "workspaceId")?;
+            let comments = get_str(&args, "comments")?;
+            let summary_text: Option<String> = args
+                .get("summaryText")
+                .and_then(|v| v.as_str())
+                .map(String::from);
+            let id = treq_lib::local_db::save_file_browser_review(
+                &repo_path,
+                workspace_id,
+                &comments,
+                summary_text.as_deref(),
+            )?;
+            Ok(Value::Number(id.into()))
+        }
+
+        "clear_file_browser_review" => {
+            let repo_path = get_str(&args, "repoPath")?;
+            let workspace_id: i64 = get_i64(&args, "workspaceId")?;
+            treq_lib::local_db::clear_file_browser_review(&repo_path, workspace_id)?;
+            Ok(Value::Null)
+        }
+
         // ── Filesystem ────────────────────────────────────────────────────
         "read_file" => {
             let path = get_str(&args, "path")?;

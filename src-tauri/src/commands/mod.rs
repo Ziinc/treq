@@ -2,6 +2,7 @@
 pub mod agent_dispatch;
 pub mod binary;
 pub mod commits;
+pub mod file_browser_review;
 pub mod file_view;
 pub mod file_watcher;
 pub mod filesystem;
@@ -16,6 +17,7 @@ pub mod workspace;
 pub use agent_dispatch::*;
 pub use binary::*;
 pub use commits::*;
+pub use file_browser_review::*;
 pub use file_view::*;
 pub use file_watcher::*;
 pub use filesystem::*;
