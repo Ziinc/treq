@@ -1,0 +1,15 @@
+id: no-e2e-js-evaluate
+language: typescript
+severity: error
+message: >
+  Do not execute custom JavaScript or manipulate the DOM in e2e tests.
+  Use Playwright locator actions and assertions instead of evaluate(), evaluateHandle(),
+  evaluateAll(), or addInitScript().
+files:
+  - "web/e2e/**/*.ts"
+rule:
+  any:
+    - pattern: $_.evaluate($$$)
+    - pattern: $_.evaluateHandle($$$)
+    - pattern: $_.evaluateAll($$$)
+    - pattern: $_.addInitScript($$$)

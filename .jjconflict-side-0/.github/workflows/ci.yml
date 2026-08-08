@@ -1,0 +1,130 @@
+name: CI
+
+on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "src-tauri/**"
+      - "crates/treq-napi/**"
+      - "supabase/**"
+      - "web/**"
+      - "test/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/ci.yml"
+
+jobs:
+  ci:
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: ubuntu-22.04
+            kind: verify
+            task: verify
+          - platform: ubuntu-22.04
+            kind: js
+            task: test
+          - platform: ubuntu-22.04
+            kind: rust
+            task: test
+          - platform: macos-latest
+            kind: rust
+            task: test
+
+    name: ${{ matrix.kind }} / ${{ matrix.task }} / ${{ matrix.platform }}
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          components: rustfmt
+          toolchain: stable
+
+      - name: Install cargo-binstall
+        uses: cargo-bins/cargo-binstall@main
+
+      - name: install dependencies (ubuntu only)
+        if: matrix.platform == 'ubuntu-22.04' # This must match the platform value defined above.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Install git, jj, and gh CLI (macOS)
+        if: matrix.platform == 'macos-latest'
+        run: |
+          brew update
+          brew install git jj gh
+          echo "$(brew --prefix)/bin" >> $GITHUB_PATH
+
+      - name: Install jj CLI (ubuntu)
+        if: matrix.platform == 'ubuntu-22.04' # This must match the platform value defined above.
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          cargo binstall --strategies crate-meta-data,compile jj-cli
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Install gh CLI (ubuntu)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          (type -p wget >/dev/null || (sudo apt-get update && sudo apt-get install -y wget)) \
+          && sudo mkdir -p -m 755 /etc/apt/keyrings \
+          && out=$(mktemp) && wget -nv -O$out https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+          && cat $out | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null \
+          && sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+          && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+          && sudo apt-get update \
+          && sudo apt-get install -y gh
+
+      - name: Verify pinned tool versions
+        run: |
+          git --version
+          jj --version
+          gh --version
+
+      - name: Install dependencies
+        run: npm ci
+
+      - uses: Swatinem/rust-cache@v2
+        if: matrix.kind == 'rust'
+        with:
+          cache-on-failure: true
+          workspaces: "./src-tauri -> target"
+
+      - name: Run JS task
+        if: matrix.kind == 'js' || matrix.kind == 'verify'
+        run: |
+          if [ "${{ matrix.kind }}" = "verify" ] || [ "${{ matrix.task }}" = "verify" ]; then
+            npm run check
+            npm run check:format
+            npm run lint
+          else
+            npm run ${{ matrix.task }}
+          fi
+
+      - name: Run Rust task
+        if: matrix.kind == 'rust' || matrix.kind == 'verify'
+        working-directory: src-tauri
+        env:
+          RUST_BACKTRACE: 1
+        run: |
+          if [ "${{ matrix.kind }}" = "verify" ] || [ "${{ matrix.task }}" = "verify" ]; then
+            cargo fmt --check
+            cargo check
+          else
+            cargo test --no-fail-fast
+          fi

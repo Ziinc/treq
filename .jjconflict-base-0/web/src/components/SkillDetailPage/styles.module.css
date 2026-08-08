@@ -1,0 +1,355 @@
+.page {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 3rem;
+  box-sizing: border-box;
+  /* Docusaurus's sticky-footer wrapper is a flex column, making this a flex
+     item whose cross-axis stretch sizing otherwise refuses to shrink below
+     the widest unwrapped descendant (e.g. a long fenced code line) — an
+     explicit width, not min-width alone, is what actually pins it to the
+     container's size instead of stretching the whole page. */
+  min-width: 0;
+}
+
+.breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--ifm-color-emphasis-600);
+  margin-bottom: 1.5rem;
+}
+
+.sep {
+  color: var(--ifm-color-emphasis-400);
+}
+
+.header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.title {
+  font-size: 2rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem;
+  font-family: var(--ifm-font-family-monospace);
+}
+
+.description {
+  font-size: 1rem;
+  color: var(--ifm-color-emphasis-700);
+  max-width: 65ch;
+  line-height: 1.5;
+  margin: 0 0 0.75rem;
+}
+
+.meta {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--ifm-color-emphasis-100);
+  color: var(--ifm-color-emphasis-700);
+}
+
+.badge[data-source='anthropic'] {
+  background: color-mix(in srgb, #d97757 18%, transparent);
+  color: #d97757;
+}
+
+.badge[data-source='openai'] {
+  background: color-mix(in srgb, #10a37f 18%, transparent);
+  color: #10a37f;
+}
+
+.badge[data-source='mattpocock'] {
+  background: color-mix(in srgb, #6366f1 18%, transparent);
+  color: #6366f1;
+}
+
+.githubButton {
+  flex-shrink: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  background: var(--ifm-background-surface-color);
+  color: var(--ifm-font-color-base) !important;
+  text-decoration: none !important;
+  white-space: nowrap;
+}
+
+.githubButton:hover {
+  border-color: var(--ifm-color-primary);
+}
+
+.callout {
+  border: 1px solid var(--ifm-color-warning-dark);
+  background: color-mix(in srgb, var(--ifm-color-warning) 12%, transparent);
+  border-radius: 12px;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.calloutTitle {
+  font-size: 1rem;
+}
+
+.calloutBody {
+  margin: 0;
+  color: var(--ifm-color-emphasis-800);
+  line-height: 1.5;
+  max-width: 65ch;
+}
+
+/* Hidden on desktop — the file tree in .browser is the primary way to pick a
+   file. Below the mobile breakpoint this swaps places with .tree. */
+.mobilePicker {
+  display: none;
+  margin-bottom: 0.75rem;
+}
+
+.mobileSelect {
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.85rem;
+  font-family: var(--ifm-font-family-monospace);
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 8px;
+  background: var(--ifm-background-surface-color);
+  color: var(--ifm-font-color-base);
+}
+
+.browser {
+  display: flex;
+  border: 1px solid var(--ifm-color-emphasis-200);
+  border-radius: 12px;
+  overflow: hidden;
+  height: 65vh;
+  min-height: 420px;
+  background: var(--ifm-background-surface-color);
+}
+
+.tree {
+  width: 280px;
+  flex-shrink: 0;
+  overflow: auto;
+  border-right: 1px solid var(--ifm-color-emphasis-200);
+  background: var(--ifm-background-color);
+}
+
+.treeInner {
+  padding: 0.6rem 0.3rem;
+}
+
+.treeFolder,
+.treeFile,
+.treeFileActive {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  font-size: 0.82rem;
+  font-family: var(--ifm-font-family-monospace);
+  padding: 4px 8px;
+  border-radius: 6px;
+  color: var(--ifm-font-color-base);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.treeFolder {
+  font-weight: 600;
+}
+
+.treeFolder:hover,
+.treeFile:hover {
+  background: var(--ifm-color-emphasis-100);
+}
+
+.treeFileActive {
+  background: var(--ifm-color-primary-lightest);
+  color: var(--ifm-color-primary-darkest);
+}
+
+.treeIcon {
+  display: inline-block;
+  width: 1.1em;
+  color: var(--ifm-color-emphasis-500);
+}
+
+.viewer {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--ifm-color-emphasis-500);
+  font-size: 0.9rem;
+}
+
+.viewerHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+  font-size: 0.8rem;
+}
+
+.viewerPath {
+  font-family: var(--ifm-font-family-monospace);
+  color: var(--ifm-font-color-base);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viewerSize {
+  color: var(--ifm-color-emphasis-500);
+  flex-shrink: 0;
+}
+
+.viewerGithub {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--ifm-color-primary) !important;
+  text-decoration: none !important;
+  white-space: nowrap;
+}
+
+.viewerGithub:hover {
+  text-decoration: underline !important;
+}
+
+.tabs {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.4rem 1rem 0;
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+}
+
+.tab,
+.tabActive {
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.4rem 0.75rem;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: var(--ifm-color-emphasis-600);
+  border-bottom: 2px solid transparent;
+}
+
+.tab:hover {
+  color: var(--ifm-font-color-base);
+}
+
+.tabActive {
+  color: var(--ifm-color-primary);
+  border-bottom-color: var(--ifm-color-primary);
+}
+
+.viewerBody {
+  flex: 1;
+  overflow: auto;
+}
+
+.markdownPreview {
+  padding: 1.25rem 1.5rem;
+}
+
+.markdownPreview :global(pre) {
+  overflow-x: auto;
+}
+
+.markdownPreview :global(img) {
+  max-width: 100%;
+}
+
+.notice {
+  padding: 1.5rem;
+  color: var(--ifm-color-emphasis-600);
+  font-size: 0.9rem;
+}
+
+.code {
+  margin: 0;
+  padding: 0.75rem 0;
+  font-size: 0.82rem;
+  line-height: 1.6;
+  overflow: visible;
+  background: transparent !important;
+}
+
+.codeLine {
+  display: table-row;
+}
+
+.lineNumber {
+  display: table-cell;
+  user-select: none;
+  text-align: right;
+  padding: 0 1rem;
+  color: var(--ifm-color-emphasis-400);
+  width: 1%;
+  white-space: nowrap;
+}
+
+/* Below this width the two-pane tree/viewer layout doesn't fit — swap the
+   sidebar tree for a dropdown above the file preview. */
+@media (max-width: 768px) {
+  .page {
+    padding: 1.25rem 1rem 2rem;
+  }
+
+  .title {
+    font-size: 1.5rem;
+  }
+
+  .mobilePicker {
+    display: block;
+  }
+
+  .tree {
+    display: none;
+  }
+
+  .browser {
+    height: 70vh;
+  }
+
+  .viewerHeader {
+    flex-wrap: wrap;
+  }
+
+  .viewerGithub {
+    margin-left: 0;
+  }
+}

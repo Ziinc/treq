@@ -1,0 +1,213 @@
+import { createCommit } from "../src/lib/api";
+import { execFileSync } from "node:child_process";
+import path from "node:path";
+import { afterEach, expect } from "vitest";
+import { waitFor, within } from "./test-utils";
+
+export function openRepo(repoPath: string) {
+	// Point the app at a repo via the URL search param it reads
+	window.history.pushState({}, "", `?repo=${encodeURIComponent(repoPath)}`);
+}
+
+type NapiTestBindings = {
+	createTestRepo: (withRemote: boolean) => {
+		repoPath: string;
+		tempDirPath: string;
+		defaultBranch: string;
+	};
+	cleanupTestRepo: (tempDirPath: string) => void;
+	gitCommitAll: (repoPath: string, message: string) => void;
+	writeWorkspaceFile: (
+		workspacePath: string,
+		relativePath: string,
+		content: string,
+		append?: boolean,
+	) => string;
+	writeRepoFile: (
+		repoPath: string,
+		relativePath: string,
+		content: string,
+		append?: boolean,
+	) => string;
+	resolveCommitId: (workspacePath: string, revision: string) => string;
+	resolveChangeId: (workspacePath: string, revision: string) => string;
+	resolveRevsetCommitIds: (workspacePath: string, revset: string) => string[];
+	newCommitWithParents: (
+		workspacePath: string,
+		parentRevisions: string[],
+	) => string;
+};
+
+function getNapiBindings(): NapiTestBindings {
+	// eslint-disable-next-line @typescript-eslint/no-require-imports
+	return require("../crates/treq-napi") as NapiTestBindings;
+}
+
+const testRepoPaths = new Set<string>();
+
+afterEach(() => {
+	const napi = getNapiBindings();
+	for (const tempDirPath of testRepoPaths) {
+		napi.cleanupTestRepo(tempDirPath);
+	}
+	testRepoPaths.clear();
+});
+
+export function createTestRepo(withRemote = false): {
+	repoPath: string;
+	tempDirPath: string;
+	defaultBranch: string;
+} {
+	const repo = getNapiBindings().createTestRepo(withRemote);
+	testRepoPaths.add(repo.tempDirPath);
+	return repo;
+}
+
+export function writeWorkspaceFile(
+	workspacePath: string,
+	relativePath: string,
+	content: string,
+	append = false,
+): string {
+	return getNapiBindings().writeWorkspaceFile(
+		workspacePath,
+		relativePath,
+		content,
+		append,
+	);
+}
+
+export function resolveWorkspacePath(
+	repoPath: string,
+	workspacePath: string,
+): string {
+	if (path.isAbsolute(workspacePath)) {
+		return workspacePath;
+	}
+	return path.join(repoPath, ".treq", "workspaces", workspacePath);
+}
+
+/**
+ * Write `target_branch` directly in the local DB, bypassing retarget validation.
+ * Use only to seed malformed graphs (e.g. self-target) for rendering tests.
+ */
+export function setWorkspaceTargetBranchRaw(
+	repoPath: string,
+	workspaceId: number,
+	targetBranch: string,
+): void {
+	const dbPath = path.join(repoPath, ".treq", "local.db");
+	const escaped = targetBranch.replace(/'/g, "''");
+	execFileSync(
+		"sqlite3",
+		[
+			dbPath,
+			`UPDATE workspaces SET target_branch = '${escaped}' WHERE id = ${workspaceId};`,
+		],
+		{ stdio: "pipe" },
+	);
+}
+
+/**
+ * Resolve a revision to its short commit id via jj-lib (no `jj` CLI on PATH required).
+ */
+export function resolveCommitId(
+	workspacePath: string,
+	revision: string,
+): string {
+	return getNapiBindings().resolveCommitId(workspacePath, revision);
+}
+
+/**
+ * Resolve a revision to its short change id. Change ids survive rewrites (rebase,
+ * amend), so use this when a revision is captured before later history edits.
+ */
+export function resolveChangeId(
+	workspacePath: string,
+	revision: string,
+): string {
+	return getNapiBindings().resolveChangeId(workspacePath, revision);
+}
+
+/**
+ * Resolve a revset to the short commit ids it matches; empty when it matches nothing.
+ */
+export function resolveRevsetCommitIds(
+	workspacePath: string,
+	revset: string,
+): string[] {
+	return getNapiBindings().resolveRevsetCommitIds(workspacePath, revset);
+}
+
+/**
+ * Create a new working-copy commit on the given parents (equivalent to `jj new <rev>...`).
+ */
+export function newCommitWithParents(
+	workspacePath: string,
+	parentRevisions: string[],
+): string {
+	return getNapiBindings().newCommitWithParents(workspacePath, parentRevisions);
+}
+
+export async function writeRepoFile(
+	repoPath: string,
+	relativePath: string,
+	content: string,
+	append = false,
+): Promise<string> {
+	return getNapiBindings().writeRepoFile(
+		repoPath,
+		relativePath,
+		content,
+		append,
+	);
+}
+
+export async function commitRepoFile(
+	repoPath: string,
+	relativePath: string,
+	content: string,
+	message: string,
+): Promise<void> {
+	await writeRepoFile(repoPath, relativePath, `${content}\n`, true);
+	await createCommit(repoPath, null, message);
+}
+
+// Write a file and commit it with git directly, advancing the current branch
+// ref (unlike commitRepoFile, which commits through jj on the home repo).
+export async function gitCommitRepoFile(
+	repoPath: string,
+	relativePath: string,
+	content: string,
+	message: string,
+): Promise<void> {
+	await writeRepoFile(repoPath, relativePath, `${content}\n`, true);
+	getNapiBindings().gitCommitAll(repoPath, message);
+}
+
+export async function commitWorkspaceFile(
+	repoPath: string,
+	workspace: { id: number; path: string },
+	relativePath: string,
+	content: string,
+	message: string,
+): Promise<void> {
+	const workspacePath = resolveWorkspacePath(repoPath, workspace.path);
+	writeWorkspaceFile(workspacePath, relativePath, `${content}\n`, true);
+	await createCommit(repoPath, workspace.id, message);
+}
+
+// Helper: wait for sidebar to show branch name, then return the first matching element
+export async function findSidebarBranchElement(
+	branchName: string,
+): Promise<HTMLElement> {
+	const sidebarRoot = document.querySelector(
+		`.${CSS.escape("group/sidebar")}`,
+	) as HTMLElement;
+	await waitFor(() => {
+		expect(within(sidebarRoot).getAllByText(branchName).length).toBeGreaterThan(
+			0,
+		);
+	});
+	return within(sidebarRoot).getAllByText(branchName)[0];
+}
