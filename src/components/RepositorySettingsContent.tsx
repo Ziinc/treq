@@ -21,15 +21,13 @@ export const RepositorySettingsContent = forwardRef<
 >(({ repoPath, onSavingChange }, ref) => {
 	const [branchNamePattern, setBranchNamePattern] = useState("treq/{name}");
 	const [includedFiles, setIncludedFiles] = useState("");
-	const [symlinkedDirs, setSymlinkedDirs] = useState("");
 	const [defaultModel, setDefaultModel] = useState<string>("");
 	const [defaultAgent, setDefaultAgent] = useState<string>("");
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
-	const [availableFiles, setAvailableFiles] = useState<string[]>([]);
 	const { addToast } = useToast();
 
-	// Load settings and available gitignored files when repo path changes
+	// Load settings when repo path changes
 	useEffect(() => {
 		if (repoPath) {
 			setLoading(true);
@@ -38,35 +36,21 @@ export const RepositorySettingsContent = forwardRef<
 			Promise.all([
 				getRepoSetting(repoPath, "branch_name_pattern"),
 				getRepoSetting(repoPath, "included_copy_files"),
-				getRepoSetting(repoPath, "symlinked_dirs"),
 				getRepoSetting(repoPath, "default_model"),
 				getRepoSetting(repoPath, "default_agent"),
 			])
-				.then(
-					([
-						branchPattern,
-						includedPatterns,
-						symlinkedPatterns,
-						model,
-						agent,
-					]) => {
-						setBranchNamePattern(branchPattern || "treq/{name}");
-						setIncludedFiles(includedPatterns || "");
-						setSymlinkedDirs(symlinkedPatterns || "");
-						setDefaultModel(model || "");
-						setDefaultAgent(agent || "");
-						// Note: gitignored files listing removed - was git-specific
-						setAvailableFiles([]);
-					},
-				)
+				.then(([branchPattern, includedPatterns, model, agent]) => {
+					setBranchNamePattern(branchPattern || "treq/{name}");
+					setIncludedFiles(includedPatterns || "");
+					setDefaultModel(model || "");
+					setDefaultAgent(agent || "");
+				})
 				.catch((err) => {
 					setError(`Failed to load settings: ${err}`);
 					setBranchNamePattern("treq/{name}");
 					setIncludedFiles("");
-					setSymlinkedDirs("");
 					setDefaultModel("");
 					setDefaultAgent("");
-					setAvailableFiles([]);
 				})
 				.finally(() => {
 					setLoading(false);
@@ -82,7 +66,6 @@ export const RepositorySettingsContent = forwardRef<
 			await Promise.all([
 				setRepoSetting(repoPath, "branch_name_pattern", branchNamePattern),
 				setRepoSetting(repoPath, "included_copy_files", includedFiles),
-				setRepoSetting(repoPath, "symlinked_dirs", symlinkedDirs),
 				setRepoSetting(repoPath, "default_model", defaultModel),
 				setRepoSetting(repoPath, "default_agent", defaultAgent),
 			]);
@@ -104,6 +87,7 @@ export const RepositorySettingsContent = forwardRef<
 		}
 	};
 
+<<<<<<< HEAD
 	useImperativeHandle(ref, () => ({ save: handleSave }));
 
 	const addPattern = (pattern: string) => {
@@ -114,6 +98,8 @@ export const RepositorySettingsContent = forwardRef<
 		}
 	};
 
+=======
+>>>>>>> accae8c6 (Move symlink dirs into create-workspace Advanced options)
 	if (loading) {
 		return (
 			<div className="py-8 text-center text-muted-foreground">
@@ -149,45 +135,9 @@ export const RepositorySettingsContent = forwardRef<
 					className="font-mono text-sm mt-2"
 				/>
 				<p className="text-sm text-muted-foreground mt-1">
-					Paths to copy into each new workspace (e.g. .env). Prefer symlinks
-					below for large directories.
-				</p>
-				{availableFiles.length > 0 && (
-					<div className="flex flex-wrap gap-2 mt-2">
-						{availableFiles.map((file) => (
-							<Button
-								key={file}
-								type="button"
-								variant="outline"
-								size="sm"
-								onClick={() => addPattern(file)}
-								className="text-sm h-7"
-							>
-								+ {file}
-							</Button>
-						))}
-					</div>
-				)}
-				{availableFiles.length === 0 && !loading && (
-					<p className="text-sm text-muted-foreground italic mt-2">
-						No .gitignored files found in repository root
-					</p>
-				)}
-			</div>
-
-			<div>
-				<Label htmlFor="symlinked-dirs">Symlinked Directories</Label>
-				<Textarea
-					id="symlinked-dirs"
-					value={symlinkedDirs}
-					onChange={(e) => setSymlinkedDirs(e.target.value)}
-					placeholder="e.g., node_modules&#10;target&#10;.venv"
-					rows={4}
-					className="font-mono text-sm mt-2"
-				/>
-				<p className="text-sm text-muted-foreground mt-1">
-					Heavy directories to symlink from the home repo into each new
-					workspace instead of copying (e.g. node_modules, target, .venv).
+					Paths to copy into each new workspace (e.g. .env). For heavy dirs like
+					node_modules, use Symlink from home repo under Advanced when creating
+					a workspace.
 				</p>
 			</div>
 
