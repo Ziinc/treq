@@ -2737,67 +2737,15 @@ pub fn jj_get_file_lines(
 
 // Mutation Operations (CLI fallbacks)
 
-/// Snapshot dirty on-disk files into the working-copy commit.
+/// Restore a file to parent state (discard changes).
 ///
-/// Restore compares against `wc_commit.tree()`. If disk is dirty but the WC
-/// commit was never rewritten to match, restore early-returns as a no-op —
-/// which is exactly the Review-tab "Discard" failure mode. Calling this first
-/// makes discard see the real working-copy state.
-fn snapshot_working_copy_into_commit(workspace_path: &str) -> Result<(), JjError> {
-    if !Path::new(workspace_path).exists() {
-        return Ok(());
-    }
-    let mut loaded = load_workspace_repo_for_history_edit(workspace_path)?;
-    let workspace_name = loaded.workspace.workspace_name().to_owned();
-    let Some(wc_commit) = get_workspace_wc_commit(&loaded)? else {
-        return Ok(());
-    };
-
-    let ignore_root = derive_repo_path_from_workspace(workspace_path)
-        .unwrap_or_else(|| workspace_path.to_string());
-    let matcher = repo_root_matcher();
-    let opts = snapshot_options_for_all_paths(&ignore_root, &matcher);
-
-    let mut locked_ws = loaded
-        .workspace
-        .start_working_copy_mutation()
-        .map_err(|e| JjError::IoError(format!("Failed to lock working copy: {}", e)))?;
-    let (new_tree, _) = block_on(locked_ws.locked_wc().snapshot(&opts))
-        .map_err(|e| JjError::IoError(format!("Failed to snapshot working copy: {}", e)))?;
-
-    if new_tree.tree_ids() == wc_commit.tree_ids() {
-        block_on(locked_ws.finish(loaded.repo.op_id().clone())).map_err(|e| {
-            JjError::IoError(format!("Failed to finish working copy snapshot: {}", e))
-        })?;
-        return Ok(());
-    }
-
-    let mut tx = loaded.repo.start_transaction();
-    let rewritten = block_on(
-        tx.repo_mut()
-            .rewrite_commit(&wc_commit)
-            .set_tree(new_tree)
-            .write(),
-    )
-    .map_err(|e| JjError::IoError(format!("Failed to rewrite working-copy commit: {}", e)))?;
-    block_on(tx.repo_mut().edit(workspace_name, &rewritten)).map_err(|e| {
-        JjError::IoError(format!(
-            "Failed to update working-copy commit pointer: {}",
-            e
-        ))
-    })?;
-    block_on(tx.repo_mut().rebase_descendants())
-        .map_err(|e| JjError::IoError(format!("Failed to rebase descendants: {}", e)))?;
-    let new_repo = block_on(tx.commit("snapshot working copy"))
-        .map_err(|e| JjError::IoError(format!("Failed to commit working-copy snapshot: {}", e)))?;
-    block_on(locked_ws.finish(new_repo.op_id().clone()))
-        .map_err(|e| JjError::IoError(format!("Failed to finish working copy snapshot: {}", e)))?;
-    Ok(())
-}
-
-/// Restore a file to parent state (discard changes)
+/// Snapshots on-disk content and restores in a single WC rewrite so we never
+/// publish an intermediate dirty WC commit (which would rebase sibling
+/// workspace WCs onto unrelated dirty paths).
 pub fn jj_restore_file(workspace_path: &str, file_path: &str) -> Result<String, JjError> {
-    snapshot_working_copy_into_commit(workspace_path)?;
+    if !Path::new(workspace_path).exists() {
+        return Ok(String::new());
+    }
     let mut loaded = load_workspace_repo_for_history_edit(workspace_path)?;
     let ws_name = loaded.workspace.workspace_name().to_owned();
     let wc_commit = get_workspace_wc_commit(&loaded)?
@@ -2808,51 +2756,81 @@ pub fn jj_restore_file(workspace_path: &str, file_path: &str) -> Result<String, 
         .first()
         .ok_or_else(|| JjError::IoError("Working-copy commit has no parent".to_string()))?;
     let source_tree = parent.tree();
-    let destination_tree = wc_commit.tree();
+
+    let ignore_root = derive_repo_path_from_workspace(workspace_path)
+        .unwrap_or_else(|| workspace_path.to_string());
+    let tracking_matcher = repo_root_matcher();
+    let opts = snapshot_options_for_all_paths(&ignore_root, &tracking_matcher);
+    let mut locked_ws = loaded
+        .workspace
+        .start_working_copy_mutation()
+        .map_err(|e| JjError::IoError(format!("Failed to lock working copy: {}", e)))?;
+    let (snapshotted_tree, _) = block_on(locked_ws.locked_wc().snapshot(&opts))
+        .map_err(|e| JjError::IoError(format!("Failed to snapshot working copy: {}", e)))?;
+
     let repo_file = RepoPathBuf::from_internal_string(file_path)
         .map_err(|e| JjError::IoError(format!("Invalid file path '{}': {}", file_path, e)))?;
     let matcher = PrefixMatcher::new([repo_file.as_ref()]);
     let restored_tree = block_on(rewrite::restore_tree(
         &source_tree,
-        &destination_tree,
+        &snapshotted_tree,
         "source".to_string(),
         "destination".to_string(),
         &matcher,
     ))
     .map_err(|e| JjError::IoError(format!("Failed to restore file: {}", e)))?;
-    if restored_tree.tree_ids() == destination_tree.tree_ids() {
+
+    let commit_needs_rewrite = restored_tree.tree_ids() != wc_commit.tree_ids();
+    let disk_needs_checkout = restored_tree.tree_ids() != snapshotted_tree.tree_ids();
+    if !commit_needs_rewrite && !disk_needs_checkout {
+        block_on(locked_ws.finish(loaded.repo.op_id().clone())).map_err(|e| {
+            JjError::IoError(format!("Failed to finish working copy snapshot: {}", e))
+        })?;
         return Ok(String::new());
     }
-    let mut tx = loaded.repo.start_transaction();
-    let rewritten = block_on(
-        tx.repo_mut()
-            .rewrite_commit(&wc_commit)
-            .set_tree(restored_tree)
-            .write(),
-    )
-    .map_err(|e| JjError::IoError(format!("Failed to rewrite working-copy commit: {}", e)))?;
-    block_on(tx.repo_mut().edit(ws_name, &rewritten)).map_err(|e| {
-        JjError::IoError(format!(
-            "Failed to update working-copy commit pointer: {}",
-            e
-        ))
-    })?;
-    block_on(tx.repo_mut().rebase_descendants())
-        .map_err(|e| JjError::IoError(format!("Failed to rebase descendants: {}", e)))?;
-    let new_repo = block_on(tx.commit("restore file"))
-        .map_err(|e| JjError::IoError(format!("Failed to commit restore: {}", e)))?;
-    update_workspace_after_history_edit(
-        &mut loaded,
-        &new_repo,
-        Some(&wc_commit),
-        CheckoutMode::Immediate,
-    )?;
+
+    let new_repo = if commit_needs_rewrite {
+        let mut tx = loaded.repo.start_transaction();
+        let rewritten = block_on(
+            tx.repo_mut()
+                .rewrite_commit(&wc_commit)
+                .set_tree(restored_tree)
+                .write(),
+        )
+        .map_err(|e| JjError::IoError(format!("Failed to rewrite working-copy commit: {}", e)))?;
+        block_on(tx.repo_mut().edit(ws_name, &rewritten)).map_err(|e| {
+            JjError::IoError(format!(
+                "Failed to update working-copy commit pointer: {}",
+                e
+            ))
+        })?;
+        block_on(tx.repo_mut().rebase_descendants())
+            .map_err(|e| JjError::IoError(format!("Failed to rebase descendants: {}", e)))?;
+        let new_repo = block_on(tx.commit("restore file"))
+            .map_err(|e| JjError::IoError(format!("Failed to commit restore: {}", e)))?;
+        block_on(locked_ws.finish(new_repo.op_id().clone())).map_err(|e| {
+            JjError::IoError(format!("Failed to finish working copy snapshot: {}", e))
+        })?;
+        new_repo
+    } else {
+        block_on(locked_ws.finish(loaded.repo.op_id().clone())).map_err(|e| {
+            JjError::IoError(format!("Failed to finish working copy snapshot: {}", e))
+        })?;
+        Arc::clone(&loaded.repo)
+    };
+
+    // old_wc is None: tree_state already reflects the snapshotted disk, which
+    // may differ from wc_commit.tree(), so the ConcurrentCheckout guard would
+    // false-positive if we passed the pre-snapshot commit.
+    update_workspace_after_history_edit(&mut loaded, &new_repo, None, CheckoutMode::Immediate)?;
     Ok(String::new())
 }
 
 /// Restore all changes
 pub fn jj_restore_all(workspace_path: &str) -> Result<String, JjError> {
-    snapshot_working_copy_into_commit(workspace_path)?;
+    if !Path::new(workspace_path).exists() {
+        return Ok(String::new());
+    }
     let mut loaded = load_workspace_repo_for_history_edit(workspace_path)?;
     let ws_name = loaded.workspace.workspace_name().to_owned();
     let wc_commit = get_workspace_wc_commit(&loaded)?
@@ -2863,34 +2841,58 @@ pub fn jj_restore_all(workspace_path: &str) -> Result<String, JjError> {
         .first()
         .ok_or_else(|| JjError::IoError("Working-copy commit has no parent".to_string()))?;
     let source_tree = parent.tree();
-    let destination_tree = wc_commit.tree();
-    if source_tree.tree_ids() == destination_tree.tree_ids() {
+
+    let ignore_root = derive_repo_path_from_workspace(workspace_path)
+        .unwrap_or_else(|| workspace_path.to_string());
+    let tracking_matcher = repo_root_matcher();
+    let opts = snapshot_options_for_all_paths(&ignore_root, &tracking_matcher);
+    let mut locked_ws = loaded
+        .workspace
+        .start_working_copy_mutation()
+        .map_err(|e| JjError::IoError(format!("Failed to lock working copy: {}", e)))?;
+    let (snapshotted_tree, _) = block_on(locked_ws.locked_wc().snapshot(&opts))
+        .map_err(|e| JjError::IoError(format!("Failed to snapshot working copy: {}", e)))?;
+
+    let commit_needs_rewrite = source_tree.tree_ids() != wc_commit.tree_ids();
+    let disk_needs_checkout = source_tree.tree_ids() != snapshotted_tree.tree_ids();
+    if !commit_needs_rewrite && !disk_needs_checkout {
+        block_on(locked_ws.finish(loaded.repo.op_id().clone())).map_err(|e| {
+            JjError::IoError(format!("Failed to finish working copy snapshot: {}", e))
+        })?;
         return Ok(String::new());
     }
-    let mut tx = loaded.repo.start_transaction();
-    let rewritten = block_on(
-        tx.repo_mut()
-            .rewrite_commit(&wc_commit)
-            .set_tree(source_tree)
-            .write(),
-    )
-    .map_err(|e| JjError::IoError(format!("Failed to rewrite working-copy commit: {}", e)))?;
-    block_on(tx.repo_mut().edit(ws_name, &rewritten)).map_err(|e| {
-        JjError::IoError(format!(
-            "Failed to update working-copy commit pointer: {}",
-            e
-        ))
-    })?;
-    block_on(tx.repo_mut().rebase_descendants())
-        .map_err(|e| JjError::IoError(format!("Failed to rebase descendants: {}", e)))?;
-    let new_repo = block_on(tx.commit("restore all"))
-        .map_err(|e| JjError::IoError(format!("Failed to commit restore: {}", e)))?;
-    update_workspace_after_history_edit(
-        &mut loaded,
-        &new_repo,
-        Some(&wc_commit),
-        CheckoutMode::Immediate,
-    )?;
+
+    let new_repo = if commit_needs_rewrite {
+        let mut tx = loaded.repo.start_transaction();
+        let rewritten = block_on(
+            tx.repo_mut()
+                .rewrite_commit(&wc_commit)
+                .set_tree(source_tree)
+                .write(),
+        )
+        .map_err(|e| JjError::IoError(format!("Failed to rewrite working-copy commit: {}", e)))?;
+        block_on(tx.repo_mut().edit(ws_name, &rewritten)).map_err(|e| {
+            JjError::IoError(format!(
+                "Failed to update working-copy commit pointer: {}",
+                e
+            ))
+        })?;
+        block_on(tx.repo_mut().rebase_descendants())
+            .map_err(|e| JjError::IoError(format!("Failed to rebase descendants: {}", e)))?;
+        let new_repo = block_on(tx.commit("restore all"))
+            .map_err(|e| JjError::IoError(format!("Failed to commit restore: {}", e)))?;
+        block_on(locked_ws.finish(new_repo.op_id().clone())).map_err(|e| {
+            JjError::IoError(format!("Failed to finish working copy snapshot: {}", e))
+        })?;
+        new_repo
+    } else {
+        block_on(locked_ws.finish(loaded.repo.op_id().clone())).map_err(|e| {
+            JjError::IoError(format!("Failed to finish working copy snapshot: {}", e))
+        })?;
+        Arc::clone(&loaded.repo)
+    };
+
+    update_workspace_after_history_edit(&mut loaded, &new_repo, None, CheckoutMode::Immediate)?;
     Ok(String::new())
 }
 

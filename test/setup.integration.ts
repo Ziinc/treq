@@ -40,12 +40,19 @@ beforeAll(() => {
 
 // ── Replace Tauri invoke with real Rust dispatch ──────────────────────────────
 
-// Track jj_* calls made during each test
+// Track jj_* calls made during each test. Commands that already have a real
+// NAPI implementation (restore/snapshot for Review discard) are allowlisted.
 const jjCalls: string[] = [];
+const ALLOWED_JJ_COMMANDS = new Set([
+	"jj_restore_file",
+	"jj_restore_all",
+	"jj_snapshot_working_copy",
+	"jj_restore_snapshot",
+]);
 
 vi.mock("@tauri-apps/api/core", () => ({
 	invoke: vi.fn((cmd: string, args?: Record<string, unknown>) => {
-		if (cmd.startsWith("jj_")) {
+		if (cmd.startsWith("jj_") && !ALLOWED_JJ_COMMANDS.has(cmd)) {
 			jjCalls.push(cmd);
 		}
 		try {

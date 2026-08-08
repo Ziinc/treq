@@ -40,7 +40,7 @@ import {
 	checkAndRebaseWorkspaces,
 	createSession,
 	type DirectoryEntry,
-	discardWorkspaceChanges,
+	jjRestoreAll,
 	dryRunHomeRepoRebase,
 	getRepoSetting,
 	getSetting,
@@ -635,7 +635,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 			if (!workspace?.workspace_path || !effectiveRepoPath) return;
 
 			try {
-				await discardWorkspaceChanges(workingDirectory);
+				await jjRestoreAll(workingDirectory);
 				addToast({
 					title: "Changes discarded",
 					description: "Working copy changes were removed",

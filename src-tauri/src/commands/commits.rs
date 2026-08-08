@@ -60,13 +60,6 @@ pub async fn jj_snapshot_working_copy(workspace_path: String) -> Result<String, 
 }
 
 #[tauri::command]
-pub async fn snapshot_working_copy(workspace_path: String) -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(move || core::snapshot_working_copy(&workspace_path))
-        .await
-        .map_err(|e| format!("Failed to join snapshot_working_copy task: {}", e))?
-}
-
-#[tauri::command]
 pub async fn jj_restore_snapshot(
     workspace_path: String,
     snapshot_id: String,
@@ -76,37 +69,6 @@ pub async fn jj_restore_snapshot(
     })
     .await
     .map_err(|e| format!("Failed to join jj_restore_snapshot task: {}", e))?
-}
-
-#[tauri::command]
-pub async fn restore_working_copy_snapshot(
-    workspace_path: String,
-    snapshot_id: String,
-) -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        core::restore_working_copy_snapshot(&workspace_path, &snapshot_id)
-    })
-    .await
-    .map_err(|e| format!("Failed to join restore_working_copy_snapshot task: {}", e))?
-}
-
-#[tauri::command]
-pub async fn discard_workspace_changes(workspace_path: String) -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(move || crate::core::discard_all_changes(&workspace_path))
-        .await
-        .map_err(|e| format!("Failed to join discard_workspace_changes task: {}", e))?
-}
-
-#[tauri::command]
-pub async fn discard_workspace_file(
-    workspace_path: String,
-    file_path: String,
-) -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        crate::core::discard_file_changes(&workspace_path, &file_path)
-    })
-    .await
-    .map_err(|e| format!("Failed to join discard_workspace_file task: {}", e))?
 }
 
 #[tauri::command]

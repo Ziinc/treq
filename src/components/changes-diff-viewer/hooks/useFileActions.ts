@@ -12,10 +12,10 @@ import {
 } from "../../../hooks/useMergeQueueStatus";
 import {
 	createCommit,
-	discardWorkspaceChanges,
-	discardWorkspaceFile,
 	getWorkspaceFileLines,
 	ghCreatePr,
+	jjRestoreAll,
+	jjRestoreFile,
 	jjRestoreSnapshot,
 	jjSnapshotWorkingCopy,
 	jjSplit,
@@ -114,7 +114,7 @@ export function useFileActions({
 		if (readOnly) return;
 		try {
 			const snapshotId = await jjSnapshotWorkingCopy(workspacePath);
-			await discardWorkspaceChanges(workspacePath);
+			await jjRestoreAll(workspacePath);
 			addToast({
 				description: "All changes discarded",
 				title: "Discarded",
@@ -153,9 +153,7 @@ export function useFileActions({
 			try {
 				const snapshotId = await jjSnapshotWorkingCopy(workspacePath);
 				await Promise.all(
-					filesToDiscard.map((file) =>
-						discardWorkspaceFile(workspacePath, file),
-					),
+					filesToDiscard.map((file) => jjRestoreFile(workspacePath, file)),
 				);
 				const count = filesToDiscard.length;
 				addToast({

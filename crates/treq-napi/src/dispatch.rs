@@ -695,26 +695,13 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
         }
 
         // ── Commits ───────────────────────────────────────────────────────
-        "discard_workspace_changes" => {
-            let workspace_path = get_str(&args, "workspacePath")?;
-            let result = treq_lib::core::discard_all_changes(&workspace_path)?;
-            Ok(Value::String(result))
-        }
-
-        "discard_workspace_file" => {
-            let workspace_path = get_str(&args, "workspacePath")?;
-            let file_path = get_str(&args, "filePath")?;
-            let result = treq_lib::core::discard_file_changes(&workspace_path, &file_path)?;
-            Ok(Value::String(result))
-        }
-
-        "jj_snapshot_working_copy" | "snapshot_working_copy" => {
+        "jj_snapshot_working_copy" => {
             let workspace_path = get_str(&args, "workspacePath")?;
             let result = treq_lib::core::snapshot_working_copy(&workspace_path)?;
             Ok(Value::String(result))
         }
 
-        "jj_restore_snapshot" | "restore_working_copy_snapshot" => {
+        "jj_restore_snapshot" => {
             let workspace_path = get_str(&args, "workspacePath")?;
             let snapshot_id = get_str(&args, "snapshotId")?;
             let result =

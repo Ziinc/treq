@@ -1,4 +1,3 @@
-import * as React from "react";
 import { beforeEach, describe, expect, it } from "vitest";
 import userEvent from "@testing-library/user-event";
 import { render, screen, waitFor } from "../../test-utils";
@@ -63,12 +62,10 @@ describe("Review tab - discard changes", () => {
 			expect(screen.getAllByText(fileName).length).toBeGreaterThan(0),
 		);
 
-		// Opens the confirmation dialog
 		await user.click(
 			await screen.findByRole("button", { name: /discard all changes/i }),
 		);
 		await screen.findByText("Discard all changes?");
-		// Confirm in the dialog (last matching button is the destructive action)
 		const confirmButtons = screen.getAllByRole("button", {
 			name: /discard all changes/i,
 		});
@@ -93,8 +90,8 @@ describe("Review tab - discard changes", () => {
 			expect(screen.getAllByText(fileName).length).toBeGreaterThan(0),
 		);
 
-		// Sidebar file row — first match is in the Changes list
-		await user.click(screen.getAllByText(fileName)[0]);
+		const [sidebarFile] = screen.getAllByText(fileName);
+		await user.click(sidebarFile);
 
 		await user.click(await screen.findByTitle("Discard selected files"));
 
@@ -103,5 +100,62 @@ describe("Review tab - discard changes", () => {
 		});
 
 		expect(fs.existsSync(path.join(workspacePath, fileName))).toBe(false);
+	});
+
+	it("keeps changes when canceling the discard-all confirmation", async () => {
+		const fileName = "discard-cancel.txt";
+		const { workspacePath } = await createDirtyWorkspace(
+			"feat/discard-cancel",
+			fileName,
+		);
+		await openReviewTab(user, "feat/discard-cancel");
+
+		await waitFor(() =>
+			expect(screen.getAllByText(fileName).length).toBeGreaterThan(0),
+		);
+
+		await user.click(
+			await screen.findByRole("button", { name: /discard all changes/i }),
+		);
+		await screen.findByText("Discard all changes?");
+		await screen.clickByText("Cancel");
+
+		expect(screen.getAllByText(fileName).length).toBeGreaterThan(0);
+		expect(screen.queryByText("Discard all changes?")).toBeNull();
+		expect(fs.existsSync(path.join(workspacePath, fileName))).toBe(true);
+	});
+
+	it("undoes discard-all and restores the previous working-copy changes", async () => {
+		const fileName = "discard-undo.txt";
+		const { workspacePath } = await createDirtyWorkspace(
+			"feat/discard-undo",
+			fileName,
+		);
+		await openReviewTab(user, "feat/discard-undo");
+
+		await waitFor(() =>
+			expect(screen.getAllByText(fileName).length).toBeGreaterThan(0),
+		);
+
+		await user.click(
+			await screen.findByRole("button", { name: /discard all changes/i }),
+		);
+		await screen.findByText("Discard all changes?");
+		const confirmButtons = screen.getAllByRole("button", {
+			name: /discard all changes/i,
+		});
+		await user.click(confirmButtons[confirmButtons.length - 1]);
+
+		await waitFor(() => {
+			expect(screen.queryAllByText(fileName)).toHaveLength(0);
+		});
+		expect(fs.existsSync(path.join(workspacePath, fileName))).toBe(false);
+
+		await user.click(await screen.findByRole("button", { name: "Undo" }));
+
+		await waitFor(() => {
+			expect(screen.getAllByText(fileName).length).toBeGreaterThan(0);
+		});
+		expect(fs.existsSync(path.join(workspacePath, fileName))).toBe(true);
 	});
 });
