@@ -72,6 +72,10 @@ import {
 	type ParsedFileChange,
 } from "../lib/git-utils";
 import { reviewChangeCountQueryKey } from "../lib/review-change-count";
+import {
+	getReviewTabPill,
+	reviewTabPillClassName,
+} from "../lib/reviewTabPill";
 import { cn, getFullWorkspacePath, resolveReadmeImageSrc } from "../lib/utils";
 import type { SessionCreationInfo } from "../types/sessions";
 import {
@@ -292,6 +296,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 			setActiveTab("overview");
 			setBookmarkConflict(null);
 			setConflictModalOpen(false);
+			setChangedFiles(new Map());
 		}, [workspace?.id]);
 
 		useEffect(() => {
@@ -410,6 +415,30 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 				return countUniqueReviewChangePaths(files);
 			},
 		});
+
+		const reviewTabPill = useMemo(() => {
+			if (reviewChangeCount <= 0) return null;
+			const derived = getReviewTabPill({
+				conflictCount,
+				uncommittedCount: changedFiles.size,
+				hasUncommittedFromStatus: workspaceStatusData?.has_changes ?? false,
+				committedFileCount: reviewChangeCount,
+				commitsAheadCount:
+					workspaceStatusData?.commits_ahead_of_target?.length ?? 0,
+				hasWorkspaceCommits,
+			});
+			return {
+				tone: derived?.tone ?? "committed",
+				count: reviewChangeCount,
+			};
+		}, [
+			reviewChangeCount,
+			conflictCount,
+			changedFiles.size,
+			workspaceStatusData?.has_changes,
+			workspaceStatusData?.commits_ahead_of_target?.length,
+			hasWorkspaceCommits,
+		]);
 
 		const { data: overviewData, isPending: overviewPending } = useQuery({
 			queryKey: [
@@ -1092,17 +1121,15 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 							>
 								<FileDiff className="w-4 h-4" />
 								<span>Review</span>
-								{reviewChangeCount > 0 && (
+								{reviewTabPill && (
 									<span
 										data-testid="review-change-count"
 										className={cn(
 											"rounded-full px-2 py-0.5 text-xs font-medium transition-colors",
-											conflictCount > 0
-												? "bg-destructive text-destructive-foreground"
-												: "bg-muted text-muted-foreground",
+											reviewTabPillClassName(reviewTabPill.tone),
 										)}
 									>
-										{reviewChangeCount}
+										{reviewTabPill.count}
 									</span>
 								)}
 							</TabsTrigger>
