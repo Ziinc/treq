@@ -193,10 +193,6 @@ export const jjRestoreSnapshot = (
 ): Promise<string> =>
 	invoke("jj_restore_snapshot", { workspacePath, snapshotId });
 
-export const discardWorkspaceChanges = (
-	workspacePath: string,
-): Promise<string> => invoke("discard_workspace_changes", { workspacePath });
-
 export const createCommit = (
 	repoPath: string,
 	workspaceId: number | null,

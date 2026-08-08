@@ -722,13 +722,6 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
         }
 
         // ── Commits ───────────────────────────────────────────────────────
-        "discard_workspace_changes" => {
-            let workspace_path = get_str(&args, "workspacePath")?;
-            let result =
-                treq_lib::jj::jj_restore_all(&workspace_path).map_err(|e| e.to_string())?;
-            Ok(Value::String(result))
-        }
-
         "jj_snapshot_working_copy" => {
             let workspace_path = get_str(&args, "workspacePath")?;
             let result = treq_lib::core::snapshot_working_copy(&workspace_path)?;
