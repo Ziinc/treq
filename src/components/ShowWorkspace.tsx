@@ -72,10 +72,7 @@ import {
 	type ParsedFileChange,
 } from "../lib/git-utils";
 import { reviewChangeCountQueryKey } from "../lib/review-change-count";
-import {
-	getReviewTabPill,
-	reviewTabPillClassName,
-} from "../lib/reviewTabPill";
+import { getReviewTabPill, reviewTabPillClassName } from "../lib/reviewTabPill";
 import { cn, getFullWorkspacePath, resolveReadmeImageSrc } from "../lib/utils";
 import type { SessionCreationInfo } from "../types/sessions";
 import {
