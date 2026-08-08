@@ -1,4 +1,5 @@
 // Command modules
+pub mod agent_dispatch;
 pub mod binary;
 pub mod commits;
 pub mod file_view;
@@ -12,6 +13,7 @@ pub mod settings;
 pub mod workspace;
 
 // Re-export all commands for convenient access
+pub use agent_dispatch::*;
 pub use binary::*;
 pub use commits::*;
 pub use file_view::*;
