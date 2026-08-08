@@ -74,11 +74,7 @@ impl PrStatusManager {
         Self::new_with_ci(fetch, Arc::new(|_, _| Ok(None)), list_branches)
     }
 
-    pub fn new_with_ci(
-        fetch: PrFetchFn,
-        ci_fetch: CiFetchFn,
-        list_branches: BranchListFn,
-    ) -> Self {
+    pub fn new_with_ci(fetch: PrFetchFn, ci_fetch: CiFetchFn, list_branches: BranchListFn) -> Self {
         Self::new_with_interval(fetch, ci_fetch, list_branches, DEFAULT_POLL_INTERVAL)
     }
 
@@ -134,8 +130,13 @@ impl PrStatusManager {
         let ci_fetch = Arc::clone(&self.inner.ci_fetch);
         let list_branches = Arc::clone(&self.inner.list_branches);
         let on_update = self.inner.on_update.lock().unwrap().clone();
-        let mgr =
-            Self::new_with_intervals(fetch, ci_fetch, list_branches, poll_interval, ci_poll_interval);
+        let mgr = Self::new_with_intervals(
+            fetch,
+            ci_fetch,
+            list_branches,
+            poll_interval,
+            ci_poll_interval,
+        );
         if let Some(cb) = on_update {
             mgr.set_on_update(cb);
         }
@@ -201,12 +202,7 @@ impl PrStatusManager {
     }
 
     /// Overwrite a single branch CI entry (e.g. after an on-demand `gh pr checks`).
-    pub fn put_cached_ci(
-        &self,
-        repo_path: &str,
-        branch_name: &str,
-        status: Option<PrCiStatus>,
-    ) {
+    pub fn put_cached_ci(&self, repo_path: &str, branch_name: &str, status: Option<PrCiStatus>) {
         let mut cache = self.inner.ci_cache.lock().unwrap();
         cache
             .entry(repo_path.to_string())
@@ -250,11 +246,7 @@ impl PrStatusManager {
 
     /// Cached CI for a branch. Same `None` / `Some(None)` / `Some(Some(_))`
     /// semantics as [`Self::get_cached`].
-    pub fn get_cached_ci(
-        &self,
-        repo_path: &str,
-        branch_name: &str,
-    ) -> Option<Option<PrCiStatus>> {
+    pub fn get_cached_ci(&self, repo_path: &str, branch_name: &str) -> Option<Option<PrCiStatus>> {
         self.inner
             .ci_cache
             .lock()
@@ -337,11 +329,7 @@ fn background_loop(inner: Arc<Inner>) {
             .map(|t| inner.poll_interval.saturating_sub(now.duration_since(t)))
             .unwrap_or(Duration::ZERO);
         let until_ci = last_ci
-            .map(|t| {
-                inner
-                    .ci_poll_interval
-                    .saturating_sub(now.duration_since(t))
-            })
+            .map(|t| inner.ci_poll_interval.saturating_sub(now.duration_since(t)))
             .unwrap_or(Duration::ZERO);
         let wait = until_pr.min(until_ci).max(Duration::from_millis(5));
 
@@ -680,10 +668,7 @@ mod tests {
 
         let ci = mgr.list_cached_ci("/tmp/repo");
         assert_eq!(ci.len(), 2);
-        assert_eq!(
-            ci.get("feat/a").unwrap().as_ref().unwrap().state,
-            "success"
-        );
+        assert_eq!(ci.get("feat/a").unwrap().as_ref().unwrap().state, "success");
         assert!(ci.get("feat/b").unwrap().is_none());
         assert_eq!(
             mgr.get_cached_ci("/tmp/repo", "feat/a")

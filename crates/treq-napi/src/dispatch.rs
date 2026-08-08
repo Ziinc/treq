@@ -115,11 +115,7 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
                 &branch_name,
                 &extended_path,
             )?;
-            treq_lib::pr_status::global().put_cached_ci(
-                &repo_path,
-                &branch_name,
-                status.clone(),
-            );
+            treq_lib::pr_status::global().put_cached_ci(&repo_path, &branch_name, status.clone());
             serde_json::to_value(status).map_err(|e| e.to_string())
         }
 

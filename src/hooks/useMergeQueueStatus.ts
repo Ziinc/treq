@@ -8,6 +8,7 @@ import {
 	getPrChecksForPr,
 	getPrChecksViaGh,
 	getPrInfoViaGh,
+	listCachedPrCiStatuses,
 	listCachedPrStatuses,
 	refreshPrStatuses,
 	startPrStatusPolling,
@@ -60,10 +61,13 @@ type PrStatusesPayload = {
 
 function applyPrStatusesToQueryCache(
 	queryClient: ReturnType<typeof useQueryClient>,
-	repoPath: string,
-	statuses: Record<string, PrInfo | null>,
-	ciStatuses?: Record<string, PrCiStatus | null>,
+	payload: {
+		repoPath: string;
+		statuses: Record<string, PrInfo | null>;
+		ciStatuses?: Record<string, PrCiStatus | null>;
+	},
 ) {
+	const { repoPath, statuses, ciStatuses } = payload;
 	queryClient.setQueryData(cachedPrStatusesKey(repoPath), statuses);
 	for (const [branch, info] of Object.entries(statuses)) {
 		queryClient.setQueryData(["pr-info-gh", repoPath, branch], info);
@@ -106,12 +110,11 @@ export function usePrStatusPolling(repoPath: string | undefined) {
 		let unlisten: (() => void) | undefined;
 		void listen<PrStatusesPayload>("pr-statuses-updated", (event) => {
 			if (event.payload.repo_path !== repoPath) return;
-			applyPrStatusesToQueryCache(
-				queryClient,
+			applyPrStatusesToQueryCache(queryClient, {
 				repoPath,
-				event.payload.statuses,
-				event.payload.ci_statuses,
-			);
+				statuses: event.payload.statuses,
+				ciStatuses: event.payload.ci_statuses,
+			});
 		}).then((fn) => {
 			unlisten = fn;
 		});
@@ -122,7 +125,18 @@ export function usePrStatusPolling(repoPath: string | undefined) {
 
 	return useQuery({
 		queryKey: cachedPrStatusesKey(repoPath),
-		queryFn: () => listCachedPrStatuses(repoPath!),
+		queryFn: async () => {
+			const [statuses, ciStatuses] = await Promise.all([
+				listCachedPrStatuses(repoPath!),
+				listCachedPrCiStatuses(repoPath!),
+			]);
+			applyPrStatusesToQueryCache(queryClient, {
+				repoPath: repoPath!,
+				statuses,
+				ciStatuses,
+			});
+			return statuses;
+		},
 		enabled: !!repoPath,
 		// Cheap cache read only — the Rust poller owns the refresh cadence.
 		staleTime: 5_000,
@@ -150,12 +164,11 @@ export function usePrInfoViaGh(
 		let unlisten: (() => void) | undefined;
 		void listen<PrStatusesPayload>("pr-statuses-updated", (event) => {
 			if (event.payload.repo_path !== repoPath) return;
-			applyPrStatusesToQueryCache(
-				queryClient,
+			applyPrStatusesToQueryCache(queryClient, {
 				repoPath,
-				event.payload.statuses,
-				event.payload.ci_statuses,
-			);
+				statuses: event.payload.statuses,
+				ciStatuses: event.payload.ci_statuses,
+			});
 		}).then((fn) => {
 			unlisten = fn;
 		});
@@ -227,12 +240,11 @@ export function usePrCiStatus(
 		let unlisten: (() => void) | undefined;
 		void listen<PrStatusesPayload>("pr-statuses-updated", (event) => {
 			if (event.payload.repo_path !== repoPath) return;
-			applyPrStatusesToQueryCache(
-				queryClient,
+			applyPrStatusesToQueryCache(queryClient, {
 				repoPath,
-				event.payload.statuses,
-				event.payload.ci_statuses,
-			);
+				statuses: event.payload.statuses,
+				ciStatuses: event.payload.ci_statuses,
+			});
 		}).then((fn) => {
 			unlisten = fn;
 		});
