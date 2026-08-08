@@ -871,7 +871,10 @@ pub fn sync_discovered_workspaces(
              VALUES (?1, ?2, ?3, ?4, ?5)
              ON CONFLICT(workspace_path) DO UPDATE SET
                  workspace_name = excluded.workspace_name,
-                 branch_name = excluded.branch_name,
+                 branch_name = CASE
+                     WHEN ?6 THEN workspaces.branch_name
+                     ELSE excluded.branch_name
+                 END,
                  refreshed_at = excluded.refreshed_at",
             params![
                 workspace.workspace_name,
@@ -879,6 +882,7 @@ pub fn sync_discovered_workspaces(
                 workspace.branch_name,
                 refreshed_at,
                 refreshed_at,
+                workspace.has_conflicts,
             ],
         )
         .map_err(|e| format!("Failed to upsert discovered workspace: {}", e))?;
@@ -1314,6 +1318,34 @@ mod tests {
     use super::*;
     use std::fs;
     use tempfile::TempDir;
+
+    #[test]
+    fn conflicted_discovery_preserves_canonical_branch_name() {
+        let temp = TempDir::new().expect("tempdir");
+        let repo_path = temp.path().to_str().expect("utf8 path");
+        init_local_db(repo_path).expect("initialize database");
+        add_workspace(
+            repo_path,
+            "fix-example".to_string(),
+            "fix-example".to_string(),
+            "fix/example".to_string(),
+            None,
+            None,
+            None,
+        )
+        .expect("register workspace");
+
+        let discovered = vec![crate::jj::DiscoveredWorkspace {
+            workspace_name: "fix-example".to_string(),
+            workspace_path: "fix-example".to_string(),
+            branch_name: "fix-example".to_string(),
+            has_conflicts: true,
+        }];
+        let workspaces = sync_discovered_workspaces(repo_path, &discovered, "2026-08-08T00:00:00Z")
+            .expect("sync discovery");
+
+        assert_eq!(workspaces[0].branch_name, "fix/example");
+    }
 
     #[test]
     fn init_local_db_creates_instance_registry_table() {
