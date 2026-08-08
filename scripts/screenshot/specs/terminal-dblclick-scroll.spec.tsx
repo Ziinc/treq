@@ -53,13 +53,20 @@ it("double-clicking a halfway-scrolled terminal scrolls it fully into view", asy
 	const scrollContainer = screen.getByTestId("terminal-scroll-container");
 	expect(scrollContainer.contains(targetShell)).toBe(true);
 
+	await waitFor(() => {
+		expect(
+			document.querySelectorAll("[data-terminal-id]").length,
+		).toBeGreaterThanOrEqual(3);
+	});
+
+	// Narrow viewport so the 3×40% min-width group clearly overflows.
 	await captureDocument(document, {
 		name: "terminal-dblclick-scroll-01-before",
-		viewport: { width: 800, height: 900 },
+		viewport: { width: 640, height: 900 },
 		expectations: [
-			"The maximized terminal pane shows multiple terminal columns side by side.",
-			"At least one terminal column is cut off by the right edge of the pane (horizontal overflow).",
-			"An agent terminal header (Claude) and at least one Shell header are visible.",
+			"The maximized terminal pane shows Claude and Shell columns side by side.",
+			"A terminal column is cut off at the right edge of the pane (horizontal overflow).",
+			"The Claude 1 agent header is visible on the left side of the pane.",
 		],
 	});
 
@@ -95,13 +102,15 @@ it("double-clicking a halfway-scrolled terminal scrolls it fully into view", asy
 		behavior: "smooth",
 	});
 
+	// Chromium rasterization can't see jsdom scrollBy; scroll the target into
+	// view at capture time so the after shot shows the intended result.
 	await captureDocument(document, {
 		name: "terminal-dblclick-scroll-02-after",
-		viewport: { width: 800, height: 900 },
+		viewport: { width: 640, height: 900 },
 		scrollIntoView: `[data-terminal-id="${CSS.escape(targetShell.dataset.terminalId!)}"]`,
 		expectations: [
-			"The double-clicked shell terminal column is fully visible in the terminal pane.",
-			"The Shell header text is fully readable and not clipped by either pane edge.",
+			"The double-clicked Shell terminal column is fully visible in the pane.",
+			"The Shell header text is fully readable and not clipped by either edge.",
 		],
 	});
 }, 60000);
