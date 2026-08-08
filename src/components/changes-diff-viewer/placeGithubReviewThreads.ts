@@ -12,9 +12,7 @@ function pushToMap(
 	else map.set(key, [thread]);
 }
 
-function lineSideOf(
-	ln: { new?: number; old?: number },
-): "old" | "new" {
+function lineSideOf(ln: { new?: number; old?: number }): "old" | "new" {
 	return ln.old !== undefined && ln.new === undefined ? "old" : "new";
 }
 
@@ -45,9 +43,7 @@ export function tryPlaceThread(
 			const lineNumbers = computeHunkLineNumbers(hunk);
 			const hasMatch = lineNumbers.some((ln) => {
 				const actualLineNum = ln.new ?? ln.old ?? 0;
-				return (
-					actualLineNum === thread.line && lineSideOf(ln) === expectedSide
-				);
+				return actualLineNum === thread.line && lineSideOf(ln) === expectedSide;
 			});
 			if (hasMatch) {
 				return `${thread.path}:${hunk.id}:${thread.line}:${expectedSide}`;
