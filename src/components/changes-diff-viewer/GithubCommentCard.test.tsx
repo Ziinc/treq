@@ -3,7 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
 import { render, screen, within } from "../../../test/test-utils";
 import type { GhReviewThread } from "../../lib/api-types";
-import { formatGithubCommentDate, GithubCommentCard } from "./GithubCommentCard";
+import {
+	formatGithubCommentDate,
+	GithubCommentCard,
+} from "./GithubCommentCard";
 
 function thread(overrides: Partial<GhReviewThread> = {}): GhReviewThread {
 	return {

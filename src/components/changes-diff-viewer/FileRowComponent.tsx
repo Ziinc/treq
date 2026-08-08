@@ -1,11 +1,5 @@
 import React, { memo, useMemo } from "react";
-import {
-	ChevronDown,
-	ChevronRight,
-	FileText,
-	Loader2,
-	X,
-} from "lucide-react";
+import { ChevronDown, ChevronRight, FileText, Loader2, X } from "lucide-react";
 import { Button } from "../ui/button";
 import { CommentInput } from "../CommentInput";
 import { FileCommentSection } from "./FileCommentSection";

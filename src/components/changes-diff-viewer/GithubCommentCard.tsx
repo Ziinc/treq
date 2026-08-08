@@ -101,7 +101,7 @@ function GithubCommentBody({
 
 	return (
 		<div
-			className="group relative bg-background rounded-md p-2.5 pr-9 border border-border/60"
+			className="group relative bg-background rounded-md p-2.5 pr-9 border border-border/60 font-sans"
 			data-testid="github-comment-card"
 		>
 			<div className="flex items-center gap-2 mb-1.5">
