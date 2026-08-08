@@ -36,6 +36,7 @@ export function useFileBrowserReview({
 	addToast,
 }: UseFileBrowserReviewParams) {
 	const [comments, setComments] = useState<LineComment[]>([]);
+	const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
 	const [finalReviewComment, setFinalReviewComment] = useState("");
 	const [reviewPopoverOpen, setReviewPopoverOpen] = useState(false);
 	const [showCancelDialog, setShowCancelDialog] = useState(false);
@@ -99,6 +100,27 @@ export function useFileBrowserReview({
 
 	const deleteComment = useCallback((commentId: string) => {
 		setComments((prev) => prev.filter((c) => c.id !== commentId));
+		setEditingCommentId((prev) => (prev === commentId ? null : prev));
+	}, []);
+
+	const startEditComment = useCallback((commentId: string) => {
+		setEditingCommentId(commentId);
+	}, []);
+
+	const cancelEditComment = useCallback(() => {
+		setEditingCommentId(null);
+	}, []);
+
+	const saveEditComment = useCallback((commentId: string, newText: string) => {
+		if (!newText.trim()) return;
+		setComments((prev) =>
+			prev.map((comment) =>
+				comment.id === commentId
+					? { ...comment, text: newText.trim() }
+					: comment,
+			),
+		);
+		setEditingCommentId(null);
 	}, []);
 
 	const formatMarkdown = useCallback(
@@ -180,6 +202,10 @@ export function useFileBrowserReview({
 		comments,
 		addComment,
 		deleteComment,
+		editingCommentId,
+		startEditComment,
+		cancelEditComment,
+		saveEditComment,
 		finalReviewComment,
 		setFinalReviewComment,
 		reviewPopoverOpen,

@@ -82,7 +82,8 @@ import {
 	AlertDialogTitle,
 } from "./ui/alert-dialog";
 import { Button } from "./ui/button";
-import { CommentInput } from "./CommentInput";
+import { FileCommentSection } from "./changes-diff-viewer/FileCommentSection";
+import type { LineComment } from "../lib/review";
 import { MarkdownContent } from "./MarkdownContent";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
@@ -151,7 +152,15 @@ function filterHiddenEntries(entries: DirectoryEntry[]): DirectoryEntry[] {
 
 // Virtualization constants
 const LINE_HEIGHT = 18;
-const COMMENT_ROW_HEIGHT = 165;
+const COMMENT_INPUT_HEIGHT = 165;
+const COMMENT_CARD_HEIGHT = 90;
+// FileCommentSection wraps its cards in a padded container (px-4 py-3).
+const COMMENT_SECTION_PADDING = 24;
+
+/** One virtualized row: either a code line, or a comment-thread row inserted after it. */
+type FileBrowserRow =
+	| { type: "line"; lineNum: number }
+	| { type: "comment"; lineNum: number };
 
 // TreeNode component - memoized to prevent unnecessary re-renders
 interface TreeNodeProps {
@@ -178,6 +187,7 @@ interface CodeLineProps {
 	htmlContent: string;
 	diffStatus: "add" | "modify" | "delete" | undefined;
 	hasDeletionMarker: boolean;
+	hasComment: boolean;
 	lineNumberWidth: number;
 	onMouseEnter: () => void;
 	onMouseLeave: () => void;
@@ -202,6 +212,7 @@ const CodeLine = memo(
 		htmlContent,
 		diffStatus,
 		hasDeletionMarker,
+		hasComment,
 		lineNumberWidth,
 		onMouseEnter,
 		onMouseLeave,
@@ -250,6 +261,10 @@ const CodeLine = memo(
 						}}
 						title="Lines deleted here"
 					/>
+				)}
+				{/* Comment indicator */}
+				{hasComment && (
+					<MessageSquare className="w-3 h-3 text-primary flex-shrink-0 ml-1" />
 				)}
 				{/* Line number */}
 				<span
@@ -327,6 +342,14 @@ interface FileContentViewProps {
 	} | null;
 	onSubmitComment: (text: string) => void;
 	onCancelComment: () => void;
+	rows: FileBrowserRow[];
+	linesWithComments: Set<number>;
+	commentsByEndLine: Map<number, LineComment[]>;
+	editingCommentId: string | null;
+	onStartEditComment: (commentId: string) => void;
+	onCancelEditComment: () => void;
+	onSaveEditComment: (commentId: string, text: string) => void;
+	onDeleteComment: (commentId: string) => void;
 	listRef: React.RefObject<ListImperativeAPI>;
 	// Search props
 	isSearchOpen: boolean;
@@ -365,6 +388,14 @@ const FileContentView = memo(
 		pendingComment,
 		onSubmitComment,
 		onCancelComment,
+		rows,
+		linesWithComments,
+		commentsByEndLine,
+		editingCommentId,
+		onStartEditComment,
+		onCancelEditComment,
+		onSaveEditComment,
+		onDeleteComment,
 		listRef,
 		isSearchOpen,
 		searchQuery,
@@ -568,9 +599,7 @@ const FileContentView = memo(
 						<>
 							<List
 								listRef={listRef}
-								rowCount={
-									lines.length + (showCommentInput && pendingComment ? 1 : 0)
-								}
+								rowCount={rows.length}
 								rowHeight={getItemHeight}
 								rowComponent={({
 									index,
@@ -579,33 +608,34 @@ const FileContentView = memo(
 									index: number;
 									style: React.CSSProperties;
 								}) => {
-									// Comment row is inserted at index = pendingComment.endLine (after last selected line)
-									if (
-										showCommentInput &&
-										pendingComment &&
-										index === pendingComment.endLine
-									) {
+									const row = rows[index];
+									if (!row) return null;
+
+									if (row.type === "comment") {
+										const { lineNum } = row;
+										const showInputHere =
+											showCommentInput &&
+											pendingComment !== null &&
+											pendingComment.endLine === lineNum;
 										return (
 											<div style={style}>
-												<CommentInput
+												<FileCommentSection
+													comments={commentsByEndLine.get(lineNum) ?? []}
+													editingCommentId={editingCommentId}
+													showInput={showInputHere}
 													onSubmit={onSubmitComment}
 													onCancel={onCancelComment}
-													filePath={relativePath ?? undefined}
-													startLine={pendingComment.startLine}
-													endLine={pendingComment.endLine}
+													onStartEdit={onStartEditComment}
+													onCancelEdit={onCancelEditComment}
+													onSaveEdit={onSaveEditComment}
+													onDelete={onDeleteComment}
 												/>
 											</div>
 										);
 									}
 
-									// For rows after the comment row, adjust index to account for inserted row
-									const lineIndex =
-										showCommentInput &&
-										pendingComment &&
-										index > pendingComment.endLine
-											? index - 1
-											: index;
-									const lineNum = lineIndex + 1;
+									const { lineNum } = row;
+									const lineIndex = lineNum - 1;
 									let line = lines[lineIndex];
 									const diffStatus = fileHunks.get(lineNum);
 									const hasDeletionMarker = deletionMarkers.has(lineNum);
@@ -643,6 +673,7 @@ const FileContentView = memo(
 											htmlContent={line}
 											diffStatus={diffStatus}
 											hasDeletionMarker={hasDeletionMarker}
+											hasComment={linesWithComments.has(lineNum)}
 											lineNumberWidth={lineNumberWidth}
 											onMouseEnter={() => onSetHoveredLine(lineNum)}
 											onMouseLeave={() => onSetHoveredLine(null)}
@@ -1601,21 +1632,6 @@ export const FileBrowser = memo(
 			],
 		);
 
-		// Calculate item height for virtualization
-		const getItemHeight = useCallback(
-			(index: number) => {
-				if (
-					showCommentInput &&
-					pendingComment &&
-					index === pendingComment.endLine
-				) {
-					return COMMENT_ROW_HEIGHT;
-				}
-				return LINE_HEIGHT;
-			},
-			[showCommentInput, pendingComment],
-		);
-
 		// Memoize file content data for virtualization
 		const fileContentData = useMemo(() => {
 			if (!selectedFile || !fileContent) return null;
@@ -1634,6 +1650,76 @@ export const FileBrowser = memo(
 
 			return { lines, rawLines, lineNumberWidth, language };
 		}, [selectedFile, fileContent]);
+
+		// Comments for the currently open file, keyed by the line they're anchored to
+		const commentsForSelectedFile = useMemo(() => {
+			if (!selectedFile) return [];
+			const relPath = getRelativePath(selectedFile);
+			return fileBrowserReview.comments.filter((c) => c.filePath === relPath);
+		}, [selectedFile, getRelativePath, fileBrowserReview.comments]);
+
+		const commentsByEndLine = useMemo(() => {
+			const map = new Map<number, LineComment[]>();
+			for (const comment of commentsForSelectedFile) {
+				const existing = map.get(comment.endLine);
+				if (existing) existing.push(comment);
+				else map.set(comment.endLine, [comment]);
+			}
+			return map;
+		}, [commentsForSelectedFile]);
+
+		const linesWithComments = useMemo(() => {
+			const set = new Set<number>();
+			for (const comment of commentsForSelectedFile) {
+				for (let ln = comment.startLine; ln <= comment.endLine; ln++) {
+					set.add(ln);
+				}
+			}
+			return set;
+		}, [commentsForSelectedFile]);
+
+		// Virtualized rows: a code line for every source line, plus one inline
+		// comment-thread row inserted right after any line that has comments
+		// (or the pending new-comment input), mirroring the Review tab's layout.
+		const rows = useMemo<FileBrowserRow[]>(() => {
+			const totalLines = fileContentData?.lines.length ?? 0;
+			const commentRowAnchors = new Set<number>(commentsByEndLine.keys());
+			if (showCommentInput && pendingComment) {
+				commentRowAnchors.add(pendingComment.endLine);
+			}
+			const result: FileBrowserRow[] = [];
+			for (let lineNum = 1; lineNum <= totalLines; lineNum++) {
+				result.push({ type: "line", lineNum });
+				if (commentRowAnchors.has(lineNum)) {
+					result.push({ type: "comment", lineNum });
+				}
+			}
+			return result;
+		}, [
+			fileContentData?.lines.length,
+			commentsByEndLine,
+			showCommentInput,
+			pendingComment,
+		]);
+
+		// Calculate item height for virtualization
+		const getItemHeight = useCallback(
+			(index: number) => {
+				const row = rows[index];
+				if (!row || row.type === "line") return LINE_HEIGHT;
+				const existingCount = commentsByEndLine.get(row.lineNum)?.length ?? 0;
+				const showInputHere =
+					showCommentInput &&
+					pendingComment !== null &&
+					pendingComment.endLine === row.lineNum;
+				return (
+					COMMENT_SECTION_PADDING +
+					existingCount * COMMENT_CARD_HEIGHT +
+					(showInputHere ? COMMENT_INPUT_HEIGHT : 0)
+				);
+			},
+			[rows, commentsByEndLine, showCommentInput, pendingComment],
+		);
 
 		// Memoize sorted root entries to avoid re-sorting on every render
 		const sortedRootEntries = useMemo(
@@ -1672,6 +1758,14 @@ export const FileBrowser = memo(
 				pendingComment={pendingComment}
 				onSubmitComment={handleSubmitComment}
 				onCancelComment={handleCancelComment}
+				rows={rows}
+				linesWithComments={linesWithComments}
+				commentsByEndLine={commentsByEndLine}
+				editingCommentId={fileBrowserReview.editingCommentId}
+				onStartEditComment={fileBrowserReview.startEditComment}
+				onCancelEditComment={fileBrowserReview.cancelEditComment}
+				onSaveEditComment={fileBrowserReview.saveEditComment}
+				onDeleteComment={fileBrowserReview.deleteComment}
 				listRef={listRef}
 				isSearchOpen={isSearchOpen}
 				searchQuery={debouncedSearchQuery}

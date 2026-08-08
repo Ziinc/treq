@@ -69,10 +69,12 @@ it("captures adding review comments across two files in the FileBrowser", async 
 	await user.click(screen.getByRole("button", { name: "Add Comment" }));
 
 	await fileBrowser.findByText("1 comment pending");
+	await fileBrowser.findByTestId("file-comment-card");
 	await captureDocument(document, {
 		name: "filebrowser-review-02-first-comment",
 		expectations: [
 			'The same header row as the "Back" button also reads "1 comment pending" with Discard and Finish review controls, all in one row.',
+			'The comment "Please double check this function signature." renders inline as a card directly under the line it\'s attached to, like the Review tab (not floating separately).',
 			"app.ts's row in the file tree shows a small comment-count badge reading 1.",
 		],
 	});
@@ -91,11 +93,26 @@ it("captures adding review comments across two files in the FileBrowser", async 
 	await user.click(screen.getByRole("button", { name: "Add Comment" }));
 
 	await fileBrowser.findByText("2 comments pending");
+	await fileBrowser.findByText("Consider renaming this constant.");
 	await captureDocument(document, {
 		name: "filebrowser-review-03-second-file-comment",
 		expectations: [
 			'The header row next to "Back" now reads "2 comments pending", proving comments accumulate across files in one session.',
+			'The comment "Consider renaming this constant." renders inline as a card under helper.ts\'s first line.',
 			"Both app.ts and helper.ts show a comment-count badge of 1 each in the file tree.",
+		],
+	});
+
+	// Delete the helper.ts comment via its inline card to prove the shared
+	// FileCommentSection component (from the Review tab) is fully wired, not
+	// just rendering read-only.
+	await user.click(screen.getByTitle("Delete comment"));
+	await fileBrowser.findByText("1 comment pending");
+	await captureDocument(document, {
+		name: "filebrowser-review-05-after-delete",
+		expectations: [
+			'The header now reads "1 comment pending" after deleting the helper.ts comment via its inline card.',
+			"helper.ts's comment-count badge is gone from the file tree; app.ts's badge of 1 remains.",
 		],
 	});
 
@@ -108,9 +125,9 @@ it("captures adding review comments across two files in the FileBrowser", async 
 	await user.click(fileBrowser.getByRole("button", { name: /finish review/i }));
 	await screen.findByText("Finish your review");
 	await captureDocument(document, {
-		name: "filebrowser-review-04-finish-popover",
+		name: "filebrowser-review-06-finish-popover",
 		expectations: [
-			'A "Finish your review" card is present, stating 2 comments will be submitted.',
+			'A "Finish your review" card is present, stating 1 comment will be submitted.',
 			'The card shows "Copy", "Plan", and "Edit" buttons for sending the batched review.',
 		],
 	});
