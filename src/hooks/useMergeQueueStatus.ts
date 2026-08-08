@@ -185,7 +185,6 @@ export async function invalidatePrStatuses(
 			// Single-branch force-fetch warms the Rust cache without re-polling
 			// every workspace. Failures must not fail the caller (e.g. create PR
 			// already succeeded and still needs its success toast).
-			const { getPrChecksViaGh } = await import("../lib/api");
 			await Promise.all([
 				getPrInfoViaGh(repoPath, branchName),
 				getPrChecksViaGh(repoPath, branchName),
