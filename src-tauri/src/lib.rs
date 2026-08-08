@@ -79,34 +79,56 @@ pub fn run() {
             // --- CLI mode: handle commands and exit before any GUI init ---
             {
                 use tauri_plugin_cli::CliExt;
-                if let Ok(matches) = app.cli().matches() {
-                    cli::init_cli_binary_paths();
-                    if let Some(ref subcommand) = matches.subcommand {
-                        if let Some(exit_code) = cli::handle_cli_command(subcommand) {
-                            // Drop explicitly to flush the log writer before the process exits,
-                            // since `app.handle().exit()` does not run Rust destructors.
+                match app.cli().matches() {
+                    Ok(matches) => {
+                        cli::init_cli_binary_paths();
+                        if let Some(ref subcommand) = matches.subcommand {
+                            if let Some(exit_code) = cli::handle_cli_command(subcommand) {
+                                // Drop explicitly to flush the log writer before the process exits,
+                                // since `app.handle().exit()` does not run Rust destructors.
+                                drop(telemetry);
+                                app.handle().exit(exit_code);
+                                return Ok(());
+                            }
+                            let msg = format!("Unknown command: {}", subcommand.name);
+                            eprintln!("{}", msg);
+                            tracing::error!("{}", msg);
+                            eprintln!("Usage:");
+                            eprintln!("  treq add <branch_name> [-d description] [-l title] [-s source_branch]");
+                            eprintln!("  treq set <workspace_name> [-d description] [-l title] [-t target_branch]");
+                            eprintln!("  treq st [workspace_name]");
+                            eprintln!("  treq agent <branch> <prompt> [-m <edit|plan>]");
+                            eprintln!("  treq help");
                             drop(telemetry);
-                            app.handle().exit(exit_code);
+                            app.handle().exit(1);
                             return Ok(());
-                        }
-                        let msg = format!("Unknown command: {}", subcommand.name);
-                        eprintln!("{}", msg);
-                        tracing::error!("{}", msg);
-                        eprintln!("Usage:");
-                        eprintln!("  treq add <branch_name> [-d description] [-l title] [-s source_branch]");
-                        eprintln!("  treq set <workspace_name> [-d description] [-l title] [-t target_branch]");
-                        eprintln!("  treq st [workspace_name]");
-                        eprintln!("  treq agent <branch> <prompt> [-m <edit|plan>]");
-                        eprintln!("  treq help");
-                        drop(telemetry);
-                        return Ok(());
-                    } else {
-                        if cli::handle_cli_global_args(&matches) {
+                        } else if cli::handle_cli_global_args(&matches) {
                             drop(telemetry);
                             app.handle().exit(0);
                             return Ok(());
+                        } else if !matches.args.is_empty() {
+                            // Defensive: a recognized-but-unhandled top-level arg was passed.
+                            // Treat it as a CLI error rather than silently opening the GUI.
+                            let msg = format!("Unrecognized arguments: {:?}", matches.args);
+                            eprintln!("{}", msg);
+                            tracing::error!("{}", msg);
+                            drop(telemetry);
+                            app.handle().exit(1);
+                            return Ok(());
                         }
-                        eprintln!("No subcommand provided, args: {:?}", matches.args);
+                        // No args at all: fall through to normal GUI launch.
+                    }
+                    Err(e) => {
+                        // Malformed CLI invocation (unrecognized subcommand/flag, missing
+                        // required argument, wrong value count, etc). clap's error message
+                        // already includes usage help, so surface it and exit non-zero
+                        // instead of silently falling through to the GUI.
+                        let msg = e.to_string();
+                        eprintln!("{}", msg);
+                        tracing::error!("{}", msg);
+                        drop(telemetry);
+                        app.handle().exit(1);
+                        return Ok(());
                     }
                 }
             }
