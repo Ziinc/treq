@@ -68,6 +68,7 @@ import {
 	countUniqueReviewChangePaths,
 	type ParsedFileChange,
 } from "../lib/git-utils";
+import { reviewChangeCountQueryKey } from "../lib/review-change-count";
 import { cn, getFullWorkspacePath, resolveReadmeImageSrc } from "../lib/utils";
 import type { SessionCreationInfo } from "../types/sessions";
 import {
@@ -383,21 +384,13 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 			Boolean(workspace) && workspace!.branch_name !== defaultTargetBranch;
 		const { data: reviewChangeCount = 0 } = useQuery({
 			queryKey: [
-				"workspace-review-change-count",
-				effectiveRepoPath,
-				workspace?.id ?? null,
+				...reviewChangeCountQueryKey(effectiveRepoPath, workspace?.id ?? null),
 				includeCommittedInReviewCount,
 			],
 			enabled: Boolean(effectiveRepoPath),
 			queryFn: async () => {
-				if (
-					includeCommittedInReviewCount &&
-					workspace?.id !== undefined
-				) {
-					const diff = await getWorkspaceDiff(
-						effectiveRepoPath,
-						workspace.id,
-					);
+				if (includeCommittedInReviewCount && workspace?.id !== undefined) {
+					const diff = await getWorkspaceDiff(effectiveRepoPath, workspace.id);
 					return countUniqueReviewChangePaths(
 						diff.uncommitted_files ?? [],
 						diff.committed_files ?? [],
@@ -483,11 +476,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 				(event) => {
 					if (event.payload.workspace_id !== workspaceId) return;
 					void queryClient.invalidateQueries({
-						queryKey: [
-							"workspace-review-change-count",
-							effectiveRepoPath,
-							workspaceId,
-						],
+						queryKey: reviewChangeCountQueryKey(effectiveRepoPath, workspaceId),
 					});
 				},
 			);

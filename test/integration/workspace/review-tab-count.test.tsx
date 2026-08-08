@@ -54,15 +54,13 @@ describe("Review tab change count", () => {
 	});
 
 	it("shows total unique committed + uncommitted files before and after selecting Review", async () => {
-		const fixture = await setupWorkspaceWithCommittedAndUncommitted(
-			"feat/review-count",
-		);
+		const fixture =
+			await setupWorkspaceWithCommittedAndUncommitted("feat/review-count");
 
 		render(<Dashboard />);
 		await user.click(await findSidebarBranchElement(fixture.branchName));
 		await screen.findByTestId("show-workspace-header");
 
-		// Still on Code tab — badge must already be the workspace total (2).
 		await waitFor(() => {
 			expect(getReviewBadgeCount()).toBe(2);
 		});
