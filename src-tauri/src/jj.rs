@@ -3631,16 +3631,26 @@ fn jj_rebase_workspace_bookmark_onto_with_checkout_mode(
         simplify_ancestor_merge: false,
     };
 
+    let mut commits_to_move: Vec<_> = branch_only_commits
+        .iter()
+        .map(|commit| commit.id().clone())
+        .collect();
+    // Treat this workspace's working-copy commit as part of the explicit move.
+    // Leaving it for the descendant pass can replay its stale empty-commit delta
+    // over a conflicted bookmark rebase and incorrectly resolve the conflict as
+    // a deletion. Keeping it explicit preserves both the conflict and the
+    // sibling-workspace isolation provided by `MoveCommitsTarget::Commits`.
+    if let Some(wc_commit) = old_wc_commit.as_ref() {
+        if !commits_to_move.iter().any(|id| id == wc_commit.id()) {
+            commits_to_move.insert(0, wc_commit.id().clone());
+        }
+    }
+
     let mut tx = loaded.repo.start_transaction();
     let location = MoveCommitsLocation {
         new_parent_ids: vec![target_commit.id().clone()],
         new_child_ids: Vec::new(),
-        target: MoveCommitsTarget::Commits(
-            branch_only_commits
-                .iter()
-                .map(|commit| commit.id().clone())
-                .collect(),
-        ),
+        target: MoveCommitsTarget::Commits(commits_to_move),
     };
     let stats = block_on(async {
         rewrite::compute_move_commits(tx.repo_mut(), &location)
@@ -3661,6 +3671,7 @@ fn jj_rebase_workspace_bookmark_onto_with_checkout_mode(
             e
         ))
     })?;
+
     let _ = git::export_refs(tx.repo_mut());
 
     let new_repo = block_on(tx.commit("rebase workspace bookmark lineage"))
