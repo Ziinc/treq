@@ -1,12 +1,5 @@
 import React, { memo, useMemo } from "react";
-import {
-	ChevronDown,
-	ChevronRight,
-	FileText,
-	Github,
-	Loader2,
-	X,
-} from "lucide-react";
+import { ChevronDown, ChevronRight, FileText, Loader2, X } from "lucide-react";
 import { Button } from "../ui/button";
 import { CommentInput } from "../CommentInput";
 import { FileCommentSection } from "./FileCommentSection";
@@ -229,11 +222,7 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
 											) : (
 												<ChevronRight className="w-3 h-3 text-muted-foreground flex-shrink-0" />
 											)}
-											<Github
-												className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400 flex-shrink-0"
-												aria-label="GitHub"
-											/>
-											<span className="text-xs text-muted-foreground">
+											<span className="text-xs text-muted-foreground font-sans">
 												{unplacedGithubThreads.length} outdated comment
 												{unplacedGithubThreads.length !== 1 ? "s" : ""} (no
 												longer on a visible line)

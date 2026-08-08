@@ -1,10 +1,11 @@
 /**
  * Verifies GitHub PR review comment threads rendered inline in the Review
- * tab: read-only, styled distinctly from local comments (avatar + author +
- * "GitHub" badge), resolved threads collapsed by default, threads that no
- * longer map onto a visible diff line grouped into a collapsed "Outdated"
- * banner per file, and selecting text inside a comment body surfaces a
- * floating "Quote" button that seeds a normal local draft comment.
+ * tab: read-only, styled distinctly from local comments (larger avatar +
+ * linked author + per-comment GitHub icon), resolved threads collapsed by
+ * default, threads that no longer map onto a visible diff line grouped into
+ * a collapsed "Outdated" banner per file (no GitHub icon on the group), and
+ * selecting text inside a comment body surfaces a floating "Quote" button
+ * that seeds a normal local draft comment.
  *
  * The GitHub side (remote info / PR lookup / review threads) all shell out
  * to a real `gh` CLI the desktop harness can't reach, so those three API
@@ -175,9 +176,9 @@ it("captures GitHub review comment threads in the Review tab", async () => {
 	await captureDocument(document, {
 		name: "github-review-threads-01-inline",
 		expectations: [
-			'A blue-accented card with a small GitHub (octocat) icon -- not a text label -- is inline in the example.ts diff, showing @octocat\'s comment "This magic number should be a named constant." with an avatar and date.',
-			'A second, collapsed GitHub thread card is visible showing a gray/muted "Resolved" badge and a comment count, but no comment text.',
-			'A collapsed "Outdated" banner with a GitHub icon sits above the diff hunk, stating one outdated comment not on a visible line.',
+			'A blue-accented card is inline in the example.ts diff, expanded to show @octocat\'s comment "This magic number should be a named constant." with a larger avatar, a linked username, a sans-serif comment body, a small GitHub icon on the comment itself (not on the thread header), and a date without a year.',
+			'A second, collapsed GitHub thread card is visible showing a gray/muted "Resolved" badge and a comment count, but no comment text and no GitHub icon on the collapsed header.',
+			'A collapsed "Outdated" banner sits above the diff hunk, stating one outdated comment not on a visible line, without a GitHub icon on the banner.',
 		],
 	});
 
