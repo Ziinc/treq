@@ -59,3 +59,21 @@ export function parseJjChangedFiles(
 		workspaceStatus: file.status,
 	}));
 }
+
+/**
+ * Unique file count for the Review tab badge: working-copy changes plus
+ * committed-but-not-yet-in-target changes, with overlapping paths counted once.
+ */
+export function countUniqueReviewChangePaths(
+	uncommitted: Array<{ path: string }>,
+	committed: Array<{ path: string }> = [],
+): number {
+	const paths = new Set<string>();
+	for (const file of uncommitted) {
+		paths.add(file.path);
+	}
+	for (const file of committed) {
+		paths.add(file.path);
+	}
+	return paths.size;
+}

@@ -22,6 +22,7 @@ import {
 	pushWorkspaceToRemote,
 } from "../../../lib/api";
 import type { Workspace } from "../../../lib/api-types";
+import { invalidateReviewChangeCount } from "../../../lib/review-change-count";
 import type { useToast } from "../../ui/toast";
 import type { CommitAction, DiffLineSelection, FileHunksData } from "../types";
 import { computeHunkLineNumbers, parseHunkHeader } from "../utils";
@@ -94,6 +95,7 @@ export function useFileActions({
 				await jjRestoreSnapshot(workspacePath, snapshotId);
 				await invalidateCache();
 				await loadChangedFiles();
+				await invalidateReviewChangeCount(queryClient, repoPath, workspaceId);
 				addToast({
 					description: "Discarded changes have been restored",
 					title: "Restored",
@@ -107,7 +109,15 @@ export function useFileActions({
 				});
 			}
 		},
-		[workspacePath, addToast, invalidateCache, loadChangedFiles],
+		[
+			workspacePath,
+			addToast,
+			invalidateCache,
+			loadChangedFiles,
+			queryClient,
+			repoPath,
+			workspaceId,
+		],
 	);
 
 	const handleDiscardAll = useCallback(async () => {
@@ -126,6 +136,7 @@ export function useFileActions({
 			});
 			await invalidateCache();
 			await loadChangedFiles();
+			await invalidateReviewChangeCount(queryClient, repoPath, workspaceId);
 		} catch (error) {
 			addToast({
 				description: error instanceof Error ? error.message : String(error),
@@ -140,6 +151,9 @@ export function useFileActions({
 		invalidateCache,
 		loadChangedFiles,
 		handleUndoDiscard,
+		queryClient,
+		repoPath,
+		workspaceId,
 	]);
 
 	const handleDiscardFiles = useCallback(
@@ -171,6 +185,7 @@ export function useFileActions({
 				setSelectedUnstagedFiles(new Set());
 				await invalidateCache();
 				await loadChangedFiles();
+				await invalidateReviewChangeCount(queryClient, repoPath, workspaceId);
 			} catch (error) {
 				addToast({
 					description: error instanceof Error ? error.message : String(error),
@@ -190,6 +205,9 @@ export function useFileActions({
 			workspacePath,
 			setSelectedUnstagedFiles,
 			handleUndoDiscard,
+			queryClient,
+			repoPath,
+			workspaceId,
 		],
 	);
 
@@ -310,6 +328,7 @@ export function useFileActions({
 					queryClient.invalidateQueries({
 						queryKey: ["workspace-commits", repoPath, workspaceId ?? null],
 					}),
+					invalidateReviewChangeCount(queryClient, repoPath, workspaceId),
 				]);
 				return true;
 			} catch (error) {
