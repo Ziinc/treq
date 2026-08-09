@@ -1450,7 +1450,12 @@ export const FileBrowser = memo(
 				setPendingComment(null);
 				setLineSelection(null);
 			},
-			[pendingComment, selectedFile, fileBrowserReview, getRelativePath],
+			[
+				pendingComment,
+				selectedFile,
+				fileBrowserReview.addComment,
+				getRelativePath,
+			],
 		);
 
 		const handleCancelComment = useCallback(() => {
