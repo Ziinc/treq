@@ -115,8 +115,23 @@ it("captures treq send attachment thumbs and lightbox carousel previews", async 
 		name: "treq-send-01-square-previews",
 		expectations: [
 			"Two Attachment-style cards sit at the top-left of the dark terminal in a horizontal row.",
-			"Each card has a grey circular X dismiss control.",
 			"The image attachment shows a blue square with a white circle.",
+			"Dismiss X controls are hidden until an attachment is hovered.",
+		],
+	});
+
+	await user.hover(
+		screen
+			.getByTestId("terminal-send-preview-qa-send-text")
+			.closest('[data-slot="attachment"]') as HTMLElement,
+	);
+	expect(screen.getByTestId("terminal-send-dismiss-qa-send-text")).toBeTruthy();
+
+	await captureDocument(document, {
+		name: "treq-send-01a-hover-dismiss",
+		expectations: [
+			"Hovering the text attachment reveals its grey circular X dismiss control.",
+			"The image attachment next to it still hides its X while not hovered.",
 		],
 	});
 

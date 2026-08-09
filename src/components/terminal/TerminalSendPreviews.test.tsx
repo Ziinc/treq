@@ -120,9 +120,11 @@ describe("TerminalSendPreviews", () => {
 		const user = userEvent.setup();
 		renderSend(<SendHarness ptySessionId="session-1" />);
 		await user.click(screen.getByRole("button", { name: "Inject text" }));
-		expect(
-			await screen.findByTestId("terminal-send-preview-send-1"),
-		).toBeTruthy();
+		const thumb = await screen.findByTestId("terminal-send-preview-send-1");
+		const attachment = thumb.closest(
+			'[data-slot="attachment"]',
+		) as HTMLElement;
+		await user.hover(attachment);
 		await user.click(screen.getByTestId("terminal-send-dismiss-send-1"));
 		await waitFor(() => {
 			expect(screen.queryByTestId("terminal-send-preview-send-1")).toBeNull();

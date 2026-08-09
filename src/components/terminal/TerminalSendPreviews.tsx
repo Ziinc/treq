@@ -51,6 +51,7 @@ export function TerminalSendPreviews({
 }: TerminalSendPreviewsProps) {
 	const send = useTreqSendOptional();
 	const [previewIndex, setPreviewIndex] = useState<number | null>(null);
+	const [hoveredId, setHoveredId] = useState<string | null>(null);
 
 	if (!send) return null;
 
@@ -85,6 +86,8 @@ export function TerminalSendPreviews({
 									size="xs"
 									orientation="vertical"
 									className="w-16 bg-zinc-100/95 text-zinc-900 shadow-md"
+									onMouseEnter={() => setHoveredId(asset.id)}
+									onMouseLeave={() => setHoveredId(null)}
 								>
 									<AttachmentTrigger
 										data-testid={`terminal-send-preview-${asset.id}`}
@@ -110,7 +113,14 @@ export function TerminalSendPreviews({
 											{asset.title}
 										</AttachmentTitle>
 									</AttachmentContent>
-									<AttachmentActions className="top-1 right-1">
+									<AttachmentActions
+										className={cn(
+											"top-1 right-1 transition-opacity",
+											hoveredId === asset.id
+												? "pointer-events-auto opacity-100"
+												: "pointer-events-none opacity-0",
+										)}
+									>
 										<AttachmentAction
 											type="button"
 											data-testid={`terminal-send-dismiss-${asset.id}`}
@@ -118,6 +128,7 @@ export function TerminalSendPreviews({
 											className="h-5 w-5 rounded-full border border-zinc-500 bg-[#c4c4c4] text-zinc-900 shadow-md hover:bg-[#d4d4d4]"
 											onClick={() => {
 												send.dismissAsset(asset.id);
+												setHoveredId(null);
 												setPreviewIndex((current) => {
 													if (current == null) return null;
 													const remaining = assets.filter(
