@@ -233,19 +233,6 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
     const [targetBranch, setTargetBranch] = useState<string | null>(null);
     const defaultBranch = "main";
     const defaultTargetBranch = mainRepoBranch || defaultBranch;
-    const [conflictedFiles, setConflictedFiles] = useState<string[]>([]);
-    const normalizedConflictedFiles = useMemo(() => {
-      const seen = new Set<string>();
-      const normalized: string[] = [];
-      for (const path of conflictedFiles) {
-        const trimmed = path.trim();
-        if (!trimmed || seen.has(trimmed)) continue;
-        seen.add(trimmed);
-        normalized.push(trimmed);
-      }
-      return normalized;
-    }, [conflictedFiles]);
-    const conflictCount = normalizedConflictedFiles.length;
 
     // Committed changes toggle state
     const [showCommittedChanges, setShowCommittedChanges] = useState(true);
@@ -382,6 +369,23 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
       queryFn: () =>
         getWorkspaceStatus(effectiveRepoPath, workspace?.id ?? null),
     });
+
+    // Derive from the status query — copying into local state lagged a render
+    // behind resolve+commit refetches and kept the Review Conflicts section /
+    // Code-tab alert visible after the backend had already cleared them.
+    const conflictedFiles = workspaceStatusData?.conflicted_files ?? [];
+    const normalizedConflictedFiles = useMemo(() => {
+      const seen = new Set<string>();
+      const normalized: string[] = [];
+      for (const path of conflictedFiles) {
+        const trimmed = path.trim();
+        if (!trimmed || seen.has(trimmed)) continue;
+        seen.add(trimmed);
+        normalized.push(trimmed);
+      }
+      return normalized;
+    }, [conflictedFiles]);
+    const conflictCount = normalizedConflictedFiles.length;
 
     // Review badge: unique working-copy + committed files, independent of
     // whether the Review tab (ChangesDiffViewer) is mounted. Mounting Review
@@ -546,7 +550,6 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 
     useEffect(() => {
       if (!workspaceStatusData) return;
-      setConflictedFiles(workspaceStatusData.conflicted_files ?? []);
       const sync = workspaceStatusData.remote_sync;
       if (sync.type === "Ahead") {
         setSyncStatus({ ahead: sync.data.count, behind: 0 });

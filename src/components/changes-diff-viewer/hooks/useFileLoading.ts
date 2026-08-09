@@ -106,10 +106,11 @@ export function useFileLoading({
         const parsed = parseJjChangedFiles(diff.uncommitted_files ?? []);
         applyChangedFilesRef.current(parsed);
 
-        const conflictedHint = new Set<string>([
-          ...conflictedFilesHintRef.current,
-          ...(diff.conflicted_files ?? []),
-        ]);
+        const fromDiff = diff.conflicted_files ?? [];
+        // Diff is authoritative for live conflict state. The status hint can
+        // lag a frame behind resolve+commit; never re-introduce paths a fresh
+        // diff reports as resolved.
+        const conflictedHint = new Set<string>(fromDiff);
         const uncommittedPaths = new Set(parsed.map((file) => file.path));
 
         // Keep the full committed file list so the Committed section header

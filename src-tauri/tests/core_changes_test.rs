@@ -430,3 +430,243 @@ fn test_detects_conflicts_in_committed_tip_when_tree_diff_is_empty() {
     status.conflicted_files
   );
 }
+
+#[test]
+fn test_resolve_and_commit_clears_merge_conflict_from_status() {
+  let repo = TestRepo::new().expect("Failed to create test repo");
+
+  let workspace = treq_lib::core::create_workspace(
+    &repo.repo_path,
+    "feat/resolve-merge-conflict",
+    Some("resolve merge conflict".to_string()),
+    None,
+    None,
+    None,
+    None,
+  )
+  .expect("Failed to create workspace");
+  let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+  let workspace_path_str = workspace_path.to_str().unwrap();
+
+  TestRepo::write_workspace_file(workspace_path_str, "README.md", "workspace side\n")
+    .expect("Failed to write workspace README");
+  treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "workspace commit")
+    .expect("Failed to commit workspace");
+  let ws_change_id =
+    get_change_id(workspace_path_str, "@-").expect("Failed to get workspace change_id");
+
+  repo
+    .create_file("README.md", "main side\n")
+    .expect("Failed to write main README");
+  treq_lib::jj::jj_commit(&repo.repo_path, "main commit").expect("Failed to commit main");
+  let main_change_id = get_change_id(&repo.repo_path, "@-").expect("Failed to get main change_id");
+
+  TestRepo::run_jj(workspace_path_str, &["new", &ws_change_id, &main_change_id])
+    .expect("Failed to create unresolved merge conflict");
+
+  let before = treq_lib::core::workspace_status(&repo.repo_path, Some(workspace.id))
+    .expect("workspace_status before resolve");
+  assert!(
+    before.partial.has_conflicts,
+    "merge conflict must set has_conflicts before resolve"
+  );
+  assert!(
+    before.conflicted_files.contains(&"README.md".to_string()),
+    "merge conflict must list README.md before resolve, got {:?}",
+    before.conflicted_files
+  );
+
+  // Resolve by writing clean content (same as editing conflict markers away).
+  TestRepo::write_workspace_file(workspace_path_str, "README.md", "resolved content\n")
+    .expect("Failed to write resolved README");
+  treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "resolve conflict")
+    .expect("Failed to commit resolution");
+
+  let after = treq_lib::core::workspace_status(&repo.repo_path, Some(workspace.id))
+    .expect("workspace_status after resolve commit");
+  assert!(
+    !after.partial.has_conflicts,
+    "has_conflicts must clear after resolve+commit"
+  );
+  assert!(
+    after.conflicted_files.is_empty(),
+    "conflicted_files must clear after resolve+commit, got {:?}",
+    after.conflicted_files
+  );
+
+  let sidebar = treq_lib::core::list_workspace_statuses(&repo.repo_path)
+    .expect("list_workspace_statuses after resolve");
+  let sidebar_status = sidebar
+    .iter()
+    .find(|s| s.current.id == workspace.id)
+    .expect("workspace should appear in sidebar statuses");
+  assert!(
+    !sidebar_status.has_conflicts,
+    "sidebar has_conflicts must clear after resolve+commit"
+  );
+}
+
+#[test]
+fn test_resolve_and_commit_clears_rebase_conflict_from_status() {
+  let repo = TestRepo::new().expect("Failed to create test repo");
+  let default_branch = repo.default_branch();
+
+  let workspace = treq_lib::core::create_workspace(
+    &repo.repo_path,
+    "feat/resolve-rebase-conflict",
+    Some("resolve rebase conflict".to_string()),
+    None,
+    None,
+    None,
+    None,
+  )
+  .expect("Failed to create workspace");
+  let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+  let workspace_path_str = workspace_path.to_str().unwrap();
+
+  // Add/add conflict: both sides create the same new path from a shared base.
+  TestRepo::write_workspace_file(workspace_path_str, "conflict.txt", "workspace version\n")
+    .expect("Failed to write conflict.txt in workspace");
+  treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "workspace commit")
+    .expect("Failed to commit workspace");
+
+  repo
+    .create_file("conflict.txt", "main version\n")
+    .expect("Failed to write conflict.txt on main");
+  treq_lib::jj::jj_commit(&repo.repo_path, "main commit").expect("Failed to commit main");
+
+  let rebase_result = treq_lib::jj::jj_rebase_workspace_bookmark_onto(
+    workspace_path_str,
+    &workspace.branch_name,
+    default_branch,
+  )
+  .expect("Failed to rebase workspace onto main");
+  assert!(
+    rebase_result.success,
+    "Expected rebase to succeed with recorded conflict, got: {}",
+    rebase_result.message
+  );
+
+  let before = treq_lib::core::workspace_status(&repo.repo_path, Some(workspace.id))
+    .expect("workspace_status before resolve");
+  assert!(
+    before.partial.has_conflicts,
+    "rebase conflict must set has_conflicts before resolve"
+  );
+  assert!(
+    before.conflicted_files.contains(&"conflict.txt".to_string()),
+    "rebase conflict must list conflict.txt before resolve, got {:?}",
+    before.conflicted_files
+  );
+
+  TestRepo::write_workspace_file(workspace_path_str, "conflict.txt", "resolved after rebase\n")
+    .expect("Failed to write resolved conflict.txt");
+  treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "resolve rebase conflict")
+    .expect("Failed to commit resolution");
+
+  let after = treq_lib::core::workspace_status(&repo.repo_path, Some(workspace.id))
+    .expect("workspace_status after resolve commit");
+  assert!(
+    !after.partial.has_conflicts,
+    "has_conflicts must clear after rebase resolve+commit"
+  );
+  assert!(
+    after.conflicted_files.is_empty(),
+    "conflicted_files must clear after rebase resolve+commit, got {:?}",
+    after.conflicted_files
+  );
+
+  let sidebar = treq_lib::core::list_workspace_statuses(&repo.repo_path)
+    .expect("list_workspace_statuses after resolve");
+  let sidebar_status = sidebar
+    .iter()
+    .find(|s| s.current.id == workspace.id)
+    .expect("workspace should appear in sidebar statuses");
+  assert!(
+    !sidebar_status.has_conflicts,
+    "sidebar has_conflicts must clear after rebase resolve+commit"
+  );
+}
+
+#[test]
+fn test_resolve_and_commit_clears_committed_tip_conflict_from_status() {
+  let repo = TestRepo::new().expect("Failed to create test repo");
+
+  let workspace = treq_lib::core::create_workspace(
+    &repo.repo_path,
+    "feat/resolve-committed-tip",
+    Some("resolve committed tip".to_string()),
+    None,
+    None,
+    None,
+    None,
+  )
+  .expect("Failed to create workspace");
+  let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+  let workspace_path_str = workspace_path.to_str().unwrap();
+
+  TestRepo::write_workspace_file(workspace_path_str, "shared.txt", "workspace side\n")
+    .expect("Failed to write workspace shared.txt");
+  treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "workspace commit")
+    .expect("Failed to commit workspace");
+  let ws_change_id =
+    get_change_id(workspace_path_str, "@-").expect("Failed to get workspace change_id");
+
+  repo
+    .create_file("shared.txt", "main side\n")
+    .expect("Failed to write main shared.txt");
+  treq_lib::jj::jj_commit(&repo.repo_path, "main commit").expect("Failed to commit main");
+  let main_change_id = get_change_id(&repo.repo_path, "@-").expect("Failed to get main change_id");
+
+  TestRepo::run_jj(workspace_path_str, &["new", &ws_change_id, &main_change_id])
+    .expect("Failed to create conflicted merge");
+  TestRepo::run_jj(
+    workspace_path_str,
+    &[
+      "bookmark",
+      "set",
+      "feat/resolve-committed-tip",
+      "-r",
+      "@",
+      "--allow-backwards",
+    ],
+  )
+  .expect("Failed to point bookmark at conflicted tip");
+  TestRepo::run_jj(workspace_path_str, &["new", "@"])
+    .expect("Failed to create empty WC on conflicted tip");
+
+  let before = treq_lib::core::workspace_status(&repo.repo_path, Some(workspace.id))
+    .expect("workspace_status before resolve");
+  assert!(
+    before.partial.has_conflicts,
+    "committed-tip conflict must set has_conflicts before resolve"
+  );
+
+  TestRepo::write_workspace_file(workspace_path_str, "shared.txt", "resolved tip\n")
+    .expect("Failed to write resolved shared.txt");
+  treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "resolve committed tip")
+    .expect("Failed to commit resolution");
+
+  let after = treq_lib::core::workspace_status(&repo.repo_path, Some(workspace.id))
+    .expect("workspace_status after resolve commit");
+  assert!(
+    !after.partial.has_conflicts,
+    "has_conflicts must clear after committed-tip resolve+commit"
+  );
+  assert!(
+    after.conflicted_files.is_empty(),
+    "conflicted_files must clear after committed-tip resolve+commit, got {:?}",
+    after.conflicted_files
+  );
+
+  let sidebar = treq_lib::core::list_workspace_statuses(&repo.repo_path)
+    .expect("list_workspace_statuses after resolve");
+  let sidebar_status = sidebar
+    .iter()
+    .find(|s| s.current.id == workspace.id)
+    .expect("workspace should appear in sidebar statuses");
+  assert!(
+    !sidebar_status.has_conflicts,
+    "sidebar has_conflicts must clear after committed-tip resolve+commit"
+  );
+}

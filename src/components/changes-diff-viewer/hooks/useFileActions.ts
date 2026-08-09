@@ -314,22 +314,22 @@ export function useFileActions({
           type: "success",
         });
         setCommittedSectionCollapsed(true);
+        // Await status refetches before reloading Review files so conflict
+        // hints / sidebar indicators clear in the same turn as the commit
+        // (resolve+commit must not leave a stale Conflicts section).
         await Promise.all([
-          loadChangedFiles(),
-          refreshCommittedChanges(),
-          // A commit changes the ahead count the header and sidebar render.
-          queryClient.invalidateQueries({
+          queryClient.refetchQueries({
             queryKey: ["workspace-status", repoPath, workspaceId ?? null],
           }),
-          queryClient.invalidateQueries({
+          queryClient.refetchQueries({
             queryKey: ["workspace-statuses", repoPath],
           }),
-          // The stack panel's per-workspace line-change counts.
           queryClient.invalidateQueries({
             queryKey: ["workspace-commits", repoPath, workspaceId ?? null],
           }),
           invalidateReviewChangeCount(queryClient, repoPath, workspaceId),
         ]);
+        await Promise.all([loadChangedFiles(), refreshCommittedChanges()]);
         return true;
       } catch (error) {
         addToast({
