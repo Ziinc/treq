@@ -127,6 +127,14 @@ const FileRowHeader: React.FC<FileRowHeaderProps> = ({
             >
               <Copy className="w-4 h-4" />
             </button>
+            {isCommitted && (
+              <span
+                data-testid="committed-file-label"
+                className="text-sm flex-shrink-0 px-[8px] py-[2px] rounded bg-sky-500/20 text-sky-700 dark:text-sky-300"
+              >
+                Committed
+              </span>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-[8px]">
@@ -170,14 +178,6 @@ const FileRowHeader: React.FC<FileRowHeaderProps> = ({
             )}
             <span>Viewed</span>
           </button>
-          {isCommitted && (
-            <span
-              data-testid="committed-file-label"
-              className="text-sm px-[8px] py-[2px] rounded bg-zinc-500/25 text-zinc-700 dark:text-zinc-300"
-            >
-              Committed
-            </span>
-          )}
           {isRename && (
             <span className="text-sm px-[8px] py-[2px] rounded bg-blue-500/25 text-blue-700 dark:text-blue-300">
               Renamed

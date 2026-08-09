@@ -78,8 +78,8 @@ it("marks committed-only file collapsibles with a Committed label", async () => 
 	await captureDocument(document, {
 		name: "committed-file-label-01-mixed-review",
 		expectations: [
-			"In the Review main pane, the committed-only.txt file-row header shows a grey 'Committed' badge.",
-			"The uncommitted-only.txt file-row header has no 'Committed' badge.",
+			"In the Review main pane, committed-only.txt shows a light blue 'Committed' label next to the copy button in text-sm.",
+			"The uncommitted-only.txt file-row header has no 'Committed' label.",
 			"The left sidebar lists uncommitted-only.txt under Changes and committed-only.txt under Committed.",
 		],
 	});
