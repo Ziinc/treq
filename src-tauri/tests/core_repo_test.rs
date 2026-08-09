@@ -307,9 +307,8 @@ fn test_repo_status_ahead_on_checked_out_non_default_branch() {
     .push_branch("feature-sync")
     .expect("Failed to push feature-sync");
 
-  // Advance only the checked-out branch via git. The jj working copy stays on
-  // the default-branch tip, so bookmarks-on-@- still see the in-sync default
-  // branch and miss the ahead feature branch.
+  // Advance only the checked-out branch via git. Home reconciliation should
+  // move the jj working-copy parent to the new Git HEAD.
   repo
     .commit_file(
       "feature_local_only.txt",
@@ -339,13 +338,8 @@ fn test_repo_status_ahead_on_checked_out_non_default_branch() {
   let bookmarks_on_parent =
     treq_lib::jj::get_bookmarks_on_revision(&repo.repo_path, "@-").unwrap_or_default();
   assert!(
-    bookmarks_on_parent.iter().any(|b| b == &default_branch),
-    "expected default branch bookmark on @- (WC lag); got {:?}",
-    bookmarks_on_parent
-  );
-  assert!(
-    !bookmarks_on_parent.iter().any(|b| b == "feature-sync"),
-    "expected feature-sync bookmark not on @-; got {:?}",
+    bookmarks_on_parent.iter().any(|b| b == "feature-sync"),
+    "expected feature-sync bookmark on reconciled @-; got {:?}",
     bookmarks_on_parent
   );
 
