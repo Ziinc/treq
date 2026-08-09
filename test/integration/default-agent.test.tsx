@@ -2,199 +2,199 @@ import * as React from "react";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createTestRepo, findSidebarBranchElement, openRepo } from "../utils";
 import {
-	createWorkspace,
-	getSetting,
-	getRepoSetting,
-	getSessions,
-	setSetting,
+  createWorkspace,
+  getSetting,
+  getRepoSetting,
+  getSessions,
+  setSetting,
 } from "../../src/lib/api";
 import { render, screen, waitFor, within } from "../test-utils";
 import { Dashboard } from "../../src/components/Dashboard";
 import userEvent from "@testing-library/user-event";
 
 describe("default agent configuration", () => {
-	let user: ReturnType<typeof userEvent.setup>;
-	let repoPath: string;
+  let user: ReturnType<typeof userEvent.setup>;
+  let repoPath: string;
 
-	beforeEach(() => {
-		({ repoPath } = createTestRepo(false));
-		openRepo(repoPath);
-		user = userEvent.setup();
-	});
+  beforeEach(() => {
+    ({ repoPath } = createTestRepo(false));
+    openRepo(repoPath);
+    user = userEvent.setup();
+  });
 
-	it("saves app-level default_agent via Application settings tab", async () => {
-		render(<Dashboard />);
+  it("saves app-level default_agent via Application settings tab", async () => {
+    render(<Dashboard />);
 
-		await user.click(await screen.findByLabelText("Settings"));
-		await screen.findByText("Settings");
+    await user.click(await screen.findByLabelText("Settings"));
+    await screen.findByText("Settings");
 
-		const applicationTab = await screen.findByRole("tab", {
-			name: /application/i,
-		});
-		await user.click(applicationTab);
+    const applicationTab = await screen.findByRole("tab", {
+      name: /application/i,
+    });
+    await user.click(applicationTab);
 
-		const agentSelect = await screen.findByLabelText(/default agent/i);
-		await user.selectOptions(agentSelect, "codex");
+    const agentSelect = await screen.findByLabelText(/default agent/i);
+    await user.selectOptions(agentSelect, "codex");
 
-		await user.click(
-			await screen.findByRole("button", { name: /save settings/i }),
-		);
-		await screen.findByText("Settings Saved");
+    await user.click(
+      await screen.findByRole("button", { name: /save settings/i }),
+    );
+    await screen.findByText("Settings Saved");
 
-		const saved = await getSetting("default_agent");
-		expect(saved).toBe("codex");
-	});
+    const saved = await getSetting("default_agent");
+    expect(saved).toBe("codex");
+  });
 
-	it("saves repo-level default_agent via Repository settings tab and it overrides app-level in TaskInput", async () => {
-		await setSetting("default_agent", "codex");
+  it("saves repo-level default_agent via Repository settings tab and it overrides app-level in TaskInput", async () => {
+    await setSetting("default_agent", "codex");
 
-		await createWorkspace(repoPath, "feat/agent-settings-test");
+    await createWorkspace(repoPath, "feat/agent-settings-test");
 
-		render(<Dashboard />);
+    render(<Dashboard />);
 
-		await user.click(await screen.findByLabelText("Settings"));
-		await screen.findByText("Settings");
+    await user.click(await screen.findByLabelText("Settings"));
+    await screen.findByText("Settings");
 
-		const repositoryTab = await screen.findByRole("tab", {
-			name: /repository/i,
-		});
-		expect(repositoryTab).toHaveAttribute("data-state", "active");
+    const repositoryTab = await screen.findByRole("tab", {
+      name: /repository/i,
+    });
+    expect(repositoryTab).toHaveAttribute("data-state", "active");
 
-		const agentSelect = await screen.findByLabelText(/default agent/i);
-		await user.selectOptions(agentSelect, "claude");
+    const agentSelect = await screen.findByLabelText(/default agent/i);
+    await user.selectOptions(agentSelect, "claude");
 
-		await user.click(
-			await screen.findByRole("button", { name: /save settings/i }),
-		);
-		await screen.findByText("Settings saved");
+    await user.click(
+      await screen.findByRole("button", { name: /save settings/i }),
+    );
+    await screen.findByText("Settings saved");
 
-		const savedRepo = await getRepoSetting(repoPath, "default_agent");
-		expect(savedRepo).toBe("claude");
+    const savedRepo = await getRepoSetting(repoPath, "default_agent");
+    expect(savedRepo).toBe("claude");
 
-		await user.click(await screen.findByRole("button", { name: "Close" }));
+    await user.click(await screen.findByRole("button", { name: "Close" }));
 
-		await user.click(
-			await findSidebarBranchElement("feat/agent-settings-test"),
-		);
+    await user.click(
+      await findSidebarBranchElement("feat/agent-settings-test"),
+    );
 
-		const agentPicker = await screen.findByLabelText("Agent");
-		await waitFor(() => expect(agentPicker).toHaveValue("claude"));
-	});
+    const agentPicker = await screen.findByLabelText("Agent");
+    await waitFor(() => expect(agentPicker).toHaveValue("claude"));
+  });
 
-	it("creates sessions with the selected agent and switching the dropdown changes the agent used", async () => {
-		await setSetting("default_agent", "codex");
+  it("creates sessions with the selected agent and switching the dropdown changes the agent used", async () => {
+    await setSetting("default_agent", "codex");
 
-		await createWorkspace(repoPath, "feat/agent-switch-test");
+    await createWorkspace(repoPath, "feat/agent-switch-test");
 
-		render(<Dashboard />);
+    render(<Dashboard />);
 
-		await user.click(await findSidebarBranchElement("feat/agent-switch-test"));
+    await user.click(await findSidebarBranchElement("feat/agent-switch-test"));
 
-		const agentPicker = await screen.findByLabelText("Agent");
-		await waitFor(() => expect(agentPicker).toHaveValue("codex"));
+    const agentPicker = await screen.findByLabelText("Agent");
+    await waitFor(() => expect(agentPicker).toHaveValue("codex"));
 
-		const textarea = await screen.findByPlaceholderText(/describe a task/i);
-		await user.click(textarea);
-		await user.type(textarea, "codex task one");
-		await user.keyboard("{Control>}{Enter}{/Control}");
+    const textarea = await screen.findByPlaceholderText(/describe a task/i);
+    await user.click(textarea);
+    await user.type(textarea, "codex task one");
+    await user.keyboard("{Control>}{Enter}{/Control}");
 
-		await waitFor(async () => {
-			const sessions = await getSessions(repoPath);
-			expect(sessions.some((s) => s.name === "codex task one")).toBe(true);
-		});
+    await waitFor(async () => {
+      const sessions = await getSessions(repoPath);
+      expect(sessions.some((s) => s.name === "codex task one")).toBe(true);
+    });
 
-		await user.selectOptions(agentPicker, "claude");
-		expect(agentPicker).toHaveValue("claude");
-		expect(
-			await screen.findByLabelText(/set as default for this repo/i),
-		).toBeInTheDocument();
+    await user.selectOptions(agentPicker, "claude");
+    expect(agentPicker).toHaveValue("claude");
+    expect(
+      await screen.findByLabelText(/set as default for this repo/i),
+    ).toBeInTheDocument();
 
-		const textarea2 = await screen.findByPlaceholderText(/describe a task/i);
-		await user.click(textarea2);
-		await user.type(textarea2, "claude task two");
-		await user.keyboard("{Control>}{Enter}{/Control}");
+    const textarea2 = await screen.findByPlaceholderText(/describe a task/i);
+    await user.click(textarea2);
+    await user.type(textarea2, "claude task two");
+    await user.keyboard("{Control>}{Enter}{/Control}");
 
-		await waitFor(async () => {
-			const sessions = await getSessions(repoPath);
-			expect(sessions.some((s) => s.name === "claude task two")).toBe(true);
-		});
-		await waitFor(() =>
-			expect(
-				screen.queryByLabelText(/set as default for this repo/i),
-			).not.toBeInTheDocument(),
-		);
+    await waitFor(async () => {
+      const sessions = await getSessions(repoPath);
+      expect(sessions.some((s) => s.name === "claude task two")).toBe(true);
+    });
+    await waitFor(() =>
+      expect(
+        screen.queryByLabelText(/set as default for this repo/i),
+      ).not.toBeInTheDocument(),
+    );
 
-		await user.selectOptions(agentPicker, "codex");
-		expect(agentPicker).toHaveValue("codex");
-	});
+    await user.selectOptions(agentPicker, "codex");
+    expect(agentPicker).toHaveValue("codex");
+  });
 
-	it("saves app-level default_agent as cursor and TaskInput picks it up", async () => {
-		await setSetting("default_agent", "cursor");
+  it("saves app-level default_agent as cursor and TaskInput picks it up", async () => {
+    await setSetting("default_agent", "cursor");
 
-		await createWorkspace(repoPath, "feat/agent-cursor-test");
+    await createWorkspace(repoPath, "feat/agent-cursor-test");
 
-		render(<Dashboard />);
+    render(<Dashboard />);
 
-		await user.click(await findSidebarBranchElement("feat/agent-cursor-test"));
+    await user.click(await findSidebarBranchElement("feat/agent-cursor-test"));
 
-		const agentPicker = await screen.findByLabelText("Agent");
-		await waitFor(() => expect(agentPicker).toHaveValue("cursor"));
-	});
+    const agentPicker = await screen.findByLabelText("Agent");
+    await waitFor(() => expect(agentPicker).toHaveValue("cursor"));
+  });
 
-	it("command palette agent prompt uses the configured default_agent", async () => {
-		await setSetting("default_agent", "codex");
+  it("command palette agent prompt uses the configured default_agent", async () => {
+    await setSetting("default_agent", "codex");
 
-		await createWorkspace(repoPath, "feat/agent-terminal-default-test");
+    await createWorkspace(repoPath, "feat/agent-terminal-default-test");
 
-		render(<Dashboard />);
+    render(<Dashboard />);
 
-		await user.click(
-			await findSidebarBranchElement("feat/agent-terminal-default-test"),
-		);
+    await user.click(
+      await findSidebarBranchElement("feat/agent-terminal-default-test"),
+    );
 
-		await user.keyboard("{Meta>}k{/Meta}");
-		await user.click(
-			await screen.findByText("Start a new agent session with a prompt"),
-		);
+    await user.keyboard("{Meta>}k{/Meta}");
+    await user.click(
+      await screen.findByText("Start a new agent session with a prompt"),
+    );
 
-		const promptDialog = (
-			await screen.findByRole("heading", {
-				name: "Start a new agent session",
-			})
-		).closest('[data-testid="modal"]');
-		if (!promptDialog) throw new Error("Agent prompt dialog was not rendered");
-		const textarea =
-			await within(promptDialog).findByPlaceholderText(/describe a task/i);
-		await user.type(textarea, "command palette codex task");
-		await user.click(within(promptDialog).getByRole("button", { name: "Run" }));
+    const promptDialog = (
+      await screen.findByRole("heading", {
+        name: "Start a new agent session",
+      })
+    ).closest('[data-testid="modal"]');
+    if (!promptDialog) throw new Error("Agent prompt dialog was not rendered");
+    const textarea =
+      await within(promptDialog).findByPlaceholderText(/describe a task/i);
+    await user.type(textarea, "command palette codex task");
+    await user.click(within(promptDialog).getByRole("button", { name: "Run" }));
 
-		await waitFor(async () => {
-			const sessions = await getSessions(repoPath);
-			expect(
-				sessions.some((s) => s.name === "command palette codex task"),
-			).toBe(true);
-		});
-	});
+    await waitFor(async () => {
+      const sessions = await getSessions(repoPath);
+      expect(
+        sessions.some((s) => s.name === "command palette codex task"),
+      ).toBe(true);
+    });
+  });
 
-	it("terminal pane Agent button uses the configured default_agent, not hardcoded claude", async () => {
-		await setSetting("default_agent", "codex");
+  it("terminal pane Agent button uses the configured default_agent, not hardcoded claude", async () => {
+    await setSetting("default_agent", "codex");
 
-		await createWorkspace(repoPath, "feat/agent-pane-button-test");
+    await createWorkspace(repoPath, "feat/agent-pane-button-test");
 
-		const { container } = render(<Dashboard />);
+    const { container } = render(<Dashboard />);
 
-		await user.click(
-			await findSidebarBranchElement("feat/agent-pane-button-test"),
-		);
+    await user.click(
+      await findSidebarBranchElement("feat/agent-pane-button-test"),
+    );
 
-		const agentButton = await within(container).findByRole("button", {
-			name: "New Agent",
-		});
-		await user.click(agentButton);
+    const agentButton = await within(container).findByRole("button", {
+      name: "New Agent",
+    });
+    await user.click(agentButton);
 
-		await waitFor(async () => {
-			const sessions = await getSessions(repoPath);
-			expect(sessions.some((s) => s.name === "Codex 1")).toBe(true);
-		});
-	});
+    await waitFor(async () => {
+      const sessions = await getSessions(repoPath);
+      expect(sessions.some((s) => s.name === "Codex 1")).toBe(true);
+    });
+  });
 });

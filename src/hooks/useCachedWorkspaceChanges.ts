@@ -1,13 +1,13 @@
 import { useCallback, useRef } from "react";
 
 interface UseCachedWorkspaceChangesOptions {
-	enabled?: boolean;
-	repoPath?: string | null;
-	workspaceId?: number | null;
+  enabled?: boolean;
+  repoPath?: string | null;
+  workspaceId?: number | null;
 }
 
 interface CachedWorkspaceChangesResult {
-	refresh: () => Promise<void>;
+  refresh: () => Promise<void>;
 }
 
 /**
@@ -16,19 +16,19 @@ interface CachedWorkspaceChangesResult {
  * via the jjGetChangedFiles calls in the component.
  */
 export function useCachedWorkspaceChanges(
-	workspacePath: string,
-	options: UseCachedWorkspaceChangesOptions = {},
+  workspacePath: string,
+  options: UseCachedWorkspaceChangesOptions = {},
 ): CachedWorkspaceChangesResult {
-	void workspacePath;
-	void options;
-	const refreshCallbackRef = useRef<(() => void) | null>(null);
+  void workspacePath;
+  void options;
+  const refreshCallbackRef = useRef<(() => void) | null>(null);
 
-	const refresh = useCallback(async () => {
-		// Trigger any registered refresh callbacks
-		refreshCallbackRef.current?.();
-	}, []);
+  const refresh = useCallback(async () => {
+    // Trigger any registered refresh callbacks
+    refreshCallbackRef.current?.();
+  }, []);
 
-	return {
-		refresh,
-	};
+  return {
+    refresh,
+  };
 }

@@ -4,21 +4,21 @@ import type { Workspace, WorkspaceNode, WorkspaceSidebarStatus } from "./api";
  * Represents a node in the workspace tree
  */
 export interface WorkspaceTreeNode {
-	status: WorkspaceSidebarStatus;
-	branchName: string;
-	children: WorkspaceTreeNode[];
-	depth: number;
+  status: WorkspaceSidebarStatus;
+  branchName: string;
+  children: WorkspaceTreeNode[];
+  depth: number;
 }
 
 /**
  * Flattened node for rendering
  */
 export interface FlattenedWorkspaceNode {
-	status: WorkspaceSidebarStatus;
-	branchName: string;
-	depth: number;
-	hasChildren: boolean;
-	parentBranch: string | null;
+  status: WorkspaceSidebarStatus;
+  branchName: string;
+  depth: number;
+  hasChildren: boolean;
+  parentBranch: string | null;
 }
 
 /**
@@ -35,81 +35,81 @@ export interface FlattenedWorkspaceNode {
  * @returns Array of root nodes forming a forest
  */
 export function buildWorkspaceTree(
-	statuses: WorkspaceSidebarStatus[],
+  statuses: WorkspaceSidebarStatus[],
 ): WorkspaceTreeNode[] {
-	const workspaces = statuses.map((statusEntry) => statusEntry.current);
-	// Step 1: Create lookup map by branch_name
-	const workspaceByBranch = new Map<string, Workspace>();
-	for (const ws of workspaces) {
-		workspaceByBranch.set(ws.branch_name, ws);
-	}
+  const workspaces = statuses.map((statusEntry) => statusEntry.current);
+  // Step 1: Create lookup map by branch_name
+  const workspaceByBranch = new Map<string, Workspace>();
+  for (const ws of workspaces) {
+    workspaceByBranch.set(ws.branch_name, ws);
+  }
 
-	// Step 2: Create nodes for all workspaces
-	const nodeByBranch = new Map<string, WorkspaceTreeNode>();
-	for (const ws of workspaces) {
-		nodeByBranch.set(ws.branch_name, {
-			branchName: ws.branch_name,
-			children: [],
-			depth: 0,
-			status: statuses.find((statusEntry) => statusEntry.current.id === ws.id)!,
-		});
-	}
+  // Step 2: Create nodes for all workspaces
+  const nodeByBranch = new Map<string, WorkspaceTreeNode>();
+  for (const ws of workspaces) {
+    nodeByBranch.set(ws.branch_name, {
+      branchName: ws.branch_name,
+      children: [],
+      depth: 0,
+      status: statuses.find((statusEntry) => statusEntry.current.id === ws.id)!,
+    });
+  }
 
-	// Step 3: Build parent-child relationships
-	for (const ws of workspaces) {
-		const target = ws.target_branch;
-		if (!target) continue; // No target = root node
-		if (target === ws.branch_name) continue; // Ignore self-target links
+  // Step 3: Build parent-child relationships
+  for (const ws of workspaces) {
+    const target = ws.target_branch;
+    if (!target) continue; // No target = root node
+    if (target === ws.branch_name) continue; // Ignore self-target links
 
-		const parentNode = nodeByBranch.get(target);
-		const childNode = nodeByBranch.get(ws.branch_name);
+    const parentNode = nodeByBranch.get(target);
+    const childNode = nodeByBranch.get(ws.branch_name);
 
-		if (parentNode && childNode) {
-			// Valid parent-child relationship
-			parentNode.children.push(childNode);
-		}
-		// If parent doesn't exist (targets external branch like origin/main), it becomes a root
-	}
+    if (parentNode && childNode) {
+      // Valid parent-child relationship
+      parentNode.children.push(childNode);
+    }
+    // If parent doesn't exist (targets external branch like origin/main), it becomes a root
+  }
 
-	// Step 4: Find root nodes (workspaces with no target or target not in workspace list)
-	const roots: WorkspaceTreeNode[] = [];
-	for (const node of nodeByBranch.values()) {
-		const targetBranch = node.status.current.target_branch;
-		const hasTarget = targetBranch !== null && targetBranch !== undefined;
-		const isSelfTarget = hasTarget && targetBranch === node.branchName;
-		const targetExists = hasTarget && workspaceByBranch.has(targetBranch);
+  // Step 4: Find root nodes (workspaces with no target or target not in workspace list)
+  const roots: WorkspaceTreeNode[] = [];
+  for (const node of nodeByBranch.values()) {
+    const targetBranch = node.status.current.target_branch;
+    const hasTarget = targetBranch !== null && targetBranch !== undefined;
+    const isSelfTarget = hasTarget && targetBranch === node.branchName;
+    const targetExists = hasTarget && workspaceByBranch.has(targetBranch);
 
-		if (!hasTarget || !targetExists || isSelfTarget) {
-			roots.push(node);
-		}
-	}
+    if (!hasTarget || !targetExists || isSelfTarget) {
+      roots.push(node);
+    }
+  }
 
-	// Malformed graphs can form cycles with zero roots; degrade safely by
-	// flattening to top-level roots so sidebar content never disappears.
-	if (roots.length === 0) {
-		for (const node of nodeByBranch.values()) {
-			node.children = [];
-			roots.push(node);
-		}
-	}
+  // Malformed graphs can form cycles with zero roots; degrade safely by
+  // flattening to top-level roots so sidebar content never disappears.
+  if (roots.length === 0) {
+    for (const node of nodeByBranch.values()) {
+      node.children = [];
+      roots.push(node);
+    }
+  }
 
-	// Step 5: Compute depths and sort
-	for (const root of roots) {
-		computeDepths(root, 0);
-	}
-	sortTreeByRecency(roots);
+  // Step 5: Compute depths and sort
+  for (const root of roots) {
+    computeDepths(root, 0);
+  }
+  sortTreeByRecency(roots);
 
-	return roots;
+  return roots;
 }
 
 /**
  * Recursively compute depths for all nodes in the tree
  */
 function computeDepths(node: WorkspaceTreeNode, depth: number): void {
-	node.depth = depth;
-	for (const child of node.children) {
-		computeDepths(child, depth + 1);
-	}
+  node.depth = depth;
+  for (const child of node.children) {
+    computeDepths(child, depth + 1);
+  }
 }
 
 /**
@@ -117,7 +117,7 @@ function computeDepths(node: WorkspaceTreeNode, depth: number): void {
  * (commit / WC tip) and fall back to created_at.
  */
 function activityTimestamp(node: WorkspaceTreeNode): string {
-	return node.status.last_activity_at || node.status.current.created_at || "";
+  return node.status.last_activity_at || node.status.current.created_at || "";
 }
 
 /**
@@ -126,17 +126,17 @@ function activityTimestamp(node: WorkspaceTreeNode): string {
  * Equal timestamps fall back to branch name for stability.
  */
 function sortTreeByRecency(nodes: WorkspaceTreeNode[]): void {
-	nodes.sort((nodeA, nodeB) => {
-		const timeA = activityTimestamp(nodeA);
-		const timeB = activityTimestamp(nodeB);
-		if (timeA !== timeB) {
-			return timeB.localeCompare(timeA);
-		}
-		return nodeA.branchName.localeCompare(nodeB.branchName);
-	});
-	for (const node of nodes) {
-		sortTreeByRecency(node.children);
-	}
+  nodes.sort((nodeA, nodeB) => {
+    const timeA = activityTimestamp(nodeA);
+    const timeB = activityTimestamp(nodeB);
+    if (timeA !== timeB) {
+      return timeB.localeCompare(timeA);
+    }
+    return nodeA.branchName.localeCompare(nodeB.branchName);
+  });
+  for (const node of nodes) {
+    sortTreeByRecency(node.children);
+  }
 }
 
 /**
@@ -146,29 +146,29 @@ function sortTreeByRecency(nodes: WorkspaceTreeNode[]): void {
  * @returns Flattened list in display order with depth info
  */
 export function flattenWorkspaceTree(
-	roots: WorkspaceTreeNode[],
+  roots: WorkspaceTreeNode[],
 ): FlattenedWorkspaceNode[] {
-	const result: FlattenedWorkspaceNode[] = [];
+  const result: FlattenedWorkspaceNode[] = [];
 
-	function traverse(node: WorkspaceTreeNode): void {
-		result.push({
-			branchName: node.branchName,
-			depth: node.depth,
-			hasChildren: node.children.length > 0,
-			parentBranch: node.status.current.target_branch ?? null,
-			status: node.status,
-		});
+  function traverse(node: WorkspaceTreeNode): void {
+    result.push({
+      branchName: node.branchName,
+      depth: node.depth,
+      hasChildren: node.children.length > 0,
+      parentBranch: node.status.current.target_branch ?? null,
+      status: node.status,
+    });
 
-		for (const child of node.children) {
-			traverse(child);
-		}
-	}
+    for (const child of node.children) {
+      traverse(child);
+    }
+  }
 
-	for (const root of roots) {
-		traverse(root);
-	}
+  for (const root of roots) {
+    traverse(root);
+  }
 
-	return result;
+  return result;
 }
 
 /**
@@ -177,35 +177,35 @@ export function flattenWorkspaceTree(
  * or W.target_branch is itself a descendant.
  */
 export function getDescendants(
-	workspaces: Workspace[],
-	branchName: string,
+  workspaces: Workspace[],
+  branchName: string,
 ): Workspace[] {
-	const childrenMap = new Map<string, Workspace[]>();
-	for (const ws of workspaces) {
-		if (ws.target_branch) {
-			const list = childrenMap.get(ws.target_branch) || [];
-			list.push(ws);
-			childrenMap.set(ws.target_branch, list);
-		}
-	}
+  const childrenMap = new Map<string, Workspace[]>();
+  for (const ws of workspaces) {
+    if (ws.target_branch) {
+      const list = childrenMap.get(ws.target_branch) || [];
+      list.push(ws);
+      childrenMap.set(ws.target_branch, list);
+    }
+  }
 
-	const result: Workspace[] = [];
-	const stack = [branchName];
-	const visited = new Set<string>([branchName]);
+  const result: Workspace[] = [];
+  const stack = [branchName];
+  const visited = new Set<string>([branchName]);
 
-	while (stack.length > 0) {
-		const current = stack.pop()!;
-		const children = childrenMap.get(current) || [];
-		for (const child of children) {
-			if (!visited.has(child.branch_name)) {
-				visited.add(child.branch_name);
-				result.push(child);
-				stack.push(child.branch_name);
-			}
-		}
-	}
+  while (stack.length > 0) {
+    const current = stack.pop()!;
+    const children = childrenMap.get(current) || [];
+    for (const child of children) {
+      if (!visited.has(child.branch_name)) {
+        visited.add(child.branch_name);
+        result.push(child);
+        stack.push(child.branch_name);
+      }
+    }
+  }
 
-	return result;
+  return result;
 }
 
 /**
@@ -216,33 +216,33 @@ export function getDescendants(
  * Returns the branch_name of the root workspace.
  */
 export function getStackRoot(
-	workspaces: Workspace[],
-	branchName: string,
+  workspaces: Workspace[],
+  branchName: string,
 ): string {
-	const workspaceByBranch = new Map<string, Workspace>();
-	for (const ws of workspaces) {
-		workspaceByBranch.set(ws.branch_name, ws);
-	}
+  const workspaceByBranch = new Map<string, Workspace>();
+  for (const ws of workspaces) {
+    workspaceByBranch.set(ws.branch_name, ws);
+  }
 
-	let current = branchName;
-	const visited = new Set<string>();
+  let current = branchName;
+  const visited = new Set<string>();
 
-	while (true) {
-		visited.add(current);
-		const ws = workspaceByBranch.get(current);
-		if (!ws || !ws.target_branch) {
-			return current;
-		}
-		// If target_branch is not a workspace (external branch), current is root
-		if (!workspaceByBranch.has(ws.target_branch)) {
-			return current;
-		}
-		// Cycle detection
-		if (visited.has(ws.target_branch)) {
-			return current;
-		}
-		current = ws.target_branch;
-	}
+  while (true) {
+    visited.add(current);
+    const ws = workspaceByBranch.get(current);
+    if (!ws || !ws.target_branch) {
+      return current;
+    }
+    // If target_branch is not a workspace (external branch), current is root
+    if (!workspaceByBranch.has(ws.target_branch)) {
+      return current;
+    }
+    // Cycle detection
+    if (visited.has(ws.target_branch)) {
+      return current;
+    }
+    current = ws.target_branch;
+  }
 }
 
 /**
@@ -250,26 +250,26 @@ export function getStackRoot(
  * Finds the root via getStackRoot, then collects all descendants.
  */
 export function getEntireStack(
-	workspaces: Workspace[],
-	branchName: string,
+  workspaces: Workspace[],
+  branchName: string,
 ): Workspace[] {
-	const rootBranch = getStackRoot(workspaces, branchName);
-	const root = workspaces.find(
-		(workspace) => workspace.branch_name === rootBranch,
-	);
-	if (!root) return [];
+  const rootBranch = getStackRoot(workspaces, branchName);
+  const root = workspaces.find(
+    (workspace) => workspace.branch_name === rootBranch,
+  );
+  if (!root) return [];
 
-	const descendants = getDescendants(workspaces, rootBranch);
-	return [root, ...descendants];
+  const descendants = getDescendants(workspaces, rootBranch);
+  return [root, ...descendants];
 }
 
 // Tree preview helpers for split/stack dialogs
 
 export interface TreeLine {
-	depth: number;
-	label: string;
-	isCurrent: boolean;
-	isNew: boolean;
+  depth: number;
+  label: string;
+  isCurrent: boolean;
+  isNew: boolean;
 }
 
 /**
@@ -277,95 +277,95 @@ export interface TreeLine {
  * Shows how the new workspace will be positioned relative to the current workspace.
  */
 export function buildTreePreview(
-	dagNodes: WorkspaceNode[],
-	currentWorkspace: Workspace,
-	{ position, newLabel }: { position: "before" | "after"; newLabel: string },
+  dagNodes: WorkspaceNode[],
+  currentWorkspace: Workspace,
+  { position, newLabel }: { position: "before" | "after"; newLabel: string },
 ): TreeLine[] {
-	const lines: TreeLine[] = [];
+  const lines: TreeLine[] = [];
 
-	const rootTarget =
-		currentWorkspace.target_branch ??
-		dagNodes.find((node) => node.depth === 0)?.status.current.branch_name ??
-		"main";
+  const rootTarget =
+    currentWorkspace.target_branch ??
+    dagNodes.find((node) => node.depth === 0)?.status.current.branch_name ??
+    "main";
 
-	const rootNode = [...dagNodes]
-		.sort((nodeA, nodeB) => nodeA.depth - nodeB.depth)
-		.find((node) => node.depth === 0);
-	const rootLabel = rootNode?.status.current.branch_name ?? rootTarget;
-	const currentIsRoot = rootLabel === currentWorkspace.branch_name;
+  const rootNode = [...dagNodes]
+    .sort((nodeA, nodeB) => nodeA.depth - nodeB.depth)
+    .find((node) => node.depth === 0);
+  const rootLabel = rootNode?.status.current.branch_name ?? rootTarget;
+  const currentIsRoot = rootLabel === currentWorkspace.branch_name;
 
-	const currentNode = dagNodes.find(
-		(node) => node.status.current.id === currentWorkspace.id,
-	);
-	const currentDepth = currentIsRoot ? 0 : (currentNode?.depth ?? 1);
+  const currentNode = dagNodes.find(
+    (node) => node.status.current.id === currentWorkspace.id,
+  );
+  const currentDepth = currentIsRoot ? 0 : (currentNode?.depth ?? 1);
 
-	const children = dagNodes.filter(
-		(node) =>
-			node.parent_id === currentWorkspace.id &&
-			node.status.current.id !== currentWorkspace.id,
-	);
+  const children = dagNodes.filter(
+    (node) =>
+      node.parent_id === currentWorkspace.id &&
+      node.status.current.id !== currentWorkspace.id,
+  );
 
-	if (position === "before") {
-		lines.push({ depth: 0, isCurrent: false, isNew: false, label: rootLabel });
-		if (!currentIsRoot && currentDepth > 1) {
-			lines.push({ depth: 1, isCurrent: false, isNew: false, label: "..." });
-		}
-		const newDepth = currentIsRoot ? 1 : currentDepth;
-		lines.push({
-			depth: newDepth,
-			isCurrent: false,
-			isNew: true,
-			label: newLabel,
-		});
-		lines.push({
-			depth: newDepth + 1,
-			isCurrent: true,
-			isNew: false,
-			label: currentWorkspace.branch_name,
-		});
-		for (const child of children) {
-			lines.push({
-				depth: newDepth + 2,
-				isCurrent: false,
-				isNew: false,
-				label: child.status.current.branch_name,
-			});
-		}
-	} else {
-		lines.push({
-			depth: 0,
-			isCurrent: currentIsRoot,
-			isNew: false,
-			label: rootLabel,
-		});
-		if (!currentIsRoot) {
-			if (currentDepth > 1) {
-				lines.push({ depth: 1, isCurrent: false, isNew: false, label: "..." });
-			}
-			lines.push({
-				depth: currentDepth,
-				isCurrent: true,
-				isNew: false,
-				label: currentWorkspace.branch_name,
-			});
-		}
-		lines.push({
-			depth: currentDepth + 1,
-			isCurrent: false,
-			isNew: true,
-			label: newLabel,
-		});
-		for (const child of children) {
-			lines.push({
-				depth: currentDepth + 1,
-				isCurrent: false,
-				isNew: false,
-				label: child.status.current.branch_name,
-			});
-		}
-	}
+  if (position === "before") {
+    lines.push({ depth: 0, isCurrent: false, isNew: false, label: rootLabel });
+    if (!currentIsRoot && currentDepth > 1) {
+      lines.push({ depth: 1, isCurrent: false, isNew: false, label: "..." });
+    }
+    const newDepth = currentIsRoot ? 1 : currentDepth;
+    lines.push({
+      depth: newDepth,
+      isCurrent: false,
+      isNew: true,
+      label: newLabel,
+    });
+    lines.push({
+      depth: newDepth + 1,
+      isCurrent: true,
+      isNew: false,
+      label: currentWorkspace.branch_name,
+    });
+    for (const child of children) {
+      lines.push({
+        depth: newDepth + 2,
+        isCurrent: false,
+        isNew: false,
+        label: child.status.current.branch_name,
+      });
+    }
+  } else {
+    lines.push({
+      depth: 0,
+      isCurrent: currentIsRoot,
+      isNew: false,
+      label: rootLabel,
+    });
+    if (!currentIsRoot) {
+      if (currentDepth > 1) {
+        lines.push({ depth: 1, isCurrent: false, isNew: false, label: "..." });
+      }
+      lines.push({
+        depth: currentDepth,
+        isCurrent: true,
+        isNew: false,
+        label: currentWorkspace.branch_name,
+      });
+    }
+    lines.push({
+      depth: currentDepth + 1,
+      isCurrent: false,
+      isNew: true,
+      label: newLabel,
+    });
+    for (const child of children) {
+      lines.push({
+        depth: currentDepth + 1,
+        isCurrent: false,
+        isNew: false,
+        label: child.status.current.branch_name,
+      });
+    }
+  }
 
-	return lines;
+  return lines;
 }
 
 /**
@@ -373,155 +373,155 @@ export function buildTreePreview(
  * Shows the full workspace hierarchy — no truncation.
  */
 export function buildStackTreePreview(
-	workspaces: Workspace[],
-	parentWorkspace: Workspace | null,
-	{
-		newLabel,
-		parentBranch,
-		position,
-	}: { newLabel: string; parentBranch: string; position: "before" | "after" },
+  workspaces: Workspace[],
+  parentWorkspace: Workspace | null,
+  {
+    newLabel,
+    parentBranch,
+    position,
+  }: { newLabel: string; parentBranch: string; position: "before" | "after" },
 ): TreeLine[] {
-	const parent =
-		parentWorkspace ??
-		workspaces.find((workspace) => workspace.branch_name === parentBranch) ??
-		null;
+  const parent =
+    parentWorkspace ??
+    workspaces.find((workspace) => workspace.branch_name === parentBranch) ??
+    null;
 
-	// Build ancestor chain from parent up to root (reversed: root first)
-	const ancestorBranches: string[] = [];
-	if (parent) {
-		let current: Workspace | undefined = parent;
-		const visited = new Set<string>([parent.branch_name]);
-		while (current?.target_branch) {
-			if (visited.has(current.target_branch)) break;
-			visited.add(current.target_branch);
-			ancestorBranches.unshift(current.target_branch);
-			current = workspaces.find(
-				(workspace) => workspace.branch_name === current!.target_branch,
-			);
-		}
-		// If the top ancestor's target_branch is not in workspace list, it's an external root (e.g. "main")
-		if (
-			ancestorBranches.length === 0 &&
-			parent.target_branch &&
-			!workspaces.some(
-				(workspace) => workspace.branch_name === parent.target_branch,
-			)
-		) {
-			ancestorBranches.unshift(parent.target_branch);
-		} else if (ancestorBranches.length === 0 && !parent.target_branch) {
-			ancestorBranches.unshift("main");
-		}
-	}
+  // Build ancestor chain from parent up to root (reversed: root first)
+  const ancestorBranches: string[] = [];
+  if (parent) {
+    let current: Workspace | undefined = parent;
+    const visited = new Set<string>([parent.branch_name]);
+    while (current?.target_branch) {
+      if (visited.has(current.target_branch)) break;
+      visited.add(current.target_branch);
+      ancestorBranches.unshift(current.target_branch);
+      current = workspaces.find(
+        (workspace) => workspace.branch_name === current!.target_branch,
+      );
+    }
+    // If the top ancestor's target_branch is not in workspace list, it's an external root (e.g. "main")
+    if (
+      ancestorBranches.length === 0 &&
+      parent.target_branch &&
+      !workspaces.some(
+        (workspace) => workspace.branch_name === parent.target_branch,
+      )
+    ) {
+      ancestorBranches.unshift(parent.target_branch);
+    } else if (ancestorBranches.length === 0 && !parent.target_branch) {
+      ancestorBranches.unshift("main");
+    }
+  }
 
-	// Children of parent workspace
-	const children = parent
-		? workspaces.filter(
-				(workspace) => workspace.target_branch === parent.branch_name,
-			)
-		: [];
+  // Children of parent workspace
+  const children = parent
+    ? workspaces.filter(
+        (workspace) => workspace.target_branch === parent.branch_name,
+      )
+    : [];
 
-	const lines: TreeLine[] = [];
+  const lines: TreeLine[] = [];
 
-	// Render ancestor chain (root at depth 0)
-	const topRoot =
-		ancestorBranches.length > 0
-			? ancestorBranches[0]
-			: (parent?.branch_name ?? "main");
-	const isExternalRoot = !workspaces.some(
-		(workspace) => workspace.branch_name === topRoot,
-	);
+  // Render ancestor chain (root at depth 0)
+  const topRoot =
+    ancestorBranches.length > 0
+      ? ancestorBranches[0]
+      : (parent?.branch_name ?? "main");
+  const isExternalRoot = !workspaces.some(
+    (workspace) => workspace.branch_name === topRoot,
+  );
 
-	let depth = 0;
-	if (isExternalRoot) {
-		// External root like "main" — not a workspace, just a label
-		lines.push({ depth: 0, isCurrent: false, isNew: false, label: topRoot });
-		depth = 1;
-		// Render workspace ancestors (skip the external root)
-		for (let idx = 1; idx < ancestorBranches.length; idx++) {
-			const branch = ancestorBranches[idx];
-			lines.push({ depth, isCurrent: false, isNew: false, label: branch });
-			depth++;
-		}
-	} else {
-		// Root is a workspace
-		for (const branch of ancestorBranches) {
-			lines.push({ depth, isCurrent: false, isNew: false, label: branch });
-			depth++;
-		}
-	}
+  let depth = 0;
+  if (isExternalRoot) {
+    // External root like "main" — not a workspace, just a label
+    lines.push({ depth: 0, isCurrent: false, isNew: false, label: topRoot });
+    depth = 1;
+    // Render workspace ancestors (skip the external root)
+    for (let idx = 1; idx < ancestorBranches.length; idx++) {
+      const branch = ancestorBranches[idx];
+      lines.push({ depth, isCurrent: false, isNew: false, label: branch });
+      depth++;
+    }
+  } else {
+    // Root is a workspace
+    for (const branch of ancestorBranches) {
+      lines.push({ depth, isCurrent: false, isNew: false, label: branch });
+      depth++;
+    }
+  }
 
-	const parentDepth = depth;
+  const parentDepth = depth;
 
-	if (position === "before" && parent) {
-		// [new] inserted before parent, parent pushed down
-		lines.push({
-			depth: parentDepth,
-			isCurrent: false,
-			isNew: true,
-			label: newLabel,
-		});
-		lines.push({
-			depth: parentDepth + 1,
-			isCurrent: true,
-			isNew: false,
-			label: parent.branch_name,
-		});
-		for (const child of children) {
-			lines.push({
-				depth: parentDepth + 2,
-				isCurrent: false,
-				isNew: false,
-				label: child.branch_name,
-			});
-		}
-	} else {
-		// parent -> [new] + children
-		if (parent) {
-			const parentIsAlreadyRendered = ancestorBranches.includes(
-				parent.branch_name,
-			);
-			if (!parentIsAlreadyRendered) {
-				lines.push({
-					depth: parentDepth,
-					isCurrent: true,
-					isNew: false,
-					label: parent.branch_name,
-				});
-			} else {
-				// Mark the already-rendered parent line as current
-				const parentLine = lines.find(
-					(line) => line.label === parent.branch_name,
-				);
-				if (parentLine) parentLine.isCurrent = true;
-			}
-		}
-		const newDepth = parent
-			? ancestorBranches.includes(parent.branch_name)
-				? parentDepth
-				: parentDepth + 1
-			: parentDepth;
-		lines.push({
-			depth: newDepth,
-			isCurrent: false,
-			isNew: true,
-			label: newLabel,
-		});
-		for (const child of children) {
-			lines.push({
-				depth: newDepth,
-				isCurrent: false,
-				isNew: false,
-				label: child.branch_name,
-			});
-		}
-	}
+  if (position === "before" && parent) {
+    // [new] inserted before parent, parent pushed down
+    lines.push({
+      depth: parentDepth,
+      isCurrent: false,
+      isNew: true,
+      label: newLabel,
+    });
+    lines.push({
+      depth: parentDepth + 1,
+      isCurrent: true,
+      isNew: false,
+      label: parent.branch_name,
+    });
+    for (const child of children) {
+      lines.push({
+        depth: parentDepth + 2,
+        isCurrent: false,
+        isNew: false,
+        label: child.branch_name,
+      });
+    }
+  } else {
+    // parent -> [new] + children
+    if (parent) {
+      const parentIsAlreadyRendered = ancestorBranches.includes(
+        parent.branch_name,
+      );
+      if (!parentIsAlreadyRendered) {
+        lines.push({
+          depth: parentDepth,
+          isCurrent: true,
+          isNew: false,
+          label: parent.branch_name,
+        });
+      } else {
+        // Mark the already-rendered parent line as current
+        const parentLine = lines.find(
+          (line) => line.label === parent.branch_name,
+        );
+        if (parentLine) parentLine.isCurrent = true;
+      }
+    }
+    const newDepth = parent
+      ? ancestorBranches.includes(parent.branch_name)
+        ? parentDepth
+        : parentDepth + 1
+      : parentDepth;
+    lines.push({
+      depth: newDepth,
+      isCurrent: false,
+      isNew: true,
+      label: newLabel,
+    });
+    for (const child of children) {
+      lines.push({
+        depth: newDepth,
+        isCurrent: false,
+        isNew: false,
+        label: child.branch_name,
+      });
+    }
+  }
 
-	return lines;
+  return lines;
 }
 
 export interface StackedWorkspaceEntry {
-	workspace: Workspace;
-	isCurrent: boolean;
+  workspace: Workspace;
+  isCurrent: boolean;
 }
 
 /**
@@ -534,38 +534,38 @@ export interface StackedWorkspaceEntry {
  * so the Code tab stack card stays visible on the first workspace.
  */
 export function getWorkspaceStack(
-	workspaces: Workspace[],
-	currentWorkspaceId: number,
+  workspaces: Workspace[],
+  currentWorkspaceId: number,
 ): StackedWorkspaceEntry[] | null {
-	const current = workspaces.find((ws) => ws.id === currentWorkspaceId);
-	if (!current) return null;
+  const current = workspaces.find((ws) => ws.id === currentWorkspaceId);
+  if (!current) return null;
 
-	const chain = getEntireStack(workspaces, current.branch_name);
-	// A single workspace targeting main/external isn't a stack worth showing.
-	if (chain.length <= 1) return null;
+  const chain = getEntireStack(workspaces, current.branch_name);
+  // A single workspace targeting main/external isn't a stack worth showing.
+  if (chain.length <= 1) return null;
 
-	return [...chain].reverse().map((workspace) => ({
-		workspace,
-		isCurrent: workspace.id === currentWorkspaceId,
-	}));
+  return [...chain].reverse().map((workspace) => ({
+    workspace,
+    isCurrent: workspace.id === currentWorkspaceId,
+  }));
 }
 
 export function getValidTargets(
-	workspaces: Workspace[],
-	currentBranch: string,
+  workspaces: Workspace[],
+  currentBranch: string,
 ): string[] {
-	const validTargets: string[] = [];
+  const validTargets: string[] = [];
 
-	for (const ws of workspaces) {
-		// Can't target self — every other workspace is valid because
-		// planWorkspaceTargetMove lifts the bridge node when the target
-		// is a descendant (parent/child stack reorder).
-		if (ws.branch_name === currentBranch) {
-			continue;
-		}
+  for (const ws of workspaces) {
+    // Can't target self — every other workspace is valid because
+    // planWorkspaceTargetMove lifts the bridge node when the target
+    // is a descendant (parent/child stack reorder).
+    if (ws.branch_name === currentBranch) {
+      continue;
+    }
 
-		validTargets.push(ws.branch_name);
-	}
+    validTargets.push(ws.branch_name);
+  }
 
-	return validTargets;
+  return validTargets;
 }

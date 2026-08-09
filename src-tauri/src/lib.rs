@@ -16,8 +16,8 @@ pub mod pty;
 pub mod telemetry;
 
 use agent_runtime::{
-    parse_agent_request_from_url, route_agent_deep_link, route_agent_dispatch_request,
-    start_agent_ipc_listener, start_instance_registry_heartbeat,
+  parse_agent_request_from_url, route_agent_deep_link, route_agent_dispatch_request,
+  start_agent_ipc_listener, start_instance_registry_heartbeat,
 };
 use commands::file_watcher::WatcherManager;
 use db::Database;
@@ -29,35 +29,35 @@ use tauri::{AppHandle, Emitter, EventTarget, Manager};
 use tauri_plugin_log::{Target, TargetKind};
 
 pub(crate) struct AppState {
-    db: Mutex<Database>,
-    pty_manager: Mutex<PtyManager>,
-    watcher_manager: WatcherManager,
-    window_repo_paths: Mutex<HashMap<String, String>>,
-    window_last_focused_at: Mutex<HashMap<String, u64>>,
-    dispatch_instance_id: String,
-    dispatch_started_at: u64,
-    dispatch_endpoint: String,
-    // Held for its Drop guards (file writer + provider shutdown).
-    _telemetry: telemetry::TelemetryGuards,
+  db: Mutex<Database>,
+  pty_manager: Mutex<PtyManager>,
+  watcher_manager: WatcherManager,
+  window_repo_paths: Mutex<HashMap<String, String>>,
+  window_last_focused_at: Mutex<HashMap<String, u64>>,
+  dispatch_instance_id: String,
+  dispatch_started_at: u64,
+  dispatch_endpoint: String,
+  // Held for its Drop guards (file writer + provider shutdown).
+  _telemetry: telemetry::TelemetryGuards,
 }
 
 /// Emits an event only to the focused webview window.
 /// Falls back to broadcasting if no focused window is found.
 pub fn emit_to_focused<S: serde::Serialize + Clone>(app: &AppHandle, event: &str, payload: S) {
-    for (label, window) in app.webview_windows() {
-        if window.is_focused().unwrap_or(false) {
-            let _ = app.emit_to(EventTarget::webview_window(&label), event, payload);
-            return;
-        }
+  for (label, window) in app.webview_windows() {
+    if window.is_focused().unwrap_or(false) {
+      let _ = app.emit_to(EventTarget::webview_window(&label), event, payload);
+      return;
     }
-    // Fallback: emit globally if no focused window found
-    let _ = app.emit(event, payload);
+  }
+  // Fallback: emit globally if no focused window found
+  let _ = app.emit(event, payload);
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    telemetry::install_panic_hook();
-    tauri::Builder::default()
+  telemetry::install_panic_hook();
+  tauri::Builder::default()
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(tauri_plugin_log::log::LevelFilter::Info)
@@ -599,36 +599,36 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::agent_runtime::{
-        build_agent_deep_link_url, extract_repo_from_agent_deep_link, parse_agent_request_from_url,
-    };
+  use super::agent_runtime::{
+    build_agent_deep_link_url, extract_repo_from_agent_deep_link, parse_agent_request_from_url,
+  };
 
-    #[test]
-    fn extracts_repo_from_agent_deep_link() {
-        let url =
+  #[test]
+  fn extracts_repo_from_agent_deep_link() {
+    let url =
             "treq://agent/start?repo=%2Ftmp%2Frepo&branch=feat%2Fx&prompt=hello&mode=plan&agent=codex&request_id=req-1";
-        let repo = extract_repo_from_agent_deep_link(url);
-        assert_eq!(repo.as_deref(), Some("/tmp/repo"));
-    }
+    let repo = extract_repo_from_agent_deep_link(url);
+    assert_eq!(repo.as_deref(), Some("/tmp/repo"));
+  }
 
-    #[test]
-    fn ignores_non_agent_deep_link() {
-        let url = "treq://auth/callback?token=abc";
-        assert_eq!(extract_repo_from_agent_deep_link(url), None);
-    }
+  #[test]
+  fn ignores_non_agent_deep_link() {
+    let url = "treq://auth/callback?token=abc";
+    assert_eq!(extract_repo_from_agent_deep_link(url), None);
+  }
 
-    #[test]
-    fn parse_agent_request_from_url_round_trips() {
-        let request = crate::agent_dispatch::AgentDispatchRequest {
-            request_id: "req-1".to_string(),
-            repo: "/tmp/repo".to_string(),
-            branch: "feat/x".to_string(),
-            prompt: "hello".to_string(),
-            mode: "plan".to_string(),
-            agent: "codex".to_string(),
-        };
-        let url = build_agent_deep_link_url(&request);
-        let parsed = parse_agent_request_from_url(&url).expect("request should parse");
-        assert_eq!(parsed, request);
-    }
+  #[test]
+  fn parse_agent_request_from_url_round_trips() {
+    let request = crate::agent_dispatch::AgentDispatchRequest {
+      request_id: "req-1".to_string(),
+      repo: "/tmp/repo".to_string(),
+      branch: "feat/x".to_string(),
+      prompt: "hello".to_string(),
+      mode: "plan".to_string(),
+      agent: "codex".to_string(),
+    };
+    let url = build_agent_deep_link_url(&request);
+    let parsed = parse_agent_request_from_url(&url).expect("request should parse");
+    assert_eq!(parsed, request);
+  }
 }

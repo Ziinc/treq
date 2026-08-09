@@ -15,66 +15,66 @@ import { PrismThemeLoader } from "./components/PrismThemeLoader";
 import "./index.css";
 
 const queryClient = new QueryClient({
-	defaultOptions: {
-		queries: {
-			refetchOnWindowFocus: false,
-			retry: 1,
-		},
-	},
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: false,
+      retry: 1,
+    },
+  },
 });
 
 function AppContent() {
-	// Pre-load all settings in a single batch request
-	useSettingsPreloader();
+  // Pre-load all settings in a single batch request
+  useSettingsPreloader();
 
-	return (
-		<div className="flex h-screen">
-			<ErrorBoundary
-				fallbackTitle="Dashboard crashed"
-				onReset={() => {
-					if (typeof window !== "undefined") {
-						window.location.reload();
-					}
-				}}
-			>
-				<Dashboard />
-			</ErrorBoundary>
-		</div>
-	);
+  return (
+    <div className="flex h-screen">
+      <ErrorBoundary
+        fallbackTitle="Dashboard crashed"
+        onReset={() => {
+          if (typeof window !== "undefined") {
+            window.location.reload();
+          }
+        }}
+      >
+        <Dashboard />
+      </ErrorBoundary>
+    </div>
+  );
 }
 
 function App() {
-	return (
-		<ErrorBoundary
-			fallbackTitle="Application failed to initialize"
-			onReset={() => {
-				if (typeof window !== "undefined") {
-					window.location.reload();
-				}
-			}}
-		>
-			<QueryClientProvider client={queryClient}>
-				<AuthProvider>
-					<ThemeProvider>
-						<PrismThemeLoader />
-						<ZoomSettingsProvider>
-							<TerminalSettingsProvider>
-								<DiffSettingsProvider>
-									<EditorAppsProvider>
-										<ToastProvider>
-											<Router hook={useHashLocation}>
-												<AppContent />
-											</Router>
-										</ToastProvider>
-									</EditorAppsProvider>
-								</DiffSettingsProvider>
-							</TerminalSettingsProvider>
-						</ZoomSettingsProvider>
-					</ThemeProvider>
-				</AuthProvider>
-			</QueryClientProvider>
-		</ErrorBoundary>
-	);
+  return (
+    <ErrorBoundary
+      fallbackTitle="Application failed to initialize"
+      onReset={() => {
+        if (typeof window !== "undefined") {
+          window.location.reload();
+        }
+      }}
+    >
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <ThemeProvider>
+            <PrismThemeLoader />
+            <ZoomSettingsProvider>
+              <TerminalSettingsProvider>
+                <DiffSettingsProvider>
+                  <EditorAppsProvider>
+                    <ToastProvider>
+                      <Router hook={useHashLocation}>
+                        <AppContent />
+                      </Router>
+                    </ToastProvider>
+                  </EditorAppsProvider>
+                </DiffSettingsProvider>
+              </TerminalSettingsProvider>
+            </ZoomSettingsProvider>
+          </ThemeProvider>
+        </AuthProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
+  );
 }
 
 export default App;

@@ -4,20 +4,20 @@ import type { ConsolidatedTerminalHandle } from "../ConsolidatedTerminal";
 export const MIN_TERMINAL_WIDTH = 300;
 
 export interface ClaudeSessionData {
-	sessionId: number;
-	sessionName: string;
-	ptySessionId: string;
-	workspacePath: string | null;
-	repoPath: string;
-	workspaceName?: string | null; // Branch name or null for main repo
-	pendingPrompt?: string; // Optional prompt to send after agent initializes
-	permissionMode?: "plan" | "acceptEdits"; // Permission mode for Claude terminal
-	agent?: "claude" | "codex" | "cursor";
+  sessionId: number;
+  sessionName: string;
+  ptySessionId: string;
+  workspacePath: string | null;
+  repoPath: string;
+  workspaceName?: string | null; // Branch name or null for main repo
+  pendingPrompt?: string; // Optional prompt to send after agent initializes
+  permissionMode?: "plan" | "acceptEdits"; // Permission mode for Claude terminal
+  agent?: "claude" | "codex" | "cursor";
 }
 
 export interface ShellTerminalData {
-	id: string;
-	workingDirectory: string;
+  id: string;
+  workingDirectory: string;
 }
 
 export type TerminalRefsMap = Map<string, ConsolidatedTerminalHandle | null>;
@@ -30,16 +30,16 @@ export const TERMINAL_IDLE_THRESHOLD_MS = 60_000;
  * workspace sidebar's terminal sessions list.
  */
 export interface TerminalSessionSummary {
-	/** Matches the id used in WorkspaceTerminalPane's terminalOrder ("shell-..." or "claude-<sessionId>"). */
-	id: string;
-	kind: "agent" | "shell";
-	name: string;
-	/** null when the terminal belongs to the main repo (not a workspace). */
-	branchName: string | null;
-	isMainRepo: boolean;
-	agent?: "claude" | "codex" | "cursor";
-	/** Epoch ms of the last output/creation event. */
-	lastActivityAt: number;
-	/** True while output is actively streaming (shows a spinner). */
-	isStreaming: boolean;
+  /** Matches the id used in WorkspaceTerminalPane's terminalOrder ("shell-..." or "claude-<sessionId>"). */
+  id: string;
+  kind: "agent" | "shell";
+  name: string;
+  /** null when the terminal belongs to the main repo (not a workspace). */
+  branchName: string | null;
+  isMainRepo: boolean;
+  agent?: "claude" | "codex" | "cursor";
+  /** Epoch ms of the last output/creation event. */
+  lastActivityAt: number;
+  /** True while output is actively streaming (shows a spinner). */
+  isStreaming: boolean;
 }

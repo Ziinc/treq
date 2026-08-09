@@ -15,42 +15,42 @@ export type GitHubStateFilter = "open" | "closed" | "all";
 export const GITHUB_BASE_PATH = "/github";
 
 export function githubTabPath(tab: "merge-queue"): string {
-	return `${GITHUB_BASE_PATH}/${tab}`;
+  return `${GITHUB_BASE_PATH}/${tab}`;
 }
 
 export function githubListPath(
-	tab: "issues" | "prs",
-	filter: GitHubStateFilter = "open",
+  tab: "issues" | "prs",
+  filter: GitHubStateFilter = "open",
 ): string {
-	return `${GITHUB_BASE_PATH}/${tab}/${filter}`;
+  return `${GITHUB_BASE_PATH}/${tab}/${filter}`;
 }
 
 export function githubNewItemPath(
-	tab: "issues" | "prs",
-	filter: GitHubStateFilter = "open",
+  tab: "issues" | "prs",
+  filter: GitHubStateFilter = "open",
 ): string {
-	return `${githubListPath(tab, filter)}/new`;
+  return `${githubListPath(tab, filter)}/new`;
 }
 
 export function githubDetailPath(
-	tab: "issues" | "prs",
-	number: number,
-	filter: GitHubStateFilter = "open",
+  tab: "issues" | "prs",
+  number: number,
+  filter: GitHubStateFilter = "open",
 ): string {
-	return `${githubListPath(tab, filter)}/${number}`;
+  return `${githubListPath(tab, filter)}/${number}`;
 }
 
 /** Maps a PR's gh state to the filter tab that will surface it in the list. */
 export function stateFilterForPrState(
-	prState: string | null | undefined,
+  prState: string | null | undefined,
 ): GitHubStateFilter {
-	switch (prState?.toUpperCase()) {
-		case "OPEN":
-			return "open";
-		case "CLOSED":
-			return "closed";
-		default:
-			// MERGED PRs aren't returned by gh's "closed" filter, so fall back to "all".
-			return "all";
-	}
+  switch (prState?.toUpperCase()) {
+    case "OPEN":
+      return "open";
+    case "CLOSED":
+      return "closed";
+    default:
+      // MERGED PRs aren't returned by gh's "closed" filter, so fall back to "all".
+      return "all";
+  }
 }

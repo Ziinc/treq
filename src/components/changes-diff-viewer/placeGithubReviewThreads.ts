@@ -3,17 +3,17 @@ import { computeHunkLineNumbers } from "./utils";
 import type { FileHunksData } from "./types";
 
 function pushToMap(
-	map: Map<string, GhReviewThread[]>,
-	key: string,
-	thread: GhReviewThread,
+  map: Map<string, GhReviewThread[]>,
+  key: string,
+  thread: GhReviewThread,
 ) {
-	const existing = map.get(key);
-	if (existing) existing.push(thread);
-	else map.set(key, [thread]);
+  const existing = map.get(key);
+  if (existing) existing.push(thread);
+  else map.set(key, [thread]);
 }
 
 function lineSideOf(ln: { new?: number; old?: number }): "old" | "new" {
-	return ln.old !== undefined && ln.new === undefined ? "old" : "new";
+  return ln.old !== undefined && ln.new === undefined ? "old" : "new";
 }
 
 /**
@@ -27,48 +27,48 @@ function lineSideOf(ln: { new?: number; old?: number }): "old" | "new" {
  * thread outdated after a force-push that left the line intact.
  */
 export function tryPlaceThread(
-	thread: GhReviewThread,
-	hunkMaps: Array<Map<string, FileHunksData>>,
+  thread: GhReviewThread,
+  hunkMaps: Array<Map<string, FileHunksData>>,
 ): string | null {
-	if (thread.line == null) return null;
+  if (thread.line == null) return null;
 
-	const expectedSide: "old" | "new" =
-		thread.diff_side === "LEFT" ? "old" : "new";
+  const expectedSide: "old" | "new" =
+    thread.diff_side === "LEFT" ? "old" : "new";
 
-	for (const hunksMap of hunkMaps) {
-		const fileData = hunksMap.get(thread.path);
-		if (!fileData?.hunks) continue;
+  for (const hunksMap of hunkMaps) {
+    const fileData = hunksMap.get(thread.path);
+    if (!fileData?.hunks) continue;
 
-		for (const hunk of fileData.hunks) {
-			const lineNumbers = computeHunkLineNumbers(hunk);
-			const hasMatch = lineNumbers.some((ln) => {
-				const actualLineNum = ln.new ?? ln.old ?? 0;
-				return actualLineNum === thread.line && lineSideOf(ln) === expectedSide;
-			});
-			if (hasMatch) {
-				return `${thread.path}:${hunk.id}:${thread.line}:${expectedSide}`;
-			}
-		}
-	}
+    for (const hunk of fileData.hunks) {
+      const lineNumbers = computeHunkLineNumbers(hunk);
+      const hasMatch = lineNumbers.some((ln) => {
+        const actualLineNum = ln.new ?? ln.old ?? 0;
+        return actualLineNum === thread.line && lineSideOf(ln) === expectedSide;
+      });
+      if (hasMatch) {
+        return `${thread.path}:${hunk.id}:${thread.line}:${expectedSide}`;
+      }
+    }
+  }
 
-	return null;
+  return null;
 }
 
 export function placeGithubReviewThreads(
-	threads: GhReviewThread[],
-	hunkMaps: Array<Map<string, FileHunksData>>,
+  threads: GhReviewThread[],
+  hunkMaps: Array<Map<string, FileHunksData>>,
 ): {
-	threadsByLineKey: Map<string, GhReviewThread[]>;
-	unplacedThreadsByFile: Map<string, GhReviewThread[]>;
+  threadsByLineKey: Map<string, GhReviewThread[]>;
+  unplacedThreadsByFile: Map<string, GhReviewThread[]>;
 } {
-	const byLineKey = new Map<string, GhReviewThread[]>();
-	const unplaced = new Map<string, GhReviewThread[]>();
+  const byLineKey = new Map<string, GhReviewThread[]>();
+  const unplaced = new Map<string, GhReviewThread[]>();
 
-	for (const thread of threads) {
-		const key = tryPlaceThread(thread, hunkMaps);
-		if (key) pushToMap(byLineKey, key, thread);
-		else pushToMap(unplaced, thread.path, thread);
-	}
+  for (const thread of threads) {
+    const key = tryPlaceThread(thread, hunkMaps);
+    if (key) pushToMap(byLineKey, key, thread);
+    else pushToMap(unplaced, thread.path, thread);
+  }
 
-	return { threadsByLineKey: byLineKey, unplacedThreadsByFile: unplaced };
+  return { threadsByLineKey: byLineKey, unplacedThreadsByFile: unplaced };
 }

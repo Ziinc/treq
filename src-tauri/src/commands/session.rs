@@ -2,59 +2,59 @@ use crate::local_db::{self, PromptHistoryEntry, Session};
 
 #[tauri::command]
 pub fn create_session(
-    repo_path: String,
-    workspace_id: Option<i64>,
-    name: String,
+  repo_path: String,
+  workspace_id: Option<i64>,
+  name: String,
 ) -> Result<i64, String> {
-    local_db::add_session(&repo_path, workspace_id, name)
+  local_db::add_session(&repo_path, workspace_id, name)
 }
 
 #[tauri::command]
 pub fn get_sessions(repo_path: String) -> Result<Vec<Session>, String> {
-    local_db::get_sessions(&repo_path)
+  local_db::get_sessions(&repo_path)
 }
 
 #[tauri::command]
 pub fn update_session_access(repo_path: String, id: i64) -> Result<(), String> {
-    local_db::update_session_access(&repo_path, id)
+  local_db::update_session_access(&repo_path, id)
 }
 
 #[tauri::command]
 pub fn get_session_model(repo_path: String, id: i64) -> Result<Option<String>, String> {
-    local_db::get_session_model(&repo_path, id)
+  local_db::get_session_model(&repo_path, id)
 }
 
 #[tauri::command]
 pub fn set_session_model(repo_path: String, id: i64, model: Option<String>) -> Result<(), String> {
-    local_db::set_session_model(&repo_path, id, model)
+  local_db::set_session_model(&repo_path, id, model)
 }
 
 #[tauri::command]
 pub fn add_prompt_history(
-    repo_path: String,
-    workspace_id: Option<i64>,
-    session_id: Option<i64>,
-    prompt_text: String,
-    agent: Option<String>,
+  repo_path: String,
+  workspace_id: Option<i64>,
+  session_id: Option<i64>,
+  prompt_text: String,
+  agent: Option<String>,
 ) -> Result<i64, String> {
-    local_db::add_prompt_history(
-        &repo_path,
-        workspace_id,
-        session_id,
-        &prompt_text,
-        agent.as_deref(),
-    )
+  local_db::add_prompt_history(
+    &repo_path,
+    workspace_id,
+    session_id,
+    &prompt_text,
+    agent.as_deref(),
+  )
 }
 
 #[tauri::command]
 pub fn get_prompt_history(repo_path: String) -> Result<Vec<PromptHistoryEntry>, String> {
-    local_db::get_prompt_history(&repo_path)
+  local_db::get_prompt_history(&repo_path)
 }
 
 #[tauri::command]
 pub fn get_workspace_starting_prompt(
-    repo_path: String,
-    workspace_id: i64,
+  repo_path: String,
+  workspace_id: i64,
 ) -> Result<Option<PromptHistoryEntry>, String> {
-    local_db::get_workspace_starting_prompt(&repo_path, workspace_id)
+  local_db::get_workspace_starting_prompt(&repo_path, workspace_id)
 }

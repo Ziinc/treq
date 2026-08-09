@@ -7,83 +7,83 @@ import { Dashboard } from "../../src/components/Dashboard";
 import { createWorkspace } from "../../src/lib/api";
 
 describe("CommandPalette integration", () => {
-	let user: ReturnType<typeof userEvent.setup>;
-	let repoPath: string;
+  let user: ReturnType<typeof userEvent.setup>;
+  let repoPath: string;
 
-	beforeEach(() => {
-		const values = new Map<string, string>();
-		Object.defineProperty(globalThis, "localStorage", {
-			configurable: true,
-			value: {
-				getItem: (key: string) => values.get(key) ?? null,
-				setItem: (key: string, value: string) => values.set(key, value),
-				removeItem: (key: string) => values.delete(key),
-				clear: () => values.clear(),
-			},
-		});
-		({ repoPath } = createTestRepo(false));
-		openRepo(repoPath);
-		user = userEvent.setup();
-	});
+  beforeEach(() => {
+    const values = new Map<string, string>();
+    Object.defineProperty(globalThis, "localStorage", {
+      configurable: true,
+      value: {
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => values.set(key, value),
+        removeItem: (key: string) => values.delete(key),
+        clear: () => values.clear(),
+      },
+    });
+    ({ repoPath } = createTestRepo(false));
+    openRepo(repoPath);
+    user = userEvent.setup();
+  });
 
-	it("opens on Ctrl+K and shows Search Files command", async () => {
-		render(<Dashboard />);
+  it("opens on Ctrl+K and shows Search Files command", async () => {
+    render(<Dashboard />);
 
-		await user.keyboard("{Control>}k{/Control}");
+    await user.keyboard("{Control>}k{/Control}");
 
-		await screen.findByText("Search Files");
-	});
+    await screen.findByText("Search Files");
+  });
 
-	it("shows description for Search Files command", async () => {
-		render(<Dashboard />);
+  it("shows description for Search Files command", async () => {
+    render(<Dashboard />);
 
-		await user.keyboard("{Control>}k{/Control}");
+    await user.keyboard("{Control>}k{/Control}");
 
-		await screen.findByText("Jump to a file in the repository");
-	});
+    await screen.findByText("Jump to a file in the repository");
+  });
 
-	it("always shows Go to Home and Go to Settings commands", async () => {
-		render(<Dashboard />);
+  it("always shows Go to Home and Go to Settings commands", async () => {
+    render(<Dashboard />);
 
-		await user.keyboard("{Control>}k{/Control}");
+    await user.keyboard("{Control>}k{/Control}");
 
-		await screen.findByText("Go to Home");
-		await screen.findByText("Go to Settings");
-	});
+    await screen.findByText("Go to Home");
+    await screen.findByText("Go to Settings");
+  });
 
-	it("clicking Search Files opens the file picker and closes the palette", async () => {
-		render(<Dashboard />);
+  it("clicking Search Files opens the file picker and closes the palette", async () => {
+    render(<Dashboard />);
 
-		await user.keyboard("{Control>}k{/Control}");
-		await user.click(await screen.findByText("Search Files"));
+    await user.keyboard("{Control>}k{/Control}");
+    await user.click(await screen.findByText("Search Files"));
 
-		await screen.findByPlaceholderText("Search files...");
+    await screen.findByPlaceholderText("Search files...");
 
-		await waitFor(() => {
-			expect(
-				screen.queryByPlaceholderText("Type a command or search..."),
-			).not.toBeInTheDocument();
-		});
-	});
+    await waitFor(() => {
+      expect(
+        screen.queryByPlaceholderText("Type a command or search..."),
+      ).not.toBeInTheDocument();
+    });
+  });
 
-	it("opens the same stacked workspace dialog as the Stack button", async () => {
-		await createWorkspace(repoPath, "feat/parent");
-		render(<Dashboard />);
-		await user.click(await findSidebarBranchElement("feat/parent"));
+  it("opens the same stacked workspace dialog as the Stack button", async () => {
+    await createWorkspace(repoPath, "feat/parent");
+    render(<Dashboard />);
+    await user.click(await findSidebarBranchElement("feat/parent"));
 
-		await user.keyboard("{Control>}k{/Control}");
-		await user.click(await screen.findByText("Create Workspace"));
+    await user.keyboard("{Control>}k{/Control}");
+    await user.click(await screen.findByText("Create Workspace"));
 
-		expect(await screen.findByText("Stack a new Workspace")).toBeVisible();
-		expect(
-			screen.getByText(
-				"Create a new workspace stacked on feat/parent. Optionally move commits or file changes.",
-			),
-		).toBeVisible();
-		await waitFor(() => {
-			expect(
-				screen.queryByPlaceholderText("Type a command or search..."),
-			).not.toBeInTheDocument();
-		});
-	});
+    expect(await screen.findByText("Stack a new Workspace")).toBeVisible();
+    expect(
+      screen.getByText(
+        "Create a new workspace stacked on feat/parent. Optionally move commits or file changes.",
+      ),
+    ).toBeVisible();
+    await waitFor(() => {
+      expect(
+        screen.queryByPlaceholderText("Type a command or search..."),
+      ).not.toBeInTheDocument();
+    });
+  });
 });

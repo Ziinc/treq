@@ -1,12 +1,12 @@
 use crate::binary_paths::{detect_binary, get_binary_path, get_extended_path};
 pub use crate::github::{
-    GhIssue, GhListPage, GhPullRequest, GhReviewThread, GitRemoteInfo, PrCiStatus, PrInfo,
+  GhIssue, GhListPage, GhPullRequest, GhReviewThread, GitRemoteInfo, PrCiStatus, PrInfo,
 };
 
 fn gh_bin() -> Result<String, String> {
-    get_binary_path("gh")
-        .or_else(|| detect_binary("gh"))
-        .ok_or_else(|| "gh CLI not found".to_string())
+  get_binary_path("gh")
+    .or_else(|| detect_binary("gh"))
+    .ok_or_else(|| "gh CLI not found".to_string())
 }
 
 /// Run `gh pr view` for the given branch in the given repo directory.
@@ -15,82 +15,82 @@ fn gh_bin() -> Result<String, String> {
 /// Runs off the UI/command thread via `spawn_blocking`.
 #[tauri::command]
 pub async fn get_pr_info_via_gh(
-    repo_path: String,
-    branch_name: String,
+  repo_path: String,
+  branch_name: String,
 ) -> Result<Option<PrInfo>, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let gh = get_binary_path("gh")
-            .or_else(|| detect_binary("gh"))
-            .ok_or_else(|| "gh CLI not found".to_string())?;
+  tauri::async_runtime::spawn_blocking(move || {
+    let gh = get_binary_path("gh")
+      .or_else(|| detect_binary("gh"))
+      .ok_or_else(|| "gh CLI not found".to_string())?;
 
-        let info = crate::github::get_pr_info_via_gh_impl(
-            &gh,
-            &repo_path,
-            &branch_name,
-            &get_extended_path(),
-        )?;
-        crate::pr_status::global().put_cached(&repo_path, &branch_name, info.clone());
-        Ok(info)
-    })
-    .await
-    .map_err(|e| format!("Failed to join get_pr_info_via_gh task: {e}"))?
+    let info =
+      crate::github::get_pr_info_via_gh_impl(&gh, &repo_path, &branch_name, &get_extended_path())?;
+    crate::pr_status::global().put_cached(&repo_path, &branch_name, info.clone());
+    Ok(info)
+  })
+  .await
+  .map_err(|e| format!("Failed to join get_pr_info_via_gh task: {e}"))?
 }
 
 /// Start background PR-status polling for every workspace branch in `repo_path`.
 /// Safe to call repeatedly; the first call also starts the poller thread.
 #[tauri::command]
 pub fn start_pr_status_polling(repo_path: String) -> Result<(), String> {
-    crate::pr_status::global().watch_repo(&repo_path);
-    Ok(())
+  crate::pr_status::global().watch_repo(&repo_path);
+  Ok(())
 }
 
 /// Stop background PR-status polling for `repo_path`.
 #[tauri::command]
 pub fn stop_pr_status_polling(repo_path: String) -> Result<(), String> {
-    crate::pr_status::global().unwatch_repo(&repo_path);
-    Ok(())
+  crate::pr_status::global().unwatch_repo(&repo_path);
+  Ok(())
 }
 
 /// Return the cached PR statuses for a repo (`branch_name -> Option<PrInfo>`).
 /// Never shells out to `gh` — the background poller owns that work.
 #[tauri::command]
 pub fn list_cached_pr_statuses(
-    repo_path: String,
+  repo_path: String,
 ) -> Result<std::collections::HashMap<String, Option<PrInfo>>, String> {
-    Ok(crate::pr_status::global().list_cached(&repo_path))
+  Ok(crate::pr_status::global().list_cached(&repo_path))
 }
 
 /// Return a single cached PR. `None` means not yet polled or no PR (callers
 /// that need to distinguish should use `list_cached_pr_statuses`).
 #[tauri::command]
 pub fn get_cached_pr_info(
-    repo_path: String,
-    branch_name: String,
+  repo_path: String,
+  branch_name: String,
 ) -> Result<Option<PrInfo>, String> {
-    Ok(crate::pr_status::global()
-        .get_cached(&repo_path, &branch_name)
-        .flatten())
+  Ok(
+    crate::pr_status::global()
+      .get_cached(&repo_path, &branch_name)
+      .flatten(),
+  )
 }
 
 /// Return the cached CI statuses for a repo (`branch_name -> Option<PrCiStatus>`).
 /// Never shells out to `gh` — the background poller owns that work.
 #[tauri::command]
 pub fn list_cached_pr_ci_statuses(
-    repo_path: String,
+  repo_path: String,
 ) -> Result<std::collections::HashMap<String, Option<PrCiStatus>>, String> {
-    Ok(crate::pr_status::global().list_cached_ci(&repo_path))
+  Ok(crate::pr_status::global().list_cached_ci(&repo_path))
 }
 
 /// Return a single cached CI rollup. `None` means not yet polled, no PR, or
 /// no checks reported yet.
 #[tauri::command]
 pub fn get_cached_pr_ci_status(
-    repo_path: String,
-    branch_name: String,
+  repo_path: String,
+  branch_name: String,
 ) -> Result<Option<PrCiStatus>, String> {
-    Ok(crate::pr_status::global()
-        .get_cached_ci(&repo_path, &branch_name)
-        .flatten())
+  Ok(
+    crate::pr_status::global()
+      .get_cached_ci(&repo_path, &branch_name)
+      .flatten(),
+  )
 }
 
 /// Force a refresh of all workspace PR statuses for a repo.
@@ -98,14 +98,14 @@ pub fn get_cached_pr_ci_status(
 /// Runs off the UI/command thread via `spawn_blocking`.
 #[tauri::command]
 pub async fn refresh_pr_statuses(repo_path: String) -> Result<(), String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        // Ensure the repo is watched so subsequent background polls continue.
-        crate::pr_status::global().watch_repo(&repo_path);
-        crate::pr_status::global().refresh_repo_now(&repo_path);
-    })
-    .await
-    .map_err(|e| format!("Failed to join refresh_pr_statuses task: {e}"))?;
-    Ok(())
+  tauri::async_runtime::spawn_blocking(move || {
+    // Ensure the repo is watched so subsequent background polls continue.
+    crate::pr_status::global().watch_repo(&repo_path);
+    crate::pr_status::global().refresh_repo_now(&repo_path);
+  })
+  .await
+  .map_err(|e| format!("Failed to join refresh_pr_statuses task: {e}"))?;
+  Ok(())
 }
 
 /// Queue an out-of-band PR info + CI refresh for one branch.
@@ -115,9 +115,9 @@ pub async fn refresh_pr_statuses(repo_path: String) -> Result<(), String> {
 /// do not wait for the next poll tick to see fresh data.
 #[tauri::command]
 pub fn refresh_pr_branch_status(repo_path: String, branch_name: String) -> Result<(), String> {
-    crate::pr_status::global().watch_repo(&repo_path);
-    crate::pr_status::global().queue_branch_refresh(repo_path, branch_name);
-    Ok(())
+  crate::pr_status::global().watch_repo(&repo_path);
+  crate::pr_status::global().queue_branch_refresh(repo_path, branch_name);
+  Ok(())
 }
 
 /// Run `gh pr checks` for the given branch in the given repo directory and
@@ -128,25 +128,25 @@ pub fn refresh_pr_branch_status(repo_path: String, branch_name: String) -> Resul
 /// Runs off the UI/command thread via `spawn_blocking`.
 #[tauri::command]
 pub async fn get_pr_checks_via_gh(
-    repo_path: String,
-    branch_name: String,
+  repo_path: String,
+  branch_name: String,
 ) -> Result<Option<PrCiStatus>, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let gh = get_binary_path("gh")
-            .or_else(|| detect_binary("gh"))
-            .ok_or_else(|| "gh CLI not found".to_string())?;
+  tauri::async_runtime::spawn_blocking(move || {
+    let gh = get_binary_path("gh")
+      .or_else(|| detect_binary("gh"))
+      .ok_or_else(|| "gh CLI not found".to_string())?;
 
-        let status = crate::github::get_pr_checks_via_gh_impl(
-            &gh,
-            &repo_path,
-            &branch_name,
-            &get_extended_path(),
-        )?;
-        crate::pr_status::global().put_cached_ci(&repo_path, &branch_name, status.clone());
-        Ok(status)
-    })
-    .await
-    .map_err(|e| format!("Failed to join get_pr_checks_via_gh task: {e}"))?
+    let status = crate::github::get_pr_checks_via_gh_impl(
+      &gh,
+      &repo_path,
+      &branch_name,
+      &get_extended_path(),
+    )?;
+    crate::pr_status::global().put_cached_ci(&repo_path, &branch_name, status.clone());
+    Ok(status)
+  })
+  .await
+  .map_err(|e| format!("Failed to join get_pr_checks_via_gh task: {e}"))?
 }
 
 /// Run `gh pr checks` for a specific PR number in a repo (not necessarily
@@ -155,149 +155,138 @@ pub async fn get_pr_checks_via_gh(
 /// Runs off the UI/command thread via `spawn_blocking`.
 #[tauri::command]
 pub async fn get_pr_checks_for_pr(
-    repo_full_name: String,
-    pr_number: u64,
+  repo_full_name: String,
+  pr_number: u64,
 ) -> Result<Option<PrCiStatus>, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let gh = gh_bin()?;
-        crate::github::get_pr_checks_for_pr_impl(
-            &gh,
-            &repo_full_name,
-            pr_number,
-            &get_extended_path(),
-        )
-    })
-    .await
-    .map_err(|e| format!("Failed to join get_pr_checks_for_pr task: {e}"))?
+  tauri::async_runtime::spawn_blocking(move || {
+    let gh = gh_bin()?;
+    crate::github::get_pr_checks_for_pr_impl(&gh, &repo_full_name, pr_number, &get_extended_path())
+  })
+  .await
+  .map_err(|e| format!("Failed to join get_pr_checks_for_pr task: {e}"))?
 }
 
 /// Read the GitHub remote URL from .git/config and parse owner/repo.
 /// Returns None if no GitHub remote is found.
 #[tauri::command]
 pub fn get_git_remote_url(repo_path: String) -> Result<Option<GitRemoteInfo>, String> {
-    crate::github::get_git_remote_url_impl(&repo_path)
+  crate::github::get_git_remote_url_impl(&repo_path)
 }
 
 #[tauri::command]
 pub fn gh_list_issues(
-    repo_full_name: String,
-    state: String,
-    limit: Option<u32>,
-    page: Option<u32>,
+  repo_full_name: String,
+  state: String,
+  limit: Option<u32>,
+  page: Option<u32>,
 ) -> Result<GhListPage<GhIssue>, String> {
-    let gh = gh_bin()?;
-    crate::github::gh_list_issues_impl(
-        &gh,
-        &repo_full_name,
-        &state,
-        limit.unwrap_or(crate::github::GH_LIST_PAGE_SIZE),
-        page.unwrap_or(1),
-        &get_extended_path(),
-    )
+  let gh = gh_bin()?;
+  crate::github::gh_list_issues_impl(
+    &gh,
+    &repo_full_name,
+    &state,
+    limit.unwrap_or(crate::github::GH_LIST_PAGE_SIZE),
+    page.unwrap_or(1),
+    &get_extended_path(),
+  )
 }
 
 #[tauri::command]
 pub fn gh_view_issue(repo_full_name: String, issue_number: u64) -> Result<GhIssue, String> {
-    let gh = gh_bin()?;
-    crate::github::gh_view_issue_impl(&gh, &repo_full_name, issue_number, &get_extended_path())
+  let gh = gh_bin()?;
+  crate::github::gh_view_issue_impl(&gh, &repo_full_name, issue_number, &get_extended_path())
 }
 
 #[tauri::command]
 pub fn gh_create_issue(repo_full_name: String, title: String, body: String) -> Result<u64, String> {
-    let gh = gh_bin()?;
-    crate::github::gh_create_issue_impl(&gh, &repo_full_name, &title, &body, &get_extended_path())
+  let gh = gh_bin()?;
+  crate::github::gh_create_issue_impl(&gh, &repo_full_name, &title, &body, &get_extended_path())
 }
 
 #[tauri::command]
 pub fn gh_create_issue_comment(
-    repo_full_name: String,
-    issue_number: u64,
-    body: String,
+  repo_full_name: String,
+  issue_number: u64,
+  body: String,
 ) -> Result<(), String> {
-    let gh = gh_bin()?;
-    crate::github::gh_create_issue_comment_impl(
-        &gh,
-        &repo_full_name,
-        issue_number,
-        &body,
-        &get_extended_path(),
-    )
+  let gh = gh_bin()?;
+  crate::github::gh_create_issue_comment_impl(
+    &gh,
+    &repo_full_name,
+    issue_number,
+    &body,
+    &get_extended_path(),
+  )
 }
 
 #[tauri::command]
 pub fn gh_close_issue(repo_full_name: String, issue_number: u64) -> Result<(), String> {
-    let gh = gh_bin()?;
-    crate::github::gh_close_issue_impl(&gh, &repo_full_name, issue_number, &get_extended_path())
+  let gh = gh_bin()?;
+  crate::github::gh_close_issue_impl(&gh, &repo_full_name, issue_number, &get_extended_path())
 }
 
 #[tauri::command]
 pub fn gh_reopen_issue(repo_full_name: String, issue_number: u64) -> Result<(), String> {
-    let gh = gh_bin()?;
-    crate::github::gh_reopen_issue_impl(&gh, &repo_full_name, issue_number, &get_extended_path())
+  let gh = gh_bin()?;
+  crate::github::gh_reopen_issue_impl(&gh, &repo_full_name, issue_number, &get_extended_path())
 }
 
 #[tauri::command]
 pub fn gh_list_prs(
-    repo_full_name: String,
-    state: String,
-    limit: Option<u32>,
-    page: Option<u32>,
+  repo_full_name: String,
+  state: String,
+  limit: Option<u32>,
+  page: Option<u32>,
 ) -> Result<GhListPage<GhPullRequest>, String> {
-    let gh = gh_bin()?;
-    crate::github::gh_list_prs_impl(
-        &gh,
-        &repo_full_name,
-        &state,
-        limit.unwrap_or(crate::github::GH_LIST_PAGE_SIZE),
-        page.unwrap_or(1),
-        &get_extended_path(),
-    )
+  let gh = gh_bin()?;
+  crate::github::gh_list_prs_impl(
+    &gh,
+    &repo_full_name,
+    &state,
+    limit.unwrap_or(crate::github::GH_LIST_PAGE_SIZE),
+    page.unwrap_or(1),
+    &get_extended_path(),
+  )
 }
 
 #[tauri::command]
 pub fn gh_view_pr(repo_full_name: String, pr_number: u64) -> Result<GhPullRequest, String> {
-    let gh = gh_bin()?;
-    crate::github::gh_view_pr_impl(&gh, &repo_full_name, pr_number, &get_extended_path())
+  let gh = gh_bin()?;
+  crate::github::gh_view_pr_impl(&gh, &repo_full_name, pr_number, &get_extended_path())
 }
 
 #[tauri::command]
 pub fn gh_create_pr_comment(
-    repo_full_name: String,
-    pr_number: u64,
-    body: String,
+  repo_full_name: String,
+  pr_number: u64,
+  body: String,
 ) -> Result<(), String> {
-    let gh = gh_bin()?;
-    crate::github::gh_create_pr_comment_impl(
-        &gh,
-        &repo_full_name,
-        pr_number,
-        &body,
-        &get_extended_path(),
-    )
+  let gh = gh_bin()?;
+  crate::github::gh_create_pr_comment_impl(
+    &gh,
+    &repo_full_name,
+    pr_number,
+    &body,
+    &get_extended_path(),
+  )
 }
 
 #[tauri::command]
 pub fn gh_close_pr(repo_full_name: String, pr_number: u64) -> Result<(), String> {
-    let gh = gh_bin()?;
-    crate::github::gh_close_pr_impl(&gh, &repo_full_name, pr_number, &get_extended_path())
+  let gh = gh_bin()?;
+  crate::github::gh_close_pr_impl(&gh, &repo_full_name, pr_number, &get_extended_path())
 }
 
 #[tauri::command]
 pub fn gh_reopen_pr(repo_full_name: String, pr_number: u64) -> Result<(), String> {
-    let gh = gh_bin()?;
-    crate::github::gh_reopen_pr_impl(&gh, &repo_full_name, pr_number, &get_extended_path())
+  let gh = gh_bin()?;
+  crate::github::gh_reopen_pr_impl(&gh, &repo_full_name, pr_number, &get_extended_path())
 }
 
 #[tauri::command]
 pub fn gh_set_pr_draft(repo_full_name: String, pr_number: u64, draft: bool) -> Result<(), String> {
-    let gh = gh_bin()?;
-    crate::github::gh_set_pr_draft_impl(
-        &gh,
-        &repo_full_name,
-        pr_number,
-        draft,
-        &get_extended_path(),
-    )
+  let gh = gh_bin()?;
+  crate::github::gh_set_pr_draft_impl(&gh, &repo_full_name, pr_number, draft, &get_extended_path())
 }
 
 /// List every review-comment thread on a PR, including resolved/outdated
@@ -305,22 +294,22 @@ pub fn gh_set_pr_draft(repo_full_name: String, pr_number: u64, draft: bool) -> R
 /// Runs off the UI/command thread via `spawn_blocking`.
 #[tauri::command]
 pub async fn gh_list_pr_review_threads(
-    owner: String,
-    repo: String,
-    pr_number: u64,
+  owner: String,
+  repo: String,
+  pr_number: u64,
 ) -> Result<Vec<GhReviewThread>, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        let gh = gh_bin()?;
-        crate::github::gh_list_pr_review_threads_impl(
-            &gh,
-            &owner,
-            &repo,
-            pr_number,
-            &get_extended_path(),
-        )
-    })
-    .await
-    .map_err(|e| format!("Failed to join gh_list_pr_review_threads task: {e}"))?
+  tauri::async_runtime::spawn_blocking(move || {
+    let gh = gh_bin()?;
+    crate::github::gh_list_pr_review_threads_impl(
+      &gh,
+      &owner,
+      &repo,
+      pr_number,
+      &get_extended_path(),
+    )
+  })
+  .await
+  .map_err(|e| format!("Failed to join gh_list_pr_review_threads task: {e}"))?
 }
 
 /// Create a GitHub PR via `gh`. Runs on the blocking pool so the network
@@ -328,133 +317,133 @@ pub async fn gh_list_pr_review_threads(
 /// `push_workspace_to_remote` and other long-running workspace commands).
 #[tauri::command]
 pub async fn gh_create_pr(
-    repo_full_name: String,
-    title: String,
-    body: String,
-    base_branch: String,
-    head_branch: String,
-    draft: Option<bool>,
+  repo_full_name: String,
+  title: String,
+  body: String,
+  base_branch: String,
+  head_branch: String,
+  draft: Option<bool>,
 ) -> Result<u64, String> {
-    let gh = gh_bin()?;
-    let extended_path = get_extended_path();
-    let draft = draft.unwrap_or(false);
-    tauri::async_runtime::spawn_blocking(move || {
-        crate::github::gh_create_pr_impl(
-            &gh,
-            &repo_full_name,
-            &title,
-            &body,
-            &base_branch,
-            &head_branch,
-            draft,
-            &extended_path,
-        )
-    })
-    .await
-    .map_err(|e| format!("Failed to join gh_create_pr task: {}", e))?
+  let gh = gh_bin()?;
+  let extended_path = get_extended_path();
+  let draft = draft.unwrap_or(false);
+  tauri::async_runtime::spawn_blocking(move || {
+    crate::github::gh_create_pr_impl(
+      &gh,
+      &repo_full_name,
+      &title,
+      &body,
+      &base_branch,
+      &head_branch,
+      draft,
+      &extended_path,
+    )
+  })
+  .await
+  .map_err(|e| format!("Failed to join gh_create_pr task: {}", e))?
 }
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
-    use std::io::Write;
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::Arc;
-    use std::time::{Duration, Instant};
-    use tempfile::TempDir;
+  use std::fs;
+  use std::io::Write;
+  use std::sync::atomic::{AtomicBool, Ordering};
+  use std::sync::Arc;
+  use std::time::{Duration, Instant};
+  use tempfile::TempDir;
 
-    #[cfg(unix)]
-    fn write_fake_gh(dir: &TempDir, script_body: &str) -> String {
-        let path = dir.path().join("gh");
-        let mut f = fs::File::create(&path).unwrap();
-        writeln!(f, "#!/bin/sh").unwrap();
-        write!(f, "{script_body}").unwrap();
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
-        path.to_str().unwrap().to_string()
-    }
+  #[cfg(unix)]
+  fn write_fake_gh(dir: &TempDir, script_body: &str) -> String {
+    let path = dir.path().join("gh");
+    let mut f = fs::File::create(&path).unwrap();
+    writeln!(f, "#!/bin/sh").unwrap();
+    write!(f, "{script_body}").unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+    path.to_str().unwrap().to_string()
+  }
 
-    /// `gh_create_pr` must schedule the `gh` subprocess on the blocking pool
-    /// and return a Future the caller can await — never run the network call
-    /// synchronously on the invoking thread.
-    #[test]
-    #[cfg(unix)]
-    fn gh_create_pr_runs_on_blocking_pool_not_caller_thread() {
-        let bin_dir = TempDir::new().unwrap();
-        let gh_path = write_fake_gh(
-            &bin_dir,
-            "sleep 0.2\necho 'https://github.com/owner/repo/pull/11'",
-        );
+  /// `gh_create_pr` must schedule the `gh` subprocess on the blocking pool
+  /// and return a Future the caller can await — never run the network call
+  /// synchronously on the invoking thread.
+  #[test]
+  #[cfg(unix)]
+  fn gh_create_pr_runs_on_blocking_pool_not_caller_thread() {
+    let bin_dir = TempDir::new().unwrap();
+    let gh_path = write_fake_gh(
+      &bin_dir,
+      "sleep 0.2\necho 'https://github.com/owner/repo/pull/11'",
+    );
 
-        let started = Arc::new(AtomicBool::new(false));
-        let started_flag = Arc::clone(&started);
+    let started = Arc::new(AtomicBool::new(false));
+    let started_flag = Arc::clone(&started);
 
-        let join = std::thread::spawn(move || {
-            tauri::async_runtime::block_on(async move {
-                tauri::async_runtime::spawn_blocking(move || {
-                    started_flag.store(true, Ordering::SeqCst);
-                    crate::github::gh_create_pr_impl(
-                        &gh_path,
-                        "owner/repo",
-                        "T",
-                        "B",
-                        "main",
-                        "feat",
-                        false,
-                        "/usr/bin:/bin",
-                    )
-                })
-                .await
-                .expect("join create_pr task")
-            })
-        });
-
-        // The invoking path returns a join handle immediately; work happens on
-        // the blocking pool. We must observe the subprocess start without the
-        // caller thread being stuck inside `Command::output`.
-        let deadline = Instant::now() + Duration::from_secs(2);
-        while !started.load(Ordering::SeqCst) {
-            assert!(
-                Instant::now() < deadline,
-                "gh_create_pr blocking task never started"
-            );
-            std::thread::sleep(Duration::from_millis(10));
-        }
-
-        let number = join.join().expect("worker thread").unwrap();
-        assert_eq!(number, 11);
-    }
-
-    #[test]
-    #[cfg(unix)]
-    fn gh_create_pr_command_returns_pr_number_via_spawn_blocking() {
-        let bin_dir = TempDir::new().unwrap();
-        let gh_path = write_fake_gh(
-            &bin_dir,
-            r#"test "$*" = "pr create --repo owner/repo --title T --body B --base main --head feat" || exit 9
-echo 'https://github.com/owner/repo/pull/42'"#,
-        );
-
-        // Exercise the same spawn_blocking join path the Tauri command uses,
-        // without depending on the process-wide gh binary cache.
-        let number = tauri::async_runtime::block_on(async move {
-            tauri::async_runtime::spawn_blocking(move || {
-                crate::github::gh_create_pr_impl(
-                    &gh_path,
-                    "owner/repo",
-                    "T",
-                    "B",
-                    "main",
-                    "feat",
-                    false,
-                    "/usr/bin:/bin",
-                )
-            })
-            .await
-            .expect("join")
+    let join = std::thread::spawn(move || {
+      tauri::async_runtime::block_on(async move {
+        tauri::async_runtime::spawn_blocking(move || {
+          started_flag.store(true, Ordering::SeqCst);
+          crate::github::gh_create_pr_impl(
+            &gh_path,
+            "owner/repo",
+            "T",
+            "B",
+            "main",
+            "feat",
+            false,
+            "/usr/bin:/bin",
+          )
         })
-        .unwrap();
+        .await
+        .expect("join create_pr task")
+      })
+    });
 
-        assert_eq!(number, 42);
+    // The invoking path returns a join handle immediately; work happens on
+    // the blocking pool. We must observe the subprocess start without the
+    // caller thread being stuck inside `Command::output`.
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while !started.load(Ordering::SeqCst) {
+      assert!(
+        Instant::now() < deadline,
+        "gh_create_pr blocking task never started"
+      );
+      std::thread::sleep(Duration::from_millis(10));
     }
+
+    let number = join.join().expect("worker thread").unwrap();
+    assert_eq!(number, 11);
+  }
+
+  #[test]
+  #[cfg(unix)]
+  fn gh_create_pr_command_returns_pr_number_via_spawn_blocking() {
+    let bin_dir = TempDir::new().unwrap();
+    let gh_path = write_fake_gh(
+      &bin_dir,
+      r#"test "$*" = "pr create --repo owner/repo --title T --body B --base main --head feat" || exit 9
+echo 'https://github.com/owner/repo/pull/42'"#,
+    );
+
+    // Exercise the same spawn_blocking join path the Tauri command uses,
+    // without depending on the process-wide gh binary cache.
+    let number = tauri::async_runtime::block_on(async move {
+      tauri::async_runtime::spawn_blocking(move || {
+        crate::github::gh_create_pr_impl(
+          &gh_path,
+          "owner/repo",
+          "T",
+          "B",
+          "main",
+          "feat",
+          false,
+          "/usr/bin:/bin",
+        )
+      })
+      .await
+      .expect("join")
+    })
+    .unwrap();
+
+    assert_eq!(number, 42);
+  }
 }

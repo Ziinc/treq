@@ -18,22 +18,22 @@ let nextId = 1;
  * });
  */
 export function createMockWorkspace(
-	overrides: WorkspaceFactoryOptions = {},
+  overrides: WorkspaceFactoryOptions = {},
 ): Workspace {
-	const id = overrides.id ?? nextId++;
-	const branchName = overrides.branch_name ?? `workspace-${id}`;
+  const id = overrides.id ?? nextId++;
+  const branchName = overrides.branch_name ?? `workspace-${id}`;
 
-	return {
-		id,
-		repo_path: "/Users/test/repo",
-		workspace_name: branchName,
-		workspace_path: `/Users/test/repo/.treq/workspaces/${branchName}`,
-		branch_name: branchName,
-		title: branchName,
-		created_at: new Date().toISOString(),
-		not_on_remote: false,
-		...overrides,
-	};
+  return {
+    id,
+    repo_path: "/Users/test/repo",
+    workspace_name: branchName,
+    workspace_path: `/Users/test/repo/.treq/workspaces/${branchName}`,
+    branch_name: branchName,
+    title: branchName,
+    created_at: new Date().toISOString(),
+    not_on_remote: false,
+    ...overrides,
+  };
 }
 
 type WorkspaceStatusFactoryOptions = Partial<WorkspaceStatus>;
@@ -43,19 +43,19 @@ type WorkspaceStatusFactoryOptions = Partial<WorkspaceStatus>;
  * getWorkspaceStatus().
  */
 export function createMockWorkspaceStatus(
-	overrides: WorkspaceStatusFactoryOptions = {},
+  overrides: WorkspaceStatusFactoryOptions = {},
 ): WorkspaceStatus {
-	return {
-		current: createMockWorkspace(),
-		has_conflicts: false,
-		has_changes: false,
-		conflicted_files: [],
-		remote_sync: { type: "InSync" },
-		target: null,
-		children: [],
-		dag_nodes: [],
-		conflicted_workspace_ids: [],
-		commits_ahead_of_target: [],
-		...overrides,
-	};
+  return {
+    current: createMockWorkspace(),
+    has_conflicts: false,
+    has_changes: false,
+    conflicted_files: [],
+    remote_sync: { type: "InSync" },
+    target: null,
+    children: [],
+    dag_nodes: [],
+    conflicted_workspace_ids: [],
+    commits_ahead_of_target: [],
+    ...overrides,
+  };
 }

@@ -6,10 +6,10 @@ const SUPABASE_URL = environment.supabase.url;
 const SUPABASE_ANON_KEY = environment.supabase.anonKey;
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-	auth: {
-		autoRefreshToken: false,
-		persistSession: false, // Desktop manages its own persistence via SQLite
-	},
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false, // Desktop manages its own persistence via SQLite
+  },
 });
 
 const WEB_URL = environment.webUrl;

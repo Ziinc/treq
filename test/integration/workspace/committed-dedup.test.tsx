@@ -1,117 +1,117 @@
 import * as React from "react";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
-	createTestRepo,
-	findSidebarBranchElement,
-	openRepo,
-	resolveWorkspacePath,
-	writeWorkspaceFile,
+  createTestRepo,
+  findSidebarBranchElement,
+  openRepo,
+  resolveWorkspacePath,
+  writeWorkspaceFile,
 } from "../../utils";
 import {
-	createCommit,
-	createWorkspace,
-	getWorkspaces,
+  createCommit,
+  createWorkspace,
+  getWorkspaces,
 } from "../../../src/lib/api";
 import { render, screen, waitFor } from "../../test-utils";
 import { Dashboard } from "../../../src/components/Dashboard";
 import userEvent from "@testing-library/user-event";
 
 async function setupOverlappingWorkspace(branchName: string) {
-	const { repoPath } = createTestRepo(false);
-	openRepo(repoPath);
+  const { repoPath } = createTestRepo(false);
+  openRepo(repoPath);
 
-	const workspaceId = await createWorkspace(repoPath, branchName);
-	const workspace = (await getWorkspaces(repoPath)).find(
-		(item) => item.id === workspaceId,
-	);
-	if (!workspace) throw new Error(`Workspace not found for id ${workspaceId}`);
+  const workspaceId = await createWorkspace(repoPath, branchName);
+  const workspace = (await getWorkspaces(repoPath)).find(
+    (item) => item.id === workspaceId,
+  );
+  if (!workspace) throw new Error(`Workspace not found for id ${workspaceId}`);
 
-	const workspacePath = resolveWorkspacePath(
-		repoPath,
-		workspace.workspace_path,
-	);
+  const workspacePath = resolveWorkspacePath(
+    repoPath,
+    workspace.workspace_path,
+  );
 
-	writeWorkspaceFile(workspacePath, "shared.txt", "shared v1\n");
-	await createCommit(repoPath, workspaceId, "commit shared file");
+  writeWorkspaceFile(workspacePath, "shared.txt", "shared v1\n");
+  await createCommit(repoPath, workspaceId, "commit shared file");
 
-	writeWorkspaceFile(workspacePath, "shared.txt", "shared v2\n");
-	writeWorkspaceFile(workspacePath, "committed-only.txt", "committed only\n");
-	await createCommit(repoPath, workspaceId, "commit committed-only file");
+  writeWorkspaceFile(workspacePath, "shared.txt", "shared v2\n");
+  writeWorkspaceFile(workspacePath, "committed-only.txt", "committed only\n");
+  await createCommit(repoPath, workspaceId, "commit committed-only file");
 
-	writeWorkspaceFile(workspacePath, "shared.txt", "shared v3\n");
-	writeWorkspaceFile(workspacePath, "uncommitted-only.txt", "working only\n");
+  writeWorkspaceFile(workspacePath, "shared.txt", "shared v3\n");
+  writeWorkspaceFile(workspacePath, "uncommitted-only.txt", "working only\n");
 
-	return {
-		branchName,
-		repoPath,
-		workspaceId,
-	};
+  return {
+    branchName,
+    repoPath,
+    workspaceId,
+  };
 }
 
 describe("ShowWorkspace - committed diff dedupe integration", () => {
-	let user: ReturnType<typeof userEvent.setup>;
+  let user: ReturnType<typeof userEvent.setup>;
 
-	function getCommittedToggleButton() {
-		const committedButtons = screen.getAllByRole("button", {
-			name: /^Committed$/,
-		});
-		const [committedButton] = committedButtons;
-		if (!committedButton) {
-			throw new Error("Committed toggle button not found");
-		}
-		return committedButton;
-	}
+  function getCommittedToggleButton() {
+    const committedButtons = screen.getAllByRole("button", {
+      name: /^Committed$/,
+    });
+    const [committedButton] = committedButtons;
+    if (!committedButton) {
+      throw new Error("Committed toggle button not found");
+    }
+    return committedButton;
+  }
 
-	beforeEach(() => {
-		user = userEvent.setup();
-	});
+  beforeEach(() => {
+    user = userEvent.setup();
+  });
 
-	it("renders committed and uncommitted hunks from the live backend and toggles committed visibility", async () => {
-		const fixture = await setupOverlappingWorkspace("feat/committed-dedupe");
+  it("renders committed and uncommitted hunks from the live backend and toggles committed visibility", async () => {
+    const fixture = await setupOverlappingWorkspace("feat/committed-dedupe");
 
-		render(<Dashboard />);
-		await user.click(await findSidebarBranchElement(fixture.branchName));
+    render(<Dashboard />);
+    await user.click(await findSidebarBranchElement(fixture.branchName));
 
-		const reviewTab = await screen.findByRole("tab", { name: /^Review/ });
-		await user.click(reviewTab);
-		await screen.findByRole("tab", { name: /^Review/, selected: true });
+    const reviewTab = await screen.findByRole("tab", { name: /^Review/ });
+    await user.click(reviewTab);
+    await screen.findByRole("tab", { name: /^Review/, selected: true });
 
-		await waitFor(() => {
-			expect(screen.getAllByText("shared.txt").length).toBeGreaterThanOrEqual(
-				2,
-			);
-			expect(screen.getByTitle("committed-only.txt")).toBeInTheDocument();
-			expect(screen.getByTitle("uncommitted-only.txt")).toBeInTheDocument();
-		});
+    await waitFor(() => {
+      expect(screen.getAllByText("shared.txt").length).toBeGreaterThanOrEqual(
+        2,
+      );
+      expect(screen.getByTitle("committed-only.txt")).toBeInTheDocument();
+      expect(screen.getByTitle("uncommitted-only.txt")).toBeInTheDocument();
+    });
 
-		expect(await screen.findByText("committed only")).toBeInTheDocument();
-		expect(await screen.findByText("shared v2")).toBeInTheDocument();
-		expect(await screen.findByText("shared v3")).toBeInTheDocument();
-		expect(await screen.findByText("working only")).toBeInTheDocument();
+    expect(await screen.findByText("committed only")).toBeInTheDocument();
+    expect(await screen.findByText("shared v2")).toBeInTheDocument();
+    expect(await screen.findByText("shared v3")).toBeInTheDocument();
+    expect(await screen.findByText("working only")).toBeInTheDocument();
 
-		const committedButton = getCommittedToggleButton();
-		await user.click(committedButton);
-		await waitFor(() => {
-			expect(screen.queryByTitle("committed-only.txt")).not.toBeInTheDocument();
-			expect(screen.queryByText("committed only")).not.toBeInTheDocument();
-			expect(screen.getByTitle("uncommitted-only.txt")).toBeInTheDocument();
-		});
+    const committedButton = getCommittedToggleButton();
+    await user.click(committedButton);
+    await waitFor(() => {
+      expect(screen.queryByTitle("committed-only.txt")).not.toBeInTheDocument();
+      expect(screen.queryByText("committed only")).not.toBeInTheDocument();
+      expect(screen.getByTitle("uncommitted-only.txt")).toBeInTheDocument();
+    });
 
-		expect(await screen.findByText("shared v2")).toBeInTheDocument();
-		expect(await screen.findByText("shared v3")).toBeInTheDocument();
-		expect(await screen.findByText("working only")).toBeInTheDocument();
+    expect(await screen.findByText("shared v2")).toBeInTheDocument();
+    expect(await screen.findByText("shared v3")).toBeInTheDocument();
+    expect(await screen.findByText("working only")).toBeInTheDocument();
 
-		await user.click(getCommittedToggleButton());
-		await waitFor(() => {
-			expect(screen.getAllByText("shared.txt").length).toBeGreaterThanOrEqual(
-				2,
-			);
-			expect(screen.getByTitle("committed-only.txt")).toBeInTheDocument();
-		});
+    await user.click(getCommittedToggleButton());
+    await waitFor(() => {
+      expect(screen.getAllByText("shared.txt").length).toBeGreaterThanOrEqual(
+        2,
+      );
+      expect(screen.getByTitle("committed-only.txt")).toBeInTheDocument();
+    });
 
-		expect(await screen.findByText("committed only")).toBeInTheDocument();
-		expect(await screen.findByText("shared v2")).toBeInTheDocument();
-		expect(await screen.findByText("shared v3")).toBeInTheDocument();
-		expect(await screen.findByText("working only")).toBeInTheDocument();
-	});
+    expect(await screen.findByText("committed only")).toBeInTheDocument();
+    expect(await screen.findByText("shared v2")).toBeInTheDocument();
+    expect(await screen.findByText("shared v3")).toBeInTheDocument();
+    expect(await screen.findByText("working only")).toBeInTheDocument();
+  });
 });

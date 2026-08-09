@@ -21,62 +21,62 @@ import "prismjs/components/prism-tsx";
 import "prismjs/components/prism-yaml";
 
 const extensionToLanguage: Record<string, string> = {
-	".bash": "bash",
-	".c": "c",
-	".cc": "cpp",
-	".cpp": "cpp",
-	".css": "css",
-	".ex": "elixir",
-	".exs": "elixir",
-	".go": "go",
-	".h": "c",
-	".hpp": "cpp",
-	".htm": "html",
-	".html": "html",
-	".java": "java",
-	".js": "javascript",
-	".json": "json",
-	".jsx": "jsx",
-	".md": "markdown",
-	".mjs": "javascript",
-	".py": "python",
-	".rb": "ruby",
-	".rs": "rust",
-	".scss": "scss",
-	".sh": "bash",
-	".sql": "sql",
-	".svg": "xml",
-	".ts": "typescript",
-	".tsx": "tsx",
-	".xml": "xml",
-	".yaml": "yaml",
-	".yml": "yaml",
-	".zsh": "bash",
+  ".bash": "bash",
+  ".c": "c",
+  ".cc": "cpp",
+  ".cpp": "cpp",
+  ".css": "css",
+  ".ex": "elixir",
+  ".exs": "elixir",
+  ".go": "go",
+  ".h": "c",
+  ".hpp": "cpp",
+  ".htm": "html",
+  ".html": "html",
+  ".java": "java",
+  ".js": "javascript",
+  ".json": "json",
+  ".jsx": "jsx",
+  ".md": "markdown",
+  ".mjs": "javascript",
+  ".py": "python",
+  ".rb": "ruby",
+  ".rs": "rust",
+  ".scss": "scss",
+  ".sh": "bash",
+  ".sql": "sql",
+  ".svg": "xml",
+  ".ts": "typescript",
+  ".tsx": "tsx",
+  ".xml": "xml",
+  ".yaml": "yaml",
+  ".yml": "yaml",
+  ".zsh": "bash",
 };
 
 export function getLanguageFromPath(filePath: string): string | null {
-	const lastDot = filePath.lastIndexOf(".");
-	if (lastDot === -1) return null;
-	const ext = filePath.substring(lastDot).toLowerCase();
-	return extensionToLanguage[ext] || null;
+  const lastDot = filePath.lastIndexOf(".");
+  if (lastDot === -1) return null;
+  const ext = filePath.substring(lastDot).toLowerCase();
+  return extensionToLanguage[ext] || null;
 }
 
 export function highlightCode(code: string, language: string | null): string {
-	if (!code || !language) return escapeHtml(code);
+  if (!code || !language) return escapeHtml(code);
 
-	const grammar = Prism.languages[language];
-	if (!grammar) return escapeHtml(code);
+  const grammar = Prism.languages[language];
+  if (!grammar) return escapeHtml(code);
 
-	try {
-		return Prism.highlight(code, grammar, language);
-	} catch {
-		return escapeHtml(code);
-	}
+  try {
+    return Prism.highlight(code, grammar, language);
+  } catch {
+    return escapeHtml(code);
+  }
 }
 
 function escapeHtml(text: string): string {
-	return text
-		.replace(/&/g, "&amp;")
-		.replace(/</g, "&lt;")
-		.replace(/>/g, "&gt;");
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }

@@ -16,16 +16,16 @@ type FileFactoryOptions = Partial<JjFileChange>;
  * });
  */
 export function createMockFile(overrides?: FileFactoryOptions): JjFileChange {
-	const randomId = Math.random().toString(36).substring(2, 7);
+  const randomId = Math.random().toString(36).substring(2, 7);
 
-	return {
-		path: `src/file${randomId}.ts`,
-		status: "M",
-		previous_path: null,
-		changed_line_count: 0,
-		diff_deferred: false,
-		...overrides,
-	};
+  return {
+    path: `src/file${randomId}.ts`,
+    status: "M",
+    previous_path: null,
+    changed_line_count: 0,
+    diff_deferred: false,
+    ...overrides,
+  };
 }
 
 /**
@@ -40,19 +40,19 @@ export function createMockFile(overrides?: FileFactoryOptions): JjFileChange {
  * const files = createMockFiles(5, { status: "A" });
  */
 export function createMockFiles(
-	count: number = 2,
-	overrides?: FileFactoryOptions,
+  count: number = 2,
+  overrides?: FileFactoryOptions,
 ): JjFileChange[] {
-	const files: JjFileChange[] = [];
+  const files: JjFileChange[] = [];
 
-	for (let i = 0; i < count; i++) {
-		files.push(
-			createMockFile({
-				path: `src/file${i + 1}.ts`,
-				...overrides,
-			}),
-		);
-	}
+  for (let i = 0; i < count; i++) {
+    files.push(
+      createMockFile({
+        path: `src/file${i + 1}.ts`,
+        ...overrides,
+      }),
+    );
+  }
 
-	return files;
+  return files;
 }

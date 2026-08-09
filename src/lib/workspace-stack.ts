@@ -1,8 +1,8 @@
 import type { JjLogCommit } from "./api-types";
 
 export interface WorkspaceDiffStats {
-	insertions: number;
-	deletions: number;
+  insertions: number;
+  deletions: number;
 }
 
 /**
@@ -10,16 +10,16 @@ export interface WorkspaceDiffStats {
  * commits that only belong to the target branch (`on_target_only`).
  */
 export function sumWorkspaceDiffStats(
-	commits: JjLogCommit[],
+  commits: JjLogCommit[],
 ): WorkspaceDiffStats {
-	return commits.reduce<WorkspaceDiffStats>(
-		(totals, commit) => {
-			if (commit.on_target_only) return totals;
-			return {
-				insertions: totals.insertions + commit.insertions,
-				deletions: totals.deletions + commit.deletions,
-			};
-		},
-		{ insertions: 0, deletions: 0 },
-	);
+  return commits.reduce<WorkspaceDiffStats>(
+    (totals, commit) => {
+      if (commit.on_target_only) return totals;
+      return {
+        insertions: totals.insertions + commit.insertions,
+        deletions: totals.deletions + commit.deletions,
+      };
+    },
+    { insertions: 0, deletions: 0 },
+  );
 }
