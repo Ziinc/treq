@@ -164,6 +164,8 @@ impl PtyManager {
       cmd.cwd(dir);
     }
     cmd.env("TERM", "xterm-256color");
+    // Lets `treq send` target the terminal pane that spawned the command.
+    cmd.env("TREQ_PTY_SESSION_ID", &session_id);
 
     // Set extended PATH so terminal can find jj, git, claude binaries
     cmd.env("PATH", crate::binary_paths::get_extended_path());
@@ -229,8 +231,7 @@ impl PtyManager {
           Ok(n) => {
             let data = process_utf8_chunk(&mut pending_bytes, &buffer[..n]);
             if data.is_empty() {
-              continue;
-            }
+              continue;            }
 
             // Check if filtering is active
             let filter_cmd = {

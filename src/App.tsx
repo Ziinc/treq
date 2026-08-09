@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Router } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import { Dashboard } from "./components/Dashboard";
+import { TreqSendProvider } from "./hooks/useTreqSend";
 import { ToastProvider } from "./components/ui/toast";
 import { ThemeProvider } from "./hooks/useTheme";
 import { TerminalSettingsProvider } from "./hooks/useTerminalSettings";
@@ -61,11 +62,13 @@ function App() {
               <TerminalSettingsProvider>
                 <DiffSettingsProvider>
                   <EditorAppsProvider>
-                    <ToastProvider>
-                      <Router hook={useHashLocation}>
-                        <AppContent />
-                      </Router>
-                    </ToastProvider>
+                    <TreqSendProvider>
+                      <ToastProvider>
+                        <Router hook={useHashLocation}>
+                          <AppContent />
+                        </Router>
+                      </ToastProvider>
+                    </TreqSendProvider>
                   </EditorAppsProvider>
                 </DiffSettingsProvider>
               </TerminalSettingsProvider>
