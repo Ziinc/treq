@@ -554,6 +554,7 @@ pub fn run() {
             commands::get_prompt_history,
             commands::get_workspace_starting_prompt,
             commands::stash_workspace_changes,
+            commands::stash_commit,
             commands::list_stashes,
             commands::delete_stash,
             commands::apply_stash,

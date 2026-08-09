@@ -847,6 +847,14 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
       serde_json::to_value(entry).map_err(|e| e.to_string())
     }
 
+    "stash_commit" => {
+      let repo_path = get_str(&args, "repoPath")?;
+      let workspace_id: Option<i64> = opt_i64(&args, "workspaceId");
+      let change_id = get_str(&args, "changeId")?;
+      let entry = treq_lib::core::stash_commit(&repo_path, workspace_id, &change_id)?;
+      serde_json::to_value(entry).map_err(|e| e.to_string())
+    }
+
     "list_stashes" => {
       let repo_path = get_str(&args, "repoPath")?;
       let entries = treq_lib::core::list_stashes(&repo_path)?;

@@ -1431,6 +1431,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     });
                     // Note: dialog will open in "move to existing" mode via defaults
                   }}
+                  onCommitStashed={() => setShowStashModal(true)}
                   onMoveFilesToNewWorkspace={(files, workspace) => {
                     setUnifiedDialogDefaults({
                       targetBranch: workspace?.branch_name,

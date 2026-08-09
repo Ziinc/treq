@@ -229,3 +229,101 @@ fn stash_rejects_clean_working_copy() {
     "unexpected error: {err}"
   );
 }
+
+#[test]
+fn stash_commit_removes_from_branch_and_is_applicable() {
+  let repo = TestRepo::new().expect("Failed to create test repo");
+  let source = treq_lib::core::create_workspace(
+    &repo.repo_path,
+    "feat/stash-commit-src",
+    Some("stash commit src".to_string()),
+    None,
+    None,
+    None,
+    None,
+  )
+  .expect("Failed to create source workspace");
+  let target = treq_lib::core::create_workspace(
+    &repo.repo_path,
+    "feat/stash-commit-dst",
+    Some("stash commit dst".to_string()),
+    None,
+    None,
+    None,
+    None,
+  )
+  .expect("Failed to create target workspace");
+
+  let source_path = repo.workspace_full_path(&source);
+  TestRepo::write_workspace_file(&source_path, "parked.txt", "park me\n")
+    .expect("Failed to write parked.txt");
+  treq_lib::core::commit_workspace(&repo.repo_path, source.id, "commit to stash")
+    .expect("should create commit");
+
+  let log = treq_lib::core::list_commits(&repo.repo_path, Some(source.id), false, None, None)
+    .expect("list commits");
+  let parked = log
+    .commits
+    .iter()
+    .find(|c| c.description.contains("commit to stash"))
+    .expect("parked commit should exist");
+  let change_id = parked.change_id.clone();
+
+  let entry = treq_lib::core::stash_commit(&repo.repo_path, Some(source.id), &change_id)
+    .expect("stash_commit should succeed");
+
+  assert!(!entry.commit_id.is_empty());
+  assert!(entry.files_changed.iter().any(|f| f == "parked.txt"));
+  assert!(entry.additions > 0 || entry.deletions > 0);
+
+  let after = treq_lib::core::list_commits(&repo.repo_path, Some(source.id), false, None, None)
+    .expect("list after stash");
+  assert!(
+    after
+      .commits
+      .iter()
+      .all(|c| !c.description.contains("commit to stash")),
+    "stashed commit should no longer appear on the source branch"
+  );
+
+  let listed = treq_lib::core::list_stashes(&repo.repo_path).expect("list stashes");
+  assert_eq!(listed.len(), 1);
+  assert_eq!(listed[0].id, entry.id);
+
+  treq_lib::core::apply_stash(&repo.repo_path, entry.id, &target.branch_name)
+    .expect("apply stashed commit onto target");
+  let target_path = repo.workspace_full_path(&target);
+  let applied = std::fs::read_to_string(std::path::Path::new(&target_path).join("parked.txt"))
+    .expect("parked.txt should exist on target after apply");
+  assert_eq!(applied, "park me\n");
+
+  // Stash remains (copy apply); can still be applied elsewhere / deleted.
+  assert_eq!(
+    treq_lib::core::list_stashes(&repo.repo_path)
+      .expect("list")
+      .len(),
+    1
+  );
+}
+
+#[test]
+fn stash_commit_rejects_unknown_change_id() {
+  let repo = TestRepo::new().expect("Failed to create test repo");
+  let workspace = treq_lib::core::create_workspace(
+    &repo.repo_path,
+    "feat/stash-commit-missing",
+    None,
+    None,
+    None,
+    None,
+    None,
+  )
+  .expect("Failed to create workspace");
+
+  let err = treq_lib::core::stash_commit(&repo.repo_path, Some(workspace.id), "zzzzzzzzzzzz")
+    .expect_err("unknown change id should fail");
+  assert!(
+    !err.is_empty(),
+    "expected a non-empty error for unknown change id"
+  );
+}

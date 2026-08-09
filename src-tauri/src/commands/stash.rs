@@ -15,6 +15,19 @@ pub async fn stash_workspace_changes(
 }
 
 #[tauri::command]
+pub async fn stash_commit(
+  repo_path: String,
+  workspace_id: Option<i64>,
+  change_id: String,
+) -> Result<StashEntry, String> {
+  tauri::async_runtime::spawn_blocking(move || {
+    core::stash_commit(&repo_path, workspace_id, &change_id)
+  })
+  .await
+  .map_err(|e| format!("Failed to join stash_commit task: {}", e))?
+}
+
+#[tauri::command]
 pub async fn list_stashes(repo_path: String) -> Result<Vec<StashEntry>, String> {
   tauri::async_runtime::spawn_blocking(move || core::list_stashes(&repo_path))
     .await

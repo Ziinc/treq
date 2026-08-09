@@ -3240,6 +3240,108 @@ pub fn jj_stash_working_copy(
   })
 }
 
+/// Park an existing commit into an immutable stash: duplicate its tree as a
+/// stash commit under `bookmark_name`, then abandon the original change so it
+/// leaves the branch. The stash can later be applied (copied) onto any workspace.
+pub fn jj_stash_commit(
+  workspace_path: &str,
+  change_id: &str,
+  bookmark_name: &str,
+) -> Result<JjStashCommit, JjError> {
+  if !bookmark_name.starts_with(STASH_BOOKMARK_PREFIX) {
+    return Err(JjError::IoError(format!(
+      "Stash bookmark must start with '{}'",
+      STASH_BOOKMARK_PREFIX
+    )));
+  }
+  if !Path::new(workspace_path).exists() {
+    return Err(JjError::IoError(
+      "Workspace path does not exist".to_string(),
+    ));
+  }
+
+  let mut loaded = load_workspace_repo_for_history_edit(workspace_path)?;
+  let commit = resolve_commit_by_revision(&loaded, change_id)?;
+
+  if commit.id() == loaded.repo.store().root_commit_id() {
+    return Err(JjError::IoError("Cannot stash the root commit".to_string()));
+  }
+
+  let parents = block_on(commit.parents())
+    .map_err(|e| JjError::IoError(format!("Failed to load commit parents: {}", e)))?;
+  let parent_ids: Vec<_> = if parents.is_empty() {
+    vec![loaded.repo.store().root_commit_id().clone()]
+  } else {
+    parents.iter().map(|p| p.id().clone()).collect()
+  };
+  let commit_tree = commit.tree();
+  let parent_tree = block_on(commit.parent_tree(loaded.repo.as_ref()))
+    .map_err(|e| JjError::IoError(format!("Failed to load parent tree: {}", e)))?;
+
+  if commit_tree.tree_ids() == parent_tree.tree_ids() {
+    return Err(JjError::IoError(
+      "Nothing to stash: commit has no file changes".to_string(),
+    ));
+  }
+
+  let matcher = repo_root_matcher();
+  let mut files_changed = Vec::new();
+  let mut diff_stream = parent_tree.diff_stream(&commit_tree, &matcher);
+  while let Some(entry) = block_on(diff_stream.next()) {
+    files_changed.push(entry.path.as_internal_file_string().to_string());
+  }
+  if files_changed.is_empty() {
+    return Err(JjError::IoError(
+      "Nothing to stash: commit has no file changes".to_string(),
+    ));
+  }
+
+  let (additions, deletions) = compute_commit_stats(&loaded.repo, &commit, None);
+  let original_description = commit.description().to_string();
+  let stash_description = if original_description.trim().is_empty() {
+    format!("treq stash: {}", bookmark_name)
+  } else {
+    format!("treq stash: {}", original_description.trim())
+  };
+
+  let mut tx = loaded.repo.start_transaction();
+  let stash_commit = block_on(
+    tx.repo_mut()
+      .new_commit(parent_ids, commit_tree)
+      .set_description(stash_description)
+      .write(),
+  )
+  .map_err(|e| JjError::IoError(format!("Failed to write stash commit: {}", e)))?;
+
+  set_local_bookmark_target(tx.repo_mut(), bookmark_name, stash_commit.id().clone());
+
+  // Remove the original from the branch while keeping the stash bookmark reachable.
+  tx.repo_mut().record_abandoned_commit(&commit);
+  block_on(tx.repo_mut().rebase_descendants())
+    .map_err(|e| JjError::IoError(format!("Failed to rebase descendants after stash: {}", e)))?;
+  let _ = git::export_refs(tx.repo_mut());
+
+  let new_repo = block_on(tx.commit("stash commit"))
+    .map_err(|e| JjError::IoError(format!("Failed to commit stash-commit transaction: {}", e)))?;
+  update_workspace_after_history_edit(&mut loaded, &new_repo, None, CheckoutMode::Immediate)?;
+
+  let repo_path =
+    derive_repo_path_from_workspace(workspace_path).unwrap_or_else(|| workspace_path.to_string());
+  let _ = reconcile_all_workspaces_after_rewrite(&repo_path, None);
+
+  let change_id_hex = HexPrefix::from_id(stash_commit.change_id()).reverse_hex()[..12].to_string();
+  let short_commit_id = short_commit_id(&stash_commit);
+  Ok(JjStashCommit {
+    commit_id: stash_commit.id().hex(),
+    change_id: change_id_hex,
+    short_commit_id,
+    additions,
+    deletions,
+    files_changed,
+    bookmark_name: bookmark_name.to_string(),
+  })
+}
+
 /// Copy the file changes from a stash commit onto a target working copy.
 /// The stash commit itself is left untouched (immutable / re-applicable).
 pub fn jj_apply_stash_commit(workspace_path: &str, stash_commit_id: &str) -> Result<(), JjError> {

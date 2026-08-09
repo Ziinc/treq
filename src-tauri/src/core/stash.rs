@@ -65,6 +65,33 @@ pub fn stash_workspace_changes(
   )
 }
 
+/// Park an existing commit into an immutable stash entry, removing it from the branch.
+pub fn stash_commit(
+  repo_path: &str,
+  workspace_id: Option<i64>,
+  change_id: &str,
+) -> Result<StashEntry, String> {
+  let workspace_path = resolve_workspace_root(repo_path, workspace_id)?;
+  let workspace_label = workspace_label_for(repo_path, workspace_id)?;
+  let bookmark_name = format!("{}{}", jj::STASH_BOOKMARK_PREFIX, Uuid::new_v4());
+
+  let stash_commit =
+    jj::jj_stash_commit(&workspace_path, change_id, &bookmark_name).map_err(|e| e.to_string())?;
+
+  local_db::add_stash(
+    repo_path,
+    workspace_id,
+    &workspace_label,
+    &stash_commit.commit_id,
+    &stash_commit.change_id,
+    &stash_commit.short_commit_id,
+    &stash_commit.bookmark_name,
+    stash_commit.additions,
+    stash_commit.deletions,
+    &stash_commit.files_changed,
+  )
+}
+
 /// List all stashes for a repository, most recent first.
 pub fn list_stashes(repo_path: &str) -> Result<Vec<StashEntry>, String> {
   local_db::get_stashes(repo_path)

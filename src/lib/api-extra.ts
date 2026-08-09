@@ -172,6 +172,13 @@ export const stashWorkspaceChanges = (
 ): Promise<StashEntry> =>
   invoke("stash_workspace_changes", { repoPath, workspaceId });
 
+export const stashCommit = (
+  repoPath: string,
+  workspaceId: number | null,
+  changeId: string,
+): Promise<StashEntry> =>
+  invoke("stash_commit", { repoPath, workspaceId, changeId });
+
 export const listStashes = (repoPath: string): Promise<StashEntry[]> =>
   invoke("list_stashes", { repoPath });
 
