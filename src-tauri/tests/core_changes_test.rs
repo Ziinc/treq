@@ -554,13 +554,19 @@ fn test_resolve_and_commit_clears_rebase_conflict_from_status() {
     "rebase conflict must set has_conflicts before resolve"
   );
   assert!(
-    before.conflicted_files.contains(&"conflict.txt".to_string()),
+    before
+      .conflicted_files
+      .contains(&"conflict.txt".to_string()),
     "rebase conflict must list conflict.txt before resolve, got {:?}",
     before.conflicted_files
   );
 
-  TestRepo::write_workspace_file(workspace_path_str, "conflict.txt", "resolved after rebase\n")
-    .expect("Failed to write resolved conflict.txt");
+  TestRepo::write_workspace_file(
+    workspace_path_str,
+    "conflict.txt",
+    "resolved after rebase\n",
+  )
+  .expect("Failed to write resolved conflict.txt");
   treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "resolve rebase conflict")
     .expect("Failed to commit resolution");
 
