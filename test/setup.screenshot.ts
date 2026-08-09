@@ -34,7 +34,7 @@ const napi = require("../crates/treq-napi");
 const testDbPath = path.join(os.tmpdir(), `treq-screenshot-${Date.now()}.db`);
 
 beforeAll(() => {
-	napi.initState(testDbPath);
+  napi.initState(testDbPath);
 });
 
 // ── Replace Tauri invoke with real Rust dispatch ──────────────────────────────
@@ -43,36 +43,36 @@ beforeAll(() => {
 const jjCalls: string[] = [];
 
 vi.mock("@tauri-apps/api/core", () => ({
-	invoke: (cmd: string, args?: Record<string, unknown>) => {
-		if (cmd.startsWith("jj_")) {
-			jjCalls.push(cmd);
-		}
-		try {
-			const result = napi.invokeSync(cmd, args ?? {});
-			return Promise.resolve(result);
-		} catch (err: unknown) {
-			return Promise.reject(
-				err instanceof Error ? err : new Error(String(err)),
-			);
-		}
-	},
+  invoke: (cmd: string, args?: Record<string, unknown>) => {
+    if (cmd.startsWith("jj_")) {
+      jjCalls.push(cmd);
+    }
+    try {
+      const result = napi.invokeSync(cmd, args ?? {});
+      return Promise.resolve(result);
+    } catch (err: unknown) {
+      return Promise.reject(
+        err instanceof Error ? err : new Error(String(err)),
+      );
+    }
+  },
 }));
 
 afterEach(() => {
-	if (jjCalls.length > 0) {
-		console.log(
-			`[app-qa] un-migrated jj_* commands exercised in this spec: ${jjCalls.join(", ")}`,
-		);
-	}
-	jjCalls.length = 0;
+  if (jjCalls.length > 0) {
+    console.log(
+      `[app-qa] un-migrated jj_* commands exercised in this spec: ${jjCalls.join(", ")}`,
+    );
+  }
+  jjCalls.length = 0;
 });
 
 // ── Cleanup db file on exit ───────────────────────────────────────────────────
 
 process.on("exit", () => {
-	try {
-		if (fs.existsSync(testDbPath)) fs.unlinkSync(testDbPath);
-	} catch {
-		// ignore
-	}
+  try {
+    if (fs.existsSync(testDbPath)) fs.unlinkSync(testDbPath);
+  } catch {
+    // ignore
+  }
 });

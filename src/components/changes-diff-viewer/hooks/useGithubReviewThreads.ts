@@ -3,18 +3,18 @@ import { useQuery } from "@tanstack/react-query";
 import { ghListPrReviewThreads } from "../../../lib/api";
 import type { GhReviewThread } from "../../../lib/api-types";
 import {
-	useGitRemoteInfo,
-	usePrInfoViaGh,
+  useGitRemoteInfo,
+  usePrInfoViaGh,
 } from "../../../hooks/useMergeQueueStatus";
 import { placeGithubReviewThreads } from "../placeGithubReviewThreads";
 import type { CommentLineQuery, FileHunksData } from "../types";
 
 interface UseGithubReviewThreadsParams {
-	repoPath: string | undefined;
-	branchName: string | undefined;
-	allFileHunks: Map<string, FileHunksData>;
-	/** Committed PR/workspace hunks shown in the Review tab. */
-	committedFileHunks?: Map<string, FileHunksData>;
+  repoPath: string | undefined;
+  branchName: string | undefined;
+  allFileHunks: Map<string, FileHunksData>;
+  /** Committed PR/workspace hunks shown in the Review tab. */
+  committedFileHunks?: Map<string, FileHunksData>;
 }
 
 /**
@@ -24,106 +24,106 @@ interface UseGithubReviewThreadsParams {
  * a thread that no longer matches any visible line is reported as "unplaced".
  */
 export function useGithubReviewThreads({
-	repoPath,
-	branchName,
-	allFileHunks,
-	committedFileHunks,
+  repoPath,
+  branchName,
+  allFileHunks,
+  committedFileHunks,
 }: UseGithubReviewThreadsParams) {
-	const { data: remoteInfo } = useGitRemoteInfo(repoPath);
-	const { data: prInfo } = usePrInfoViaGh(repoPath, branchName);
+  const { data: remoteInfo } = useGitRemoteInfo(repoPath);
+  const { data: prInfo } = usePrInfoViaGh(repoPath, branchName);
 
-	const enabled = Boolean(remoteInfo) && Boolean(prInfo);
+  const enabled = Boolean(remoteInfo) && Boolean(prInfo);
 
-	const { data: threads = [] } = useQuery<GhReviewThread[]>({
-		queryKey: ["gh-pr-review-threads", remoteInfo?.full_name, prInfo?.number],
-		queryFn: () =>
-			ghListPrReviewThreads(
-				remoteInfo!.owner,
-				remoteInfo!.repo,
-				prInfo!.number,
-			),
-		enabled,
-		staleTime: 60_000,
-		// Low-urgency read; keep off the ShowWorkspace hot path cadence.
-		refetchInterval: 2 * 60_000,
-	});
+  const { data: threads = [] } = useQuery<GhReviewThread[]>({
+    queryKey: ["gh-pr-review-threads", remoteInfo?.full_name, prInfo?.number],
+    queryFn: () =>
+      ghListPrReviewThreads(
+        remoteInfo!.owner,
+        remoteInfo!.repo,
+        prInfo!.number,
+      ),
+    enabled,
+    staleTime: 60_000,
+    // Low-urgency read; keep off the ShowWorkspace hot path cadence.
+    refetchInterval: 2 * 60_000,
+  });
 
-	const { threadsByLineKey, unplacedThreadsByFile } = useMemo(() => {
-		const hunkMaps: Array<Map<string, FileHunksData>> = [allFileHunks];
-		if (committedFileHunks && committedFileHunks.size > 0) {
-			hunkMaps.push(committedFileHunks);
-		}
-		return placeGithubReviewThreads(threads, hunkMaps);
-	}, [threads, allFileHunks, committedFileHunks]);
+  const { threadsByLineKey, unplacedThreadsByFile } = useMemo(() => {
+    const hunkMaps: Array<Map<string, FileHunksData>> = [allFileHunks];
+    if (committedFileHunks && committedFileHunks.size > 0) {
+      hunkMaps.push(committedFileHunks);
+    }
+    return placeGithubReviewThreads(threads, hunkMaps);
+  }, [threads, allFileHunks, committedFileHunks]);
 
-	const getThreadsForLine = useCallback(
-		({
-			filePath,
-			hunkId,
-			lineNumber,
-			side,
-		}: CommentLineQuery): GhReviewThread[] =>
-			threadsByLineKey.get(`${filePath}:${hunkId}:${lineNumber}:${side}`) ?? [],
-		[threadsByLineKey],
-	);
+  const getThreadsForLine = useCallback(
+    ({
+      filePath,
+      hunkId,
+      lineNumber,
+      side,
+    }: CommentLineQuery): GhReviewThread[] =>
+      threadsByLineKey.get(`${filePath}:${hunkId}:${lineNumber}:${side}`) ?? [],
+    [threadsByLineKey],
+  );
 
-	const getUnplacedThreadsForFile = useCallback(
-		(filePath: string): GhReviewThread[] =>
-			unplacedThreadsByFile.get(filePath) ?? [],
-		[unplacedThreadsByFile],
-	);
+  const getUnplacedThreadsForFile = useCallback(
+    (filePath: string): GhReviewThread[] =>
+      unplacedThreadsByFile.get(filePath) ?? [],
+    [unplacedThreadsByFile],
+  );
 
-	// Resolved threads start collapsed; unresolved start expanded. Only seed
-	// collapse state the first time a thread is seen, so manual toggles survive
-	// background refetches.
-	const [collapsedThreadIds, setCollapsedThreadIds] = useState<Set<string>>(
-		new Set(),
-	);
-	const seenThreadIdsRef = useRef<Set<string>>(new Set());
+  // Resolved threads start collapsed; unresolved start expanded. Only seed
+  // collapse state the first time a thread is seen, so manual toggles survive
+  // background refetches.
+  const [collapsedThreadIds, setCollapsedThreadIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const seenThreadIdsRef = useRef<Set<string>>(new Set());
 
-	useEffect(() => {
-		const newlyResolved: string[] = [];
-		for (const thread of threads) {
-			if (!seenThreadIdsRef.current.has(thread.id)) {
-				seenThreadIdsRef.current.add(thread.id);
-				if (thread.is_resolved) newlyResolved.push(thread.id);
-			}
-		}
-		if (newlyResolved.length > 0) {
-			setCollapsedThreadIds((prev) => new Set([...prev, ...newlyResolved]));
-		}
-	}, [threads]);
+  useEffect(() => {
+    const newlyResolved: string[] = [];
+    for (const thread of threads) {
+      if (!seenThreadIdsRef.current.has(thread.id)) {
+        seenThreadIdsRef.current.add(thread.id);
+        if (thread.is_resolved) newlyResolved.push(thread.id);
+      }
+    }
+    if (newlyResolved.length > 0) {
+      setCollapsedThreadIds((prev) => new Set([...prev, ...newlyResolved]));
+    }
+  }, [threads]);
 
-	const toggleThreadCollapse = useCallback((threadId: string) => {
-		setCollapsedThreadIds((prev) => {
-			const next = new Set(prev);
-			if (next.has(threadId)) next.delete(threadId);
-			else next.add(threadId);
-			return next;
-		});
-	}, []);
+  const toggleThreadCollapse = useCallback((threadId: string) => {
+    setCollapsedThreadIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(threadId)) next.delete(threadId);
+      else next.add(threadId);
+      return next;
+    });
+  }, []);
 
-	// Unplaced/outdated groups are collapsed by default, per-file.
-	const [expandedOutdatedGroups, setExpandedOutdatedGroups] = useState<
-		Set<string>
-	>(new Set());
+  // Unplaced/outdated groups are collapsed by default, per-file.
+  const [expandedOutdatedGroups, setExpandedOutdatedGroups] = useState<
+    Set<string>
+  >(new Set());
 
-	const toggleOutdatedGroup = useCallback((filePath: string) => {
-		setExpandedOutdatedGroups((prev) => {
-			const next = new Set(prev);
-			if (next.has(filePath)) next.delete(filePath);
-			else next.add(filePath);
-			return next;
-		});
-	}, []);
+  const toggleOutdatedGroup = useCallback((filePath: string) => {
+    setExpandedOutdatedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(filePath)) next.delete(filePath);
+      else next.add(filePath);
+      return next;
+    });
+  }, []);
 
-	return {
-		threads,
-		getThreadsForLine,
-		getUnplacedThreadsForFile,
-		collapsedThreadIds,
-		toggleThreadCollapse,
-		expandedOutdatedGroups,
-		toggleOutdatedGroup,
-	};
+  return {
+    threads,
+    getThreadsForLine,
+    getUnplacedThreadsForFile,
+    collapsedThreadIds,
+    toggleThreadCollapse,
+    expandedOutdatedGroups,
+    toggleOutdatedGroup,
+  };
 }

@@ -30,12 +30,12 @@ const napi = require("../crates/treq-napi");
 // ── Initialize state ─────────────────────────────────────────────────────────
 
 const testDbPath = path.join(
-	os.tmpdir(),
-	`treq-integration-test-${Date.now()}.db`,
+  os.tmpdir(),
+  `treq-integration-test-${Date.now()}.db`,
 );
 
 beforeAll(() => {
-	napi.initState(testDbPath);
+  napi.initState(testDbPath);
 });
 
 // ── Replace Tauri invoke with real Rust dispatch ──────────────────────────────
@@ -44,43 +44,43 @@ beforeAll(() => {
 // NAPI implementation (restore/snapshot for Review discard) are allowlisted.
 const jjCalls: string[] = [];
 const ALLOWED_JJ_COMMANDS = new Set([
-	"jj_restore_file",
-	"jj_restore_all",
-	"jj_snapshot_working_copy",
-	"jj_restore_snapshot",
+  "jj_restore_file",
+  "jj_restore_all",
+  "jj_snapshot_working_copy",
+  "jj_restore_snapshot",
 ]);
 
 vi.mock("@tauri-apps/api/core", () => ({
-	invoke: vi.fn((cmd: string, args?: Record<string, unknown>) => {
-		if (cmd.startsWith("jj_") && !ALLOWED_JJ_COMMANDS.has(cmd)) {
-			jjCalls.push(cmd);
-		}
-		try {
-			const result = napi.invokeSync(cmd, args ?? {});
-			return Promise.resolve(result);
-		} catch (err: unknown) {
-			return Promise.reject(
-				err instanceof Error ? err : new Error(String(err)),
-			);
-		}
-	}),
+  invoke: vi.fn((cmd: string, args?: Record<string, unknown>) => {
+    if (cmd.startsWith("jj_") && !ALLOWED_JJ_COMMANDS.has(cmd)) {
+      jjCalls.push(cmd);
+    }
+    try {
+      const result = napi.invokeSync(cmd, args ?? {});
+      return Promise.resolve(result);
+    } catch (err: unknown) {
+      return Promise.reject(
+        err instanceof Error ? err : new Error(String(err)),
+      );
+    }
+  }),
 }));
 
 afterEach(() => {
-	const calls = [...jjCalls];
-	jjCalls.length = 0;
-	expect(
-		calls,
-		"jj_* commands should not be called in integration tests",
-	).toEqual([]);
+  const calls = [...jjCalls];
+  jjCalls.length = 0;
+  expect(
+    calls,
+    "jj_* commands should not be called in integration tests",
+  ).toEqual([]);
 });
 
 // ── Cleanup db file on exit ───────────────────────────────────────────────────
 
 process.on("exit", () => {
-	try {
-		if (fs.existsSync(testDbPath)) fs.unlinkSync(testDbPath);
-	} catch {
-		// ignore
-	}
+  try {
+    if (fs.existsSync(testDbPath)) fs.unlinkSync(testDbPath);
+  } catch {
+    // ignore
+  }
 });
