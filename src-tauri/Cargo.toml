@@ -1,6 +1,6 @@
 [package]
 name = "treq"
-version = "0.1.3"
+version = "0.2.0"
 description = "Stacking Agent Development Environment"
 authors = ["Ziinc"]
 edition = "2021"
