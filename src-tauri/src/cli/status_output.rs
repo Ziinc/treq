@@ -17,10 +17,7 @@ fn compare_sidebar_recency(
     right: &core::WorkspaceSidebarStatus,
 ) -> Ordering {
     match sidebar_activity_key(right).cmp(sidebar_activity_key(left)) {
-        Ordering::Equal => left
-            .current
-            .branch_name
-            .cmp(&right.current.branch_name),
+        Ordering::Equal => left.current.branch_name.cmp(&right.current.branch_name),
         other => other,
     }
 }
@@ -56,9 +53,7 @@ pub(crate) fn format_workspace_stack_lines(
     if roots.is_empty() {
         roots.extend(statuses);
     }
-    roots.sort_by(|left, right| {
-        compare_sidebar_recency(left, right)
-    });
+    roots.sort_by(|left, right| compare_sidebar_recency(left, right));
     for siblings in children.values_mut() {
         siblings.sort_by(|left, right| compare_sidebar_recency(left, right));
     }
