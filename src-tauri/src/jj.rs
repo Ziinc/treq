@@ -3920,20 +3920,13 @@ fn get_conflicted_files_from_branch_diff(
         .get_commit(&wc_commit_id)
         .map_err(|e| JjError::IoError(format!("Failed to load wc commit: {}", e)))?;
 
-    // jj-lib MergedTree::conflicts() on the WC tip (and any unsaved snapshot).
+    // jj-lib MergedTree::conflicts() is the only source of truth — never scan
+    // working-copy file text for markers (false positives on literal <<<<<<<).
     // Empty WC children inherit a conflicted parent tree, so committed-tip
-    // conflicts show up here without pairwise tree-diffs.
+    // conflicts still appear here.
     let mut conflicts = collect_conflict_paths_from_tree(&wc_commit.tree());
     if let Some(snapshotted_tree) = snapshotted_tree_override.as_ref() {
         conflicts.extend(collect_conflict_paths_from_tree(snapshotted_tree));
-    }
-
-    if conflicts.is_empty() {
-        // Last resort: materialized conflict markers in dirty WC files only.
-        conflicts.extend(collect_conflict_marker_paths_from_files(
-            workspace_path,
-            jj_get_changed_files(workspace_path).unwrap_or_default(),
-        ));
     }
 
     conflicts.sort();
@@ -3946,23 +3939,6 @@ fn collect_conflict_paths_from_tree(tree: &MergedTree) -> Vec<String> {
     tree.conflicts()
         .map(|(path, _value)| path.as_internal_file_string().to_string())
         .collect()
-}
-
-fn collect_conflict_marker_paths_from_files(
-    workspace_path: &str,
-    files: Vec<JjFileChange>,
-) -> Vec<String> {
-    let mut conflicts = Vec::new();
-    for file in files {
-        let full_path = Path::new(workspace_path).join(&file.path);
-        let Ok(contents) = fs::read_to_string(&full_path) else {
-            continue;
-        };
-        if !conflict_markers::parse_conflict_markers(&contents, &file.path).is_empty() {
-            conflicts.push(file.path);
-        }
-    }
-    conflicts
 }
 
 /// Collect detailed information about all revisions for a conflicted bookmark
