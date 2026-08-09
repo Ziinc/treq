@@ -318,7 +318,7 @@ describe("Dashboard - workspace list", () => {
 			await user.click(beta);
 			await user.keyboard("{/Meta}");
 
-			await screen.findByText(/delete 2 workspaces/i);
+			await screen.findByText(/archive 2 workspaces/i);
 		});
 
 		it("shows GitHub as a sidebar item below the home repo row", async () => {
@@ -464,7 +464,7 @@ describe("Dashboard - workspace list", () => {
 			await waitFor(() => {
 				expect(
 					within(sidebarRoot).getByRole("button", {
-						name: /delete 6 workspaces/i,
+						name: /archive 6 workspaces/i,
 					}),
 				).toBeTruthy();
 			});
