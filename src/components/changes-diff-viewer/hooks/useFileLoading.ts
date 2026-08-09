@@ -22,6 +22,8 @@ interface UseFileLoadingParams {
 	repoPath: string | undefined;
 	workspaceId: number | undefined;
 	showCommittedChanges: boolean | undefined;
+	/** Backend conflicted-file hint — retained even when Committed is hidden. */
+	conflictedFilesHint?: string[];
 	onRefreshingChange: ((refreshing: boolean) => void) | undefined;
 	/** Ref updated each render with current setLargeChangesetExpanded (breaks ordering dep) */
 	setLargeChangesetExpandedRef: React.MutableRefObject<
@@ -50,6 +52,7 @@ export function useFileLoading({
 	repoPath,
 	workspaceId,
 	showCommittedChanges,
+	conflictedFilesHint = [],
 	onRefreshingChange,
 	setLargeChangesetExpandedRef,
 	applyChangedFilesRef,
@@ -73,6 +76,12 @@ export function useFileLoading({
 		Map<string, FileHunksData>
 	>(new Map());
 	const prevFilePathsRef = useRef<string[]>([]);
+	// Stabilize against default `[]` / new array identity each render — a changing
+	// loadChangedFiles identity would retrigger the showCommittedChanges effect
+	// in a loop and unmount the Review tree (empty <body /> in unit tests).
+	const conflictedFilesHintRef = useRef(conflictedFilesHint);
+	conflictedFilesHintRef.current = conflictedFilesHint;
+	const conflictedFilesKey = conflictedFilesHint.join("\0");
 
 	const cachedChanges = useCachedWorkspaceChanges(workspacePath, {
 		enabled: true,
@@ -92,21 +101,62 @@ export function useFileLoading({
 		setRefreshing(true);
 		onRefreshingChange?.(true);
 		try {
-			if (showCommittedChanges && repoPath && workspaceId !== undefined) {
+			if (repoPath && workspaceId !== undefined) {
 				const diff = await getWorkspaceDiff(repoPath, workspaceId);
 				const parsed = parseJjChangedFiles(diff.uncommitted_files ?? []);
 				applyChangedFilesRef.current(parsed);
-				setCommittedFiles(diff.committed_files);
+
+				const conflictedHint = new Set<string>([
+					...conflictedFilesHintRef.current,
+					...(diff.conflicted_files ?? []),
+				]);
+				const uncommittedPaths = new Set(parsed.map((file) => file.path));
+
+				// When Committed is hidden, still keep conflicted committed files —
+				// rebase conflicts live in committed hunks, not dirty WC changes.
+				let committed = (diff.committed_files ?? []).filter(
+					(file) => showCommittedChanges || conflictedHint.has(file.path),
+				);
+				for (const path of conflictedHint) {
+					if (
+						uncommittedPaths.has(path) ||
+						committed.some((file) => file.path === path)
+					) {
+						continue;
+					}
+					committed = [
+						...committed,
+						{
+							path,
+							status: "C",
+							previous_path: null,
+							changed_line_count: 0,
+							diff_deferred: false,
+						},
+					];
+				}
+				setCommittedFiles(committed);
+
+				const retainedCommittedPaths = new Set(
+					committed.map((file) => file.path),
+				);
 				setCommittedFileHunks(
 					new Map(
-						diff.hunks_by_file.map((fileDiff) => [
-							fileDiff.path,
-							{
-								filePath: fileDiff.path,
-								hunks: fileDiff.hunks,
-								isLoading: false,
-							},
-						]),
+						(diff.hunks_by_file ?? [])
+							.filter(
+								(fileDiff) =>
+									showCommittedChanges ||
+									retainedCommittedPaths.has(fileDiff.path) ||
+									conflictedHint.has(fileDiff.path),
+							)
+							.map((fileDiff) => [
+								fileDiff.path,
+								{
+									filePath: fileDiff.path,
+									hunks: fileDiff.hunks,
+									isLoading: false,
+								},
+							]),
 					),
 				);
 				return;
@@ -117,6 +167,8 @@ export function useFileLoading({
 			);
 			const parsed = parseJjChangedFiles(jjFiles);
 			applyChangedFilesRef.current(parsed);
+			setCommittedFiles([]);
+			setCommittedFileHunks(new Map());
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			addToast({ description: message, title: "JJ Error", type: "error" });
@@ -130,6 +182,7 @@ export function useFileLoading({
 		repoPath,
 		workspaceId,
 		showCommittedChanges,
+		conflictedFilesKey,
 		applyChangedFilesRef,
 		addToast,
 		onRefreshingChange,
@@ -141,9 +194,7 @@ export function useFileLoading({
 
 	useEffect(() => {
 		if (!workspacePath || initialLoading) return;
-		if (showCommittedChanges) {
-			loadChangedFiles();
-		}
+		loadChangedFiles();
 	}, [workspacePath, showCommittedChanges, initialLoading, loadChangedFiles]);
 
 	useEffect(() => {
@@ -159,19 +210,7 @@ export function useFileLoading({
 		};
 	}, [workspaceId, loadChangedFiles]);
 
-	const refreshCommittedChanges = useCallback(async () => {
-		if (showCommittedChanges && repoPath && workspaceId !== undefined) {
-			return;
-		}
-		setCommittedFiles((previousCommittedFiles) => {
-			setCommittedFileHunks((prev) => {
-				const updated = new Map(prev);
-				for (const file of previousCommittedFiles) updated.delete(file.path);
-				return updated;
-			});
-			return [];
-		});
-	}, [showCommittedChanges, repoPath, workspaceId, addToast]);
+	const refreshCommittedChanges = useCallback(async () => {}, []);
 
 	useEffect(() => {
 		refreshCommittedChanges();

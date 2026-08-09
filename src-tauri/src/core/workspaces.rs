@@ -952,7 +952,10 @@ pub fn workspace_status(
     } else {
         jj::get_conflicted_files(workspace_path_str, Some(&conflict_target)).unwrap_or_default()
     };
-    let has_conflicts = jj::workspace_has_unresolved_conflicts(workspace_path_str).unwrap_or(false);
+    // Tree-id resolution and path discovery can diverge (e.g. conflicted committed
+    // tip with an empty WC child). Surface a conflict whenever either signal fires.
+    let has_conflicts = jj::workspace_has_unresolved_conflicts(workspace_path_str).unwrap_or(false)
+        || !conflicted_files.is_empty();
 
     let commits_ahead_count = commits_ahead_of_target.len();
 

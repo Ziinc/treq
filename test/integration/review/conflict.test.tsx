@@ -345,6 +345,35 @@ describe("Review - conflict rendering contract", () => {
 		});
 	});
 
+	it("committed-only conflict stays visible when Committed changes are hidden", async () => {
+		const fixture = await setupRebaseConflictState(
+			"feat/committed-conflict-hidden",
+		);
+
+		render(<Dashboard />);
+		await screen.findByTestId(
+			`workspace-conflict-indicator-${fixture.workspaceId}`,
+		);
+		await assertStatus(fixture.repoPath, fixture.workspaceId, {
+			hasConflicts: true,
+			conflictedFiles: [fixture.conflictFile],
+		});
+		await navigateToReviewTab(user, fixture.branchName);
+		await screen.findByText("Conflicts");
+
+		const [committedToggle] = screen.getAllByRole("button", {
+			name: /^Committed$/,
+		});
+		if (!committedToggle) {
+			throw new Error("Committed toggle button not found");
+		}
+		await user.click(committedToggle);
+
+		await clickFileInSection(user, "Conflicts", "README.md");
+		await screen.findByText(/^Conflict 1 of 1$/);
+		expect(screen.queryByText("No changes to review")).not.toBeInTheDocument();
+	});
+
 	it("conflicted file with no diff hunks shows an explicit placeholder", async () => {
 		const fixture = await setupUnresolvedConflictState(
 			"feat/deleted-conflict-placeholder",

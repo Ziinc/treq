@@ -3900,10 +3900,13 @@ pub fn get_conflicted_files(
 
 fn get_conflicted_files_from_branch_diff(
     workspace_path: &str,
-    target_branch: &str,
+    _target_branch: &str,
 ) -> Result<Vec<String>, JjError> {
     let mut loaded = load_workspace_repo(workspace_path)?;
     import_colocated_git_state(&mut loaded, workspace_path)?;
+
+    let snapshotted_tree_override =
+        snapshot_working_copy_tree(&mut loaded, workspace_path)?.map(|(_, tree)| tree);
 
     let wc_commit_id = loaded
         .repo
@@ -3916,39 +3919,14 @@ fn get_conflicted_files_from_branch_diff(
         .store()
         .get_commit(&wc_commit_id)
         .map_err(|e| JjError::IoError(format!("Failed to load wc commit: {}", e)))?;
-    let working_copy_tree = wc_commit.tree();
-    let snapshotted_tree_override =
-        snapshot_working_copy_tree(&mut loaded, workspace_path)?.map(|(_, tree)| tree);
 
-    let target_commit =
-        resolve_target_commit_for_conflict_diff(&loaded, workspace_path, target_branch)?;
-    let target_tree = target_commit.tree();
-
-    let mut conflicts = collect_unresolved_conflict_paths(&target_tree, &working_copy_tree)?;
-
-    if conflicts.is_empty() {
-        let wc_parent_tree = block_on(wc_commit.parent_tree(loaded.repo.as_ref()))
-            .map_err(|e| JjError::IoError(format!("Failed to load wc parent tree: {}", e)))?;
-        conflicts = collect_unresolved_conflict_paths(&wc_parent_tree, &working_copy_tree)?;
-    }
-
-    if conflicts.is_empty() {
-        if let Some(snapshotted_tree) = snapshotted_tree_override.as_ref() {
-            conflicts = collect_unresolved_conflict_paths(&target_tree, snapshotted_tree)?;
-        }
-    }
-
-    if conflicts.is_empty() {
-        let changed_files = jj_get_changed_files(workspace_path)?;
-        for changed in changed_files {
-            let full_path = Path::new(workspace_path).join(&changed.path);
-            let Ok(contents) = fs::read_to_string(&full_path) else {
-                continue;
-            };
-            if !conflict_markers::parse_conflict_markers(&contents, &changed.path).is_empty() {
-                conflicts.push(changed.path);
-            }
-        }
+    // jj-lib MergedTree::conflicts() is the only source of truth — never scan
+    // working-copy file text for markers (false positives on literal <<<<<<<).
+    // Empty WC children inherit a conflicted parent tree, so committed-tip
+    // conflicts still appear here.
+    let mut conflicts = collect_conflict_paths_from_tree(&wc_commit.tree());
+    if let Some(snapshotted_tree) = snapshotted_tree_override.as_ref() {
+        conflicts.extend(collect_conflict_paths_from_tree(snapshotted_tree));
     }
 
     conflicts.sort();
@@ -3956,51 +3934,11 @@ fn get_conflicted_files_from_branch_diff(
     Ok(conflicts)
 }
 
-fn collect_unresolved_conflict_paths(
-    before: &MergedTree,
-    after: &MergedTree,
-) -> Result<Vec<String>, JjError> {
-    let mut conflicts = Vec::new();
-    let diff_matcher = repo_root_matcher();
-    let diff_entries = block_on(before.diff_stream(after, &diff_matcher).collect::<Vec<_>>());
-    for entry in diff_entries {
-        let values = entry
-            .values
-            .map_err(|e| JjError::IoError(format!("Failed to read conflict entry: {}", e)))?;
-        if !values.before.is_resolved() || !values.after.is_resolved() {
-            conflicts.push(entry.path.as_internal_file_string().to_string());
-        }
-    }
-    Ok(conflicts)
-}
-
-fn resolve_target_commit_for_conflict_diff(
-    loaded: &LoadedWorkspaceRepo,
-    workspace_path: &str,
-    target_branch: &str,
-) -> Result<Commit, JjError> {
-    if let Ok(commit) = resolve_merge_target_parent(loaded, workspace_path, target_branch) {
-        return Ok(commit);
-    }
-
-    let repo_path = workspace_repo_path(workspace_path);
-    for git_ref in [
-        format!("refs/heads/{}", target_branch),
-        format!("refs/remotes/origin/{}", target_branch),
-    ] {
-        let Some(sha) = git_ref_commit_hex(&repo_path, &git_ref) else {
-            continue;
-        };
-
-        if let Ok(commit) = resolve_commit_by_revision(loaded, sha.as_str()) {
-            return Ok(commit);
-        }
-    }
-
-    Err(JjError::IoError(format!(
-        "Target branch '{}' could not be resolved",
-        target_branch
-    )))
+/// Paths with unresolved conflicts inside a single tree (jj-lib MergedTree::conflicts).
+fn collect_conflict_paths_from_tree(tree: &MergedTree) -> Vec<String> {
+    tree.conflicts()
+        .map(|(path, _value)| path.as_internal_file_string().to_string())
+        .collect()
 }
 
 /// Collect detailed information about all revisions for a conflicted bookmark
@@ -5820,7 +5758,10 @@ pub fn workspace_has_unresolved_conflicts(workspace_path: &str) -> Result<bool, 
         .store()
         .get_commit(&wc_commit_id)
         .map_err(|e| JjError::IoError(format!("Failed to load working-copy commit: {}", e)))?;
-    Ok(!wc_commit.tree_ids().is_resolved())
+    // Walk the WC tree itself — tree_ids().is_resolved() is equivalent to
+    // has_conflict() for the root, but pairing this with get_conflicted_files
+    // (which uses tree.conflicts()) keeps the boolean and path list in sync.
+    Ok(wc_commit.tree().has_conflict())
 }
 
 fn get_workspace_wc_commit(loaded: &LoadedWorkspaceRepo) -> Result<Option<Commit>, JjError> {

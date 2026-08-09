@@ -56,7 +56,6 @@ export const ChangesDiffViewer = memo(
 			},
 			ref,
 		) => {
-			void conflictedFiles;
 			const { addToast } = useToast();
 			const { fontSize: diffFontSize } = useDiffSettings();
 
@@ -98,6 +97,7 @@ export const ChangesDiffViewer = memo(
 				repoPath,
 				workspaceId,
 				showCommittedChanges,
+				conflictedFilesHint: conflictedFiles,
 				onRefreshingChange,
 				setLargeChangesetExpandedRef,
 				applyChangedFilesRef,
