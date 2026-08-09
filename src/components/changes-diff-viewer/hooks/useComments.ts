@@ -82,7 +82,7 @@ export function useComments({
 		const committed = committedFileHunks?.get(filePath);
 		let fileData = working ?? committed;
 		if (working && committed) {
-			const first = diffLineSelection.lines[0];
+			const [first] = diffLineSelection.lines;
 			const workingLine =
 				working.hunks[first.hunkIndex]?.lines[first.lineIndex];
 			if (workingLine !== first.content) {

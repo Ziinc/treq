@@ -83,9 +83,9 @@ describe("ChangesDiffViewer committed multi-line comments", () => {
 		}
 
 		await waitFor(() => {
-			expect(document.querySelectorAll("[data-diff-line]").length).toBeGreaterThan(
-				0,
-			);
+			expect(
+				document.querySelectorAll("[data-diff-line]").length,
+			).toBeGreaterThan(0);
 			expect(screen.getAllByText(/added line 2/).length).toBeGreaterThan(0);
 		});
 	}
@@ -93,10 +93,9 @@ describe("ChangesDiffViewer committed multi-line comments", () => {
 	it("highlights a multi-line drag selection on committed hunks", async () => {
 		await renderCommittedReview();
 
-		const diffLines = document.querySelectorAll("[data-diff-line]");
-		const line2 = diffLines[1];
-		const line3 = diffLines[2];
-		const line4 = diffLines[3];
+		const [, line2, line3, line4] = Array.from(
+			document.querySelectorAll("[data-diff-line]"),
+		);
 		const gutter = line2.querySelector("[data-testid='line-gutter']");
 		expect(gutter).not.toBeNull();
 
@@ -116,9 +115,9 @@ describe("ChangesDiffViewer committed multi-line comments", () => {
 		const user = userEvent.setup();
 		await renderCommittedReview();
 
-		const diffLines = document.querySelectorAll("[data-diff-line]");
-		const line2 = diffLines[1];
-		const line4 = diffLines[3];
+		const [, line2, , line4] = Array.from(
+			document.querySelectorAll("[data-diff-line]"),
+		);
 		const gutter = line2.querySelector("[data-testid='line-gutter']");
 		expect(gutter).not.toBeNull();
 

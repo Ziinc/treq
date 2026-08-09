@@ -75,8 +75,8 @@ it("selects multiple committed lines and opens a comment composer", async () => 
 	await captureDocument(document, {
 		name: "committed-multiline-comment-01-selection",
 		expectations: [
-			"The Review tab shows committed example.ts with several added lines highlighted in blue as a multi-line selection.",
-			"A green + comment button is visible beside the selected diff lines.",
+			"The Review tab shows committed example.ts with lines b/c/d highlighted in blue as a multi-line selection.",
+			"Line a remains unselected (green add only), confirming the drag covered L2-L4.",
 		],
 	});
 

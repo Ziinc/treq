@@ -182,7 +182,6 @@ describe("Multi-line selection on committed Review-tab files", () => {
 		);
 		if (!workspace) throw new Error("Workspace not found");
 
-		// Commit so Review shows the file only under Committed (committedFileHunks).
 		await commitWorkspaceFile(
 			repoPath,
 			{ id: workspaceId, path: workspace.workspace_path },

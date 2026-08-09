@@ -72,8 +72,9 @@ export function useLineSelection({
 			let fileData = working ?? committed;
 			// When the same path appears in both sections, pick the map whose
 			// anchor line matches the content captured on mouseDown.
-			if (working && committed && diffLineSelection?.lines[0]) {
-				const expected = diffLineSelection.lines[0].content;
+			if (working && committed && diffLineSelection?.lines.length) {
+				const [anchorLine] = diffLineSelection.lines;
+				const expected = anchorLine.content;
 				const workingLine =
 					working.hunks[selectionAnchor.hunkIndex]?.lines[
 						selectionAnchor.lineIndex
