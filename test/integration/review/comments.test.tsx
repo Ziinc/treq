@@ -1,6 +1,7 @@
 import * as React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+	commitWorkspaceFile,
 	createTestRepo,
 	findSidebarBranchElement,
 	openRepo,
@@ -155,6 +156,77 @@ describe("Multi-line selection in diff viewer", () => {
 
 		await waitFor(() => {
 			expect(line2.className).toContain("bg-blue-500/10");
+		});
+
+		const commentBtn = line4.querySelector("[data-comment-button]")!;
+		await user.click(commentBtn as HTMLElement);
+
+		await screen.findByPlaceholderText(/add a comment/i);
+	});
+});
+
+describe("Multi-line selection on committed Review-tab files", () => {
+	let user: ReturnType<typeof userEvent.setup>;
+
+	beforeEach(() => {
+		user = userEvent.setup();
+	});
+
+	async function setupCommittedDiff(branchName: string) {
+		const { repoPath } = createTestRepo(false);
+		openRepo(repoPath);
+
+		const workspaceId = await createWorkspace(repoPath, branchName);
+		const workspace = (await getWorkspaces(repoPath)).find(
+			(w) => w.id === workspaceId,
+		);
+		if (!workspace) throw new Error("Workspace not found");
+
+		// Commit so Review shows the file only under Committed (committedFileHunks).
+		await commitWorkspaceFile(
+			repoPath,
+			{ id: workspaceId, path: workspace.workspace_path },
+			"test.txt",
+			"context line 1\nadded line 2\nadded line 3\nadded line 4\ncontext line 5\ncontext line 6",
+			"add test.txt",
+		);
+
+		return { repoPath, workspace };
+	}
+
+	it("highlights a multi-line drag selection on committed hunks", async () => {
+		await setupCommittedDiff("feat/committed-drag");
+		await openReviewTab(user, "feat/committed-drag");
+		await waitForFileAndLines();
+
+		const [, line2, line3, line4] = getDiffLines();
+
+		fireEvent.mouseDown(getClickableArea(line2), { button: 0 });
+		fireEvent.mouseEnter(line3);
+		fireEvent.mouseEnter(line4);
+		fireEvent.mouseUp(line4);
+
+		await waitFor(() => {
+			expect(line2.className).toContain("bg-blue-500/10");
+			expect(line3.className).toContain("bg-blue-500/10");
+			expect(line4.className).toContain("bg-blue-500/10");
+		});
+	});
+
+	it("opens a multi-line comment composer on committed hunks", async () => {
+		await setupCommittedDiff("feat/committed-comment");
+		await openReviewTab(user, "feat/committed-comment");
+		await waitForFileAndLines();
+
+		const [, line2, , line4] = getDiffLines();
+
+		fireEvent.mouseDown(getClickableArea(line2), { button: 0 });
+		fireEvent.mouseEnter(line4);
+		fireEvent.mouseUp(line4);
+
+		await waitFor(() => {
+			expect(line2.className).toContain("bg-blue-500/10");
+			expect(line4.className).toContain("bg-blue-500/10");
 		});
 
 		const commentBtn = line4.querySelector("[data-comment-button]")!;

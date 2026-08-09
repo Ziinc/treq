@@ -442,8 +442,8 @@ export function DiffContentArea({
 											handleContextMenu={handleContextMenu}
 											renderHunkLines={renderHunkLines}
 											addToast={addToast}
-											getOutdatedCommentsForFile={() => []}
-											getFileCommentsForFile={() => []}
+											getOutdatedCommentsForFile={getOutdatedCommentsForFile}
+											getFileCommentsForFile={getFileCommentsForFile}
 											deleteComment={deleteComment}
 											getThreadsForLine={getThreadsForLine}
 											getUnplacedThreadsForFile={getUnplacedThreadsForFile}
