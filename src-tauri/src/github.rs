@@ -577,7 +577,9 @@ fn check_duration_secs(
     completed_at: Option<&str>,
     now: chrono::DateTime<chrono::Utc>,
 ) -> Option<u64> {
-    let started = chrono::DateTime::parse_from_rfc3339(started_at?).ok()?.with_timezone(&chrono::Utc);
+    let started = chrono::DateTime::parse_from_rfc3339(started_at?)
+        .ok()?
+        .with_timezone(&chrono::Utc);
     let end = match completed_at {
         Some(raw) => chrono::DateTime::parse_from_rfc3339(raw)
             .ok()?
@@ -640,11 +642,8 @@ fn rollup_pr_checks(raw: Vec<GhCheck>) -> Option<PrCiStatus> {
                 "fail" | "cancel" => failed += 1,
                 _ => pending += 1,
             }
-            let duration_secs = check_duration_secs(
-                c.started_at.as_deref(),
-                c.completed_at.as_deref(),
-                now,
-            );
+            let duration_secs =
+                check_duration_secs(c.started_at.as_deref(), c.completed_at.as_deref(), now);
             PrCheckEntry {
                 name: c.name,
                 bucket: c.bucket,

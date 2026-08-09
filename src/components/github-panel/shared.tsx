@@ -14,7 +14,11 @@ import type {
 	GhPullRequest,
 	PrCheckEntry,
 } from "../../lib/api-types";
-import { ciStateForBucket, ciStatusStyle, formatCheckDuration } from "../../lib/ci-status";
+import {
+	ciStateForBucket,
+	ciStatusStyle,
+	formatCheckDuration,
+} from "../../lib/ci-status";
 import { Button } from "../ui/button";
 
 export function formatDate(iso: string) {

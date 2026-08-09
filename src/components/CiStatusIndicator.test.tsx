@@ -18,7 +18,12 @@ const baseStatus: PrCiStatus = {
 	failed: 0,
 	pending: 0,
 	checks: [
-		{ name: "build", bucket: "pass", link: "https://x/1", duration_secs: 5 * 60 + 56 },
+		{
+			name: "build",
+			bucket: "pass",
+			link: "https://x/1",
+			duration_secs: 5 * 60 + 56,
+		},
 		{ name: "lint", bucket: "pass", link: "https://x/2", duration_secs: 12 },
 	],
 };
