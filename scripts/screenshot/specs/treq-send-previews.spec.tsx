@@ -166,13 +166,15 @@ it("captures treq send attachment thumbs and lightbox carousel previews", async 
 
 	await user.click(screen.getByTestId("treq-send-zoom-in"));
 	await user.click(screen.getByTestId("treq-send-zoom-in"));
-	expect(screen.getByTestId("treq-send-zoom-level").textContent).toBe("150%");
+	await user.click(screen.getByTestId("treq-send-zoom-in"));
+	await user.click(screen.getByTestId("treq-send-zoom-in"));
+	expect(screen.getByTestId("treq-send-zoom-level").textContent).toBe("200%");
 
 	await captureDocument(document, {
 		name: "treq-send-03b-image-zoomed",
 		expectations: [
-			"The image appears larger after zooming in to 150%.",
-			"The zoom level label in the top-right toolbar reads 150%.",
+			"The SVG preview is physically larger than at 100% (layout width grew, not just transform).",
+			"The zoom level label in the top-right toolbar reads 200%.",
 		],
 	});
 

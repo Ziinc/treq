@@ -405,13 +405,13 @@ function SendAssetLightbox({
 										<img
 											src={treqSendFileSrc(asset.path)}
 											alt={asset.title}
-											className="max-h-[80vh] max-w-full origin-center object-contain transition-transform duration-150"
+											className="h-auto w-auto max-h-[80vh] max-w-full object-contain"
 											style={{
-												transform: `scale(${
+												// CSS zoom grows layout size (unlike transform: scale).
+												zoom:
 													asset.id === current?.id
 														? imageZoom
-														: IMAGE_ZOOM_DEFAULT
-												})`,
+														: IMAGE_ZOOM_DEFAULT,
 											}}
 											draggable={false}
 										/>
