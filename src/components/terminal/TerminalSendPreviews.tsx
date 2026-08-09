@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Copy, FileText, FolderOpen, X, ZoomIn, ZoomOut } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { readFile } from "../../lib/api";
@@ -32,6 +32,8 @@ const IMAGE_ZOOM_MIN = 0.5;
 const IMAGE_ZOOM_MAX = 4;
 const IMAGE_ZOOM_STEP = 0.25;
 const IMAGE_ZOOM_DEFAULT = 1;
+/** Fallback display width before natural size is known (and in jsdom captures). */
+const IMAGE_ZOOM_FALLBACK_BASE_PX = 256;
 
 function clampImageZoom(value: number): number {
 	return Math.min(
@@ -183,6 +185,10 @@ function SendAssetLightbox({
 	const [currentIndex, setCurrentIndex] = useState(initialIndex);
 	const [textByPath, setTextByPath] = useState<Record<string, string>>({});
 	const [imageZoom, setImageZoom] = useState(IMAGE_ZOOM_DEFAULT);
+	/** Fitted display size at 100% zoom, keyed by asset id (from natural size on load). */
+	const [baseSizeById, setBaseSizeById] = useState<
+		Record<string, { width: number; height: number }>
+	>({});
 	const revealLabel = useMemo(() => revealInFileManagerLabel(), []);
 
 	const current = assets[currentIndex] ?? assets[0];
@@ -202,6 +208,49 @@ function SendAssetLightbox({
 	useEffect(() => {
 		setImageZoom(IMAGE_ZOOM_DEFAULT);
 	}, [currentIndex]);
+
+	const rememberFittedBaseSize = (assetId: string, img: HTMLImageElement) => {
+		if (img.naturalWidth <= 0 || img.naturalHeight <= 0) return;
+		const maxH = window.innerHeight * 0.8;
+		const maxW = Math.min(
+			window.innerWidth * 0.9,
+			img.parentElement?.clientWidth || window.innerWidth,
+		);
+		const fitScale = Math.min(
+			1,
+			maxW / img.naturalWidth,
+			maxH / img.naturalHeight,
+		);
+		const width = img.naturalWidth * fitScale;
+		const height = img.naturalHeight * fitScale;
+		setBaseSizeById((prev) => {
+			const existing = prev[assetId];
+			if (existing && existing.width === width && existing.height === height) {
+				return prev;
+			}
+			return { ...prev, [assetId]: { width, height } };
+		});
+	};
+
+	/** Explicit width so zoom grows layout (transform/scale does not; CSS zoom won't serialize in jsdom captures). */
+	const imageSizeStyle = (assetId: string): CSSProperties => {
+		const zoomFactor = assetId === current?.id ? imageZoom : IMAGE_ZOOM_DEFAULT;
+		const base = baseSizeById[assetId];
+		if (base) {
+			return {
+				width: base.width * zoomFactor,
+				height: base.height * zoomFactor,
+				maxWidth: "none",
+				maxHeight: "none",
+			};
+		}
+		return {
+			width: IMAGE_ZOOM_FALLBACK_BASE_PX * zoomFactor,
+			height: "auto",
+			maxWidth: "none",
+			maxHeight: "none",
+		};
+	};
 
 	useEffect(() => {
 		const onKeyDown = (event: KeyboardEvent) => {
@@ -405,14 +454,11 @@ function SendAssetLightbox({
 										<img
 											src={treqSendFileSrc(asset.path)}
 											alt={asset.title}
-											className="h-auto w-auto max-h-[80vh] max-w-full object-contain"
-											style={{
-												// CSS zoom grows layout size (unlike transform: scale).
-												zoom:
-													asset.id === current?.id
-														? imageZoom
-														: IMAGE_ZOOM_DEFAULT,
-											}}
+											className="object-contain"
+											style={imageSizeStyle(asset.id)}
+											onLoad={(event) =>
+												rememberFittedBaseSize(asset.id, event.currentTarget)
+											}
 											draggable={false}
 										/>
 									</div>

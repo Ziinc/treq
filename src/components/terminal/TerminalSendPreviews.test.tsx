@@ -169,13 +169,13 @@ describe("TerminalSendPreviews", () => {
 			.getByTestId("treq-send-preview-lightbox")
 			.querySelector('img[alt="shot.png"]') as HTMLImageElement;
 		expect(image).toBeTruthy();
-		expect(image.style.zoom).toBe("1");
+		expect(image.style.width).toBe("256px");
 
 		await user.click(zoomIn);
-		expect(image.style.zoom).toBe("1.25");
+		expect(image.style.width).toBe("320px");
 
 		await user.click(zoomOut);
-		expect(image.style.zoom).toBe("1");
+		expect(image.style.width).toBe("256px");
 	});
 
 	it("hides zoom controls for text assets", async () => {
