@@ -18,8 +18,8 @@ const baseStatus: PrCiStatus = {
 	failed: 0,
 	pending: 0,
 	checks: [
-		{ name: "build", bucket: "pass", link: "https://x/1" },
-		{ name: "lint", bucket: "pass", link: "https://x/2" },
+		{ name: "build", bucket: "pass", link: "https://x/1", duration_secs: 5 * 60 + 56 },
+		{ name: "lint", bucket: "pass", link: "https://x/2", duration_secs: 12 },
 	],
 };
 
@@ -68,7 +68,7 @@ describe("CiStatusIndicator", () => {
 		).toBeInTheDocument();
 	});
 
-	it("lists failed checks first and opens the selected check URL", async () => {
+	it("lists failed checks first with duration instead of status text", async () => {
 		const user = userEvent.setup();
 		vi.spyOn(api, "getCachedPrCiStatus").mockResolvedValue({
 			...baseStatus,
@@ -76,8 +76,18 @@ describe("CiStatusIndicator", () => {
 			passed: 1,
 			failed: 1,
 			checks: [
-				{ name: "build", bucket: "pass", link: "https://x/build" },
-				{ name: "test", bucket: "fail", link: "https://x/test" },
+				{
+					name: "build",
+					bucket: "pass",
+					link: "https://x/build",
+					duration_secs: 12,
+				},
+				{
+					name: "test",
+					bucket: "fail",
+					link: "https://x/test",
+					duration_secs: 5 * 60 + 56,
+				},
 			],
 		});
 		vi.spyOn(api, "startPrStatusPolling").mockResolvedValue(undefined);
@@ -92,9 +102,11 @@ describe("CiStatusIndicator", () => {
 			name: /^(test|build)/i,
 		});
 		expect(checkButtons.map((button) => button.textContent)).toEqual([
-			"testFailed",
-			"buildSuccess",
+			"test5m 56s",
+			"build12s",
 		]);
+		expect(screen.queryByText("Failed")).not.toBeInTheDocument();
+		expect(screen.queryByText("Success")).not.toBeInTheDocument();
 
 		await user.click(screen.getByRole("button", { name: /^test/i }));
 		expect(openUrl).toHaveBeenCalledWith("https://x/test");
