@@ -1,5 +1,6 @@
 pub mod agent_cli;
 pub mod app;
+pub mod auto_update;
 pub mod changes;
 pub mod commits;
 pub mod repo;
@@ -9,6 +10,7 @@ pub mod submodules;
 pub mod workspaces;
 pub use agent_cli::*;
 pub use app::*;
+pub use auto_update::*;
 pub use changes::*;
 pub use commits::*;
 pub use repo::*;

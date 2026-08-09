@@ -92,6 +92,7 @@ import {
   type WorkspaceDialogDefaults,
 } from "./UnifiedWorkspaceDialog";
 import { useToast } from "./ui/toast";
+import { useAutoUpdate } from "../hooks/useAutoUpdate";
 import { WorkspacePicker } from "./WorkspacePicker";
 import { SidebarInset, SidebarProvider } from "./ui/sidebar";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
@@ -200,6 +201,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   const queryClient = useQueryClient();
   const { addToast } = useToast();
+  useAutoUpdate();
   const handleReturnToDashboard = useCallback(() => {
     // Navigate to main repo ShowWorkspace > Code
     setSelectedWorkspace(null);
