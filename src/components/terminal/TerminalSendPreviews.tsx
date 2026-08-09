@@ -160,7 +160,9 @@ export function SendAssetPreviewModal({
 			>
 				<DialogHeader className="flex flex-row items-start justify-between gap-3 space-y-0">
 					<div className="min-w-0 space-y-1 text-left">
-						<DialogTitle className="truncate">{asset?.title ?? "Preview"}</DialogTitle>
+						<DialogTitle className="truncate">
+							{asset?.title ?? "Preview"}
+						</DialogTitle>
 						<DialogDescription className="truncate font-mono text-xs">
 							{asset?.path}
 						</DialogDescription>

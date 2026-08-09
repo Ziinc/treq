@@ -28,19 +28,22 @@ const TreqSendContext = createContext<TreqSendContextValue | null>(null);
 export function TreqSendProvider({ children }: { children: ReactNode }) {
 	const [assets, setAssets] = useState<TreqSendAsset[]>([]);
 
-	const ingestPayload = useCallback((payload: TreqSendPayload | TreqSendAsset) => {
-		const asset =
-			"id" in payload && "mediaType" in payload
-				? (payload as TreqSendAsset)
-				: parseTreqSendPayload(payload);
-		if (!asset) return;
-		setAssets((prev) => {
-			if (prev.some((existing) => existing.id === asset.id)) {
-				return prev;
-			}
-			return [...prev, asset];
-		});
-	}, []);
+	const ingestPayload = useCallback(
+		(payload: TreqSendPayload | TreqSendAsset) => {
+			const asset =
+				"id" in payload && "mediaType" in payload
+					? (payload as TreqSendAsset)
+					: parseTreqSendPayload(payload);
+			if (!asset) return;
+			setAssets((prev) => {
+				if (prev.some((existing) => existing.id === asset.id)) {
+					return prev;
+				}
+				return [...prev, asset];
+			});
+		},
+		[],
+	);
 
 	const dismissAsset = useCallback((id: string) => {
 		setAssets((prev) => prev.filter((asset) => asset.id !== id));
@@ -79,7 +82,9 @@ export function TreqSendProvider({ children }: { children: ReactNode }) {
 	);
 
 	return (
-		<TreqSendContext.Provider value={value}>{children}</TreqSendContext.Provider>
+		<TreqSendContext.Provider value={value}>
+			{children}
+		</TreqSendContext.Provider>
 	);
 }
 

@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-	assetsForPtySession,
-	parseTreqSendPayload,
-} from "./treqSend";
+import { assetsForPtySession, parseTreqSendPayload } from "./treqSend";
 
 describe("treqSend helpers", () => {
 	it("parses send payloads and ignores malformed ones", () => {

@@ -89,9 +89,7 @@ describe("TerminalSendPreviews", () => {
 				"hello from send",
 			);
 		});
-		expect(api.readFile).toHaveBeenCalledWith(
-			"/tmp/repo/.treq/send/note.txt",
-		);
+		expect(api.readFile).toHaveBeenCalledWith("/tmp/repo/.treq/send/note.txt");
 	});
 
 	it("renders image thumbnails with asset URLs", async () => {
@@ -107,12 +105,10 @@ describe("TerminalSendPreviews", () => {
 
 	it("listens for treq-send-received events", async () => {
 		renderSend(<SendHarness ptySessionId="session-listen" />);
+		const hasSendListener = () =>
+			vi.mocked(listen).mock.calls.some((args) => args[0] === TREQ_SEND_EVENT);
 		await waitFor(() => {
-			expect(
-				vi
-					.mocked(listen)
-					.mock.calls.some((args) => args[0] === TREQ_SEND_EVENT),
-			).toBe(true);
+			expect(hasSendListener()).toBe(true);
 		});
 	});
 });

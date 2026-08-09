@@ -201,14 +201,13 @@ pub(super) fn dispatch_send_request(
     )?;
     let instances = local_db::list_instance_registry(&request.repo)?;
 
-    let instance = agent_dispatch::resolve_target_instance(&instances, &request.repo).ok_or_else(
-        || {
+    let instance =
+        agent_dispatch::resolve_target_instance(&instances, &request.repo).ok_or_else(|| {
             format!(
                 "No running Treq instance has repo '{}'. Open this repo in Treq first.",
                 request.repo
             )
-        },
-    )?;
+        })?;
 
     let response = send_json_dispatch_request(
         &instance.endpoint,

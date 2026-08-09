@@ -71,10 +71,7 @@ pub fn detect_media_type_from_bytes(bytes: &[u8]) -> &'static str {
         return MEDIA_IMAGE;
     }
     let trimmed = trim_utf8_bom(bytes);
-    if trimmed
-        .windows(4)
-        .any(|w| w.eq_ignore_ascii_case(b"<svg"))
-    {
+    if trimmed.windows(4).any(|w| w.eq_ignore_ascii_case(b"<svg")) {
         return MEDIA_IMAGE;
     }
     MEDIA_TEXT
@@ -106,10 +103,7 @@ pub fn extension_for_media_type(media_type: &str, bytes: &[u8]) -> &'static str 
             return "bmp";
         }
         let trimmed = trim_utf8_bom(bytes);
-        if trimmed
-            .windows(4)
-            .any(|w| w.eq_ignore_ascii_case(b"<svg"))
-        {
+        if trimmed.windows(4).any(|w| w.eq_ignore_ascii_case(b"<svg")) {
             return "svg";
         }
         return "bin";
@@ -189,8 +183,8 @@ pub fn pty_session_id_from_env() -> Option<String> {
 }
 
 pub fn parse_ipc_payload(payload: &str) -> Result<IpcDispatchMessage, String> {
-    let value: serde_json::Value = serde_json::from_str(payload.trim())
-        .map_err(|e| format!("invalid request json: {}", e))?;
+    let value: serde_json::Value =
+        serde_json::from_str(payload.trim()).map_err(|e| format!("invalid request json: {}", e))?;
     match value.get("kind").and_then(|k| k.as_str()) {
         Some(SEND_KIND) => {
             let request: SendDispatchRequest = serde_json::from_value(value)
@@ -245,10 +239,7 @@ mod tests {
     #[test]
     fn treats_plain_bytes_as_text() {
         assert_eq!(detect_media_type_from_bytes(b"hello world"), MEDIA_TEXT);
-        assert_eq!(
-            extension_for_media_type(MEDIA_TEXT, b"hello world"),
-            "txt"
-        );
+        assert_eq!(extension_for_media_type(MEDIA_TEXT, b"hello world"), "txt");
     }
 
     #[test]
