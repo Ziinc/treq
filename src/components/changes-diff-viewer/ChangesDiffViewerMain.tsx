@@ -402,6 +402,7 @@ export const ChangesDiffViewer = memo(
         canCreatePr,
         hasPr,
         handleDiscardAll,
+        handleStashAll,
         handleDiscardFiles,
         handleCopyLineLocation,
         handleCopyLines,
@@ -485,6 +486,7 @@ export const ChangesDiffViewer = memo(
             handleFileSelect={handleFileSelect}
             onMoveFilesToNewWorkspace={onMoveFilesToNewWorkspace}
             handleDiscardAll={handleDiscardAll}
+            handleStashAll={handleStashAll}
             handleDiscardFiles={handleDiscardFiles}
             setSelectedUnstagedFiles={setSelectedUnstagedFiles}
             handleSelectAllUnstaged={handleSelectAllUnstaged}

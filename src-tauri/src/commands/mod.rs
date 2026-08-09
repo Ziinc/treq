@@ -11,6 +11,7 @@ pub mod pending_review;
 pub mod pty_commands;
 pub mod session;
 pub mod settings;
+pub mod stash;
 pub mod workspace;
 
 // Re-export all commands for convenient access
@@ -26,4 +27,5 @@ pub use pending_review::*;
 pub use pty_commands::*;
 pub use session::*;
 pub use settings::*;
+pub use stash::*;
 pub use workspace::*;

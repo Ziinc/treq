@@ -170,7 +170,7 @@ pub fn parse_workspace_metadata(metadata: Option<&str>) -> WorkspaceMetadata {
   parsed
 }
 
-fn resolve_workspace_root(repo_path: &str, workspace_id: Option<i64>) -> Result<String, String> {
+pub(crate) fn resolve_workspace_root(repo_path: &str, workspace_id: Option<i64>) -> Result<String, String> {
   match workspace_id {
     Some(id) => {
       let workspace = local_db::get_workspace_by_id(repo_path, id)

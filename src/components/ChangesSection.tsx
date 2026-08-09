@@ -1,5 +1,6 @@
 import { memo } from "react";
 import {
+  Archive,
   ArrowRight,
   ChevronDown,
   ChevronRight,
@@ -31,6 +32,7 @@ export interface ChangesSectionProps {
   onMoveToWorkspace?: () => void;
   onDiscardAll?: () => void;
   discardAllLabel?: string;
+  onStashAll?: () => void;
   onDiscard?: (path: string) => void;
   onDeselectAll?: () => void;
   onSelectAll?: () => void;
@@ -57,6 +59,7 @@ export const ChangesSection = memo<ChangesSectionProps>(
     onMoveToWorkspace,
     onDiscardAll,
     discardAllLabel = "Discard all changes",
+    onStashAll,
     onDiscard,
     onDeselectAll,
     onSelectAll,
@@ -106,6 +109,28 @@ export const ChangesSection = memo<ChangesSectionProps>(
             <div className="flex items-center gap-1">
               {!readOnly && hasFiles && (
                 <>
+                  {onStashAll && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          aria-label="Stash all changes"
+                          title="Stash all changes"
+                          data-testid="stash-all-changes"
+                          className="p-1 rounded transition-colors bg-transparent hover:bg-foreground/10 text-muted-foreground"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onStashAll();
+                          }}
+                        >
+                          <Archive className="w-3 h-3" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">
+                        Stash all changes
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button

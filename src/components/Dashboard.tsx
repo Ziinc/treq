@@ -74,6 +74,7 @@ import { GitHubPanel } from "./GitHubPanel";
 import { MergePreviewPage } from "./MergePreviewPage";
 import { Onboarding } from "./Onboarding";
 import { PromptHistoryModal } from "./PromptHistoryModal";
+import { StashModal } from "./StashModal";
 import { SettingsPage } from "./SettingsPage";
 import { ShowWorkspace } from "./ShowWorkspace";
 import type { BranchListItem } from "./TargetBranchSelector";
@@ -146,6 +147,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [promptHistoryFocusId, setPromptHistoryFocusId] = useState<
     number | null
   >(null);
+  const [showStashModal, setShowStashModal] = useState(false);
   const [runPromptRequest, setRunPromptRequest] = useState<{
     prompt?: string;
     workspaceId: number | null;
@@ -1676,6 +1678,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           setPromptHistoryFocusId(null);
           setShowPromptHistory(true);
         }}
+        onOpenStash={() => setShowStashModal(true)}
         onCreateShellTerminal={() =>
           terminalPaneRef.current?.createShellSession()
         }
@@ -1712,6 +1715,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
         repoPath={repoPath}
         initialSelectedId={promptHistoryFocusId}
         onRunPrompt={handleRunPrompt}
+      />
+
+      <StashModal
+        open={showStashModal}
+        onOpenChange={setShowStashModal}
+        repoPath={repoPath}
+        workspaces={workspaces}
+        onApplied={() => {
+          void queryClient.invalidateQueries({
+            queryKey: ["workspace-changed-files"],
+          });
+          void queryClient.invalidateQueries({
+            queryKey: ["workspace-diff"],
+          });
+        }}
       />
 
       <WorkspacePicker
