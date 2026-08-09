@@ -408,7 +408,9 @@ function SendAssetLightbox({
 											className="max-h-[80vh] max-w-full origin-center object-contain transition-transform duration-150"
 											style={{
 												transform: `scale(${
-													asset.id === current?.id ? imageZoom : IMAGE_ZOOM_DEFAULT
+													asset.id === current?.id
+														? imageZoom
+														: IMAGE_ZOOM_DEFAULT
 												})`,
 											}}
 											draggable={false}
