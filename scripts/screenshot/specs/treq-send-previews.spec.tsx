@@ -100,9 +100,9 @@ it("captures treq send square previews and text/image modals in a shell terminal
 		},
 	});
 
-	const textThumb = await screen.findByTestId(
-		"terminal-send-preview-qa-send-text",
-	);
+	expect(
+		await screen.findByTestId("terminal-send-preview-qa-send-text"),
+	).toBeTruthy();
 	const imageThumb = await screen.findByTestId(
 		"terminal-send-preview-qa-send-image",
 	);
@@ -113,20 +113,40 @@ it("captures treq send square previews and text/image modals in a shell terminal
 		name: "treq-send-01-square-previews",
 		expectations: [
 			"A shell terminal is open under the feat/treq-send workspace.",
-			"Above the terminal body, a strip shows two square thumbnails side by side.",
-			"The second thumbnail shows a blue square image with a white circle.",
+			"Two square thumbnails float over the bottom of the dark terminal on a gradient fade.",
+			"Each thumbnail has a visible circular X dismiss control, and the image thumb is blue with a white circle.",
 		],
 	});
 
-	await user.click(textThumb);
-	expect(await screen.findByTestId("treq-send-preview-modal")).toBeTruthy();
-	await screen.findByTestId("treq-send-text-preview");
+	await user.click(screen.getByTestId("terminal-send-dismiss-qa-send-text"));
+	await waitFor(() => {
+		expect(
+			screen.queryByTestId("terminal-send-preview-qa-send-text"),
+		).toBeNull();
+	});
+	expect(
+		screen.getByTestId("terminal-send-preview-qa-send-image"),
+	).toBeTruthy();
 
 	await captureDocument(document, {
-		name: "treq-send-02-text-modal",
+		name: "treq-send-01b-after-dismiss",
 		expectations: [
-			"A modal titled preview-note.txt overlays the app.",
-			"The modal body shows selectable text including 'Selectable preview text from treq send'.",
+			"Only the blue image thumbnail remains overlaid on the terminal.",
+			"The text thumbnail is gone after clicking its X dismiss button.",
+		],
+	});
+
+	await user.click(imageThumb);
+	expect(await screen.findByTestId("treq-send-preview-modal")).toBeTruthy();
+	expect(
+		document.querySelector('[data-testid="treq-send-preview-modal"] img'),
+	).toBeTruthy();
+
+	await captureDocument(document, {
+		name: "treq-send-03-image-modal",
+		expectations: [
+			"A modal titled preview-shot.svg overlays the app.",
+			"The modal shows a large blue square image with a white circle centered in it.",
 		],
 	});
 
@@ -135,19 +155,30 @@ it("captures treq send square previews and text/image modals in a shell terminal
 		expect(screen.queryByTestId("treq-send-preview-modal")).toBeNull();
 	});
 
-	await user.click(imageThumb);
+	// Re-inject text so the text modal path stays covered
+	sendCallback({
+		payload: {
+			kind: "send",
+			request_id: "qa-send-text-2",
+			repo: repoPath,
+			pty_session_id: ptySessionId!,
+			media_type: "text",
+			path: notePath,
+			title: "preview-note.txt",
+		},
+	});
+	const textThumbAgain = await screen.findByTestId(
+		"terminal-send-preview-qa-send-text-2",
+	);
+	await user.click(textThumbAgain);
 	expect(await screen.findByTestId("treq-send-preview-modal")).toBeTruthy();
-	expect(
-		document.querySelector(
-			'[data-testid="treq-send-preview-modal"] img',
-		),
-	).toBeTruthy();
+	await screen.findByTestId("treq-send-text-preview");
 
 	await captureDocument(document, {
-		name: "treq-send-03-image-modal",
+		name: "treq-send-02-text-modal",
 		expectations: [
-			"A modal titled preview-shot.svg overlays the app.",
-			"The modal shows a large blue square image with a white circle centered in it.",
+			"A modal titled preview-note.txt overlays the app.",
+			"The modal body shows selectable text including 'Selectable preview text from treq send'.",
 		],
 	});
 }, 60000);

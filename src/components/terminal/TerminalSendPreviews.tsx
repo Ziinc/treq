@@ -42,54 +42,62 @@ export function TerminalSendPreviews({
 				<div
 					data-testid="terminal-send-previews"
 					className={cn(
-						"flex flex-shrink-0 gap-2 overflow-x-auto border-b border-border bg-background/80 px-2 py-2",
+						"pointer-events-none absolute inset-x-0 bottom-0 z-10",
 						className,
 					)}
 				>
-					{assets.map((asset) => (
-						<div
-							key={asset.id}
-							className="group relative h-14 w-14 flex-shrink-0"
-						>
-							<button
-								type="button"
-								data-testid={`terminal-send-preview-${asset.id}`}
-								aria-label={`Preview ${asset.title}`}
-								title={asset.title}
-								className="h-14 w-14 overflow-hidden rounded-md border border-border bg-muted/40 transition hover:border-foreground/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-								onClick={() => setPreviewAsset(asset)}
+					{/* Gradient scrim so thumbs sit over terminal content without a hard edge */}
+					<div
+						aria-hidden
+						className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#1e1e1e] via-[#1e1e1e]/85 to-transparent"
+					/>
+					<div className="pointer-events-auto relative flex gap-2 overflow-x-auto px-3 pb-3 pt-8">
+						{assets.map((asset) => (
+							<div
+								key={asset.id}
+								className="group relative h-14 w-14 flex-shrink-0"
 							>
-								{asset.mediaType === "image" ? (
-									<img
-										src={treqSendFileSrc(asset.path)}
-										alt={asset.title}
-										className="h-full w-full object-cover"
-										draggable={false}
-									/>
-								) : (
-									<div className="flex h-full w-full flex-col items-center justify-center gap-1 px-1 text-muted-foreground">
-										<FileText className="h-4 w-4" />
-										<span className="w-full truncate text-[10px] leading-tight">
-											{asset.title}
-										</span>
-									</div>
-								)}
-							</button>
-							<button
-								type="button"
-								aria-label={`Dismiss ${asset.title}`}
-								className="absolute right-0.5 top-0.5 hidden rounded-sm bg-background/90 p-0.5 text-muted-foreground group-hover:block"
-								onClick={() => {
-									send.dismissAsset(asset.id);
-									if (previewAsset?.id === asset.id) {
-										setPreviewAsset(null);
-									}
-								}}
-							>
-								<X className="h-3 w-3" />
-							</button>
-						</div>
-					))}
+								<button
+									type="button"
+									data-testid={`terminal-send-preview-${asset.id}`}
+									aria-label={`Preview ${asset.title}`}
+									title={asset.title}
+									className="h-14 w-14 overflow-hidden rounded-md border border-white/15 bg-[#2a2a2a] shadow-md transition hover:border-white/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+									onClick={() => setPreviewAsset(asset)}
+								>
+									{asset.mediaType === "image" ? (
+										<img
+											src={treqSendFileSrc(asset.path)}
+											alt={asset.title}
+											className="h-full w-full object-cover"
+											draggable={false}
+										/>
+									) : (
+										<div className="flex h-full w-full flex-col items-center justify-center gap-1 px-1 text-zinc-300">
+											<FileText className="h-4 w-4" />
+											<span className="w-full truncate text-[10px] leading-tight">
+												{asset.title}
+											</span>
+										</div>
+									)}
+								</button>
+								<button
+									type="button"
+									data-testid={`terminal-send-dismiss-${asset.id}`}
+									aria-label={`Dismiss ${asset.title}`}
+									className="absolute -right-1.5 -top-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full border border-white/20 bg-zinc-900 text-zinc-200 shadow hover:bg-zinc-700 hover:text-white"
+									onClick={() => {
+										send.dismissAsset(asset.id);
+										if (previewAsset?.id === asset.id) {
+											setPreviewAsset(null);
+										}
+									}}
+								>
+									<X className="h-3 w-3" />
+								</button>
+							</div>
+						))}
+					</div>
 				</div>
 			)}
 

@@ -486,7 +486,7 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
 
           {/* Terminal */}
           {isModelLoaded ? (
-            <div className="flex h-full min-h-0 flex-col overflow-hidden">
+            <>
               <TerminalSendPreviews
                 ptySessionId={sessionData.ptySessionId}
                 isActive={!!isActive}
@@ -509,11 +509,11 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
                 onClose={onClose}
                 onTerminalOutput={handleTerminalOutput}
                 onTerminalIdle={onTerminalIdle}
-                containerClassName="min-h-0 flex-1 w-full overflow-hidden"
+                containerClassName="h-full w-full overflow-hidden"
                 terminalPaneClassName="w-full h-full"
                 isHidden={isHidden}
               />
-            </div>
+            </>
           ) : (
             <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
               Loading...
@@ -522,4 +522,5 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
         </div>
       </div>
     );
-  },);
+  },
+);

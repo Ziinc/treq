@@ -110,7 +110,7 @@ export const ShellTerminalPanel = memo<ShellTerminalPanelProps>(
 
         {/* Terminal */}
         <div
-          className="flex min-h-0 flex-1 flex-col overflow-hidden border-r border-border"
+          className="relative flex min-h-0 flex-1 flex-col overflow-hidden border-r border-border"
           style={{ backgroundColor: "#1e1e1e" }}
         >
           <TerminalSendPreviews
@@ -132,11 +132,12 @@ export const ShellTerminalPanel = memo<ShellTerminalPanelProps>(
             onTerminalOutput={onTerminalOutput}
             onTerminalIdle={onTerminalIdle}
             onClose={onClose}
-            containerClassName="min-h-0 flex-1 w-full overflow-hidden"
+            containerClassName="h-full w-full overflow-hidden"
             terminalPaneClassName="w-full h-full"
             isHidden={isHidden}
           />
         </div>
       </div>
     );
-  },);
+  },
+);

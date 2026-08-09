@@ -103,6 +103,20 @@ describe("TerminalSendPreviews", () => {
 		);
 	});
 
+	it("dismisses a thumbnail when its x button is clicked", async () => {
+		const user = userEvent.setup();
+		renderSend(<SendHarness ptySessionId="session-1" />);
+		await user.click(screen.getByRole("button", { name: "Inject text" }));
+		expect(
+			await screen.findByTestId("terminal-send-preview-send-1"),
+		).toBeTruthy();
+		await user.click(screen.getByTestId("terminal-send-dismiss-send-1"));
+		await waitFor(() => {
+			expect(screen.queryByTestId("terminal-send-preview-send-1")).toBeNull();
+			expect(screen.queryByTestId("terminal-send-previews")).toBeNull();
+		});
+	});
+
 	it("listens for treq-send-received events", async () => {
 		renderSend(<SendHarness ptySessionId="session-listen" />);
 		const hasSendListener = () =>
