@@ -8,6 +8,14 @@ function readFile(relative: string): string {
   return fs.readFileSync(path.join(ROOT, relative), "utf-8");
 }
 
+function extractRustfmtIndent(content: string): string {
+  const hardTabs = /^hard_tabs\s*=\s*true\s*$/m.test(content);
+  if (hardTabs) return "\t";
+
+  const tabSpaces = content.match(/^tab_spaces\s*=\s*(\d+)\s*$/m);
+  return " ".repeat(tabSpaces ? Number(tabSpaces[1]) : 4);
+}
+
 function extractApiCommands(content: string): Set<string> {
   const commands = new Set<string>();
   for (const match of content.matchAll(/invoke\(\s*["'](\w+)["']/g)) {
@@ -16,12 +24,18 @@ function extractApiCommands(content: string): Set<string> {
   return commands;
 }
 
-function extractDispatchCommands(content: string): Set<string> {
+function extractDispatchCommands(content: string, indent: string): Set<string> {
   const commands = new Set<string>();
-  for (const match of content.matchAll(/^ {8}"([a-z][a-z0-9_]*)"/gm)) {
-    commands.add(match[1]);
-  }
-  for (const match of content.matchAll(/^ {8}\| "([a-z][a-z0-9_]*)"/gm)) {
+  const matchIndent = content.match(/^([\t ]*)match command \{/m)?.[1];
+  if (matchIndent === undefined) return commands;
+
+  const armIndent = `${matchIndent}${indent}`;
+  const escapedArmIndent = armIndent.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const commandArm = new RegExp(
+    `^${escapedArmIndent}(?:\\| )?"([a-z][a-z0-9_]*)"`,
+    "gm",
+  );
+  for (const match of content.matchAll(commandArm)) {
     commands.add(match[1]);
   }
   return commands;
@@ -43,9 +57,13 @@ describe("command consistency", () => {
   const apiContent = readFile("src/lib/api.ts");
   const dispatchContent = readFile("crates/treq-napi/src/dispatch.rs");
   const tauriLibContent = readFile("src-tauri/src/lib.rs");
+  const rustfmtIndent = extractRustfmtIndent(readFile("rustfmt.toml"));
 
   const apiCommands = extractApiCommands(apiContent);
-  const dispatchCommands = extractDispatchCommands(dispatchContent);
+  const dispatchCommands = extractDispatchCommands(
+    dispatchContent,
+    rustfmtIndent,
+  );
   const tauriCommands = extractTauriCommands(tauriLibContent);
 
   it("every invoke() command in api.ts is handled in dispatch.rs", () => {
