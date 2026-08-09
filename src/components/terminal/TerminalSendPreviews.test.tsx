@@ -2,17 +2,21 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ReactElement } from "react";
 import userEvent from "@testing-library/user-event";
 import { listen } from "@tauri-apps/api/event";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { render, screen, waitFor } from "@testing-library/react";
 import { TerminalSendPreviews } from "./TerminalSendPreviews";
 import { TreqSendProvider, useTreqSend } from "../../hooks/useTreqSend";
+import { ToastProvider } from "../ui/toast";
 import { TREQ_SEND_EVENT } from "../../lib/treqSend";
 import * as api from "../../lib/api";
 import * as treqSend from "../../lib/treqSend";
+import * as utils from "../../lib/utils";
 
 vi.spyOn(api, "readFile").mockResolvedValue("hello from send");
 vi.spyOn(treqSend, "treqSendFileSrc").mockImplementation(
 	(path: string) => `asset://localhost${path}`,
 );
+vi.spyOn(utils, "copyTextToClipboard").mockResolvedValue(undefined);
 
 function SendHarness({
 	ptySessionId,
@@ -62,7 +66,11 @@ function SendHarness({
 }
 
 function renderSend(ui: ReactElement) {
-	return render(<TreqSendProvider>{ui}</TreqSendProvider>);
+	return render(
+		<ToastProvider>
+			<TreqSendProvider>{ui}</TreqSendProvider>
+		</ToastProvider>,
+	);
 }
 
 describe("TerminalSendPreviews", () => {
@@ -72,9 +80,10 @@ describe("TerminalSendPreviews", () => {
 		vi.mocked(treqSend.treqSendFileSrc).mockImplementation(
 			(path: string) => `asset://localhost${path}`,
 		);
+		vi.mocked(utils.copyTextToClipboard).mockResolvedValue(undefined);
 	});
 
-	it("shows square previews and opens a selectable text modal on click", async () => {
+	it("shows attachment thumbnails and opens a lightbox text preview on click", async () => {
 		const user = userEvent.setup();
 		renderSend(<SendHarness ptySessionId="session-1" />);
 
@@ -83,12 +92,15 @@ describe("TerminalSendPreviews", () => {
 		const thumb = await screen.findByTestId("terminal-send-preview-send-1");
 		await user.click(thumb);
 
-		expect(await screen.findByTestId("treq-send-preview-modal")).toBeTruthy();
+		expect(
+			await screen.findByTestId("treq-send-preview-lightbox"),
+		).toBeTruthy();
 		await waitFor(() => {
 			expect(screen.getByTestId("treq-send-text-preview").textContent).toBe(
 				"hello from send",
 			);
 		});
+		expect(screen.queryByTestId("treq-send-preview-modal")).toBeNull();
 		expect(api.readFile).toHaveBeenCalledWith("/tmp/repo/.treq/send/note.txt");
 	});
 
@@ -97,7 +109,8 @@ describe("TerminalSendPreviews", () => {
 		renderSend(<SendHarness ptySessionId="session-1" />);
 		await user.click(screen.getByRole("button", { name: "Inject image" }));
 		const thumb = await screen.findByTestId("terminal-send-preview-send-2");
-		const img = thumb.querySelector("img");
+		const attachment = thumb.closest('[data-slot="attachment"]');
+		const img = attachment?.querySelector("img");
 		expect(img?.getAttribute("src")).toBe(
 			"asset://localhost/tmp/repo/shot.png",
 		);
@@ -114,6 +127,29 @@ describe("TerminalSendPreviews", () => {
 		await waitFor(() => {
 			expect(screen.queryByTestId("terminal-send-preview-send-1")).toBeNull();
 			expect(screen.queryByTestId("terminal-send-previews")).toBeNull();
+		});
+	});
+
+	it("copies text assets and reveals them in the file manager", async () => {
+		const user = userEvent.setup();
+		renderSend(<SendHarness ptySessionId="session-1" />);
+		await user.click(screen.getByRole("button", { name: "Inject text" }));
+		await user.click(await screen.findByTestId("terminal-send-preview-send-1"));
+		await screen.findByTestId("treq-send-preview-lightbox");
+
+		await user.click(screen.getByTestId("treq-send-copy"));
+		await waitFor(() => {
+			expect(utils.copyTextToClipboard).toHaveBeenCalledWith("hello from send");
+		});
+
+		await user.click(screen.getByTestId("treq-send-reveal"));
+		expect(revealItemInDir).toHaveBeenCalledWith(
+			"/tmp/repo/.treq/send/note.txt",
+		);
+
+		await user.click(screen.getByTestId("treq-send-close"));
+		await waitFor(() => {
+			expect(screen.queryByTestId("treq-send-preview-lightbox")).toBeNull();
 		});
 	});
 

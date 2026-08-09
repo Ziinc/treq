@@ -81,12 +81,41 @@ afterEach(async () => {
     (this as any).cb = cb;
   }
 
-  observe() {
-    (this as any).cb([{ borderBoxSize: { inlineSize: 0, blockSize: 0 } }]);
+  observe(target?: Element) {
+    (this as any).cb(
+      [
+        {
+          target,
+          borderBoxSize: [{ inlineSize: 800, blockSize: 600 }],
+          contentBoxSize: [{ inlineSize: 800, blockSize: 600 }],
+          contentRect: {
+            x: 0,
+            y: 0,
+            width: 800,
+            height: 600,
+            top: 0,
+            left: 0,
+            bottom: 600,
+            right: 800,
+          },
+        },
+      ],
+      this,
+    );
   }
 
   unobserve() {}
   disconnect() {}
+};
+
+(global as any).IntersectionObserver = class IntersectionObserver {
+  constructor(_cb: any) {}
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+  takeRecords() {
+    return [];
+  }
 };
 
 (global as any).DOMRect = {
