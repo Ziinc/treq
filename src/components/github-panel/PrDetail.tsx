@@ -15,6 +15,7 @@ import {
 	ghViewPr,
 } from "../../lib/api";
 import { MarkdownContent } from "../MarkdownContent";
+import { compareCiChecksBySeverity } from "../../lib/ci-status";
 import {
 	CheckEntryRow,
 	formatDate,
@@ -143,9 +144,11 @@ export function PrDetailPanel({
 								Checks ({ciStatus.passed}/{ciStatus.total})
 							</h3>
 							<div className="border border-border rounded-md divide-y divide-border overflow-hidden">
-								{ciStatus.checks.map((check) => (
-									<CheckEntryRow key={check.name} check={check} />
-								))}
+								{[...ciStatus.checks]
+									.sort(compareCiChecksBySeverity)
+									.map((check) => (
+										<CheckEntryRow key={check.name} check={check} />
+									))}
 							</div>
 						</div>
 					)}

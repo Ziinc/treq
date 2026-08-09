@@ -248,12 +248,20 @@ it("captures the CI checks dropdown with time-taken instead of job status text",
 			state: "failure",
 			passed: 1,
 			failed: 1,
+			pending: 1,
+			total: 3,
 			checks: [
 				{
 					name: "build",
 					bucket: "pass",
 					link: "https://github.com/x/1",
 					duration_secs: 12,
+				},
+				{
+					name: "lint",
+					bucket: "pending",
+					link: "https://github.com/x/3",
+					duration_secs: 45,
 				},
 				{
 					name: "test",
@@ -268,18 +276,24 @@ it("captures the CI checks dropdown with time-taken instead of job status text",
 	await setupPushedWorkspace(user);
 
 	await user.click(
-		await screen.findByRole("button", { name: /ci failed: 1\/2/i }),
+		await screen.findByRole("button", { name: /ci failed: 1\/3/i }),
 	);
-	expect(await screen.findByText("5m 56s")).toBeVisible();
-	expect(screen.getByText("12s")).toBeVisible();
+	const checkButtons = screen.getAllByRole("button", {
+		name: /^(test|lint|build)/i,
+	});
+	expect(checkButtons.map((button) => button.textContent)).toEqual([
+		"test5m 56s",
+		"lint45s",
+		"build12s",
+	]);
 	expect(screen.queryByText("Failed")).not.toBeInTheDocument();
 	expect(screen.queryByText("Success")).not.toBeInTheDocument();
 
 	await captureDocument(document, {
 		name: "ci-status-indicator-04-dropdown-duration",
 		expectations: [
-			'An open Checks popover lists "test" first with "5m 56s" on the right, then "build" with "12s" — no Success/Failed/Pending text.',
-			"Each row still shows a colored status icon (red for test, green for build) so pass/fail is conveyed by icon, not label.",
+			'An open Checks popover lists rows as failed → pending → success: "test" (5m 56s), then "lint" (45s), then "build" (12s).',
+			"Each row still shows a colored status icon (red, yellow, green) so status is conveyed by icon, not label text.",
 			'The popover header reads "Checks" and sits near the workspace header CI pill that triggered it.',
 		],
 	});

@@ -78,12 +78,14 @@ it("captures the Checks section with a mix of CI job statuses", async () => {
 	);
 
 	expect(await screen.findByText(/checks \(1\/3\)/i)).toBeVisible();
-	expect(screen.getByText("build")).toBeVisible();
-	expect(screen.getByText("test")).toBeVisible();
-	expect(screen.getByText("lint")).toBeVisible();
-	expect(screen.getByText("5m 56s")).toBeVisible();
-	expect(screen.getByText("12s")).toBeVisible();
-	expect(screen.getByText("45s")).toBeVisible();
+	const checkRows = screen.getAllByRole("button", {
+		name: /^(test|lint|build)/i,
+	});
+	expect(checkRows.map((button) => button.textContent)).toEqual([
+		"test5m 56s",
+		"lint45s",
+		"build12s",
+	]);
 	expect(screen.queryByText("Failed")).not.toBeInTheDocument();
 	expect(screen.queryByText("Success")).not.toBeInTheDocument();
 	expect(screen.queryByText("Pending")).not.toBeInTheDocument();
@@ -97,7 +99,7 @@ it("captures the Checks section with a mix of CI job statuses", async () => {
 		name: "pr-detail-checks-01-mixed-statuses",
 		expectations: [
 			'A red-bordered "1/3" pill (matching the workspace header\'s CI status indicator) appears next to the Open state chip, and a "Checks (1/3)" section header appears below it, above the PR description.',
-			'Three check rows list durations on the right ("12s", "5m 56s", "45s") instead of Success/Failed/Pending text, with colored status icons still indicating pass/fail/pending.',
+			'Check rows are ordered failed → pending → success: "test" (5m 56s), "lint" (45s), "build" (12s), with colored status icons and no Success/Failed/Pending text.',
 			"Each row's icon color matches the same green/red/yellow scheme as the header pill -- the same visual language, not a separate one.",
 		],
 	});
