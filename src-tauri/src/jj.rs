@@ -48,6 +48,7 @@ use jj_lib::copies::CopyRecords;
 use jj_lib::fileset::FilesetAliasesMap;
 use jj_lib::git;
 use jj_lib::gitignore::GitIgnoreFile;
+use jj_lib::lock::FileLock;
 use jj_lib::matchers::{Matcher, NothingMatcher, PrefixMatcher};
 use jj_lib::merge::Diff;
 use jj_lib::merged_tree::MergedTree;
@@ -203,6 +204,67 @@ fn load_workspace_repo(workspace_path: &str) -> Result<LoadedWorkspaceRepo, JjEr
   })
 }
 
+/// Reconciles a colocated home working copy using jj-cli's snapshot ordering.
+///
+/// The Git import/export lock covers the complete HEAD import, metadata reset,
+/// filesystem snapshot, and refs import cycle. This also serializes concurrent
+/// startup reads in this process and in other jj/Treq processes.
+fn reconcile_colocated_home_repo(repo_path: &str) -> Result<(), JjError> {
+  let initial = load_workspace_repo(repo_path)?;
+  let _git_lock = FileLock::lock(initial.workspace.repo_path().join("git_import_export.lock"))
+    .map_err(|e| JjError::GitWorkspaceError(format!("Failed to lock Git import/export: {e}")))?;
+
+  // Another process may have published an operation while this caller waited
+  // for the lock, so always reload the latest operation under the lock.
+  let mut loaded = load_workspace_repo(repo_path)?;
+  let workspace_name = loaded.workspace.workspace_name().to_owned();
+
+  let mut head_tx = loaded.repo.start_transaction();
+  block_on(git::import_head(head_tx.repo_mut()))
+    .map_err(|e| JjError::GitWorkspaceError(format!("Failed to import Git HEAD: {e}")))?;
+  if head_tx.repo().has_changes() {
+    let new_git_head = head_tx.repo().view().git_head().clone();
+    if let Some(head_id) = new_git_head.as_normal() {
+      let head_commit = head_tx
+        .repo()
+        .store()
+        .get_commit(head_id)
+        .map_err(|e| JjError::GitWorkspaceError(format!("Failed to load Git HEAD: {e}")))?;
+      let wc_commit = block_on(
+        head_tx
+          .repo_mut()
+          .check_out(workspace_name.clone(), &head_commit),
+      )
+      .map_err(|e| JjError::GitWorkspaceError(format!("Failed to check out Git HEAD: {e}")))?;
+      let mut locked_ws = loaded
+        .workspace
+        .start_working_copy_mutation()
+        .map_err(|e| JjError::GitWorkspaceError(format!("Failed to lock working copy: {e}")))?;
+      block_on(locked_ws.locked_wc().reset(&wc_commit)).map_err(|e| {
+        JjError::GitWorkspaceError(format!("Failed to reset working-copy metadata: {e}"))
+      })?;
+      block_on(head_tx.repo_mut().rebase_descendants()).map_err(|e| {
+        JjError::GitWorkspaceError(format!("Failed to rebase after Git HEAD import: {e}"))
+      })?;
+      loaded.repo = block_on(head_tx.commit("import git head")).map_err(|e| {
+        JjError::GitWorkspaceError(format!("Failed to commit Git HEAD import: {e}"))
+      })?;
+      block_on(locked_ws.finish(loaded.repo.op_id().clone())).map_err(|e| {
+        JjError::GitWorkspaceError(format!("Failed to finish working-copy reset: {e}"))
+      })?;
+    } else {
+      loaded.repo = block_on(head_tx.commit("import git head")).map_err(|e| {
+        JjError::GitWorkspaceError(format!("Failed to commit Git HEAD import: {e}"))
+      })?;
+    }
+  }
+
+  snapshot_loaded_working_copy(&mut loaded, repo_path)?;
+  import_remaining_git_refs(&mut loaded)?;
+  Ok(())
+}
+
+// Non-home workspaces retain Treq's existing lightweight import behavior.
 fn import_git_head_if_needed(
   loaded: &mut LoadedWorkspaceRepo,
   repo_path: &str,
@@ -210,33 +272,82 @@ fn import_git_head_if_needed(
   let git_head_branch = read_git_head_branch(repo_path)
     .ok()
     .filter(|branch| !branch.is_empty() && branch != "HEAD");
-  let mut import_tx = loaded.repo.start_transaction();
-  let _ = block_on(git::import_head(import_tx.repo_mut()));
-
-  let git_head_id = import_tx
-    .repo()
-    .view()
-    .git_head()
-    .added_ids()
-    .next()
-    .cloned();
-  if let (Some(branch_name), Some(head_id)) = (git_head_branch.as_ref(), git_head_id) {
-    let existing = import_tx
+  let mut tx = loaded.repo.start_transaction();
+  block_on(git::import_head(tx.repo_mut()))
+    .map_err(|e| JjError::GitWorkspaceError(format!("Failed to import Git HEAD: {e}")))?;
+  let head_id = tx.repo().view().git_head().added_ids().next().cloned();
+  if let (Some(branch), Some(head_id)) = (git_head_branch.as_ref(), head_id) {
+    if tx
       .repo()
       .view()
-      .get_local_bookmark(RefName::new(branch_name));
-    if existing.is_absent() {
-      import_tx
-        .repo_mut()
-        .set_local_bookmark_target(RefName::new(branch_name), RefTarget::normal(head_id));
+      .get_local_bookmark(RefName::new(branch))
+      .is_absent()
+    {
+      tx.repo_mut()
+        .set_local_bookmark_target(RefName::new(branch), RefTarget::normal(head_id));
     }
   }
-
-  if import_tx.repo().has_changes() {
-    loaded.repo = block_on(import_tx.commit("import git head"))
-      .map_err(|e| JjError::GitWorkspaceError(format!("Failed to import git head: {}", e)))?;
+  if tx.repo().has_changes() {
+    loaded.repo = block_on(tx.commit("import git head"))
+      .map_err(|e| JjError::GitWorkspaceError(format!("Failed to commit Git HEAD import: {e}")))?;
   }
+  Ok(())
+}
 
+fn import_colocated_git_state(
+  loaded: &mut LoadedWorkspaceRepo,
+  repo_path: &str,
+) -> Result<(), JjError> {
+  import_git_head_if_needed(loaded, repo_path)?;
+  import_remaining_git_refs(loaded)
+}
+
+fn snapshot_loaded_working_copy(
+  loaded: &mut LoadedWorkspaceRepo,
+  workspace_path: &str,
+) -> Result<(), JjError> {
+  let workspace_name = loaded.workspace.workspace_name().to_owned();
+  let Some(wc_id) = loaded
+    .repo
+    .view()
+    .get_wc_commit_id(&workspace_name)
+    .cloned()
+  else {
+    return Ok(());
+  };
+  let wc_commit = loaded
+    .repo
+    .store()
+    .get_commit(&wc_id)
+    .map_err(|e| JjError::IoError(format!("Failed to load working-copy commit: {e}")))?;
+  let matcher = repo_root_matcher();
+  let opts = snapshot_options_for_all_paths(workspace_path, &matcher);
+  let mut locked_ws = loaded
+    .workspace
+    .start_working_copy_mutation()
+    .map_err(|e| JjError::IoError(format!("Failed to lock working copy: {e}")))?;
+  let (new_tree, _) = block_on(locked_ws.locked_wc().snapshot(&opts))
+    .map_err(|e| JjError::IoError(format!("Failed to snapshot working copy: {e}")))?;
+
+  if new_tree.tree_ids_and_labels() != wc_commit.tree().tree_ids_and_labels() {
+    let mut tx = loaded.repo.start_transaction();
+    let rewritten = block_on(
+      tx.repo_mut()
+        .rewrite_commit(&wc_commit)
+        .set_tree(new_tree)
+        .write(),
+    )
+    .map_err(|e| JjError::IoError(format!("Failed to write working-copy snapshot: {e}")))?;
+    tx.repo_mut()
+      .set_wc_commit(workspace_name, rewritten.id().clone())
+      .map_err(|e| JjError::IoError(format!("Failed to set working-copy commit: {e}")))?;
+    block_on(tx.repo_mut().rebase_descendants())
+      .map_err(|e| JjError::IoError(format!("Failed to rebase after snapshot: {e}")))?;
+    loaded.repo = block_on(tx.commit("snapshot working copy"))
+      .map_err(|e| JjError::IoError(format!("Failed to commit working-copy snapshot: {e}")))?;
+  }
+  block_on(locked_ws.finish(loaded.repo.op_id().clone()))
+    .map_err(|e| JjError::IoError(format!("Failed to finish working-copy snapshot: {e}")))?;
   Ok(())
 }
 
@@ -2388,6 +2499,9 @@ pub fn jj_get_changed_files(workspace_path: &str) -> Result<Vec<JjFileChange>, J
   }
 
   let repo_path_opt = derive_repo_path_from_workspace(workspace_path);
+  if repo_path_opt.is_none() {
+    reconcile_colocated_home_repo(workspace_path)?;
+  }
   let settings_path = repo_path_opt.as_deref().unwrap_or(workspace_path);
   let settings = match create_user_settings(settings_path) {
     Ok(s) => s,
@@ -2402,60 +2516,10 @@ pub fn jj_get_changed_files(workspace_path: &str) -> Result<Vec<JjFileChange>, J
     Ok(ws) => ws,
     Err(_) => return Ok(Vec::new()),
   };
-  let mut repo = match block_on(workspace.repo_loader().load_at_head()) {
+  let repo = match block_on(workspace.repo_loader().load_at_head()) {
     Ok(r) => r,
     Err(_) => return Ok(Vec::new()),
   };
-  let mut repaired_home_wc = false;
-  if repo_path_opt.is_none() {
-    let branch = get_workspace_branch(workspace_path).unwrap_or_default();
-    if !branch.is_empty() && branch != "HEAD" {
-      let workspace_name = workspace.workspace_name().to_owned();
-      if let Some(wc_id) = repo.view().get_wc_commit_id(&workspace_name).cloned() {
-        if let Ok(wc_commit) = repo.store().get_commit(&wc_id) {
-          let root_id = repo.store().root_commit_id();
-          let bookmark_target = repo
-            .view()
-            .get_local_bookmark(RefName::new(&branch))
-            .as_normal()
-            .cloned();
-          let wc_only_parent_root =
-            wc_commit.parent_ids().len() == 1 && wc_commit.parent_ids().first() == Some(&root_id);
-          if wc_only_parent_root {
-            if let Some(branch_tip_id) = bookmark_target {
-              if branch_tip_id != *wc_commit.id() {
-                if let Ok(branch_tip_commit) = repo.store().get_commit(&branch_tip_id) {
-                  let mut tx = repo.start_transaction();
-                  let _ = block_on(tx.repo_mut().check_out(workspace_name, &branch_tip_commit));
-                  let _ = block_on(tx.repo_mut().rebase_descendants());
-                  let _ = git::export_refs(tx.repo_mut());
-                  if block_on(tx.commit("repair home wc")).is_ok() {
-                    repaired_home_wc = true;
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-  if repaired_home_wc {
-    workspace = match Workspace::load(
-      &settings,
-      path,
-      &StoreFactories::default(),
-      &default_working_copy_factories(),
-    ) {
-      Ok(ws) => ws,
-      Err(_) => return Ok(Vec::new()),
-    };
-    repo = match block_on(workspace.repo_loader().load_at_head()) {
-      Ok(r) => r,
-      Err(_) => return Ok(Vec::new()),
-    };
-  }
-
   let ignore_root = repo_path_opt.as_deref().unwrap_or(workspace_path);
   let matcher = repo_root_matcher();
   let opts = snapshot_options_for_all_paths(ignore_root, &matcher);
@@ -6697,17 +6761,10 @@ pub fn jj_squash_merge_commit(
 ///
 /// Does not shell out to `jj util snapshot`.
 pub fn jj_util_import_git_refs(repo_path: &str) -> Result<(), JjError> {
-  let mut loaded = load_workspace_repo(repo_path)?;
-  import_colocated_git_state(&mut loaded, repo_path)?;
-  Ok(())
+  reconcile_colocated_home_repo(repo_path)
 }
 
-fn import_colocated_git_state(
-  loaded: &mut LoadedWorkspaceRepo,
-  repo_path: &str,
-) -> Result<(), JjError> {
-  import_git_head_if_needed(loaded, repo_path)?;
-
+fn import_remaining_git_refs(loaded: &mut LoadedWorkspaceRepo) -> Result<(), JjError> {
   let import_options = git::GitImportOptions {
     auto_local_bookmark: false,
     abandon_unreachable_commits: true,

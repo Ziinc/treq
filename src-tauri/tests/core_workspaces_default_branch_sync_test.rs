@@ -48,6 +48,9 @@ fn read_file(base: &str, relative_path: &str) -> String {
 #[test]
 fn home_commit_on_branch_syncs_matching_workspace_branch() {
   let repo = TestRepo::new().expect("Failed to create test repo");
+  TestRepo::run_git(&repo.repo_path, &["add", ".gitignore"]).expect("stage init metadata");
+  TestRepo::run_git(&repo.repo_path, &["commit", "-m", "Commit init metadata"])
+    .expect("commit init metadata");
   TestRepo::run_git(&repo.repo_path, &["checkout", "-b", PROP_BRANCH])
     .expect("Failed to create branch");
 
@@ -86,6 +89,9 @@ fn home_commit_on_branch_syncs_matching_workspace_branch() {
 #[test]
 fn workspace_commit_on_branch_syncs_home_when_home_on_same_branch() {
   let repo = TestRepo::new().expect("Failed to create test repo");
+  TestRepo::run_git(&repo.repo_path, &["add", ".gitignore"]).expect("stage init metadata");
+  TestRepo::run_git(&repo.repo_path, &["commit", "-m", "Commit init metadata"])
+    .expect("commit init metadata");
   TestRepo::run_git(&repo.repo_path, &["checkout", "-b", PROP_BRANCH])
     .expect("Failed to create branch");
 

@@ -1643,6 +1643,128 @@ fn test_workspace_status_home_repo() {
 }
 
 #[test]
+fn test_workspace_status_home_repo_reconciles_external_git_commit() {
+  let repo = TestRepo::new().expect("Failed to create test repo");
+
+  // Establish a clean jj working-copy state before Git changes HEAD behind jj's back.
+  treq_lib::jj::jj_get_changed_files(&repo.repo_path).expect("initial snapshot should succeed");
+  TestRepo::write_workspace_file(&repo.repo_path, "external.txt", "committed by git\n")
+    .expect("write external file");
+  TestRepo::run_git(&repo.repo_path, &["add", "."]).expect("git add should succeed");
+  TestRepo::run_git(&repo.repo_path, &["commit", "-m", "External Git commit"])
+    .expect("git commit should succeed");
+  let git_head = TestRepo::run_git(&repo.repo_path, &["rev-parse", "--short=12", "HEAD"])
+    .expect("resolve git head")
+    .trim()
+    .to_string();
+
+  let status = treq_lib::core::workspace_status(&repo.repo_path, None)
+    .expect("home status should reconcile Git HEAD");
+
+  let changed = treq_lib::jj::jj_get_changed_files(&repo.repo_path).expect("list changed files");
+
+  assert!(
+    !status.partial.has_changes,
+    "external commit must not remain dirty; changes: {changed:?}"
+  );
+  assert_eq!(
+    treq_lib::jj::jj_get_commit_id(&repo.repo_path, "@-").expect("resolve @-"),
+    git_head,
+    "working-copy parent should be the external Git commit"
+  );
+  assert!(
+    changed.is_empty(),
+    "fresh working-copy commit should be empty"
+  );
+}
+
+#[test]
+fn test_workspace_status_home_repo_preserves_unstaged_edits_after_external_git_commit() {
+  let repo = TestRepo::new().expect("Failed to create test repo");
+  TestRepo::run_git(&repo.repo_path, &["add", ".gitignore"]).expect("stage init metadata");
+  TestRepo::run_git(&repo.repo_path, &["commit", "-m", "Commit init metadata"])
+    .expect("commit init metadata");
+  treq_lib::jj::jj_get_changed_files(&repo.repo_path).expect("initial snapshot should succeed");
+  TestRepo::write_workspace_file(&repo.repo_path, "committed.txt", "committed by git\n")
+    .expect("write committed file");
+  TestRepo::write_workspace_file(&repo.repo_path, "unstaged.txt", "still uncommitted\n")
+    .expect("write unstaged file");
+  TestRepo::run_git(&repo.repo_path, &["add", "committed.txt"]).expect("git add should succeed");
+  TestRepo::run_git(
+    &repo.repo_path,
+    &["commit", "-m", "Partial external Git commit"],
+  )
+  .expect("git commit should succeed");
+  let git_head = TestRepo::run_git(&repo.repo_path, &["rev-parse", "--short=12", "HEAD"])
+    .expect("resolve git head")
+    .trim()
+    .to_string();
+
+  let status = treq_lib::core::workspace_status(&repo.repo_path, None)
+    .expect("home status should reconcile Git HEAD");
+  let changed = treq_lib::jj::jj_get_changed_files(&repo.repo_path)
+    .expect("remaining changes should be readable");
+
+  assert!(
+    status.partial.has_changes,
+    "unstaged edit must remain dirty"
+  );
+  assert_eq!(
+    changed
+      .iter()
+      .map(|change| change.path.as_str())
+      .collect::<Vec<_>>(),
+    vec!["unstaged.txt"]
+  );
+  assert_eq!(
+    treq_lib::jj::jj_get_commit_id(&repo.repo_path, "@-").expect("resolve @-"),
+    git_head
+  );
+}
+
+#[test]
+fn test_home_reconciliation_follows_external_branch_and_detached_head_movements() {
+  let repo = TestRepo::new().expect("Failed to create test repo");
+  TestRepo::run_git(&repo.repo_path, &["add", ".gitignore"]).expect("stage init metadata");
+  TestRepo::run_git(&repo.repo_path, &["commit", "-m", "Commit init metadata"])
+    .expect("commit init metadata");
+  treq_lib::jj::jj_get_changed_files(&repo.repo_path).expect("initial reconciliation");
+
+  TestRepo::run_git(&repo.repo_path, &["checkout", "-b", "external-branch"])
+    .expect("create external branch");
+  repo
+    .commit_file("branch.txt", "external branch\n", "External branch commit")
+    .expect("commit on external branch");
+  let branch_head = TestRepo::run_git(&repo.repo_path, &["rev-parse", "--short=12", "HEAD"])
+    .expect("resolve branch head")
+    .trim()
+    .to_string();
+
+  let branch_status =
+    treq_lib::core::workspace_status(&repo.repo_path, None).expect("reconcile external branch");
+  assert_eq!(branch_status.partial.current.branch_name, "external-branch");
+  assert_eq!(
+    treq_lib::jj::jj_get_commit_id(&repo.repo_path, "@-").expect("resolve branch parent"),
+    branch_head
+  );
+  assert!(!branch_status.partial.has_changes);
+
+  TestRepo::run_git(&repo.repo_path, &["checkout", "--detach", "HEAD~1"]).expect("detach Git HEAD");
+  let detached_head = TestRepo::run_git(&repo.repo_path, &["rev-parse", "--short=12", "HEAD"])
+    .expect("resolve detached head")
+    .trim()
+    .to_string();
+
+  let detached_status =
+    treq_lib::core::workspace_status(&repo.repo_path, None).expect("reconcile detached HEAD");
+  assert_eq!(
+    treq_lib::jj::jj_get_commit_id(&repo.repo_path, "@-").expect("resolve detached parent"),
+    detached_head
+  );
+  assert!(!detached_status.partial.has_changes);
+}
+
+#[test]
 fn test_workspace_status_home_repo_ahead_on_checked_out_branch() {
   let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
   let default_branch = repo.default_branch().to_string();
