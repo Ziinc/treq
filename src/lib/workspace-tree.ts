@@ -117,11 +117,7 @@ function computeDepths(node: WorkspaceTreeNode, depth: number): void {
  * (commit / WC tip) and fall back to created_at.
  */
 function activityTimestamp(node: WorkspaceTreeNode): string {
-	return (
-		node.status.last_activity_at ||
-		node.status.current.created_at ||
-		""
-	);
+	return node.status.last_activity_at || node.status.current.created_at || "";
 }
 
 /**
