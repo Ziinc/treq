@@ -1,9 +1,10 @@
-/* eslint-disable max-lines, max-params, max-nested-callbacks */
+/* eslint-disable max-lines, max-nested-callbacks */
 
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
 	AlertCircle,
 	Check,
+	ChevronLeft,
 	Code2,
 	Copy,
 	Eye,
@@ -11,7 +12,10 @@ import {
 	Folder,
 	FolderOpen,
 	Loader2,
+	MessageSquare,
 	Plus,
+	Send,
+	X,
 } from "lucide-react";
 import { List, type ListImperativeAPI } from "react-window";
 import {
@@ -66,9 +70,24 @@ import {
 } from "./ui/context-menu";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useEditorApps } from "../hooks/useEditorApps";
-import { CommentInput } from "./CommentInput";
+import { useFileBrowserReview } from "../hooks/useFileBrowserReview";
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogTitle,
+} from "./ui/alert-dialog";
+import { Button } from "./ui/button";
+import { FileCommentSection } from "./changes-diff-viewer/FileCommentSection";
+import type { LineComment } from "../lib/review";
 import { MarkdownContent } from "./MarkdownContent";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
+import { Textarea } from "./ui/textarea";
 
 // Helper to check if file is binary
 function isBinaryFile(path: string): boolean {
@@ -113,14 +132,15 @@ interface FileBrowserProps {
 	repoPath: string | null;
 	initialSelectedFile: string | null;
 	initialExpandedDir: string | null;
-	onCreateAgentWithComment?: (
-		filePath: string,
-		startLine: number,
-		endLine: number,
-		lineContent: string[],
-		commentText: string,
-	) => void;
+	onBack?: () => void;
+	onCreateAgentWithReview?: (
+		reviewMarkdown: string,
+		mode: "plan" | "acceptEdits",
+	) => Promise<void>;
 }
+
+/** Placeholder hunkId for FileBrowser comments — there's no jj diff hunk to anchor to. */
+const FILE_BROWSER_COMMENT_HUNK_ID = "browser";
 
 // Filter out .git and .treq files/directories (but keep .github, .gitignore, etc.)
 function filterHiddenEntries(entries: DirectoryEntry[]): DirectoryEntry[] {
@@ -132,7 +152,15 @@ function filterHiddenEntries(entries: DirectoryEntry[]): DirectoryEntry[] {
 
 // Virtualization constants
 const LINE_HEIGHT = 18;
-const COMMENT_ROW_HEIGHT = 165;
+const COMMENT_INPUT_HEIGHT = 165;
+const COMMENT_CARD_HEIGHT = 90;
+// FileCommentSection wraps its cards in a padded container (px-4 py-3).
+const COMMENT_SECTION_PADDING = 24;
+
+/** One virtualized row: either a code line, or a comment-thread row inserted after it. */
+type FileBrowserRow =
+	| { type: "line"; lineNum: number }
+	| { type: "comment"; lineNum: number };
 
 // TreeNode component - memoized to prevent unnecessary re-renders
 interface TreeNodeProps {
@@ -143,6 +171,7 @@ interface TreeNodeProps {
 	hasChanges: boolean;
 	selectedFile: string | null;
 	changedFiles: Map<string, ParsedFileChange>;
+	commentCounts: Map<string, number>;
 	basePath: string;
 	onDirectoryClick: (path: string) => void;
 	onFileClick: (path: string) => void;
@@ -158,6 +187,7 @@ interface CodeLineProps {
 	htmlContent: string;
 	diffStatus: "add" | "modify" | "delete" | undefined;
 	hasDeletionMarker: boolean;
+	hasComment: boolean;
 	lineNumberWidth: number;
 	onMouseEnter: () => void;
 	onMouseLeave: () => void;
@@ -182,6 +212,7 @@ const CodeLine = memo(
 		htmlContent,
 		diffStatus,
 		hasDeletionMarker,
+		hasComment,
 		lineNumberWidth,
 		onMouseEnter,
 		onMouseLeave,
@@ -230,6 +261,10 @@ const CodeLine = memo(
 						}}
 						title="Lines deleted here"
 					/>
+				)}
+				{/* Comment indicator */}
+				{hasComment && (
+					<MessageSquare className="w-3 h-3 text-primary flex-shrink-0 ml-1" />
 				)}
 				{/* Line number */}
 				<span
@@ -307,6 +342,14 @@ interface FileContentViewProps {
 	} | null;
 	onSubmitComment: (text: string) => void;
 	onCancelComment: () => void;
+	rows: FileBrowserRow[];
+	linesWithComments: Set<number>;
+	commentsByEndLine: Map<number, LineComment[]>;
+	editingCommentId: string | null;
+	onStartEditComment: (commentId: string) => void;
+	onCancelEditComment: () => void;
+	onSaveEditComment: (commentId: string, text: string) => void;
+	onDeleteComment: (commentId: string) => void;
 	listRef: React.RefObject<ListImperativeAPI>;
 	// Search props
 	isSearchOpen: boolean;
@@ -345,6 +388,14 @@ const FileContentView = memo(
 		pendingComment,
 		onSubmitComment,
 		onCancelComment,
+		rows,
+		linesWithComments,
+		commentsByEndLine,
+		editingCommentId,
+		onStartEditComment,
+		onCancelEditComment,
+		onSaveEditComment,
+		onDeleteComment,
 		listRef,
 		isSearchOpen,
 		searchQuery,
@@ -548,9 +599,7 @@ const FileContentView = memo(
 						<>
 							<List
 								listRef={listRef}
-								rowCount={
-									lines.length + (showCommentInput && pendingComment ? 1 : 0)
-								}
+								rowCount={rows.length}
 								rowHeight={getItemHeight}
 								rowComponent={({
 									index,
@@ -559,33 +608,34 @@ const FileContentView = memo(
 									index: number;
 									style: React.CSSProperties;
 								}) => {
-									// Comment row is inserted at index = pendingComment.endLine (after last selected line)
-									if (
-										showCommentInput &&
-										pendingComment &&
-										index === pendingComment.endLine
-									) {
+									const row = rows[index];
+									if (!row) return null;
+
+									if (row.type === "comment") {
+										const { lineNum } = row;
+										const showInputHere =
+											showCommentInput &&
+											pendingComment !== null &&
+											pendingComment.endLine === lineNum;
 										return (
 											<div style={style}>
-												<CommentInput
+												<FileCommentSection
+													comments={commentsByEndLine.get(lineNum) ?? []}
+													editingCommentId={editingCommentId}
+													showInput={showInputHere}
 													onSubmit={onSubmitComment}
 													onCancel={onCancelComment}
-													filePath={relativePath ?? undefined}
-													startLine={pendingComment.startLine}
-													endLine={pendingComment.endLine}
+													onStartEdit={onStartEditComment}
+													onCancelEdit={onCancelEditComment}
+													onSaveEdit={onSaveEditComment}
+													onDelete={onDeleteComment}
 												/>
 											</div>
 										);
 									}
 
-									// For rows after the comment row, adjust index to account for inserted row
-									const lineIndex =
-										showCommentInput &&
-										pendingComment &&
-										index > pendingComment.endLine
-											? index - 1
-											: index;
-									const lineNum = lineIndex + 1;
+									const { lineNum } = row;
+									const lineIndex = lineNum - 1;
 									let line = lines[lineIndex];
 									const diffStatus = fileHunks.get(lineNum);
 									const hasDeletionMarker = deletionMarkers.has(lineNum);
@@ -623,6 +673,7 @@ const FileContentView = memo(
 											htmlContent={line}
 											diffStatus={diffStatus}
 											hasDeletionMarker={hasDeletionMarker}
+											hasComment={linesWithComments.has(lineNum)}
 											lineNumberWidth={lineNumberWidth}
 											onMouseEnter={() => onSetHoveredLine(lineNum)}
 											onMouseLeave={() => onSetHoveredLine(null)}
@@ -829,6 +880,7 @@ const TreeNode = memo(
 		hasChanges,
 		selectedFile,
 		changedFiles,
+		commentCounts,
 		basePath,
 		onDirectoryClick,
 		onFileClick,
@@ -909,6 +961,7 @@ const TreeNode = memo(
 			: entry.path;
 		const fileStatus = changedFiles.get(relativePath);
 		const status = fileStatus?.workspaceStatus;
+		const reviewCommentCount = commentCounts.get(relativePath) ?? 0;
 		return (
 			<FileTreeContextMenu
 				key={entry.path}
@@ -935,6 +988,15 @@ const TreeNode = memo(
 					>
 						{entry.name}
 					</span>
+					{reviewCommentCount > 0 && (
+						<span
+							className="flex items-center gap-0.5 text-[10px] text-primary flex-shrink-0 ml-auto"
+							title={`${reviewCommentCount} pending review comment${reviewCommentCount !== 1 ? "s" : ""}`}
+						>
+							<MessageSquare className="w-3 h-3" />
+							{reviewCommentCount}
+						</span>
+					)}
 					{status && (
 						<span
 							className={cn(
@@ -964,7 +1026,8 @@ export const FileBrowser = memo(
 		repoPath,
 		initialSelectedFile,
 		initialExpandedDir,
-		onCreateAgentWithComment,
+		onBack,
+		onCreateAgentWithReview,
 	}: FileBrowserProps) => {
 		// Determine the path and branch to use
 		const basePath = workspace
@@ -1016,6 +1079,19 @@ export const FileBrowser = memo(
 		const { addToast } = useToast();
 		const { fontSize } = useTerminalSettings();
 		const listRef = useRef<ListImperativeAPI>(null);
+		const fileBrowserReview = useFileBrowserReview({
+			repoPath,
+			workspaceId: workspace?.id,
+			onCreateAgentWithReview,
+			addToast,
+		});
+		const commentCountsByFile = useMemo(() => {
+			const counts = new Map<string, number>();
+			for (const comment of fileBrowserReview.comments) {
+				counts.set(comment.filePath, (counts.get(comment.filePath) ?? 0) + 1);
+			}
+			return counts;
+		}, [fileBrowserReview.comments]);
 
 		// Ensure workspace is indexed on mount
 		useEffect(() => {
@@ -1355,22 +1431,31 @@ export const FileBrowser = memo(
 			(text: string) => {
 				if (!pendingComment || !selectedFile) return;
 
-				// Call the callback to create agent and send comment
-				if (onCreateAgentWithComment) {
-					onCreateAgentWithComment(
-						selectedFile,
-						pendingComment.startLine,
-						pendingComment.endLine,
-						pendingComment.lineContent,
-						text,
-					);
-				}
+				// Add to the FileBrowser's review session (batched, sent later via
+				// "Finish review") instead of firing off a new agent session immediately.
+				fileBrowserReview.addComment(
+					{
+						filePath: getRelativePath(selectedFile),
+						hunkId: FILE_BROWSER_COMMENT_HUNK_ID,
+						displayAtLineIndex: pendingComment.endLine - 1,
+						startLine: pendingComment.startLine,
+						endLine: pendingComment.endLine,
+						lineContent: pendingComment.lineContent,
+						lineSide: "new",
+					},
+					text,
+				);
 
 				setShowCommentInput(false);
 				setPendingComment(null);
 				setLineSelection(null);
 			},
-			[pendingComment, selectedFile, onCreateAgentWithComment],
+			[
+				pendingComment,
+				selectedFile,
+				fileBrowserReview.addComment,
+				getRelativePath,
+			],
 		);
 
 		const handleCancelComment = useCallback(() => {
@@ -1525,6 +1610,7 @@ export const FileBrowser = memo(
 						hasChanges={hasChanges}
 						selectedFile={selectedFile}
 						changedFiles={changedFiles}
+						commentCounts={commentCountsByFile}
 						basePath={basePath}
 						onDirectoryClick={handleDirectoryClick}
 						onFileClick={handleFileClick}
@@ -1541,6 +1627,7 @@ export const FileBrowser = memo(
 				hasChangedFilesInDirectory,
 				selectedFile,
 				changedFiles,
+				commentCountsByFile,
 				basePath,
 				handleDirectoryClick,
 				handleFileClick,
@@ -1548,21 +1635,6 @@ export const FileBrowser = memo(
 				getRelativePath,
 				addToast,
 			],
-		);
-
-		// Calculate item height for virtualization
-		const getItemHeight = useCallback(
-			(index: number) => {
-				if (
-					showCommentInput &&
-					pendingComment &&
-					index === pendingComment.endLine
-				) {
-					return COMMENT_ROW_HEIGHT;
-				}
-				return LINE_HEIGHT;
-			},
-			[showCommentInput, pendingComment],
 		);
 
 		// Memoize file content data for virtualization
@@ -1583,6 +1655,76 @@ export const FileBrowser = memo(
 
 			return { lines, rawLines, lineNumberWidth, language };
 		}, [selectedFile, fileContent]);
+
+		// Comments for the currently open file, keyed by the line they're anchored to
+		const commentsForSelectedFile = useMemo(() => {
+			if (!selectedFile) return [];
+			const relPath = getRelativePath(selectedFile);
+			return fileBrowserReview.comments.filter((c) => c.filePath === relPath);
+		}, [selectedFile, getRelativePath, fileBrowserReview.comments]);
+
+		const commentsByEndLine = useMemo(() => {
+			const map = new Map<number, LineComment[]>();
+			for (const comment of commentsForSelectedFile) {
+				const existing = map.get(comment.endLine);
+				if (existing) existing.push(comment);
+				else map.set(comment.endLine, [comment]);
+			}
+			return map;
+		}, [commentsForSelectedFile]);
+
+		const linesWithComments = useMemo(() => {
+			const set = new Set<number>();
+			for (const comment of commentsForSelectedFile) {
+				for (let ln = comment.startLine; ln <= comment.endLine; ln++) {
+					set.add(ln);
+				}
+			}
+			return set;
+		}, [commentsForSelectedFile]);
+
+		// Virtualized rows: a code line for every source line, plus one inline
+		// comment-thread row inserted right after any line that has comments
+		// (or the pending new-comment input), mirroring the Review tab's layout.
+		const rows = useMemo<FileBrowserRow[]>(() => {
+			const totalLines = fileContentData?.lines.length ?? 0;
+			const commentRowAnchors = new Set<number>(commentsByEndLine.keys());
+			if (showCommentInput && pendingComment) {
+				commentRowAnchors.add(pendingComment.endLine);
+			}
+			const result: FileBrowserRow[] = [];
+			for (let lineNum = 1; lineNum <= totalLines; lineNum++) {
+				result.push({ type: "line", lineNum });
+				if (commentRowAnchors.has(lineNum)) {
+					result.push({ type: "comment", lineNum });
+				}
+			}
+			return result;
+		}, [
+			fileContentData?.lines.length,
+			commentsByEndLine,
+			showCommentInput,
+			pendingComment,
+		]);
+
+		// Calculate item height for virtualization
+		const getItemHeight = useCallback(
+			(index: number) => {
+				const row = rows[index];
+				if (!row || row.type === "line") return LINE_HEIGHT;
+				const existingCount = commentsByEndLine.get(row.lineNum)?.length ?? 0;
+				const showInputHere =
+					showCommentInput &&
+					pendingComment !== null &&
+					pendingComment.endLine === row.lineNum;
+				return (
+					COMMENT_SECTION_PADDING +
+					existingCount * COMMENT_CARD_HEIGHT +
+					(showInputHere ? COMMENT_INPUT_HEIGHT : 0)
+				);
+			},
+			[rows, commentsByEndLine, showCommentInput, pendingComment],
+		);
 
 		// Memoize sorted root entries to avoid re-sorting on every render
 		const sortedRootEntries = useMemo(
@@ -1621,6 +1763,14 @@ export const FileBrowser = memo(
 				pendingComment={pendingComment}
 				onSubmitComment={handleSubmitComment}
 				onCancelComment={handleCancelComment}
+				rows={rows}
+				linesWithComments={linesWithComments}
+				commentsByEndLine={commentsByEndLine}
+				editingCommentId={fileBrowserReview.editingCommentId}
+				onStartEditComment={fileBrowserReview.startEditComment}
+				onCancelEditComment={fileBrowserReview.cancelEditComment}
+				onSaveEditComment={fileBrowserReview.saveEditComment}
+				onDeleteComment={fileBrowserReview.deleteComment}
 				listRef={listRef}
 				isSearchOpen={isSearchOpen}
 				searchQuery={debouncedSearchQuery}
@@ -1635,27 +1785,180 @@ export const FileBrowser = memo(
 			/>
 		);
 
+		const pendingCommentCount = fileBrowserReview.comments.length;
+
 		return (
 			<div
-				className="h-full flex bg-background overflow-hidden"
+				className="h-full flex flex-col bg-background overflow-hidden"
 				data-testid="file-browser"
 			>
-				{/* File Tree */}
-				<div className="w-72 flex-shrink-0 border-r bg-sidebar overflow-auto">
-					{isLoadingDir && rootEntries.length === 0 ? (
-						<div className="flex items-center justify-center p-4">
-							<Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
-						</div>
-					) : (
-						<div className="p-3 space-y-1">
-							{sortedRootEntries.map((entry) => renderTreeNode(entry, 0))}
+				{/* Header: Back + review controls, sharing one row */}
+				<div className="flex items-center justify-between gap-3 px-4 pt-3 pb-2 border-b border-border flex-shrink-0">
+					<div>
+						{onBack && (
+							<button
+								type="button"
+								onClick={onBack}
+								className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+							>
+								<ChevronLeft className="w-4 h-4" />
+								Back
+							</button>
+						)}
+					</div>
+					{pendingCommentCount > 0 && (
+						<div className="flex items-center gap-2">
+							<span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+								<MessageSquare className="w-4 h-4 text-primary" />
+								{pendingCommentCount} comment
+								{pendingCommentCount !== 1 ? "s" : ""} pending
+							</span>
+							<Button
+								size="sm"
+								variant="outline"
+								onClick={() => fileBrowserReview.setShowCancelDialog(true)}
+							>
+								Discard
+							</Button>
+							<Popover
+								open={fileBrowserReview.reviewPopoverOpen}
+								onOpenChange={fileBrowserReview.setReviewPopoverOpen}
+							>
+								<PopoverTrigger asChild>
+									<Button size="sm" variant="default" className="gap-2">
+										<Send className="w-3 h-3" />
+										Finish review
+									</Button>
+								</PopoverTrigger>
+								<PopoverContent
+									align="end"
+									side="bottom"
+									className="w-80 relative"
+								>
+									<button
+										type="button"
+										onClick={() =>
+											fileBrowserReview.setReviewPopoverOpen(false)
+										}
+										className="h-8 w-8 absolute top-2 right-2 flex items-center justify-center rounded hover:bg-muted"
+										aria-label="Close"
+										title="Close"
+										disabled={fileBrowserReview.sendingReview}
+									>
+										<X className="w-4 h-4" />
+									</button>
+									<div className="space-y-3">
+										<div>
+											<h4 className="font-medium text-sm mb-1">
+												Finish your review
+											</h4>
+											<p className="text-sm text-muted-foreground">
+												{pendingCommentCount} comment
+												{pendingCommentCount !== 1 ? "s" : ""} will be
+												submitted.
+											</p>
+										</div>
+										<Textarea
+											value={fileBrowserReview.finalReviewComment}
+											onChange={(event) =>
+												fileBrowserReview.setFinalReviewComment(
+													event.target.value,
+												)
+											}
+											placeholder="Add a summary comment (optional)..."
+											className="min-h-[80px] text-sm"
+										/>
+										<div className="flex justify-between gap-2">
+											<Button
+												size="sm"
+												variant="outline"
+												onClick={fileBrowserReview.handleCopyReview}
+												className="gap-2"
+												disabled={fileBrowserReview.sendingReview}
+											>
+												{fileBrowserReview.copiedReview ? (
+													<>
+														<Check className="w-3 h-3" />
+														Copied
+													</>
+												) : (
+													<>
+														<Copy className="w-3 h-3" />
+														Copy
+													</>
+												)}
+											</Button>
+											<div className="flex gap-2">
+												<Button
+													size="sm"
+													variant="secondary"
+													onClick={() =>
+														fileBrowserReview.handleRequestChanges("plan")
+													}
+													disabled={fileBrowserReview.sendingReview}
+												>
+													Plan
+												</Button>
+												<Button
+													size="sm"
+													onClick={() =>
+														fileBrowserReview.handleRequestChanges(
+															"acceptEdits",
+														)
+													}
+													disabled={fileBrowserReview.sendingReview}
+												>
+													Edit
+												</Button>
+											</div>
+										</div>
+									</div>
+								</PopoverContent>
+							</Popover>
 						</div>
 					)}
 				</div>
 
-				{/* File Content */}
-				<div className="flex-1 min-w-0 bg-background overflow-auto">
-					{renderFileContent()}
+				<AlertDialog
+					open={fileBrowserReview.showCancelDialog}
+					onOpenChange={fileBrowserReview.setShowCancelDialog}
+				>
+					<AlertDialogContent>
+						<AlertDialogHeader>
+							<AlertDialogTitle>Discard review?</AlertDialogTitle>
+							<AlertDialogDescription>
+								This will discard all {pendingCommentCount} pending comment
+								{pendingCommentCount !== 1 ? "s" : ""}. This action cannot be
+								undone.
+							</AlertDialogDescription>
+						</AlertDialogHeader>
+						<AlertDialogFooter>
+							<AlertDialogCancel>Keep reviewing</AlertDialogCancel>
+							<AlertDialogAction onClick={fileBrowserReview.handleCancelReview}>
+								Discard
+							</AlertDialogAction>
+						</AlertDialogFooter>
+					</AlertDialogContent>
+				</AlertDialog>
+
+				<div className="flex-1 flex min-h-0 overflow-hidden">
+					{/* File Tree */}
+					<div className="w-72 flex-shrink-0 border-r bg-sidebar overflow-auto">
+						{isLoadingDir && rootEntries.length === 0 ? (
+							<div className="flex items-center justify-center p-4">
+								<Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+							</div>
+						) : (
+							<div className="p-3 space-y-1">
+								{sortedRootEntries.map((entry) => renderTreeNode(entry, 0))}
+							</div>
+						)}
+					</div>
+
+					{/* File Content */}
+					<div className="flex-1 min-w-0 bg-background overflow-auto">
+						{renderFileContent()}
+					</div>
 				</div>
 			</div>
 		);

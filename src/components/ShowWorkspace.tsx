@@ -8,7 +8,6 @@ import {
 import {
 	AlertTriangle,
 	ArrowRight,
-	ChevronLeft,
 	Code2,
 	Copy,
 	Eye,
@@ -1192,27 +1191,14 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 				<div className="flex-1 overflow-auto">
 					{activeTab === "overview" ? (
 						showFileBrowserInCode ? (
-							<div className="flex flex-col h-full">
-								<div className="px-4 pt-3 pb-2 border-b border-border">
-									<button
-										type="button"
-										onClick={() => setShowFileBrowserInCode(false)}
-										className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-									>
-										<ChevronLeft className="w-4 h-4" />
-										Back
-									</button>
-								</div>
-								<div className="flex-1 overflow-hidden">
-									<FileBrowser
-										workspace={workspace}
-										repoPath={effectiveRepoPath}
-										initialSelectedFile={initialSelectedFileForBrowser}
-										initialExpandedDir={initialExpandedDir}
-										onCreateAgentWithComment={handleCreateAgentWithComment}
-									/>
-								</div>
-							</div>
+							<FileBrowser
+								workspace={workspace}
+								repoPath={effectiveRepoPath}
+								initialSelectedFile={initialSelectedFileForBrowser}
+								initialExpandedDir={initialExpandedDir}
+								onBack={() => setShowFileBrowserInCode(false)}
+								onCreateAgentWithReview={handleCreateAgentWithReview}
+							/>
 						) : (
 							<div className="flex h-full">
 								{/* LEFT: Files + README */}
