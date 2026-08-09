@@ -113,7 +113,7 @@ it("captures treq send square previews and text/image modals in a shell terminal
 		name: "treq-send-01-square-previews",
 		expectations: [
 			"A shell terminal is open under the feat/treq-send workspace.",
-			"Two square thumbnails float over the bottom of the dark terminal on a gradient fade.",
+			"Two square thumbnails float at the top-left of the dark terminal, in a horizontal row on a gradient fade.",
 			"Each thumbnail has a visible circular X dismiss control, and the image thumb is blue with a white circle.",
 		],
 	});
@@ -131,7 +131,7 @@ it("captures treq send square previews and text/image modals in a shell terminal
 	await captureDocument(document, {
 		name: "treq-send-01b-after-dismiss",
 		expectations: [
-			"Only the blue image thumbnail remains overlaid on the terminal.",
+			"Only the blue image thumbnail remains overlaid at the top-left of the terminal.",
 			"The text thumbnail is gone after clicking its X dismiss button.",
 		],
 	});

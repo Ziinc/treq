@@ -42,16 +42,16 @@ export function TerminalSendPreviews({
 				<div
 					data-testid="terminal-send-previews"
 					className={cn(
-						"pointer-events-none absolute inset-x-0 bottom-0 z-10",
+						"pointer-events-none absolute inset-x-0 top-0 z-10",
 						className,
 					)}
 				>
 					{/* Gradient scrim so thumbs sit over terminal content without a hard edge */}
 					<div
 						aria-hidden
-						className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#1e1e1e] via-[#1e1e1e]/85 to-transparent"
+						className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#1e1e1e] via-[#1e1e1e]/85 to-transparent"
 					/>
-					<div className="pointer-events-auto relative flex gap-2 overflow-x-auto px-3 pb-3 pt-8">
+					<div className="pointer-events-auto relative flex gap-2 overflow-x-auto px-3 pb-8 pt-3">
 						{assets.map((asset) => (
 							<div
 								key={asset.id}
