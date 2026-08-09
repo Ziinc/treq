@@ -10,8 +10,6 @@ import {
   ArrowRight,
   Code2,
   Copy,
-  Eye,
-  EyeOff,
   File,
   FileDiff,
   Folder,
@@ -1167,51 +1165,6 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
             )}
           </div>
         </div>
-        {activeTab === "changes" &&
-          workspace &&
-          workspace.branch_name !== defaultTargetBranch && (
-            <div className="px-4 py-2 border-b border-border flex">
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant={
-                        showCommittedChanges && hasWorkspaceCommits
-                          ? "default"
-                          : "outline"
-                      }
-                      size="sm"
-                      disabled={!hasWorkspaceCommits}
-                      onClick={() =>
-                        setShowCommittedChanges(!showCommittedChanges)
-                      }
-                      className={
-                        showCommittedChanges && hasWorkspaceCommits
-                          ? "bg-blue-500/20 hover:bg-blue-500/30 text-blue-700 dark:text-blue-300"
-                          : ""
-                      }
-                    >
-                      {showCommittedChanges && hasWorkspaceCommits ? (
-                        <Eye className="w-4 h-4 mr-1.5" />
-                      ) : (
-                        <EyeOff className="w-4 h-4 mr-1.5" />
-                      )}
-                      Committed
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>
-                      {!hasWorkspaceCommits
-                        ? "No committed changes"
-                        : showCommittedChanges
-                          ? "Hide committed changes"
-                          : "Show committed changes"}
-                    </p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-          )}
         <div className="flex-1 overflow-auto">
           {activeTab === "overview" ? (
             showFileBrowserInCode ? (
@@ -1416,6 +1369,11 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
                 workspace && workspace.branch_name !== defaultTargetBranch
                   ? showCommittedChanges
                   : false
+              }
+              onShowCommittedChangesChange={
+                workspace && workspace.branch_name !== defaultTargetBranch
+                  ? setShowCommittedChanges
+                  : undefined
               }
               onMoveFilesToNewWorkspace={
                 onMoveFilesToNewWorkspace

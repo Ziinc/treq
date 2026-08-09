@@ -19,7 +19,20 @@ let capturedChangesDiffViewerProps: any = null;
 vi.mock("../src/components/ChangesDiffViewer", () => ({
   ChangesDiffViewer: (props: any) => {
     capturedChangesDiffViewerProps = props;
-    return <div data-testid="changes-viewer" />;
+    return (
+      <div data-testid="changes-viewer">
+        {props.onShowCommittedChangesChange && (
+          <button
+            type="button"
+            onClick={() =>
+              props.onShowCommittedChangesChange(!props.showCommittedChanges)
+            }
+          >
+            Show
+          </button>
+        )}
+      </div>
+    );
   },
 }));
 
@@ -81,7 +94,7 @@ describe("Committed Changes Toggle", () => {
     capturedChangesDiffViewerProps = null;
   });
 
-  it("should render button in Review tab when workspace has target_branch", async () => {
+  it("should pass show/toggle props in Review tab when workspace has target_branch", async () => {
     render(
       <ShowWorkspace
         workspace={workspaceWithTarget}
@@ -92,19 +105,18 @@ describe("Committed Changes Toggle", () => {
       />,
     );
 
-    // Switch to Review tab
     const reviewTab = await screen.findByText("Review");
     await userEvent.click(reviewTab);
 
-    // Button should be visible
     await waitFor(() => {
+      expect(capturedChangesDiffViewerProps?.showCommittedChanges).toBe(true);
       expect(
-        screen.getByRole("button", { name: /committed/i }),
-      ).toBeInTheDocument();
+        typeof capturedChangesDiffViewerProps?.onShowCommittedChangesChange,
+      ).toBe("function");
     });
   });
 
-  it("should hide button when workspace is null (home repo)", async () => {
+  it("should not pass toggle callback when workspace is null (home repo)", async () => {
     render(
       <ShowWorkspace
         workspace={null}
@@ -115,19 +127,20 @@ describe("Committed Changes Toggle", () => {
       />,
     );
 
-    // Switch to Review tab
     const reviewTab = await screen.findByText("Review");
     await userEvent.click(reviewTab);
 
-    // Button should not be visible
     await waitFor(() => {
-      expect(
-        screen.queryByRole("button", { name: /committed/i }),
-      ).not.toBeInTheDocument();
+      expect(screen.getByTestId("changes-viewer")).toBeInTheDocument();
     });
+
+    expect(capturedChangesDiffViewerProps?.showCommittedChanges).toBe(false);
+    expect(
+      capturedChangesDiffViewerProps?.onShowCommittedChangesChange,
+    ).toBeUndefined();
   });
 
-  it("should show button when target_branch is null (defaults to default branch)", async () => {
+  it("should pass toggle props when target_branch is null (defaults to default branch)", async () => {
     render(
       <ShowWorkspace
         workspace={workspaceWithoutTarget}
@@ -138,19 +151,18 @@ describe("Committed Changes Toggle", () => {
       />,
     );
 
-    // Switch to Review tab
     const reviewTab = await screen.findByText("Review");
     await userEvent.click(reviewTab);
 
-    // Button should be visible (uses default branch)
     await waitFor(() => {
+      expect(capturedChangesDiffViewerProps?.showCommittedChanges).toBe(true);
       expect(
-        screen.getByRole("button", { name: /committed/i }),
-      ).toBeInTheDocument();
+        typeof capturedChangesDiffViewerProps?.onShowCommittedChangesChange,
+      ).toBe("function");
     });
   });
 
-  it("should not render button in Code tab", async () => {
+  it("should not render ChangesDiffViewer toggle surface in Code tab", async () => {
     render(
       <ShowWorkspace
         workspace={workspaceWithTarget}
@@ -161,18 +173,14 @@ describe("Committed Changes Toggle", () => {
       />,
     );
 
-    // Wait for component to render
     await waitFor(() => {
       expect(screen.getByText("Code")).toBeInTheDocument();
     });
 
-    // Button should not be visible in Code tab
-    expect(
-      screen.queryByRole("button", { name: /committed/i }),
-    ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("changes-viewer")).not.toBeInTheDocument();
   });
 
-  it("should toggle state when button is clicked", async () => {
+  it("should toggle showCommittedChanges via onShowCommittedChangesChange", async () => {
     const user = userEvent.setup();
 
     render(
@@ -185,71 +193,23 @@ describe("Committed Changes Toggle", () => {
       />,
     );
 
-    // Switch to Review tab
     const reviewTab = await screen.findByText("Review");
     await user.click(reviewTab);
 
-    // Find the button
-    const committedButton = await screen.findByRole("button", {
-      name: /committed/i,
-    });
-
-    // Initial state should be true (defaults to showing committed changes)
     await waitFor(() => {
       expect(capturedChangesDiffViewerProps?.showCommittedChanges).toBe(true);
     });
 
-    // Click to toggle off
-    await user.click(committedButton);
+    await user.click(screen.getByRole("button", { name: /^Show$/ }));
 
-    // Should now pass false
     await waitFor(() => {
       expect(capturedChangesDiffViewerProps?.showCommittedChanges).toBe(false);
     });
 
-    // Click to toggle back on
-    await user.click(committedButton);
+    await user.click(screen.getByRole("button", { name: /^Show$/ }));
 
-    // Should be true again
     await waitFor(() => {
       expect(capturedChangesDiffViewerProps?.showCommittedChanges).toBe(true);
-    });
-  });
-
-  it("should pass showCommittedChanges prop to ChangesDiffViewer", async () => {
-    const user = userEvent.setup();
-
-    render(
-      <ShowWorkspace
-        workspace={workspaceWithTarget}
-        repositoryPath="/Users/test/repo"
-        sessionId={1}
-        onWorkspaceChange={vi.fn()}
-        onRequestClose={vi.fn()}
-      />,
-    );
-
-    // Switch to Review tab
-    const reviewTab = await screen.findByText("Review");
-    await user.click(reviewTab);
-
-    // Wait for ChangesDiffViewer to be rendered
-    await waitFor(() => {
-      expect(screen.getByTestId("changes-viewer")).toBeInTheDocument();
-    });
-
-    // Initial state - should pass true (defaults to showing committed changes)
-    expect(capturedChangesDiffViewerProps?.showCommittedChanges).toBe(true);
-
-    // Toggle off
-    const committedButton = await screen.findByRole("button", {
-      name: /committed/i,
-    });
-    await user.click(committedButton);
-
-    // Should now pass false
-    await waitFor(() => {
-      expect(capturedChangesDiffViewerProps?.showCommittedChanges).toBe(false);
     });
   });
 
@@ -264,16 +224,13 @@ describe("Committed Changes Toggle", () => {
       />,
     );
 
-    // Switch to Review tab
     const reviewTab = await screen.findByText("Review");
     await userEvent.click(reviewTab);
 
-    // Wait for ChangesDiffViewer to be rendered
     await waitFor(() => {
       expect(screen.getByTestId("changes-viewer")).toBeInTheDocument();
     });
 
-    // Should pass target branch
     expect(capturedChangesDiffViewerProps?.targetBranch).toBe("main");
   });
 });

@@ -183,4 +183,65 @@ describe("CommittedChangesSection", () => {
       screen.queryByRole("button", { name: /move/i }),
     ).not.toBeInTheDocument();
   });
+
+  it("renders a right-aligned Show button with eye icon when toggle handlers are provided", () => {
+    render(
+      <CommittedChangesSection
+        files={mockFiles}
+        isCollapsed={false}
+        onToggleCollapse={vi.fn()}
+        activeFilePath={null}
+        onFileSelect={vi.fn()}
+        showCommittedChanges={true}
+        onToggleShowCommitted={vi.fn()}
+      />,
+    );
+
+    const showButton = screen.getByRole("button", { name: /^Show$/ });
+    expect(showButton).toBeInTheDocument();
+    expect(
+      showButton.querySelector("svg.lucide-eye, svg.lucide-eye-off"),
+    ).toBeTruthy();
+  });
+
+  it("calls onToggleShowCommitted when Show is clicked without collapsing", async () => {
+    const user = userEvent.setup();
+    const onToggleShowCommitted = vi.fn();
+    const onToggleCollapse = vi.fn();
+
+    render(
+      <CommittedChangesSection
+        files={mockFiles}
+        isCollapsed={false}
+        onToggleCollapse={onToggleCollapse}
+        activeFilePath={null}
+        onFileSelect={vi.fn()}
+        showCommittedChanges={true}
+        onToggleShowCommitted={onToggleShowCommitted}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: /^Show$/ }));
+
+    expect(onToggleShowCommitted).toHaveBeenCalledTimes(1);
+    expect(onToggleCollapse).not.toHaveBeenCalled();
+  });
+
+  it("hides the file list when showCommittedChanges is false", () => {
+    render(
+      <CommittedChangesSection
+        files={mockFiles}
+        isCollapsed={false}
+        onToggleCollapse={vi.fn()}
+        activeFilePath={null}
+        onFileSelect={vi.fn()}
+        showCommittedChanges={false}
+        onToggleShowCommitted={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByText("Committed")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /^Show$/ })).toBeInTheDocument();
+    expect(screen.queryByText("file1.ts")).not.toBeInTheDocument();
+  });
 });

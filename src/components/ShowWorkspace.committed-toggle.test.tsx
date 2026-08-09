@@ -12,17 +12,24 @@ vi.mock("./LinearCommitHistory", () => ({
   LinearCommitHistory: () => <div data-testid="linear-commit-history" />,
 }));
 
+let capturedProps: {
+  showCommittedChanges?: boolean;
+  onShowCommittedChangesChange?: (show: boolean) => void;
+} | null = null;
+
 vi.mock("./ChangesDiffViewer", () => ({
-  ChangesDiffViewer: ({
-    showCommittedChanges,
-  }: {
+  ChangesDiffViewer: (props: {
     showCommittedChanges: boolean;
-  }) => (
-    <div
-      data-testid="changes-viewer"
-      data-show-committed={String(showCommittedChanges)}
-    />
-  ),
+    onShowCommittedChangesChange?: (show: boolean) => void;
+  }) => {
+    capturedProps = props;
+    return (
+      <div
+        data-testid="changes-viewer"
+        data-show-committed={String(props.showCommittedChanges)}
+      />
+    );
+  },
 }));
 
 vi.mock("./TargetBranchSelector", () => ({
@@ -144,12 +151,13 @@ function renderDefaultBranchWorkspace() {
   );
 }
 
-describe("Committed toggle on default branch", () => {
+describe("Committed Show toggle wiring", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    capturedProps = null;
   });
 
-  it("passes showCommittedChanges=false to ChangesDiffViewer for a default-branch workspace", async () => {
+  it("passes showCommittedChanges=false without a toggle callback for a default-branch workspace", async () => {
     const { listCommits } = await import("../lib/api");
     vi.mocked(listCommits).mockResolvedValue(
       makeLogResult([workingCopyCommit, realWorkspaceCommit]),
@@ -165,11 +173,11 @@ describe("Committed toggle on default branch", () => {
     await waitFor(() => {
       expect(viewer.dataset.showCommitted).toBe("false");
     });
+    expect(capturedProps?.onShowCommittedChangesChange).toBeUndefined();
   });
 
-  it("does not render the Committed toggle for a default-branch workspace", async () => {
+  it("does not render a Review-toolbar Committed toggle for a default-branch workspace", async () => {
     const { listCommits } = await import("../lib/api");
-    // Even with real commits present, the toggle must not appear on the default branch.
     vi.mocked(listCommits).mockResolvedValue(
       makeLogResult([workingCopyCommit, realWorkspaceCommit]),
     );
@@ -180,38 +188,16 @@ describe("Committed toggle on default branch", () => {
     const changesTab = await screen.findByRole("tab", { name: /review/i });
     await user.click(changesTab);
 
-    // Tab content has rendered (changes viewer present) but no Committed toggle.
     await screen.findByTestId("changes-viewer");
     expect(
-      screen.queryByRole("button", { name: /committed/i }),
+      screen.queryByRole("button", { name: /^Committed$/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /^Show$/ }),
     ).not.toBeInTheDocument();
   });
-});
 
-describe("Committed toggle disabled state", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
-  it("disables the Committed toggle when workspace has no own commits", async () => {
-    const { listCommits } = await import("../lib/api");
-    vi.mocked(listCommits).mockResolvedValue(
-      makeLogResult([workingCopyCommit]),
-    );
-
-    renderWorkspace();
-
-    const user = userEvent.setup();
-    const changesTab = await screen.findByRole("tab", { name: /review/i });
-    await user.click(changesTab);
-
-    const committedBtn = await screen.findByRole("button", {
-      name: /committed/i,
-    });
-    await waitFor(() => expect(committedBtn).toBeDisabled());
-  });
-
-  it("enables the Committed toggle when workspace has real commits", async () => {
+  it("passes showCommittedChanges and a toggle callback for a feature-branch workspace", async () => {
     const { listCommits } = await import("../lib/api");
     vi.mocked(listCommits).mockResolvedValue(
       makeLogResult([workingCopyCommit, realWorkspaceCommit]),
@@ -223,9 +209,12 @@ describe("Committed toggle disabled state", () => {
     const changesTab = await screen.findByRole("tab", { name: /review/i });
     await user.click(changesTab);
 
-    const committedBtn = await screen.findByRole("button", {
-      name: /committed/i,
+    await screen.findByTestId("changes-viewer");
+    await waitFor(() => {
+      expect(capturedProps?.showCommittedChanges).toBe(true);
+      expect(typeof capturedProps?.onShowCommittedChangesChange).toBe(
+        "function",
+      );
     });
-    await waitFor(() => expect(committedBtn).toBeEnabled());
   });
 });

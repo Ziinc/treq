@@ -34,6 +34,7 @@ export interface ChangesDiffViewerProps {
   ) => Promise<void>;
   conflictedFiles?: string[];
   showCommittedChanges?: boolean;
+  onShowCommittedChangesChange?: (show: boolean) => void;
   onMoveFilesToNewWorkspace?: (files: string[]) => void;
   workspace?: Workspace | null;
   baseBranch?: string;

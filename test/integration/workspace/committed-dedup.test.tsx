@@ -51,15 +51,8 @@ async function setupOverlappingWorkspace(branchName: string) {
 describe("ShowWorkspace - committed diff dedupe integration", () => {
   let user: ReturnType<typeof userEvent.setup>;
 
-  function getCommittedToggleButton() {
-    const committedButtons = screen.getAllByRole("button", {
-      name: /^Committed$/,
-    });
-    const [committedButton] = committedButtons;
-    if (!committedButton) {
-      throw new Error("Committed toggle button not found");
-    }
-    return committedButton;
+  function getCommittedShowButton() {
+    return screen.getByRole("button", { name: /^Show$/ });
   }
 
   beforeEach(() => {
@@ -89,8 +82,7 @@ describe("ShowWorkspace - committed diff dedupe integration", () => {
     expect(await screen.findByText("shared v3")).toBeInTheDocument();
     expect(await screen.findByText("working only")).toBeInTheDocument();
 
-    const committedButton = getCommittedToggleButton();
-    await user.click(committedButton);
+    await user.click(getCommittedShowButton());
     await waitFor(() => {
       expect(screen.queryByTitle("committed-only.txt")).not.toBeInTheDocument();
       expect(screen.queryByText("committed only")).not.toBeInTheDocument();
@@ -101,7 +93,7 @@ describe("ShowWorkspace - committed diff dedupe integration", () => {
     expect(await screen.findByText("shared v3")).toBeInTheDocument();
     expect(await screen.findByText("working only")).toBeInTheDocument();
 
-    await user.click(getCommittedToggleButton());
+    await user.click(getCommittedShowButton());
     await waitFor(() => {
       expect(screen.getAllByText("shared.txt").length).toBeGreaterThanOrEqual(
         2,
