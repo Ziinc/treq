@@ -47,36 +47,39 @@ export function TerminalSendPreviews({
 					)}
 				>
 					{assets.map((asset) => (
-						<button
+						<div
 							key={asset.id}
-							type="button"
-							data-testid={`terminal-send-preview-${asset.id}`}
-							aria-label={`Preview ${asset.title}`}
-							title={asset.title}
-							className="group relative h-14 w-14 flex-shrink-0 overflow-hidden rounded-md border border-border bg-muted/40 transition hover:border-foreground/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-							onClick={() => setPreviewAsset(asset)}
+							className="group relative h-14 w-14 flex-shrink-0"
 						>
-							{asset.mediaType === "image" ? (
-								<img
-									src={treqSendFileSrc(asset.path)}
-									alt={asset.title}
-									className="h-full w-full object-cover"
-									draggable={false}
-								/>
-							) : (
-								<div className="flex h-full w-full flex-col items-center justify-center gap-1 px-1 text-muted-foreground">
-									<FileText className="h-4 w-4" />
-									<span className="w-full truncate text-[10px] leading-tight">
-										{asset.title}
-									</span>
-								</div>
-							)}
+							<button
+								type="button"
+								data-testid={`terminal-send-preview-${asset.id}`}
+								aria-label={`Preview ${asset.title}`}
+								title={asset.title}
+								className="h-14 w-14 overflow-hidden rounded-md border border-border bg-muted/40 transition hover:border-foreground/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+								onClick={() => setPreviewAsset(asset)}
+							>
+								{asset.mediaType === "image" ? (
+									<img
+										src={treqSendFileSrc(asset.path)}
+										alt={asset.title}
+										className="h-full w-full object-cover"
+										draggable={false}
+									/>
+								) : (
+									<div className="flex h-full w-full flex-col items-center justify-center gap-1 px-1 text-muted-foreground">
+										<FileText className="h-4 w-4" />
+										<span className="w-full truncate text-[10px] leading-tight">
+											{asset.title}
+										</span>
+									</div>
+								)}
+							</button>
 							<button
 								type="button"
 								aria-label={`Dismiss ${asset.title}`}
 								className="absolute right-0.5 top-0.5 hidden rounded-sm bg-background/90 p-0.5 text-muted-foreground group-hover:block"
-								onClick={(event) => {
-									event.stopPropagation();
+								onClick={() => {
 									send.dismissAsset(asset.id);
 									if (previewAsset?.id === asset.id) {
 										setPreviewAsset(null);
@@ -85,7 +88,7 @@ export function TerminalSendPreviews({
 							>
 								<X className="h-3 w-3" />
 							</button>
-						</button>
+						</div>
 					))}
 				</div>
 			)}
