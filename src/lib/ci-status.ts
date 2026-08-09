@@ -41,6 +41,20 @@ export const CI_STATE_STYLES: Record<CiState, CiStateStyle> = {
 	},
 };
 
+export function formatCheckDuration(secs: number): string {
+	const total = Math.max(0, Math.floor(secs));
+	const hours = Math.floor(total / 3600);
+	const minutes = Math.floor((total % 3600) / 60);
+	const seconds = total % 60;
+	if (hours > 0) {
+		return `${hours}h ${minutes}m ${seconds}s`;
+	}
+	if (minutes > 0) {
+		return `${minutes}m ${seconds}s`;
+	}
+	return `${seconds}s`;
+}
+
 /** Looks up the style for a `PrCiStatus.state` string, defaulting to pending for unknown values. */
 export function ciStatusStyle(state: string): CiStateStyle {
 	return CI_STATE_STYLES[state as CiState] ?? CI_STATE_STYLES.pending;
@@ -51,4 +65,22 @@ export function ciStateForBucket(bucket: string): CiState {
 	if (bucket === "pass" || bucket === "skipping") return "success";
 	if (bucket === "fail" || bucket === "cancel") return "failure";
 	return "pending";
+}
+
+/** Sort key for check lists: failure, then pending, then success. */
+const CI_STATE_SEVERITY: Record<CiState, number> = {
+	failure: 0,
+	pending: 1,
+	success: 2,
+};
+
+/** Comparator for check rows — failed first, then pending, then passed/skipped. */
+export function compareCiChecksBySeverity(
+	a: { bucket: string },
+	b: { bucket: string },
+): number {
+	return (
+		CI_STATE_SEVERITY[ciStateForBucket(a.bucket)] -
+		CI_STATE_SEVERITY[ciStateForBucket(b.bucket)]
+	);
 }

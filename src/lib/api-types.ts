@@ -453,6 +453,8 @@ export interface PrCheckEntry {
 	/** "pass" | "fail" | "pending" | "skipping" | "cancel" */
 	bucket: string;
 	link: string;
+	/** Elapsed seconds for the check run, when timestamps are available. */
+	duration_secs?: number | null;
 }
 
 export interface PrCiStatus {

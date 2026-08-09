@@ -1,6 +1,10 @@
 import { usePrCiStatus } from "../hooks/useMergeQueueStatus";
 import type { PrCiStatus } from "../lib/api-types";
-import { ciStateForBucket, ciStatusStyle } from "../lib/ci-status";
+import {
+	ciStateForBucket,
+	ciStatusStyle,
+	compareCiChecksBySeverity,
+} from "../lib/ci-status";
 import { cn } from "../lib/utils";
 import { Button } from "./ui/button";
 import { CheckEntryRow } from "./github-panel/shared";
@@ -24,11 +28,7 @@ export function CiStatusButton({ ciStatus }: { ciStatus: PrCiStatus }) {
 	const failingChecks = ciStatus.checks.filter(
 		(check) => ciStateForBucket(check.bucket) === "failure",
 	);
-	const checks = [...ciStatus.checks].sort((a, b) => {
-		const aFailed = ciStateForBucket(a.bucket) === "failure";
-		const bFailed = ciStateForBucket(b.bucket) === "failure";
-		return Number(bFailed) - Number(aFailed);
-	});
+	const checks = [...ciStatus.checks].sort(compareCiChecksBySeverity);
 
 	return (
 		<Popover>

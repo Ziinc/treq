@@ -659,6 +659,7 @@ mod tests {
                     _ => "pending".into(),
                 },
                 link: "https://x/1".into(),
+                duration_secs: None,
             }],
         }
     }

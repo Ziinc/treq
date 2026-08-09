@@ -52,9 +52,24 @@ it("captures the Checks section with a mix of CI job statuses", async () => {
 		failed: 1,
 		pending: 1,
 		checks: [
-			{ name: "build", bucket: "pass", link: "https://github.com/acme/treq/actions/runs/1" },
-			{ name: "test", bucket: "fail", link: "https://github.com/acme/treq/actions/runs/2" },
-			{ name: "lint", bucket: "pending", link: "https://github.com/acme/treq/actions/runs/3" },
+			{
+				name: "build",
+				bucket: "pass",
+				link: "https://github.com/acme/treq/actions/runs/1",
+				duration_secs: 12,
+			},
+			{
+				name: "test",
+				bucket: "fail",
+				link: "https://github.com/acme/treq/actions/runs/2",
+				duration_secs: 5 * 60 + 56,
+			},
+			{
+				name: "lint",
+				bucket: "pending",
+				link: "https://github.com/acme/treq/actions/runs/3",
+				duration_secs: 45,
+			},
 		],
 	} satisfies PrCiStatus);
 
@@ -63,9 +78,17 @@ it("captures the Checks section with a mix of CI job statuses", async () => {
 	);
 
 	expect(await screen.findByText(/checks \(1\/3\)/i)).toBeVisible();
-	expect(screen.getByText("build")).toBeVisible();
-	expect(screen.getByText("test")).toBeVisible();
-	expect(screen.getByText("lint")).toBeVisible();
+	const checkRows = screen.getAllByRole("button", {
+		name: /^(test|lint|build)/i,
+	});
+	expect(checkRows.map((button) => button.textContent)).toEqual([
+		"test5m 56s",
+		"lint45s",
+		"build12s",
+	]);
+	expect(screen.queryByText("Failed")).not.toBeInTheDocument();
+	expect(screen.queryByText("Success")).not.toBeInTheDocument();
+	expect(screen.queryByText("Pending")).not.toBeInTheDocument();
 	// The compact "CI failed" pill (shared with the workspace header) shows
 	// next to the state chip in addition to the full per-job list below.
 	expect(
@@ -76,8 +99,8 @@ it("captures the Checks section with a mix of CI job statuses", async () => {
 		name: "pr-detail-checks-01-mixed-statuses",
 		expectations: [
 			'A red-bordered "1/3" pill (matching the workspace header\'s CI status indicator) appears next to the Open state chip, and a "Checks (1/3)" section header appears below it, above the PR description.',
-			'Three check rows are listed: "build" with a green success icon/label, "test" with a red failure icon/label, and "lint" with a yellow/amber spinning icon and "Pending" label.',
-			"Each row's icon and text color matches the same green/red/yellow scheme as the header pill -- the same visual language, not a separate one.",
+			'Check rows are ordered failed → pending → success: "test" (5m 56s), "lint" (45s), "build" (12s), with colored status icons and no Success/Failed/Pending text.',
+			"Each row's icon color matches the same green/red/yellow scheme as the header pill -- the same visual language, not a separate one.",
 		],
 	});
 }, 60000);

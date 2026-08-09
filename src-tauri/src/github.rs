@@ -567,12 +567,36 @@ pub fn gh_create_pr_impl(
     Err(format!("Could not parse PR number from output: {text}"))
 }
 
+const CHECK_JSON_FIELDS: &str = "name,bucket,link,startedAt,completedAt";
+
+/// Compute elapsed seconds for a check run from `gh pr checks` timestamps.
+/// Pending runs (no completedAt) measure against `now`. Inverted timestamps
+/// (seen on some skipped checks) clamp to zero.
+fn check_duration_secs(
+    started_at: Option<&str>,
+    completed_at: Option<&str>,
+    now: chrono::DateTime<chrono::Utc>,
+) -> Option<u64> {
+    let started = chrono::DateTime::parse_from_rfc3339(started_at?)
+        .ok()?
+        .with_timezone(&chrono::Utc);
+    let end = match completed_at {
+        Some(raw) => chrono::DateTime::parse_from_rfc3339(raw)
+            .ok()?
+            .with_timezone(&chrono::Utc),
+        None => now,
+    };
+    Some(end.signed_duration_since(started).num_seconds().max(0) as u64)
+}
+
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
 pub struct PrCheckEntry {
     pub name: String,
     /// "pass" | "fail" | "pending" | "skipping" | "cancel"
     pub bucket: String,
     pub link: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duration_secs: Option<u64>,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq, Eq)]
@@ -591,17 +615,22 @@ struct GhCheck {
     name: String,
     bucket: String,
     link: String,
+    #[serde(default, rename = "startedAt")]
+    started_at: Option<String>,
+    #[serde(default, rename = "completedAt")]
+    completed_at: Option<String>,
 }
 
-/// Rolls a `gh pr checks --json name,bucket,link` result up into an overall
-/// CI status. Shared by every entry point that surfaces PR CI status (the
-/// workspace header's live indicator and the GitHub panel's PR detail view),
-/// so they always agree on pass/fail/pending grouping.
+/// Rolls a `gh pr checks --json name,bucket,link,startedAt,completedAt` result
+/// up into an overall CI status. Shared by every entry point that surfaces PR
+/// CI status (the workspace header's live indicator and the GitHub panel's PR
+/// detail view), so they always agree on pass/fail/pending grouping.
 fn rollup_pr_checks(raw: Vec<GhCheck>) -> Option<PrCiStatus> {
     if raw.is_empty() {
         return None;
     }
 
+    let now = chrono::Utc::now();
     let mut passed = 0u32;
     let mut failed = 0u32;
     let mut pending = 0u32;
@@ -613,10 +642,13 @@ fn rollup_pr_checks(raw: Vec<GhCheck>) -> Option<PrCiStatus> {
                 "fail" | "cancel" => failed += 1,
                 _ => pending += 1,
             }
+            let duration_secs =
+                check_duration_secs(c.started_at.as_deref(), c.completed_at.as_deref(), now);
             PrCheckEntry {
                 name: c.name,
                 bucket: c.bucket,
                 link: c.link,
+                duration_secs,
             }
         })
         .collect();
@@ -651,7 +683,7 @@ pub fn get_pr_checks_via_gh_impl(
     extended_path: &str,
 ) -> Result<Option<PrCiStatus>, String> {
     let mut cmd = std::process::Command::new(gh_path);
-    cmd.args(["pr", "checks", branch_name, "--json", "name,bucket,link"])
+    cmd.args(["pr", "checks", branch_name, "--json", CHECK_JSON_FIELDS])
         .current_dir(repo_path)
         .env("PATH", extended_path);
     let output = spawn_with_etxtbsy_retry(cmd)?;
@@ -693,7 +725,7 @@ pub fn get_pr_checks_for_pr_impl(
             "--repo",
             repo_full_name,
             "--json",
-            "name,bucket,link",
+            CHECK_JSON_FIELDS,
         ],
         extended_path,
     )?;
@@ -1362,6 +1394,62 @@ echo ok"#,
         gh_set_pr_draft_impl(&gh_path, "owner/repo", 9, true, "/usr/bin:/bin").unwrap();
     }
 
+    // ── check duration ───────────────────────────────────────────────────────
+
+    #[test]
+    fn check_duration_secs_from_completed_run() {
+        let secs = check_duration_secs(
+            Some("2026-08-08T22:00:00Z"),
+            Some("2026-08-08T22:05:56Z"),
+            chrono::DateTime::parse_from_rfc3339("2026-08-08T23:00:00Z")
+                .unwrap()
+                .with_timezone(&chrono::Utc),
+        );
+        assert_eq!(secs, Some(5 * 60 + 56));
+    }
+
+    #[test]
+    fn check_duration_secs_uses_now_when_still_running() {
+        let now = chrono::DateTime::parse_from_rfc3339("2026-08-08T22:01:30Z")
+            .unwrap()
+            .with_timezone(&chrono::Utc);
+        let secs = check_duration_secs(Some("2026-08-08T22:00:00Z"), None, now);
+        assert_eq!(secs, Some(90));
+    }
+
+    #[test]
+    fn check_duration_secs_clamps_inverted_timestamps() {
+        // Skipped checks sometimes report startedAt after completedAt.
+        let secs = check_duration_secs(
+            Some("2026-08-08T22:02:45Z"),
+            Some("2026-08-08T22:02:35Z"),
+            chrono::Utc::now(),
+        );
+        assert_eq!(secs, Some(0));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn get_pr_checks_includes_duration_from_timestamps() {
+        let bin_dir = TempDir::new().unwrap();
+        let repo_dir = TempDir::new().unwrap();
+        let gh_path = write_fake_gh(
+            &bin_dir,
+            r#"echo '[{"name":"build","bucket":"pass","link":"https://x/1","startedAt":"2026-08-08T22:00:00Z","completedAt":"2026-08-08T22:05:56Z"}]'"#,
+        );
+
+        let status = get_pr_checks_via_gh_impl(
+            &gh_path,
+            repo_dir.path().to_str().unwrap(),
+            "feat",
+            "/usr/bin:/bin",
+        )
+        .unwrap()
+        .unwrap();
+
+        assert_eq!(status.checks[0].duration_secs, Some(5 * 60 + 56));
+    }
+
     // ── get_pr_checks_via_gh_impl ────────────────────────────────────────────
 
     #[test]
@@ -1506,7 +1594,7 @@ echo ok"#,
         let expected_dir = expected_dir.display();
         let script = format!(
             r#"test "$PWD" = "{expected_dir}" || exit 8
-test "$*" = "pr checks feat --json name,bucket,link" || exit 9
+test "$*" = "pr checks feat --json name,bucket,link,startedAt,completedAt" || exit 9
 echo '[{{"name":"build","bucket":"pass","link":"https://x/1"}}]'"#,
         );
         let gh_path = write_fake_gh(&bin_dir, &script);
@@ -1548,7 +1636,7 @@ echo '[{{"name":"build","bucket":"pass","link":"https://x/1"}}]'"#,
         let bin_dir = TempDir::new().unwrap();
         let gh_path = write_fake_gh(
             &bin_dir,
-            r#"test "$*" = "pr checks 42 --repo owner/repo --json name,bucket,link" || exit 9
+            r#"test "$*" = "pr checks 42 --repo owner/repo --json name,bucket,link,startedAt,completedAt" || exit 9
 echo '[{"name":"build","bucket":"pass","link":"https://x/1"}]'"#,
         );
 

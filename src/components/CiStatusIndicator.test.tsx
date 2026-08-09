@@ -18,8 +18,13 @@ const baseStatus: PrCiStatus = {
 	failed: 0,
 	pending: 0,
 	checks: [
-		{ name: "build", bucket: "pass", link: "https://x/1" },
-		{ name: "lint", bucket: "pass", link: "https://x/2" },
+		{
+			name: "build",
+			bucket: "pass",
+			link: "https://x/1",
+			duration_secs: 5 * 60 + 56,
+		},
+		{ name: "lint", bucket: "pass", link: "https://x/2", duration_secs: 12 },
 	],
 };
 
@@ -68,16 +73,34 @@ describe("CiStatusIndicator", () => {
 		).toBeInTheDocument();
 	});
 
-	it("lists failed checks first and opens the selected check URL", async () => {
+	it("lists checks as failed, then pending, then success", async () => {
 		const user = userEvent.setup();
 		vi.spyOn(api, "getCachedPrCiStatus").mockResolvedValue({
 			...baseStatus,
 			state: "failure",
 			passed: 1,
 			failed: 1,
+			pending: 1,
+			total: 3,
 			checks: [
-				{ name: "build", bucket: "pass", link: "https://x/build" },
-				{ name: "test", bucket: "fail", link: "https://x/test" },
+				{
+					name: "build",
+					bucket: "pass",
+					link: "https://x/build",
+					duration_secs: 12,
+				},
+				{
+					name: "lint",
+					bucket: "pending",
+					link: "https://x/lint",
+					duration_secs: 45,
+				},
+				{
+					name: "test",
+					bucket: "fail",
+					link: "https://x/test",
+					duration_secs: 5 * 60 + 56,
+				},
 			],
 		});
 		vi.spyOn(api, "startPrStatusPolling").mockResolvedValue(undefined);
@@ -85,16 +108,19 @@ describe("CiStatusIndicator", () => {
 
 		render(<CiStatusIndicator repoPath="/repo" branchName="feat" />);
 		await user.click(
-			await screen.findByRole("button", { name: /CI failed: 1\/2/ }),
+			await screen.findByRole("button", { name: /CI failed: 1\/3/ }),
 		);
 
 		const checkButtons = screen.getAllByRole("button", {
-			name: /^(test|build)/i,
+			name: /^(test|lint|build)/i,
 		});
 		expect(checkButtons.map((button) => button.textContent)).toEqual([
-			"testFailed",
-			"buildSuccess",
+			"test5m 56s",
+			"lint45s",
+			"build12s",
 		]);
+		expect(screen.queryByText("Failed")).not.toBeInTheDocument();
+		expect(screen.queryByText("Success")).not.toBeInTheDocument();
 
 		await user.click(screen.getByRole("button", { name: /^test/i }));
 		expect(openUrl).toHaveBeenCalledWith("https://x/test");

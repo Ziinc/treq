@@ -66,8 +66,18 @@ function ciStatus(overrides: Partial<PrCiStatus> = {}): PrCiStatus {
 		failed: 0,
 		pending: 0,
 		checks: [
-			{ name: "build", bucket: "pass", link: "https://github.com/x/1" },
-			{ name: "lint", bucket: "pass", link: "https://github.com/x/2" },
+			{
+				name: "build",
+				bucket: "pass",
+				link: "https://github.com/x/1",
+				duration_secs: 5 * 60 + 56,
+			},
+			{
+				name: "lint",
+				bucket: "pass",
+				link: "https://github.com/x/2",
+				duration_secs: 12,
+			},
 		],
 		...overrides,
 	};
@@ -163,8 +173,18 @@ it("captures CI failing next to the View PR button", async () => {
 			passed: 1,
 			failed: 1,
 			checks: [
-				{ name: "build", bucket: "pass", link: "https://github.com/x/1" },
-				{ name: "test", bucket: "fail", link: "https://github.com/x/2" },
+				{
+					name: "build",
+					bucket: "pass",
+					link: "https://github.com/x/1",
+					duration_secs: 12,
+				},
+				{
+					name: "test",
+					bucket: "fail",
+					link: "https://github.com/x/2",
+					duration_secs: 5 * 60 + 56,
+				},
 			],
 		}),
 	);
@@ -191,8 +211,18 @@ it("captures CI still running (pending) next to the View PR button", async () =>
 			passed: 1,
 			pending: 1,
 			checks: [
-				{ name: "build", bucket: "pass", link: "https://github.com/x/1" },
-				{ name: "test", bucket: "pending", link: "https://github.com/x/2" },
+				{
+					name: "build",
+					bucket: "pass",
+					link: "https://github.com/x/1",
+					duration_secs: 12,
+				},
+				{
+					name: "test",
+					bucket: "pending",
+					link: "https://github.com/x/2",
+					duration_secs: 45,
+				},
 			],
 		}),
 	);
@@ -206,6 +236,65 @@ it("captures CI still running (pending) next to the View PR button", async () =>
 		expectations: [
 			'A small yellow outlined pill button reading "1/2" with a loader icon sits immediately to the left of the "View PR" button.',
 			"The pending indicator is visually distinct in color (yellow) from both the green success and red failure states.",
+		],
+	});
+}, 120000);
+
+it("captures the CI checks dropdown with time-taken instead of job status text", async () => {
+	const user = userEvent.setup();
+	stubPr();
+	mockGetCachedPrCiStatus.mockResolvedValue(
+		ciStatus({
+			state: "failure",
+			passed: 1,
+			failed: 1,
+			pending: 1,
+			total: 3,
+			checks: [
+				{
+					name: "build",
+					bucket: "pass",
+					link: "https://github.com/x/1",
+					duration_secs: 12,
+				},
+				{
+					name: "lint",
+					bucket: "pending",
+					link: "https://github.com/x/3",
+					duration_secs: 45,
+				},
+				{
+					name: "test",
+					bucket: "fail",
+					link: "https://github.com/x/2",
+					duration_secs: 5 * 60 + 56,
+				},
+			],
+		}),
+	);
+
+	await setupPushedWorkspace(user);
+
+	await user.click(
+		await screen.findByRole("button", { name: /ci failed: 1\/3/i }),
+	);
+	const checkButtons = screen.getAllByRole("button", {
+		name: /^(test|lint|build)/i,
+	});
+	expect(checkButtons.map((button) => button.textContent)).toEqual([
+		"test5m 56s",
+		"lint45s",
+		"build12s",
+	]);
+	expect(screen.queryByText("Failed")).not.toBeInTheDocument();
+	expect(screen.queryByText("Success")).not.toBeInTheDocument();
+
+	await captureDocument(document, {
+		name: "ci-status-indicator-04-dropdown-duration",
+		expectations: [
+			'An open Checks popover lists rows as failed → pending → success: "test" (5m 56s), then "lint" (45s), then "build" (12s).',
+			"Each row still shows a colored status icon (red, yellow, green) so status is conveyed by icon, not label text.",
+			'The popover header reads "Checks" and sits near the workspace header CI pill that triggered it.',
 		],
 	});
 }, 120000);
