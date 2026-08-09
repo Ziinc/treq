@@ -1,7 +1,26 @@
 use crate::core;
 use crate::github::PrCiStatus;
 use crate::local_db::Workspace;
+use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
+
+fn sidebar_activity_key(status: &core::WorkspaceSidebarStatus) -> &str {
+    status
+        .last_activity_at
+        .as_deref()
+        .filter(|value| !value.is_empty())
+        .unwrap_or(status.current.created_at.as_str())
+}
+
+fn compare_sidebar_recency(
+    left: &core::WorkspaceSidebarStatus,
+    right: &core::WorkspaceSidebarStatus,
+) -> Ordering {
+    match sidebar_activity_key(right).cmp(sidebar_activity_key(left)) {
+        Ordering::Equal => left.current.branch_name.cmp(&right.current.branch_name),
+        other => other,
+    }
+}
 
 pub(crate) fn format_workspace_metadata_lines(workspace: &Workspace, indent: &str) -> Vec<String> {
     let mut lines = vec![format!("{indent}Title: {}", workspace.title)];
@@ -34,9 +53,9 @@ pub(crate) fn format_workspace_stack_lines(
     if roots.is_empty() {
         roots.extend(statuses);
     }
-    roots.sort_by(|left, right| left.current.branch_name.cmp(&right.current.branch_name));
+    roots.sort_by(|left, right| compare_sidebar_recency(left, right));
     for siblings in children.values_mut() {
-        siblings.sort_by(|left, right| left.current.branch_name.cmp(&right.current.branch_name));
+        siblings.sort_by(|left, right| compare_sidebar_recency(left, right));
     }
 
     fn append_node(
@@ -164,6 +183,7 @@ mod tests {
         core::WorkspaceSidebarStatus {
             current,
             has_conflicts: false,
+            last_activity_at: None,
         }
     }
 
@@ -297,6 +317,7 @@ pub(crate) fn print_workspace_status_detail(
             .map(|node| core::WorkspaceSidebarStatus {
                 current: node.status.current.clone(),
                 has_conflicts: node.status.has_conflicts,
+                last_activity_at: Some(node.status.current.created_at.clone()),
             })
             .collect();
         for line in format_workspace_stack_lines(&stack_statuses) {

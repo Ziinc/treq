@@ -29,7 +29,7 @@ export interface FlattenedWorkspaceNode {
  * 2. For each workspace, find parent by matching its target_branch to another workspace's branch_name
  * 3. Build parent-child relationships
  * 4. Roots = workspaces whose target_branch has no matching workspace (or is null)
- * 5. Sort alphabetically at each level
+ * 5. Sort siblings by recency (newest activity first) at each level
  *
  * @param workspaces Flat list of workspaces
  * @returns Array of root nodes forming a forest
@@ -97,7 +97,7 @@ export function buildWorkspaceTree(
 	for (const root of roots) {
 		computeDepths(root, 0);
 	}
-	sortTreeAlphabetically(roots);
+	sortTreeByRecency(roots);
 
 	return roots;
 }
@@ -113,14 +113,29 @@ function computeDepths(node: WorkspaceTreeNode, depth: number): void {
 }
 
 /**
- * Sort tree nodes alphabetically at each level
+ * Activity timestamp used for sibling ordering. Prefer last_activity_at
+ * (commit / WC tip) and fall back to created_at.
  */
-function sortTreeAlphabetically(nodes: WorkspaceTreeNode[]): void {
-	nodes.sort((nodeA, nodeB) =>
-		nodeA.branchName.localeCompare(nodeB.branchName),
-	);
+function activityTimestamp(node: WorkspaceTreeNode): string {
+	return node.status.last_activity_at || node.status.current.created_at || "";
+}
+
+/**
+ * Sort tree nodes by recency at each sibling level (newest first).
+ * Hierarchy is unchanged — only peer order within a parent (or among roots).
+ * Equal timestamps fall back to branch name for stability.
+ */
+function sortTreeByRecency(nodes: WorkspaceTreeNode[]): void {
+	nodes.sort((nodeA, nodeB) => {
+		const timeA = activityTimestamp(nodeA);
+		const timeB = activityTimestamp(nodeB);
+		if (timeA !== timeB) {
+			return timeB.localeCompare(timeA);
+		}
+		return nodeA.branchName.localeCompare(nodeB.branchName);
+	});
 	for (const node of nodes) {
-		sortTreeAlphabetically(node.children);
+		sortTreeByRecency(node.children);
 	}
 }
 
