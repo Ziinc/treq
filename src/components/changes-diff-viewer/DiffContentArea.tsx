@@ -439,6 +439,7 @@ export function DiffContentArea({
                       expandedLargeDiffs={expandedLargeDiffs}
                       diffFontSize={diffFontSize}
                       readOnly={true}
+                      isCommitted={true}
                       fileActionTarget={null}
                       selectedUnstagedFiles={new Set()}
                       actualConflictedFiles={actualConflictedFiles}

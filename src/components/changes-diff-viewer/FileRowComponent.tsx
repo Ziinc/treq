@@ -45,6 +45,7 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
     expandedLargeDiffs,
     diffFontSize,
     readOnly,
+    isCommitted = false,
     fileActionTarget,
     selectedUnstagedFiles,
     actualConflictedFiles,
@@ -122,6 +123,7 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
         key={filePath}
         id={fileId}
         data-file-path={filePath}
+        data-testid={`file-row-${filePath}`}
         className="border border-border rounded-lg overflow-hidden"
         style={{ fontSize: `${diffFontSize}px` }}
       >
@@ -134,6 +136,7 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
           additions={additions}
           deletions={deletions}
           readOnly={readOnly}
+          isCommitted={isCommitted}
           fileActionTarget={fileActionTarget}
           selectedUnstagedFiles={selectedUnstagedFiles}
           workspacePath={workspacePath}

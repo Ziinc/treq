@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "../../../test/test-utils";
+import { render, screen, waitFor, within } from "../../../test/test-utils";
 import userEvent from "@testing-library/user-event";
 import { ChangesDiffViewer } from "./ChangesDiffViewerMain";
 
@@ -104,6 +104,96 @@ describe("Review tab collapsible copy file path button", () => {
     expect(
       screen.queryByText("File path copied to clipboard"),
     ).not.toBeInTheDocument();
+  });
+
+  it("marks committed-only file collapsibles with a Committed label", async () => {
+    render(
+      <ChangesDiffViewer
+        workspacePath="/tmp/workspace"
+        repoPath="/tmp/repo"
+        workspaceId={1}
+        initialSelectedFile={null}
+        showCommittedChanges={true}
+      />,
+    );
+
+    const fileRow = await screen.findByTestId("file-row-src/example.ts");
+    expect(
+      within(fileRow).getByTestId("committed-file-label"),
+    ).toHaveTextContent("Committed");
+  });
+
+  it("does not mark uncommitted file collapsibles with a Committed label", async () => {
+    const api = await import("../../lib/api");
+    vi.mocked(api.getWorkspaceDiff).mockResolvedValue({
+      committed_files: [
+        {
+          path: "committed-only.ts",
+          status: "M",
+          changed_line_count: 1,
+          diff_deferred: false,
+        },
+      ],
+      hunks_by_file: [
+        {
+          path: "committed-only.ts",
+          hunks: [
+            {
+              id: "hunk-c",
+              header: "@@ -1,1 +1,1 @@",
+              lines: ["-old", "+new"],
+              patch: "...",
+            },
+          ],
+        },
+        {
+          path: "uncommitted-only.ts",
+          hunks: [
+            {
+              id: "hunk-u",
+              header: "@@ -1,1 +1,1 @@",
+              lines: ["-a", "+b"],
+              patch: "...",
+            },
+          ],
+        },
+      ],
+      uncommitted_files: [
+        {
+          path: "uncommitted-only.ts",
+          status: "M",
+          changed_line_count: 1,
+          diff_deferred: false,
+        },
+      ],
+      conflicted_files: [],
+      too_large_to_render: false,
+      render_block_reason: null,
+    });
+
+    render(
+      <ChangesDiffViewer
+        workspacePath="/tmp/workspace"
+        repoPath="/tmp/repo"
+        workspaceId={1}
+        initialSelectedFile={null}
+        showCommittedChanges={true}
+      />,
+    );
+
+    const uncommittedRow = await screen.findByTestId(
+      "file-row-uncommitted-only.ts",
+    );
+    expect(
+      within(uncommittedRow).queryByTestId("committed-file-label"),
+    ).not.toBeInTheDocument();
+
+    const committedRow = await screen.findByTestId(
+      "file-row-committed-only.ts",
+    );
+    expect(
+      within(committedRow).getByTestId("committed-file-label"),
+    ).toHaveTextContent("Committed");
   });
 });
 
