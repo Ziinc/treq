@@ -87,15 +87,39 @@ it("captures stash-all from Changes and the dual-pane stash modal", async () => 
     ],
   });
 
-  await user.click(await within(stashModal).findByTestId("stash-more-menu"));
-  await screen.findByTestId("stash-copy-patch");
-  await screen.findByTestId("stash-apply-submenu");
-  await screen.findByTestId("stash-delete");
+  await user.click(await within(stashModal).findByTestId("stash-apply-button"));
+  const applyPopover = await screen.findByTestId("stash-apply-popover");
+  expect(within(applyPopover).getByText("Home repo")).toBeTruthy();
+  expect(within(applyPopover).getByText(branchName)).toBeTruthy();
+  expect(within(applyPopover).getByText("New workspace...")).toBeTruthy();
 
   await captureDocument(document, {
-    name: "stash-04-more-menu",
+    name: "stash-04-apply-popover",
     expectations: [
-      "The stash more-menu dropdown is open showing Apply to workspace, Copy as git patch, and Delete stash.",
+      "The Apply... popover is open with a searchable list of workspaces (Home repo and feat/stash-demo) sorted for selection.",
+      "A 'New workspace...' option is visible at the bottom of the apply popover.",
+    ],
+  });
+
+  await user.click(
+    await within(applyPopover).findByTestId("stash-apply-new-workspace"),
+  );
+  await waitFor(() =>
+    expect(screen.queryByTestId("stash-modal")).not.toBeInTheDocument(),
+  );
+
+  // Create workspace dialog opens with the stash commit selected.
+  await screen.findByRole("heading", { name: /stack a new workspace/i });
+  await screen.findByTestId("stash-commit-selected");
+  expect(
+    screen.getByRole("button", { name: /create & apply stash/i }),
+  ).toBeTruthy();
+
+  await captureDocument(document, {
+    name: "stash-05-create-with-stash-selected",
+    expectations: [
+      "The Create Workspace dialog is open with the right-hand Commits panel showing the stashed commit selected and labeled as stash.",
+      "The primary submit button reads 'Create & apply stash'.",
     ],
   });
 }, 90000);

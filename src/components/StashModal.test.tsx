@@ -161,4 +161,35 @@ describe("StashModal", () => {
       expect(writeText).toHaveBeenCalled();
     });
   });
+
+  it("opens Apply popover with workspaces and applies on select", async () => {
+    const user = userEvent.setup();
+    renderModal();
+    await screen.findByTestId("stash-list");
+    await user.click(await screen.findByTestId("stash-apply-button"));
+    const popover = await screen.findByTestId("stash-apply-popover");
+    expect(within(popover).getByText("Home repo")).toBeTruthy();
+    expect(within(popover).getByText("feat/alpha")).toBeTruthy();
+    await user.click(
+      await within(popover).findByTestId("stash-apply-option-feat/alpha"),
+    );
+    await waitFor(() => {
+      expect(api.applyStash).toHaveBeenCalledWith("/repo", 1, "feat/alpha");
+    });
+  });
+
+  it("invokes onApplyToNewWorkspace from the Apply popover", async () => {
+    const user = userEvent.setup();
+    const onApplyToNewWorkspace = vi.fn();
+    renderModal({ onApplyToNewWorkspace });
+    await screen.findByTestId("stash-list");
+    await user.click(await screen.findByTestId("stash-apply-button"));
+    const popover = await screen.findByTestId("stash-apply-popover");
+    await user.click(
+      await within(popover).findByTestId("stash-apply-new-workspace"),
+    );
+    expect(onApplyToNewWorkspace).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 1, short_commit_id: "abcdef012345" }),
+    );
+  });
 });

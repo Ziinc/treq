@@ -27,6 +27,12 @@ export interface WorkspaceRightPanelProps {
   onClearHunks: () => void;
   getFileSelectionState: (filePath: string) => "all" | "some" | "none";
   hunkKey: (filePath: string, hunkId: string) => string;
+  /** Locked stash commit shown as selected for apply-to-new-workspace. */
+  lockedStashCommit?: {
+    hash: string;
+    message: string;
+    timestamp: string;
+  } | null;
 }
 
 const statusIcon = (status: string) => {
@@ -79,12 +85,19 @@ export const WorkspaceRightPanel: React.FC<WorkspaceRightPanelProps> = ({
   onClearHunks,
   getFileSelectionState,
   hunkKey,
+  lockedStashCommit = null,
 }) => {
   const commitsAhead = workspaceStatus?.commits_ahead_of_target ?? [];
+  const displayCommits = lockedStashCommit
+    ? [
+        lockedStashCommit,
+        ...commitsAhead.filter((c) => c.hash !== lockedStashCommit.hash),
+      ]
+    : commitsAhead;
 
   return (
     <div className="flex-1 border-l border-border pl-4 flex flex-col min-w-0">
-      {dataLoading ? (
+      {dataLoading && !lockedStashCommit ? (
         <div className="flex items-center justify-center h-full">
           <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
           <span className="ml-2 text-sm text-muted-foreground">Loading...</span>
@@ -97,9 +110,13 @@ export const WorkspaceRightPanel: React.FC<WorkspaceRightPanelProps> = ({
         >
           <TabsList className="text-xs self-start mb-2">
             <TabsTrigger value="commits" className="text-xs">
-              Commits ({commitsAhead.length})
+              Commits ({displayCommits.length})
             </TabsTrigger>
-            <TabsTrigger value="changes" className="text-xs">
+            <TabsTrigger
+              value="changes"
+              className="text-xs"
+              disabled={lockedStashCommit != null}
+            >
               Changes ({changedFiles.length})
             </TabsTrigger>
           </TabsList>
@@ -107,33 +124,50 @@ export const WorkspaceRightPanel: React.FC<WorkspaceRightPanelProps> = ({
           {/* Commits tab */}
           <TabsContent value="commits" className="flex-1 flex flex-col mt-0">
             <div className="flex-1 overflow-y-auto border rounded-md max-h-[280px]">
-              {commitsAhead.length === 0 ? (
+              {displayCommits.length === 0 ? (
                 <div className="p-4 text-sm text-muted-foreground text-center">
                   No mutable commits in this workspace
                 </div>
               ) : (
-                commitsAhead.map((commit) => (
-                  <label
-                    key={commit.hash}
-                    className="flex items-center gap-2 px-3 py-1.5 hover:bg-muted/50 cursor-pointer border-b last:border-b-0"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedCommits.has(commit.hash)}
-                      onChange={() => onToggleCommit(commit.hash)}
-                      className="rounded flex-shrink-0"
-                    />
-                    <span className="text-xs font-mono text-muted-foreground flex-shrink-0">
-                      {commit.hash.slice(0, 8)}
-                    </span>
-                    <span className="text-xs truncate flex-1">
-                      {commit.message || "(no description)"}
-                    </span>
-                  </label>
-                ))
+                displayCommits.map((commit) => {
+                  const isLocked =
+                    lockedStashCommit != null &&
+                    commit.hash === lockedStashCommit.hash;
+                  return (
+                    <label
+                      key={commit.hash}
+                      data-testid={
+                        isLocked ? "stash-commit-selected" : undefined
+                      }
+                      className={cn(
+                        "flex items-center gap-2 px-3 py-1.5 border-b last:border-b-0",
+                        isLocked
+                          ? "bg-accent/40 cursor-default"
+                          : "hover:bg-muted/50 cursor-pointer",
+                      )}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isLocked || selectedCommits.has(commit.hash)}
+                        disabled={isLocked}
+                        onChange={() => {
+                          if (!isLocked) onToggleCommit(commit.hash);
+                        }}
+                        className="rounded flex-shrink-0"
+                      />
+                      <span className="text-xs font-mono text-muted-foreground flex-shrink-0">
+                        {commit.hash.slice(0, 8)}
+                      </span>
+                      <span className="text-xs truncate flex-1">
+                        {commit.message || "(no description)"}
+                        {isLocked ? " (stash)" : ""}
+                      </span>
+                    </label>
+                  );
+                })
               )}
             </div>
-            {commitsAhead.length > 0 && (
+            {displayCommits.length > 0 && !lockedStashCommit && (
               <div className="flex gap-2 mt-1.5">
                 <button
                   type="button"
@@ -152,7 +186,9 @@ export const WorkspaceRightPanel: React.FC<WorkspaceRightPanelProps> = ({
               </div>
             )}
             <p className="text-xs text-muted-foreground mt-1.5">
-              Select commits to move to the new workspace
+              {lockedStashCommit
+                ? "Stashed changes will be copied onto the new workspace"
+                : "Select commits to move to the new workspace"}
             </p>
           </TabsContent>
 

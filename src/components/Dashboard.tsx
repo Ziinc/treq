@@ -1721,13 +1721,33 @@ export const Dashboard: React.FC<DashboardProps> = ({
         open={showStashModal}
         onOpenChange={setShowStashModal}
         repoPath={repoPath}
-        workspaces={workspaces}
+        workspaces={visibleWorkspaces}
         onApplied={() => {
           void queryClient.invalidateQueries({
             queryKey: ["workspace-changed-files"],
           });
           void queryClient.invalidateQueries({
             queryKey: ["workspace-diff"],
+          });
+        }}
+        onApplyToNewWorkspace={(entry) => {
+          setShowStashModal(false);
+          const source =
+            entry.workspace_id != null
+              ? (workspaces.find((w) => w.id === entry.workspace_id) ?? null)
+              : null;
+          setUnifiedDialogDefaults({
+            sourceWorkspace: source,
+            targetBranch: source?.branch_name,
+            applyStashId: entry.id,
+            applyStashCommit: {
+              hash: entry.short_commit_id,
+              message: `Stash from ${entry.workspace_label}`,
+              timestamp: entry.created_at,
+            },
+            preSelectedCommits: [entry.short_commit_id],
+            activeTab: "commits",
+            description: `Apply stash ${entry.short_commit_id} (${entry.files_changed.length} files, +${entry.additions}/-${entry.deletions})`,
           });
         }}
       />

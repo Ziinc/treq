@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Command } from "cmdk";
 import {
   Archive,
+  ChevronsUpDown,
   Copy,
   Loader2,
   MoreVertical,
+  Plus,
   Trash2,
   Upload,
 } from "lucide-react";
@@ -27,23 +30,35 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { useToast } from "./ui/toast";
 
 /** Target branch value that applies onto the home repo working copy. */
 export const HOME_STASH_APPLY_TARGET = ".";
 
+export interface StashApplyTarget {
+  branch: string;
+  label: string;
+}
+
 interface StashModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   repoPath: string;
+  /**
+   * Active workspaces for the apply picker. Prefer activity-sorted order
+   * (e.g. Dashboard `visibleWorkspaces`).
+   */
   workspaces: Workspace[];
   /** Called after a stash is applied so the caller can refresh diffs. */
   onApplied?: () => void;
+  /**
+   * Open the create-workspace dialog with this stash selected for apply/mv.
+   * Caller should close the stash modal.
+   */
+  onApplyToNewWorkspace?: (entry: StashEntry) => void;
 }
 
 function formatTimestamp(iso: string): string {
@@ -117,11 +132,14 @@ export const StashModal: React.FC<StashModalProps> = ({
   repoPath,
   workspaces,
   onApplied,
+  onApplyToNewWorkspace,
 }) => {
   const { addToast } = useToast();
   const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const [applyOpen, setApplyOpen] = useState(false);
+  const [applyQuery, setApplyQuery] = useState("");
   const wasOpenRef = useRef(false);
 
   const {
@@ -137,6 +155,7 @@ export const StashModal: React.FC<StashModalProps> = ({
   useEffect(() => {
     if (open && !wasOpenRef.current) {
       setSelectedId(null);
+      setApplyOpen(false);
     }
     wasOpenRef.current = open;
   }, [open]);
@@ -155,8 +174,9 @@ export const StashModal: React.FC<StashModalProps> = ({
     queryFn: () => getStashDiff(repoPath, selectedEntry!.id),
   });
 
-  const applyTargets = useMemo(() => {
-    const targets: { branch: string; label: string }[] = [
+  const applyTargets = useMemo((): StashApplyTarget[] => {
+    // Caller should pass activity-sorted workspaces; Home is always first.
+    const targets: StashApplyTarget[] = [
       { branch: HOME_STASH_APPLY_TARGET, label: "Home repo" },
     ];
     for (const ws of workspaces) {
@@ -167,6 +187,20 @@ export const StashModal: React.FC<StashModalProps> = ({
     }
     return targets;
   }, [workspaces]);
+
+  const filteredApplyTargets = useMemo(() => {
+    const q = applyQuery.trim().toLowerCase();
+    if (!q) return applyTargets;
+    return applyTargets.filter(
+      (t) =>
+        t.label.toLowerCase().includes(q) || t.branch.toLowerCase().includes(q),
+    );
+  }, [applyTargets, applyQuery]);
+
+  const handleApplyOpenChange = (next: boolean) => {
+    setApplyOpen(next);
+    if (!next) setApplyQuery("");
+  };
 
   const invalidate = async () => {
     await queryClient.invalidateQueries({ queryKey: ["stashes", repoPath] });
@@ -218,6 +252,7 @@ export const StashModal: React.FC<StashModalProps> = ({
 
   const handleApply = async (entry: StashEntry, targetBranch: string) => {
     setPendingAction(`apply-${entry.id}`);
+    setApplyOpen(false);
     try {
       await applyStash(repoPath, entry.id, targetBranch);
       const label =
@@ -238,6 +273,11 @@ export const StashModal: React.FC<StashModalProps> = ({
     } finally {
       setPendingAction(null);
     }
+  };
+
+  const handleApplyToNew = (entry: StashEntry) => {
+    setApplyOpen(false);
+    onApplyToNewWorkspace?.(entry);
   };
 
   return (
@@ -333,61 +373,128 @@ export const StashModal: React.FC<StashModalProps> = ({
                         <span>{selectedEntry.files_changed.length} files</span>
                       </div>
                     </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 px-2"
-                          disabled={pendingAction !== null}
-                          aria-label="More stash actions"
-                          data-testid="stash-more-menu"
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <Popover
+                        open={applyOpen}
+                        onOpenChange={handleApplyOpenChange}
+                      >
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="default"
+                            size="sm"
+                            className="h-7 px-2"
+                            disabled={pendingAction !== null}
+                            data-testid="stash-apply-button"
+                          >
+                            {pendingAction?.startsWith("apply-") ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
+                            ) : (
+                              <Upload className="w-3.5 h-3.5 mr-1" />
+                            )}
+                            Apply...
+                            <ChevronsUpDown className="w-3 h-3 ml-1 opacity-70" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent
+                          className="w-72 p-0"
+                          align="end"
+                          data-testid="stash-apply-popover"
                         >
-                          {pendingAction ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            <MoreVertical className="w-3.5 h-3.5" />
-                          )}
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" sideOffset={4}>
-                        <DropdownMenuSub>
-                          <DropdownMenuSubTrigger data-testid="stash-apply-submenu">
-                            <Upload className="w-3.5 h-3.5 mr-2" />
-                            Apply to workspace
-                          </DropdownMenuSubTrigger>
-                          <DropdownMenuSubContent className="max-h-64 overflow-y-auto">
-                            {applyTargets.map((target) => (
-                              <DropdownMenuItem
-                                key={target.branch}
-                                data-testid={`stash-apply-${target.branch}`}
-                                onSelect={() =>
-                                  handleApply(selectedEntry, target.branch)
-                                }
-                              >
-                                {target.label}
-                              </DropdownMenuItem>
-                            ))}
-                          </DropdownMenuSubContent>
-                        </DropdownMenuSub>
-                        <DropdownMenuItem
-                          data-testid="stash-copy-patch"
-                          onSelect={() => handleCopyPatch(selectedEntry)}
-                        >
-                          <Copy className="w-3.5 h-3.5 mr-2" />
-                          Copy as git patch
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                          data-testid="stash-delete"
-                          className="text-destructive focus:text-destructive"
-                          onSelect={() => handleDelete(selectedEntry)}
-                        >
-                          <Trash2 className="w-3.5 h-3.5 mr-2" />
-                          Delete stash
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                          <Command shouldFilter={false}>
+                            <Command.Input
+                              value={applyQuery}
+                              onValueChange={setApplyQuery}
+                              placeholder="Search workspaces..."
+                              className="h-9 w-full border-b bg-transparent px-3 text-xs outline-none"
+                              data-testid="stash-apply-workspace-select"
+                            />
+                            <Command.List className="max-h-56 overflow-y-auto p-1">
+                              {filteredApplyTargets.length === 0 ? (
+                                <div className="p-3 text-center text-xs text-muted-foreground">
+                                  No workspaces found
+                                </div>
+                              ) : (
+                                <Command.Group
+                                  heading="Apply to"
+                                  className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-1.5 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground"
+                                >
+                                  {filteredApplyTargets.map((target) => (
+                                    <Command.Item
+                                      key={target.branch}
+                                      value={target.label}
+                                      data-testid={`stash-apply-option-${target.branch}`}
+                                      onSelect={() =>
+                                        handleApply(
+                                          selectedEntry,
+                                          target.branch,
+                                        )
+                                      }
+                                      className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs aria-selected:bg-accent"
+                                    >
+                                      <span className="truncate">
+                                        {target.label}
+                                      </span>
+                                    </Command.Item>
+                                  ))}
+                                </Command.Group>
+                              )}
+                              {onApplyToNewWorkspace && (
+                                <Command.Group className="border-t border-border mt-1 pt-1">
+                                  <Command.Item
+                                    value="new workspace"
+                                    data-testid="stash-apply-new-workspace"
+                                    onSelect={() =>
+                                      handleApplyToNew(selectedEntry)
+                                    }
+                                    className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs aria-selected:bg-accent"
+                                  >
+                                    <Plus className="h-3.5 w-3.5" />
+                                    New workspace...
+                                  </Command.Item>
+                                </Command.Group>
+                              )}
+                            </Command.List>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 px-2"
+                            disabled={pendingAction !== null}
+                            aria-label="More stash actions"
+                            data-testid="stash-more-menu"
+                          >
+                            {pendingAction &&
+                            !pendingAction.startsWith("apply-") ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <MoreVertical className="w-3.5 h-3.5" />
+                            )}
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" sideOffset={4}>
+                          <DropdownMenuItem
+                            data-testid="stash-copy-patch"
+                            onSelect={() => handleCopyPatch(selectedEntry)}
+                          >
+                            <Copy className="w-3.5 h-3.5 mr-2" />
+                            Copy as git patch
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            data-testid="stash-delete"
+                            className="text-destructive focus:text-destructive"
+                            onSelect={() => handleDelete(selectedEntry)}
+                          >
+                            <Trash2 className="w-3.5 h-3.5 mr-2" />
+                            Delete stash
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
 
                   {diffPending && (
