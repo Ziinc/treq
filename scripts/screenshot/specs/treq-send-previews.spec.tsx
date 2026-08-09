@@ -114,7 +114,7 @@ it("captures treq send square previews and text/image modals in a shell terminal
 		expectations: [
 			"A shell terminal is open under the feat/treq-send workspace.",
 			"Two square thumbnails float at the top-left of the dark terminal, in a horizontal row on a gradient fade.",
-			"Each thumbnail has a visible circular X dismiss control, and the image thumb is blue with a white circle.",
+			"Each thumbnail has a visible circular X dismiss control with a grey background, and the image thumb is blue with a white circle.",
 		],
 	});
 

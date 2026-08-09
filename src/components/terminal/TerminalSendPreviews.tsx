@@ -85,7 +85,7 @@ export function TerminalSendPreviews({
 									type="button"
 									data-testid={`terminal-send-dismiss-${asset.id}`}
 									aria-label={`Dismiss ${asset.title}`}
-									className="absolute -right-1.5 -top-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full border border-white/20 bg-zinc-900 text-zinc-200 shadow hover:bg-zinc-700 hover:text-white"
+									className="absolute -right-1.5 -top-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full border border-zinc-500 bg-[#c4c4c4] text-zinc-900 shadow-md hover:bg-[#d4d4d4] hover:text-black"
 									onClick={() => {
 										send.dismissAsset(asset.id);
 										if (previewAsset?.id === asset.id) {
@@ -93,7 +93,7 @@ export function TerminalSendPreviews({
 										}
 									}}
 								>
-									<X className="h-3 w-3" />
+									<X className="h-3 w-3" strokeWidth={2.5} />
 								</button>
 							</div>
 						))}
