@@ -3142,15 +3142,15 @@ pub fn jj_stash_working_copy(
     )));
   }
   if !Path::new(workspace_path).exists() {
-    return Err(JjError::IoError("Workspace path does not exist".to_string()));
+    return Err(JjError::IoError(
+      "Workspace path does not exist".to_string(),
+    ));
   }
 
   let mut loaded = load_workspace_repo_for_history_edit(workspace_path)?;
   let ws_name = loaded.workspace.workspace_name().to_owned();
-  let (wc_commit_id, stash_tree) =
-    snapshot_working_copy_tree(&mut loaded, workspace_path)?.ok_or_else(|| {
-      JjError::IoError("No working-copy commit to stash".to_string())
-    })?;
+  let (wc_commit_id, stash_tree) = snapshot_working_copy_tree(&mut loaded, workspace_path)?
+    .ok_or_else(|| JjError::IoError("No working-copy commit to stash".to_string()))?;
   let wc_commit = loaded
     .repo
     .store()
@@ -3200,11 +3200,7 @@ pub fn jj_stash_working_copy(
   )
   .map_err(|e| JjError::IoError(format!("Failed to write stash commit: {}", e)))?;
 
-  set_local_bookmark_target(
-    tx.repo_mut(),
-    bookmark_name,
-    stash_commit.id().clone(),
-  );
+  set_local_bookmark_target(tx.repo_mut(), bookmark_name, stash_commit.id().clone());
 
   // Restore WC to the parent tree (move changes out of the working copy).
   let restored = block_on(
@@ -3226,12 +3222,10 @@ pub fn jj_stash_working_copy(
 
   let new_repo = block_on(tx.commit("stash working copy"))
     .map_err(|e| JjError::IoError(format!("Failed to commit stash transaction: {}", e)))?;
-  update_workspace_after_history_edit(
-    &mut loaded,
-    &new_repo,
-    Some(&wc_commit),
-    CheckoutMode::Immediate,
-  )?;
+  // old_wc is None: snapshot_working_copy_tree already updated tree_state to the
+  // snapshotted disk tree, which may differ from wc_commit.tree(), so the
+  // ConcurrentCheckout guard would false-positive if we passed the pre-snapshot commit.
+  update_workspace_after_history_edit(&mut loaded, &new_repo, None, CheckoutMode::Immediate)?;
 
   let change_id = HexPrefix::from_id(stash_commit.change_id()).reverse_hex()[..12].to_string();
   let short_commit_id = short_commit_id(&stash_commit);
@@ -3248,20 +3242,17 @@ pub fn jj_stash_working_copy(
 
 /// Copy the file changes from a stash commit onto a target working copy.
 /// The stash commit itself is left untouched (immutable / re-applicable).
-pub fn jj_apply_stash_commit(
-  workspace_path: &str,
-  stash_commit_id: &str,
-) -> Result<(), JjError> {
+pub fn jj_apply_stash_commit(workspace_path: &str, stash_commit_id: &str) -> Result<(), JjError> {
   if !Path::new(workspace_path).exists() {
-    return Err(JjError::IoError("Workspace path does not exist".to_string()));
+    return Err(JjError::IoError(
+      "Workspace path does not exist".to_string(),
+    ));
   }
 
   let mut loaded = load_workspace_repo_for_history_edit(workspace_path)?;
   let ws_name = loaded.workspace.workspace_name().to_owned();
-  let (wc_commit_id, current_tree) =
-    snapshot_working_copy_tree(&mut loaded, workspace_path)?.ok_or_else(|| {
-      JjError::IoError("No working-copy commit on target".to_string())
-    })?;
+  let (wc_commit_id, current_tree) = snapshot_working_copy_tree(&mut loaded, workspace_path)?
+    .ok_or_else(|| JjError::IoError("No working-copy commit on target".to_string()))?;
   let wc_commit = loaded
     .repo
     .store()
@@ -3323,12 +3314,8 @@ pub fn jj_apply_stash_commit(
     .map_err(|e| JjError::IoError(format!("Failed to rebase descendants after apply: {}", e)))?;
   let new_repo = block_on(tx.commit("apply stash"))
     .map_err(|e| JjError::IoError(format!("Failed to commit apply-stash transaction: {}", e)))?;
-  update_workspace_after_history_edit(
-    &mut loaded,
-    &new_repo,
-    Some(&wc_commit),
-    CheckoutMode::Immediate,
-  )?;
+  // Same ConcurrentCheckout caveat as stash: snapshot may have moved tree_state.
+  update_workspace_after_history_edit(&mut loaded, &new_repo, None, CheckoutMode::Immediate)?;
   Ok(())
 }
 
@@ -3421,10 +3408,7 @@ pub fn jj_export_commit_git_patch(
 }
 
 /// Delete the bookmark that keeps a stash commit reachable.
-pub fn jj_delete_stash_bookmark(
-  workspace_path: &str,
-  bookmark_name: &str,
-) -> Result<(), JjError> {
+pub fn jj_delete_stash_bookmark(workspace_path: &str, bookmark_name: &str) -> Result<(), JjError> {
   if !bookmark_name.starts_with(STASH_BOOKMARK_PREFIX) {
     return Err(JjError::IoError(format!(
       "Refusing to delete non-stash bookmark '{}'",

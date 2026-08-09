@@ -77,7 +77,9 @@ const emptyDiff: JjRevisionDiff = {
   too_large_to_render: false,
 };
 
-function renderModal(props: Partial<React.ComponentProps<typeof StashModal>> = {}) {
+function renderModal(
+  props: Partial<React.ComponentProps<typeof StashModal>> = {},
+) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -143,15 +145,20 @@ describe("StashModal", () => {
 
   it("copies git patch from the more menu", async () => {
     const user = userEvent.setup();
-    Object.assign(navigator, {
-      clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
-    });
+    // userEvent.setup() installs its own clipboard stub, so the spy must be
+    // attached after setup().
+    const writeText = vi
+      .spyOn(navigator.clipboard, "writeText")
+      .mockResolvedValue(undefined);
     renderModal();
     await screen.findByTestId("stash-list");
     await user.click(await screen.findByTestId("stash-more-menu"));
     await user.click(await screen.findByTestId("stash-copy-patch"));
     await waitFor(() => {
       expect(api.exportStashGitPatch).toHaveBeenCalledWith("/repo", 1);
+    });
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalled();
     });
   });
 });

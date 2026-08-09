@@ -19,10 +19,7 @@ import {
   type Workspace,
 } from "../lib/api";
 import { cn } from "../lib/utils";
-import {
-  getLinePrefix,
-  getLineTypeClass,
-} from "./changes-diff-viewer/utils";
+import { getLinePrefix, getLineTypeClass } from "./changes-diff-viewer/utils";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import {
@@ -152,10 +149,7 @@ export const StashModal: React.FC<StashModalProps> = ({
   const selectedEntry =
     entries.find((entry) => entry.id === selectedId) ?? null;
 
-  const {
-    data: selectedDiff,
-    isPending: diffPending,
-  } = useQuery({
+  const { data: selectedDiff, isPending: diffPending } = useQuery({
     queryKey: ["stash-diff", repoPath, selectedEntry?.id],
     enabled: open && selectedEntry != null,
     queryFn: () => getStashDiff(repoPath, selectedEntry!.id),
@@ -336,9 +330,7 @@ export const StashModal: React.FC<StashModalProps> = ({
                             -{selectedEntry.deletions}
                           </span>
                         </span>
-                        <span>
-                          {selectedEntry.files_changed.length} files
-                        </span>
+                        <span>{selectedEntry.files_changed.length} files</span>
                       </div>
                     </div>
                     <DropdownMenu>
@@ -360,9 +352,7 @@ export const StashModal: React.FC<StashModalProps> = ({
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" sideOffset={4}>
                         <DropdownMenuSub>
-                          <DropdownMenuSubTrigger
-                            data-testid="stash-apply-submenu"
-                          >
+                          <DropdownMenuSubTrigger data-testid="stash-apply-submenu">
                             <Upload className="w-3.5 h-3.5 mr-2" />
                             Apply to workspace
                           </DropdownMenuSubTrigger>

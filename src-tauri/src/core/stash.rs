@@ -48,8 +48,8 @@ pub fn stash_workspace_changes(
   let workspace_label = workspace_label_for(repo_path, workspace_id)?;
   let bookmark_name = format!("{}{}", jj::STASH_BOOKMARK_PREFIX, Uuid::new_v4());
 
-  let stash_commit = jj::jj_stash_working_copy(&workspace_path, &bookmark_name)
-    .map_err(|e| e.to_string())?;
+  let stash_commit =
+    jj::jj_stash_working_copy(&workspace_path, &bookmark_name).map_err(|e| e.to_string())?;
 
   local_db::add_stash(
     repo_path,

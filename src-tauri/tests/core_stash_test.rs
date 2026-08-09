@@ -94,10 +94,8 @@ fn apply_stash_copies_onto_target_and_leaves_stash_intact() {
     .expect("apply_stash should succeed");
 
   let target_dir = repo.workspace_full_path(&target);
-  let applied = std::fs::read_to_string(
-    std::path::Path::new(&target_dir).join("README.md"),
-  )
-  .expect("README should exist on target after apply");
+  let applied = std::fs::read_to_string(std::path::Path::new(&target_dir).join("README.md"))
+    .expect("README should exist on target after apply");
   assert_eq!(applied, "# from stash\n");
   assert!(
     !snapshot_disk_into_wc(&target_dir).is_empty(),
@@ -110,10 +108,8 @@ fn apply_stash_copies_onto_target_and_leaves_stash_intact() {
 
   treq_lib::core::apply_stash(&repo.repo_path, entry.id, &source.branch_name)
     .expect("re-apply to source should succeed");
-  let reapplied = std::fs::read_to_string(
-    std::path::Path::new(&source_dir).join("README.md"),
-  )
-  .expect("README should exist on source after re-apply");
+  let reapplied = std::fs::read_to_string(std::path::Path::new(&source_dir).join("README.md"))
+    .expect("README should exist on source after re-apply");
   assert_eq!(reapplied, "# from stash\n");
 }
 
@@ -132,8 +128,7 @@ fn delete_stash_removes_entry_and_bookmark() {
   .expect("Failed to create workspace");
 
   let ws_dir = repo.workspace_full_path(&workspace);
-  TestRepo::write_workspace_file(&ws_dir, "README.md", "# delete me\n")
-    .expect("Failed to write");
+  TestRepo::write_workspace_file(&ws_dir, "README.md", "# delete me\n").expect("Failed to write");
   assert!(!snapshot_disk_into_wc(&ws_dir).is_empty());
 
   let entry = treq_lib::core::stash_workspace_changes(&repo.repo_path, Some(workspace.id))
@@ -173,10 +168,7 @@ fn get_stash_diff_returns_isolated_diff_in_original_context() {
     "stash diff should include file changes"
   );
   assert!(
-    diff
-      .committed_files
-      .iter()
-      .any(|f| f.path == "README.md")
+    diff.committed_files.iter().any(|f| f.path == "README.md")
       || diff.hunks_by_file.iter().any(|f| f.path == "README.md"),
     "README.md should appear in stash diff"
   );

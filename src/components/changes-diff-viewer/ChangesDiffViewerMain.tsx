@@ -26,7 +26,13 @@ import { ReviewActionBar } from "./ReviewActionBar";
 import { DiffContentArea } from "./DiffContentArea";
 import { FileSidebar } from "./FileSidebar";
 import { filesEqual } from "./utils";
+<<<<<<< HEAD
 import { HOME_MOVE_ENDPOINT } from "../../lib/change-file-drag";
+=======
+import { stashWorkspaceChanges } from "../../lib/api";
+import { invalidateReviewChangeCount } from "../../lib/review-change-count";
+import { useQueryClient } from "@tanstack/react-query";
+>>>>>>> 07d52318 (fix: stash concurrent checkout, wire UI tests and app-qa)
 import type {
   ChangesDiffViewerHandle,
   ChangesDiffViewerProps,
@@ -59,6 +65,7 @@ export const ChangesDiffViewer = memo(
       ref,
     ) => {
       const { addToast } = useToast();
+      const queryClient = useQueryClient();
       const { fontSize: diffFontSize } = useDiffSettings();
 
       const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
@@ -402,7 +409,6 @@ export const ChangesDiffViewer = memo(
         canCreatePr,
         hasPr,
         handleDiscardAll,
-        handleStashAll,
         handleDiscardFiles,
         handleCopyLineLocation,
         handleCopyLines,
@@ -430,6 +436,41 @@ export const ChangesDiffViewer = memo(
         setCommittedSectionCollapsed,
         addToast,
       });
+
+      const handleStashAll = useCallback(async () => {
+        if (readOnly || !repoPath) return;
+        try {
+          const entry = await stashWorkspaceChanges(
+            repoPath,
+            workspaceId ?? null,
+          );
+          addToast({
+            description: `Stashed ${entry.files_changed.length} file${entry.files_changed.length === 1 ? "" : "s"} (${entry.short_commit_id})`,
+            title: "Changes stashed",
+            type: "success",
+          });
+          await invalidateCache();
+          await loadChangedFiles();
+          await invalidateReviewChangeCount(queryClient, repoPath, workspaceId);
+          await queryClient.invalidateQueries({
+            queryKey: ["stashes", repoPath],
+          });
+        } catch (error) {
+          addToast({
+            description: error instanceof Error ? error.message : String(error),
+            title: "Stash Failed",
+            type: "error",
+          });
+        }
+      }, [
+        readOnly,
+        repoPath,
+        workspaceId,
+        addToast,
+        invalidateCache,
+        loadChangedFiles,
+        queryClient,
+      ]);
 
       const hasConflicts = actualConflictedFiles.length > 0;
       const totalComments = comments.length + conflictComments.size;

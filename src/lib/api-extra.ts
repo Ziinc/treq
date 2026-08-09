@@ -175,10 +175,8 @@ export const stashWorkspaceChanges = (
 export const listStashes = (repoPath: string): Promise<StashEntry[]> =>
   invoke("list_stashes", { repoPath });
 
-export const deleteStash = (
-  repoPath: string,
-  stashId: number,
-): Promise<void> => invoke("delete_stash", { repoPath, stashId });
+export const deleteStash = (repoPath: string, stashId: number): Promise<void> =>
+  invoke("delete_stash", { repoPath, stashId });
 
 export const applyStash = (
   repoPath: string,

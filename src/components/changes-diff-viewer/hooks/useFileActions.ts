@@ -20,7 +20,6 @@ import {
   jjSnapshotWorkingCopy,
   jjSplit,
   pushWorkspaceToRemote,
-  stashWorkspaceChanges,
 } from "../../../lib/api";
 import type { Workspace } from "../../../lib/api-types";
 import { invalidateReviewChangeCount } from "../../../lib/review-change-count";
@@ -155,39 +154,6 @@ export function useFileActions({
     queryClient,
     repoPath,
     workspaceId,
-  ]);
-
-  const handleStashAll = useCallback(async () => {
-    if (readOnly || !repoPath) return;
-    try {
-      const entry = await stashWorkspaceChanges(
-        repoPath,
-        workspaceId ?? null,
-      );
-      addToast({
-        description: `Stashed ${entry.files_changed.length} file${entry.files_changed.length === 1 ? "" : "s"} (${entry.short_commit_id})`,
-        title: "Changes stashed",
-        type: "success",
-      });
-      await invalidateCache();
-      await loadChangedFiles();
-      await invalidateReviewChangeCount(queryClient, repoPath, workspaceId);
-      await queryClient.invalidateQueries({ queryKey: ["stashes", repoPath] });
-    } catch (error) {
-      addToast({
-        description: error instanceof Error ? error.message : String(error),
-        title: "Stash Failed",
-        type: "error",
-      });
-    }
-  }, [
-    readOnly,
-    repoPath,
-    workspaceId,
-    addToast,
-    invalidateCache,
-    loadChangedFiles,
-    queryClient,
   ]);
 
   const handleDiscardFiles = useCallback(
@@ -540,7 +506,6 @@ export function useFileActions({
     canCreatePr,
     hasPr: !!prInfo,
     handleDiscardAll,
-    handleStashAll,
     handleDiscardFiles,
     handleCopyLineLocation,
     handleCopyLines,
