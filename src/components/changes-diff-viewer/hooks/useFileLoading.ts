@@ -76,6 +76,12 @@ export function useFileLoading({
 		Map<string, FileHunksData>
 	>(new Map());
 	const prevFilePathsRef = useRef<string[]>([]);
+	// Stabilize against default `[]` / new array identity each render — a changing
+	// loadChangedFiles identity would retrigger the showCommittedChanges effect
+	// in a loop and unmount the Review tree (empty <body /> in unit tests).
+	const conflictedFilesHintRef = useRef(conflictedFilesHint);
+	conflictedFilesHintRef.current = conflictedFilesHint;
+	const conflictedFilesKey = conflictedFilesHint.join("\0");
 
 	const cachedChanges = useCachedWorkspaceChanges(workspacePath, {
 		enabled: true,
@@ -101,7 +107,7 @@ export function useFileLoading({
 				applyChangedFilesRef.current(parsed);
 
 				const conflictedHint = new Set<string>([
-					...conflictedFilesHint,
+					...conflictedFilesHintRef.current,
 					...(diff.conflicted_files ?? []),
 				]);
 				const uncommittedPaths = new Set(parsed.map((file) => file.path));
@@ -176,7 +182,7 @@ export function useFileLoading({
 		repoPath,
 		workspaceId,
 		showCommittedChanges,
-		conflictedFilesHint,
+		conflictedFilesKey,
 		applyChangedFilesRef,
 		addToast,
 		onRefreshingChange,
@@ -204,9 +210,7 @@ export function useFileLoading({
 		};
 	}, [workspaceId, loadChangedFiles]);
 
-	const refreshCommittedChanges = useCallback(async () => {
-		// loadChangedFiles already filters committed rows when the toggle flips.
-	}, []);
+	const refreshCommittedChanges = useCallback(async () => {}, []);
 
 	useEffect(() => {
 		refreshCommittedChanges();
