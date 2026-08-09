@@ -190,6 +190,7 @@ export const ChangesDiffViewer = memo(
 				isLineSelected,
 			} = useLineSelection({
 				allFileHunks,
+				committedFileHunks,
 				onClearFileSelections: () => {
 					setSelectedUnstagedFiles(new Set());
 					setSelectedStagedFiles(new Set());
@@ -231,6 +232,7 @@ export const ChangesDiffViewer = memo(
 				getCommentsForLine,
 			} = useComments({
 				allFileHunks,
+				committedFileHunks,
 				diffLineSelection,
 				clearSelection,
 				setContextMenuPosition,

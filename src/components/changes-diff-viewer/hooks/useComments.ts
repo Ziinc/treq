@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import type { useToast } from "../../ui/toast";
-import { computeHunkLineNumbers } from "../utils";
+import { computeHunkLineNumbers, resolveFileHunks } from "../utils";
 import {
 	FILE_COMMENT_HUNK_ID,
 	type CommentLineQuery,
@@ -14,6 +14,7 @@ import {
 
 interface UseCommentsParams {
 	allFileHunks: Map<string, FileHunksData>;
+	committedFileHunks?: Map<string, FileHunksData>;
 	diffLineSelection: DiffLineSelection | null;
 	clearSelection: () => void;
 	setContextMenuPosition: (pos: { x: number; y: number } | null) => void;
@@ -22,6 +23,7 @@ interface UseCommentsParams {
 
 export function useComments({
 	allFileHunks,
+	committedFileHunks,
 	diffLineSelection,
 	clearSelection,
 	setContextMenuPosition,
@@ -76,7 +78,19 @@ export function useComments({
 	const handleAddCommentFromSelection = useCallback(() => {
 		if (!diffLineSelection || diffLineSelection.lines.length === 0) return;
 		const { filePath } = diffLineSelection;
-		const fileData = allFileHunks.get(filePath);
+		const working = allFileHunks.get(filePath);
+		const committed = committedFileHunks?.get(filePath);
+		let fileData = working ?? committed;
+		if (working && committed) {
+			const [first] = diffLineSelection.lines;
+			const workingLine =
+				working.hunks[first.hunkIndex]?.lines[first.lineIndex];
+			if (workingLine !== first.content) {
+				const committedLine =
+					committed.hunks[first.hunkIndex]?.lines[first.lineIndex];
+				if (committedLine === first.content) fileData = committed;
+			}
+		}
 		if (!fileData) return;
 		const lineContents: string[] = [];
 		let minLineNum = Infinity;
@@ -118,7 +132,12 @@ export function useComments({
 		});
 		setShowCommentInput(true);
 		setContextMenuPosition(null);
-	}, [diffLineSelection, allFileHunks, setContextMenuPosition]);
+	}, [
+		diffLineSelection,
+		allFileHunks,
+		committedFileHunks,
+		setContextMenuPosition,
+	]);
 
 	const cancelComment = useCallback(() => {
 		setShowCommentInput(false);
@@ -214,7 +233,11 @@ export function useComments({
 	const isCommentOutdated = useCallback(
 		(comment: LineComment): boolean => {
 			if (comment.hunkId === FILE_COMMENT_HUNK_ID) return false;
-			const fileData = allFileHunks.get(comment.filePath);
+			const fileData = resolveFileHunks(
+				comment.filePath,
+				allFileHunks,
+				committedFileHunks,
+			);
 			if (!fileData || fileData.isLoading || !fileData.hunks) return false;
 			const hunk = fileData.hunks.find((h) => h.id === comment.hunkId);
 			if (!hunk) return true;
@@ -235,7 +258,7 @@ export function useComments({
 			});
 			return !hasMatchingLine;
 		},
-		[allFileHunks],
+		[allFileHunks, committedFileHunks],
 	);
 
 	const getOutdatedCommentsForFile = useCallback(

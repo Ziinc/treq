@@ -1,10 +1,23 @@
 import type { JjDiffHunk } from "../../lib/api";
 import type { ParsedFileChange } from "../../lib/git-utils";
 import { toApiLineComment, toLocalLineComment } from "../../lib/review";
-import type { PendingComment } from "./types";
+import type { FileHunksData, PendingComment } from "./types";
 import type { GithubQuote } from "./GithubCommentCard";
 
 export { toApiLineComment, toLocalLineComment };
+
+/**
+ * Resolve hunks for a file path, preferring the working-tree map and falling
+ * back to committed Review-tab hunks. Committed-only files live exclusively in
+ * `committedFileHunks`, so selection/comment helpers must consult both.
+ */
+export function resolveFileHunks(
+	filePath: string,
+	allFileHunks: Map<string, FileHunksData>,
+	committedFileHunks?: Map<string, FileHunksData>,
+): FileHunksData | undefined {
+	return allFileHunks.get(filePath) ?? committedFileHunks?.get(filePath);
+}
 
 export function buildQuotedPendingComment(
 	args: {
