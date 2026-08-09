@@ -14,10 +14,8 @@ import {
 	Attachment,
 	AttachmentAction,
 	AttachmentActions,
-	AttachmentContent,
 	AttachmentGroup,
 	AttachmentMedia,
-	AttachmentTitle,
 	AttachmentTrigger,
 } from "../ui/attachment";
 import {
@@ -83,9 +81,7 @@ export function TerminalSendPreviews({
 								<Attachment
 									key={asset.id}
 									state="done"
-									size="xs"
-									orientation="vertical"
-									className="w-16 bg-zinc-100/95 text-zinc-900 shadow-md"
+									variant="thumbnail"
 									onMouseEnter={() => setHoveredId(asset.id)}
 									onMouseLeave={() => setHoveredId(null)}
 								>
@@ -96,7 +92,6 @@ export function TerminalSendPreviews({
 									/>
 									<AttachmentMedia
 										variant={asset.mediaType === "image" ? "image" : "icon"}
-										className="aspect-square w-full rounded-md"
 									>
 										{asset.mediaType === "image" ? (
 											<img
@@ -105,17 +100,17 @@ export function TerminalSendPreviews({
 												draggable={false}
 											/>
 										) : (
-											<FileText />
+											<>
+												<FileText />
+												<span className="w-full truncate text-center text-[10px] leading-tight">
+													{asset.title}
+												</span>
+											</>
 										)}
 									</AttachmentMedia>
-									<AttachmentContent>
-										<AttachmentTitle className="text-[10px]">
-											{asset.title}
-										</AttachmentTitle>
-									</AttachmentContent>
 									<AttachmentActions
 										className={cn(
-											"top-1 right-1 transition-opacity",
+											"transition-opacity",
 											hoveredId === asset.id
 												? "pointer-events-auto opacity-100"
 												: "pointer-events-none opacity-0",

@@ -19,6 +19,16 @@ const attachmentVariants = cva(
 				horizontal: "min-w-40 items-center",
 				vertical: "w-24 flex-col has-data-[slot=attachment-content]:w-30",
 			},
+			variant: {
+				default: "",
+				thumbnail:
+					"h-14 w-14 min-w-14 flex-col flex-nowrap items-stretch justify-stretch gap-0 overflow-visible rounded-md border-white/15 bg-[#2a2a2a] p-0 text-zinc-300 shadow-md transition hover:border-white/40 has-[>a,>button]:hover:bg-[#2a2a2a] has-data-[slot=attachment-content]:p-0 has-data-[slot=attachment-content]:w-auto has-data-[slot=attachment-media]:p-0 focus-within:ring-1 focus-within:ring-white/30",
+			},
+		},
+		defaultVariants: {
+			size: "default",
+			orientation: "horizontal",
+			variant: "default",
 		},
 	},
 );
@@ -28,31 +38,44 @@ function Attachment({
 	state = "done",
 	size = "default",
 	orientation = "horizontal",
+	variant = "default",
 	...props
 }: React.ComponentProps<"div"> &
 	VariantProps<typeof attachmentVariants> & {
 		state?: "idle" | "uploading" | "processing" | "error" | "done";
 	}) {
+	const isThumbnail = variant === "thumbnail";
+	const resolvedSize = isThumbnail ? null : size;
+	const resolvedOrientation = isThumbnail ? null : orientation;
+
 	return (
 		<div
 			data-slot="attachment"
 			data-state={state}
-			data-size={size}
-			data-orientation={orientation}
-			className={cn(attachmentVariants({ size, orientation }), className)}
+			data-size={resolvedSize ?? undefined}
+			data-orientation={resolvedOrientation ?? undefined}
+			data-variant={variant}
+			className={cn(
+				attachmentVariants({
+					size: resolvedSize,
+					orientation: resolvedOrientation,
+					variant,
+				}),
+				className,
+			)}
 			{...props}
 		/>
 	);
 }
 
 const attachmentMediaVariants = cva(
-	"relative flex aspect-square w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted text-foreground group-data-[orientation=vertical]/attachment:w-full group-data-[size=sm]/attachment:w-8 group-data-[size=xs]/attachment:w-7 group-data-[size=xs]/attachment:rounded-md group-data-[state=error]/attachment:bg-destructive/10 group-data-[state=error]/attachment:text-destructive group-data-[orientation=vertical]/attachment:*:data-[slot=spinner]:size-6! [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 group-data-[orientation=vertical]/attachment:[&_svg:not([class*='size-'])]:size-6 group-data-[size=xs]/attachment:[&_svg:not([class*='size-'])]:size-3.5",
+	"relative flex aspect-square w-10 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-muted text-foreground group-data-[orientation=vertical]/attachment:w-full group-data-[size=sm]/attachment:w-8 group-data-[size=xs]/attachment:w-7 group-data-[size=xs]/attachment:rounded-md group-data-[state=error]/attachment:bg-destructive/10 group-data-[state=error]/attachment:text-destructive group-data-[orientation=vertical]/attachment:*:data-[slot=spinner]:size-6! [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 group-data-[orientation=vertical]/attachment:[&_svg:not([class*='size-'])]:size-6 group-data-[size=xs]/attachment:[&_svg:not([class*='size-'])]:size-3.5 group-data-[variant=thumbnail]/attachment:aspect-auto group-data-[variant=thumbnail]/attachment:size-full group-data-[variant=thumbnail]/attachment:rounded-[3px] group-data-[variant=thumbnail]/attachment:bg-[#2a2a2a] group-data-[variant=thumbnail]/attachment:text-zinc-300 group-data-[variant=thumbnail]/attachment:[&_svg:not([class*='size-'])]:size-4",
 	{
 		variants: {
 			variant: {
-				icon: "",
+				icon: "group-data-[variant=thumbnail]/attachment:flex-col group-data-[variant=thumbnail]/attachment:gap-1 group-data-[variant=thumbnail]/attachment:px-1",
 				image:
-					"opacity-60 group-data-[state=done]/attachment:opacity-100 group-data-[state=idle]/attachment:opacity-100 *:[img]:aspect-square *:[img]:w-full *:[img]:object-cover",
+					"opacity-60 group-data-[state=done]/attachment:opacity-100 group-data-[state=idle]/attachment:opacity-100 *:[img]:aspect-square *:[img]:size-full *:[img]:object-cover group-data-[variant=thumbnail]/attachment:opacity-100 group-data-[variant=thumbnail]/attachment:*:[img]:aspect-auto group-data-[variant=thumbnail]/attachment:*:[img]:rounded-[3px]",
 			},
 		},
 		defaultVariants: {
@@ -133,7 +156,7 @@ function AttachmentActions({
 		<div
 			data-slot="attachment-actions"
 			className={cn(
-				"relative z-20 flex shrink-0 items-center group-data-[orientation=vertical]/attachment:absolute group-data-[orientation=vertical]/attachment:top-3 group-data-[orientation=vertical]/attachment:right-3 group-data-[orientation=vertical]/attachment:gap-1",
+				"relative z-20 flex shrink-0 items-center group-data-[orientation=vertical]/attachment:absolute group-data-[orientation=vertical]/attachment:top-3 group-data-[orientation=vertical]/attachment:right-3 group-data-[orientation=vertical]/attachment:gap-1 group-data-[variant=thumbnail]/attachment:absolute group-data-[variant=thumbnail]/attachment:-right-1.5 group-data-[variant=thumbnail]/attachment:-top-1.5",
 				className,
 			)}
 			{...props}
