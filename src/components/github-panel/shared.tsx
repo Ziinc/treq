@@ -119,7 +119,7 @@ export function CheckEntryRow({ check }: { check: PrCheckEntry }) {
 			/>
 			<span className="flex-1 min-w-0 truncate">{check.name}</span>
 			{duration && (
-				<span className="shrink-0 text-muted-foreground tabular-nums">
+				<span className="shrink-0 text-sm text-muted-foreground tabular-nums">
 					{duration}
 				</span>
 			)}
