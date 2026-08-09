@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Copy, FileText, FolderOpen, X } from "lucide-react";
+import { Copy, FileText, FolderOpen, X, ZoomIn, ZoomOut } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { readFile } from "../../lib/api";
 import {
@@ -27,6 +27,18 @@ import {
 	CarouselPrevious,
 } from "../ui/carousel";
 import { Button } from "../ui/button";
+
+const IMAGE_ZOOM_MIN = 0.5;
+const IMAGE_ZOOM_MAX = 4;
+const IMAGE_ZOOM_STEP = 0.25;
+const IMAGE_ZOOM_DEFAULT = 1;
+
+function clampImageZoom(value: number): number {
+	return Math.min(
+		IMAGE_ZOOM_MAX,
+		Math.max(IMAGE_ZOOM_MIN, Math.round(value * 100) / 100),
+	);
+}
 
 interface TerminalSendPreviewsProps {
 	ptySessionId: string;
@@ -170,9 +182,11 @@ function SendAssetLightbox({
 	const [api, setApi] = useState<CarouselApi>();
 	const [currentIndex, setCurrentIndex] = useState(initialIndex);
 	const [textByPath, setTextByPath] = useState<Record<string, string>>({});
+	const [imageZoom, setImageZoom] = useState(IMAGE_ZOOM_DEFAULT);
 	const revealLabel = useMemo(() => revealInFileManagerLabel(), []);
 
 	const current = assets[currentIndex] ?? assets[0];
+	const showingImage = current?.mediaType === "image";
 
 	useEffect(() => {
 		if (!api) return;
@@ -184,6 +198,10 @@ function SendAssetLightbox({
 			api.off("select", onSelect);
 		};
 	}, [api, initialIndex]);
+
+	useEffect(() => {
+		setImageZoom(IMAGE_ZOOM_DEFAULT);
+	}, [currentIndex]);
 
 	useEffect(() => {
 		const onKeyDown = (event: KeyboardEvent) => {
@@ -269,6 +287,18 @@ function SendAssetLightbox({
 		}
 	};
 
+	const zoomIn = () => {
+		setImageZoom((currentZoom) =>
+			clampImageZoom(currentZoom + IMAGE_ZOOM_STEP),
+		);
+	};
+
+	const zoomOut = () => {
+		setImageZoom((currentZoom) =>
+			clampImageZoom(currentZoom - IMAGE_ZOOM_STEP),
+		);
+	};
+
 	return (
 		<div
 			data-testid="treq-send-preview-lightbox"
@@ -279,6 +309,41 @@ function SendAssetLightbox({
 				className="absolute right-4 top-4 z-20 flex items-center gap-1 rounded-full border border-white/15 bg-black/40 p-1 shadow-lg backdrop-blur"
 				onClick={(event) => event.stopPropagation()}
 			>
+				{showingImage && (
+					<>
+						<Button
+							type="button"
+							variant="ghost"
+							size="icon-xs"
+							className="h-8 w-8 text-white hover:bg-white/15 hover:text-white"
+							aria-label="Zoom out"
+							data-testid="treq-send-zoom-out"
+							disabled={imageZoom <= IMAGE_ZOOM_MIN}
+							onClick={zoomOut}
+						>
+							<ZoomOut className="h-4 w-4" />
+						</Button>
+						<span
+							data-testid="treq-send-zoom-level"
+							className="min-w-10 px-1 text-center text-xs tabular-nums text-white/80"
+						>
+							{Math.round(imageZoom * 100)}%
+						</span>
+						<Button
+							type="button"
+							variant="ghost"
+							size="icon-xs"
+							className="h-8 w-8 text-white hover:bg-white/15 hover:text-white"
+							aria-label="Zoom in"
+							data-testid="treq-send-zoom-in"
+							disabled={imageZoom >= IMAGE_ZOOM_MAX}
+							onClick={zoomIn}
+						>
+							<ZoomIn className="h-4 w-4" />
+						</Button>
+						<span aria-hidden className="mx-0.5 h-4 w-px bg-white/20" />
+					</>
+				)}
 				<Button
 					type="button"
 					variant="ghost"
@@ -336,12 +401,19 @@ function SendAssetLightbox({
 								className="flex items-center justify-center"
 							>
 								{asset.mediaType === "image" ? (
-									<img
-										src={treqSendFileSrc(asset.path)}
-										alt={asset.title}
-										className="max-h-[80vh] max-w-full object-contain"
-										draggable={false}
-									/>
+									<div className="flex max-h-[80vh] max-w-full items-center justify-center overflow-auto">
+										<img
+											src={treqSendFileSrc(asset.path)}
+											alt={asset.title}
+											className="max-h-[80vh] max-w-full origin-center object-contain transition-transform duration-150"
+											style={{
+												transform: `scale(${
+													asset.id === current?.id ? imageZoom : IMAGE_ZOOM_DEFAULT
+												})`,
+											}}
+											draggable={false}
+										/>
+									</div>
 								) : (
 									<pre
 										data-testid="treq-send-text-preview"

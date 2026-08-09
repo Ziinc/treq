@@ -153,6 +153,42 @@ describe("TerminalSendPreviews", () => {
 		});
 	});
 
+	it("zooms image assets in and out from the lightbox toolbar", async () => {
+		const user = userEvent.setup();
+		renderSend(<SendHarness ptySessionId="session-1" />);
+		await user.click(screen.getByRole("button", { name: "Inject image" }));
+		await user.click(await screen.findByTestId("terminal-send-preview-send-2"));
+		await screen.findByTestId("treq-send-preview-lightbox");
+
+		const zoomIn = screen.getByTestId("treq-send-zoom-in");
+		const zoomOut = screen.getByTestId("treq-send-zoom-out");
+		expect(zoomIn).toBeTruthy();
+		expect(zoomOut).toBeTruthy();
+
+		const image = screen
+			.getByTestId("treq-send-preview-lightbox")
+			.querySelector('img[alt="shot.png"]') as HTMLImageElement;
+		expect(image).toBeTruthy();
+		expect(image.style.transform).toMatch(/scale\(1\)/);
+
+		await user.click(zoomIn);
+		expect(image.style.transform).toMatch(/scale\(1\.25\)/);
+
+		await user.click(zoomOut);
+		expect(image.style.transform).toMatch(/scale\(1\)/);
+	});
+
+	it("hides zoom controls for text assets", async () => {
+		const user = userEvent.setup();
+		renderSend(<SendHarness ptySessionId="session-1" />);
+		await user.click(screen.getByRole("button", { name: "Inject text" }));
+		await user.click(await screen.findByTestId("terminal-send-preview-send-1"));
+		await screen.findByTestId("treq-send-preview-lightbox");
+
+		expect(screen.queryByTestId("treq-send-zoom-in")).toBeNull();
+		expect(screen.queryByTestId("treq-send-zoom-out")).toBeNull();
+	});
+
 	it("listens for treq-send-received events", async () => {
 		renderSend(<SendHarness ptySessionId="session-listen" />);
 		const hasSendListener = () =>

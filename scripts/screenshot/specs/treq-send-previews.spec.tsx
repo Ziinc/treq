@@ -147,6 +147,9 @@ it("captures treq send attachment thumbs and lightbox carousel previews", async 
 	expect(
 		document.querySelector('[data-testid="treq-send-preview-lightbox"] img'),
 	).toBeTruthy();
+	expect(screen.getByTestId("treq-send-zoom-out")).toBeTruthy();
+	expect(screen.getByTestId("treq-send-zoom-in")).toBeTruthy();
+	expect(screen.getByTestId("treq-send-zoom-level").textContent).toBe("100%");
 	expect(screen.getByTestId("treq-send-copy")).toBeTruthy();
 	expect(screen.getByTestId("treq-send-reveal")).toBeTruthy();
 	expect(screen.getByTestId("treq-send-close")).toBeTruthy();
@@ -157,7 +160,19 @@ it("captures treq send attachment thumbs and lightbox carousel previews", async 
 		expectations: [
 			"A blurred backdrop covers the app with no modal chrome around the asset.",
 			"The blue SVG image is shown large in the center.",
-			"Top-right icon buttons for copy, reveal-in-file-manager, and close are visible.",
+			"Top-right toolbar includes zoom out, 100%, zoom in, plus copy, reveal, and close.",
+		],
+	});
+
+	await user.click(screen.getByTestId("treq-send-zoom-in"));
+	await user.click(screen.getByTestId("treq-send-zoom-in"));
+	expect(screen.getByTestId("treq-send-zoom-level").textContent).toBe("150%");
+
+	await captureDocument(document, {
+		name: "treq-send-03b-image-zoomed",
+		expectations: [
+			"The image appears larger after zooming in to 150%.",
+			"The zoom level label in the top-right toolbar reads 150%.",
 		],
 	});
 
@@ -196,13 +211,14 @@ it("captures treq send attachment thumbs and lightbox carousel previews", async 
 	expect(
 		screen.getByTestId("treq-send-preview-lightbox").textContent,
 	).toContain("preview-note.txt");
+	expect(screen.queryByTestId("treq-send-zoom-in")).toBeNull();
 
 	await captureDocument(document, {
 		name: "treq-send-02-text-lightbox",
 		expectations: [
 			"A blurred backdrop shows the text asset alone without a modal frame.",
 			"The selectable text includes 'Selectable preview text from treq send'.",
-			"Copy, reveal, and close icon buttons remain in the top-right.",
+			"Top-right shows copy, reveal, and close — no zoom controls for text.",
 		],
 	});
 }, 60000);
