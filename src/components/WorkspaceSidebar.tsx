@@ -1,12 +1,12 @@
 import { DragDropContext, Droppable, type DropResult } from "@hello-pangea/dnd";
 import { useQuery } from "@tanstack/react-query";
 import {
+	Archive,
 	GitBranch,
 	Github,
 	Home,
 	Search,
 	Settings,
-	Trash2,
 } from "lucide-react";
 import { memo, useCallback, useMemo, useState } from "react";
 import {
@@ -465,9 +465,9 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
 												onClick={onBulkDelete}
 												className="flex items-center justify-center gap-1 w-full px-2 py-1.5 text-destructive hover:bg-destructive/10 rounded-md transition-colors"
 											>
-												<Trash2 className="w-3 h-3" />
+											<Archive className="w-3 h-3" />
 												<span>
-													Delete {selectedWorkspaceIds.size} workspace
+												Archive {selectedWorkspaceIds.size} workspace
 													{selectedWorkspaceIds.size > 1 ? "s" : ""}
 												</span>
 											</button>
