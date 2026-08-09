@@ -677,6 +677,8 @@ pub struct DiscoveredWorkspace {
     pub workspace_path: String,
     pub branch_name: String,
     pub has_conflicts: bool,
+    /// Author timestamp of the workspace working-copy tip (RFC3339), when known.
+    pub last_activity_at: Option<String>,
 }
 
 /// A diff hunk from jj diff output
@@ -1552,6 +1554,7 @@ struct RegisteredWorkspace {
     workspace_path: String,
     branch_name: String,
     has_conflicts: bool,
+    last_activity_at: Option<String>,
 }
 
 fn load_home_workspace(repo_path: &str) -> Result<Workspace, JjError> {
@@ -1619,12 +1622,14 @@ fn list_registered_workspaces(repo_path: &str) -> Result<Vec<RegisteredWorkspace
             .map_err(|e| JjError::IoError(format!("Failed to load working-copy commit: {}", e)))?;
         let (branch_name, bookmark_has_conflicts) =
             branch_name_for_workspace_commit(repo.as_ref(), workspace_name.as_str(), &wc_commit);
+        let last_activity_at = commit_author_timestamp_rfc3339(&wc_commit);
 
         workspaces.push(RegisteredWorkspace {
             workspace_name: workspace_name.as_str().to_string(),
             workspace_path,
             branch_name,
             has_conflicts: bookmark_has_conflicts || !wc_commit.tree_ids().is_resolved(),
+            last_activity_at,
         });
     }
 
@@ -1638,6 +1643,15 @@ pub fn list_jj_workspaces(repo_path: &str) -> Result<Vec<String>, JjError> {
         .into_iter()
         .map(|workspace| workspace.workspace_name)
         .collect())
+}
+
+fn commit_author_timestamp_rfc3339(commit: &jj_lib::commit::Commit) -> Option<String> {
+    commit
+        .author()
+        .timestamp
+        .to_datetime()
+        .ok()
+        .map(|ts| ts.to_rfc3339())
 }
 
 fn branch_name_for_workspace_commit(
@@ -1706,6 +1720,7 @@ pub fn discover_workspaces_with_conflicts(
             workspace_path: workspace.workspace_path,
             branch_name: workspace.branch_name,
             has_conflicts: workspace.has_conflicts,
+            last_activity_at: workspace.last_activity_at,
         })
         .collect())
 }

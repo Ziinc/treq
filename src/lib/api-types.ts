@@ -30,6 +30,8 @@ export interface WorkspacePartialStatus {
 export interface WorkspaceSidebarStatus {
 	current: Workspace;
 	has_conflicts: boolean;
+	/** Tip / working-copy activity time (RFC3339). Used for sibling sidebar ordering. */
+	last_activity_at?: string | null;
 }
 
 export interface WorkspaceNode {

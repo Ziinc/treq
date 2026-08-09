@@ -11,6 +11,7 @@ function makeWorkspace(
 	id: number,
 	branchName: string,
 	targetBranch: string | null,
+	createdAt = "2026-01-01T00:00:00.000Z",
 ): Workspace {
 	return {
 		id,
@@ -18,7 +19,7 @@ function makeWorkspace(
 		workspace_name: branchName,
 		workspace_path: `ws/${branchName}`,
 		branch_name: branchName,
-		created_at: "2026-01-01T00:00:00.000Z",
+		created_at: createdAt,
 		target_branch: targetBranch,
 		title: branchName,
 		not_on_remote: false,
@@ -29,10 +30,17 @@ function makeStatus(
 	id: number,
 	branchName: string,
 	targetBranch: string | null,
+	opts?: { createdAt?: string; lastActivityAt?: string | null },
 ): WorkspaceSidebarStatus {
 	return {
-		current: makeWorkspace(id, branchName, targetBranch),
+		current: makeWorkspace(
+			id,
+			branchName,
+			targetBranch,
+			opts?.createdAt ?? "2026-01-01T00:00:00.000Z",
+		),
 		has_conflicts: false,
+		last_activity_at: opts?.lastActivityAt,
 	};
 }
 
@@ -92,6 +100,89 @@ describe("workspace tree root detection", () => {
 				expectedRootCount: 1,
 				expectedBranches: ["alpha", "beta", "gamma"],
 				expectedDepths: [0, 1, 2],
+			},
+		);
+	});
+});
+
+describe("workspace tree sibling recency sort", () => {
+	it("orders root siblings by last_activity_at newest first", () => {
+		expectTree(
+			[
+				makeStatus(1, "alpha", "main", {
+					lastActivityAt: "2026-01-01T00:00:00.000Z",
+				}),
+				makeStatus(2, "zeta", "main", {
+					lastActivityAt: "2026-03-01T00:00:00.000Z",
+				}),
+				makeStatus(3, "beta", "main", {
+					lastActivityAt: "2026-02-01T00:00:00.000Z",
+				}),
+			],
+			{
+				expectedRootCount: 3,
+				expectedBranches: ["zeta", "beta", "alpha"],
+				expectedDepths: [0, 0, 0],
+			},
+		);
+	});
+
+	it("orders children by recency without breaking stack nesting", () => {
+		expectTree(
+			[
+				makeStatus(1, "root", "main", {
+					lastActivityAt: "2026-01-01T00:00:00.000Z",
+				}),
+				makeStatus(2, "child-old", "root", {
+					lastActivityAt: "2026-01-02T00:00:00.000Z",
+				}),
+				makeStatus(3, "child-new", "root", {
+					lastActivityAt: "2026-04-01T00:00:00.000Z",
+				}),
+				makeStatus(4, "grandchild", "child-old", {
+					lastActivityAt: "2026-05-01T00:00:00.000Z",
+				}),
+			],
+			{
+				expectedRootCount: 1,
+				expectedBranches: ["root", "child-new", "child-old", "grandchild"],
+				expectedDepths: [0, 1, 1, 2],
+			},
+		);
+	});
+
+	it("falls back to created_at when last_activity_at is missing", () => {
+		expectTree(
+			[
+				makeStatus(1, "older", "main", {
+					createdAt: "2026-01-01T00:00:00.000Z",
+				}),
+				makeStatus(2, "newer", "main", {
+					createdAt: "2026-06-01T00:00:00.000Z",
+				}),
+			],
+			{
+				expectedRootCount: 2,
+				expectedBranches: ["newer", "older"],
+				expectedDepths: [0, 0],
+			},
+		);
+	});
+
+	it("uses branch name as a stable tie-breaker when times match", () => {
+		expectTree(
+			[
+				makeStatus(1, "zeta", "main", {
+					lastActivityAt: "2026-02-01T00:00:00.000Z",
+				}),
+				makeStatus(2, "alpha", "main", {
+					lastActivityAt: "2026-02-01T00:00:00.000Z",
+				}),
+			],
+			{
+				expectedRootCount: 2,
+				expectedBranches: ["alpha", "zeta"],
+				expectedDepths: [0, 0],
 			},
 		);
 	});

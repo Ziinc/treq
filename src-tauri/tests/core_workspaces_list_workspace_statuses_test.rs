@@ -361,3 +361,68 @@ fn test_workspace_list_statuses_does_not_cross_assign_sibling_branch_name_when_e
     assert_eq!(logging.workspace_name, "treq-feat-logging");
     assert_ne!(logging_status.current.branch_name, "treq/feat-checks");
 }
+
+#[test]
+fn test_workspace_list_statuses_includes_last_activity_at_from_wc_tip() {
+    let repo = TestRepo::new().expect("Failed to create test repo");
+
+    let older = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/older",
+        Some("older".to_string()),
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create older workspace");
+    let older_path = repo.workspaces_dir().join(&older.workspace_path);
+    let older_path_str = older_path.to_str().expect("utf-8");
+    TestRepo::write_workspace_file(older_path_str, "older.txt", "old\n")
+        .expect("Failed to write older.txt");
+    treq_lib::core::commit_workspace(&repo.repo_path, older.id, "older commit")
+        .expect("Failed to commit older workspace");
+
+    std::thread::sleep(std::time::Duration::from_millis(1100));
+
+    let newer = treq_lib::core::create_workspace(
+        &repo.repo_path,
+        "feat/newer",
+        Some("newer".to_string()),
+        None,
+        None,
+        None,
+        None,
+    )
+    .expect("Failed to create newer workspace");
+    let newer_path = repo.workspaces_dir().join(&newer.workspace_path);
+    let newer_path_str = newer_path.to_str().expect("utf-8");
+    TestRepo::write_workspace_file(newer_path_str, "newer.txt", "new\n")
+        .expect("Failed to write newer.txt");
+    treq_lib::core::commit_workspace(&repo.repo_path, newer.id, "newer commit")
+        .expect("Failed to commit newer workspace");
+
+    let statuses = treq_lib::core::list_workspace_statuses(&repo.repo_path)
+        .expect("Failed to list workspace statuses");
+    let older_status = statuses
+        .iter()
+        .find(|s| s.current.id == older.id)
+        .expect("older status");
+    let newer_status = statuses
+        .iter()
+        .find(|s| s.current.id == newer.id)
+        .expect("newer status");
+
+    let older_activity = older_status
+        .last_activity_at
+        .as_deref()
+        .expect("older last_activity_at");
+    let newer_activity = newer_status
+        .last_activity_at
+        .as_deref()
+        .expect("newer last_activity_at");
+    assert!(
+        newer_activity > older_activity,
+        "expected newer tip activity ({newer_activity}) > older ({older_activity})"
+    );
+}

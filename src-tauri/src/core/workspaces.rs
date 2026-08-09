@@ -115,6 +115,9 @@ pub struct WorkspacePartialStatus {
 pub struct WorkspaceSidebarStatus {
     pub current: local_db::Workspace,
     pub has_conflicts: bool,
+    /// Working-copy tip author timestamp (RFC3339) for sibling recency ordering.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_activity_at: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -743,6 +746,15 @@ pub fn list_workspace_statuses(repo_path: &str) -> Result<Vec<WorkspaceSidebarSt
         .iter()
         .map(|workspace| (workspace.workspace_path.clone(), workspace.has_conflicts))
         .collect();
+    let activity_by_path: HashMap<String, Option<String>> = discovered
+        .iter()
+        .map(|workspace| {
+            (
+                workspace.workspace_path.clone(),
+                workspace.last_activity_at.clone(),
+            )
+        })
+        .collect();
     let persisted = local_db::sync_discovered_workspaces(repo_path, &discovered, &refreshed_at)?;
 
     persisted
@@ -757,6 +769,10 @@ pub fn list_workspace_statuses(repo_path: &str) -> Result<Vec<WorkspaceSidebarSt
                     current.workspace_path
                 )
             })?;
+            let last_activity_at = activity_by_path
+                .get(&current.workspace_path)
+                .cloned()
+                .flatten();
             let workspace_dir = Path::new(repo_path)
                 .join(".treq")
                 .join("workspaces")
@@ -775,6 +791,7 @@ pub fn list_workspace_statuses(repo_path: &str) -> Result<Vec<WorkspaceSidebarSt
             Ok(WorkspaceSidebarStatus {
                 current,
                 has_conflicts,
+                last_activity_at,
             })
         })
         .collect()
