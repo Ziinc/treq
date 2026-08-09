@@ -1,14 +1,32 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "./test-utils";
+import { render, screen } from "../../test/test-utils";
 import userEvent from "@testing-library/user-event";
-import { CommittedChangesSection } from "../src/components/CommittedChangesSection";
-import type { JjFileChange } from "../src/lib/api";
+import { CommittedChangesSection } from "./CommittedChangesSection";
+import type { JjFileChange } from "../lib/api";
 
 describe("CommittedChangesSection", () => {
   const mockFiles: JjFileChange[] = [
-    { path: "src/file1.ts", status: "M" },
-    { path: "src/file2.ts", status: "A" },
-    { path: "src/file3.ts", status: "D" },
+    {
+      path: "src/file1.ts",
+      status: "M",
+      previous_path: null,
+      changed_line_count: 0,
+      diff_deferred: false,
+    },
+    {
+      path: "src/file2.ts",
+      status: "A",
+      previous_path: null,
+      changed_line_count: 0,
+      diff_deferred: false,
+    },
+    {
+      path: "src/file3.ts",
+      status: "D",
+      previous_path: null,
+      changed_line_count: 0,
+      diff_deferred: false,
+    },
   ];
 
   it("should render section with file count", () => {
