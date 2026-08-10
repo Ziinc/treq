@@ -292,7 +292,7 @@ it("simulates multi-workspace enqueue, CI, and merge until the queue drains", as
       expectations: [
         "Merge Queue tab lists three workspaces added via simulated labeled webhooks (PR #201–#203).",
         "feat/workspace-one, feat/workspace-two, and feat/workspace-three are visible.",
-        "At least one entry shows Queued or Testing — entries were not DB-seeded.",
+        "At least one entry shows Queued or Running checks — entries were not DB-seeded.",
       ],
     });
 
@@ -325,7 +325,7 @@ it("simulates multi-workspace enqueue, CI, and merge until the queue drains", as
       name: "service-qa-ui-04-queue-drained",
       viewport: { width: 520, height: 900 },
       expectations: [
-        "After simulated check_suite success webhooks and worker merges, no Queued/Testing/Merging rows remain.",
+        "After simulated check_suite success webhooks and worker merges, no Queued/Running checks/Merging rows remain.",
         "PR #201, #202, and #203 show Merged chips — the queue has been fully drained.",
         "The Merge Queue tab is still selected.",
       ],
@@ -446,7 +446,7 @@ it("captures a 2-stack + independent + 3-stack with siblings through drain", asy
       viewport: { width: 560, height: 1000 },
       expectations: [
         "After CI + merge drain, all seven PRs (#301–#307) show Merged — stacks and sibling included.",
-        "No Queued/Testing/Merging chips remain.",
+        "No Queued/Running checks/Merging chips remain.",
       ],
     });
   } finally {

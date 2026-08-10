@@ -273,6 +273,13 @@ describe("GitHubPanel", () => {
       "feat/base",
       "feat/top",
     ]);
+    // Stack members are only removable via the stack Remove control.
+    expect(
+      screen.queryByRole("button", { name: "Remove feat/base from queue" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Remove feat/top from queue" }),
+    ).not.toBeInTheDocument();
   });
 
   it("removes only the branch itself when it has nothing stacked on it", async () => {

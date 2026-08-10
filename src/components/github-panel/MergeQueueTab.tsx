@@ -15,7 +15,7 @@ function queueStatusLabel(status: QueueEntryStatus): string {
     case "queued":
       return "Queued";
     case "testing":
-      return "Testing";
+      return "Running checks";
     case "merging":
       return "Merging";
     case "merged":
@@ -150,7 +150,7 @@ function QueueStackBlock({ stack, dequeueBranches }: QueueStackBlockProps) {
           </span>
           <div className="flex-1" />
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
             className="h-7 text-base shrink-0"
             disabled={dequeueBranches.isPending}
@@ -159,24 +159,29 @@ function QueueStackBlock({ stack, dequeueBranches }: QueueStackBlockProps) {
               dequeueBranches.mutate(stack.entries.map((e) => e.branch_name))
             }
           >
-            <X className="w-3.5 h-3.5 mr-1" />
-            Remove stack
+            Remove
           </Button>
         </div>
       )}
-      {stack.entries.map((entry, indexInStack) => (
+      {stack.entries.map((entry) => (
         <div
           key={entry.branch_name}
           data-testid={`merge-queue-entry-${entry.position}`}
-          className="relative flex items-start gap-3 py-2"
+          className={`relative flex items-start py-2 ${isStack ? "" : "gap-3"}`}
         >
-          <div className="shrink-0 mt-1">
+          <div className="shrink-0 mt-1 w-[14px] flex justify-center">
             <div
               className={`w-[14px] h-[14px] rounded-full border-2 border-background ${queueNodeColor(entry.status)}`}
             />
           </div>
+          {/*
+            Stack accent: header uses pl-8 so the Layers icon starts at 32px.
+            Node is 14px wide; ml-[18px] puts the border-l under that icon.
+          */}
           <div
-            className={`min-w-0 flex-1 ${isStack ? "border-l-2 border-border/70 pl-3" : ""}`}
+            className={`min-w-0 flex-1 ${
+              isStack ? "ml-[18px] border-l-2 border-border/70 pl-3" : ""
+            }`}
           >
             <div className="flex items-center gap-2 flex-wrap">
               <span className="text-base text-muted-foreground tabular-nums">
@@ -191,26 +196,19 @@ function QueueStackBlock({ stack, dequeueBranches }: QueueStackBlockProps) {
               {entry.branch_name} → {entry.target_branch}
             </p>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 shrink-0"
-            disabled={dequeueBranches.isPending}
-            aria-label={`Remove ${entry.branch_name} from queue`}
-            title={
-              isStack
-                ? "Remove this branch (and anything stacked above it)"
-                : "Remove from queue"
-            }
-            onClick={() =>
-              // Removing mid-stack would strand everything above it -- take that too.
-              dequeueBranches.mutate(
-                stack.entries.slice(indexInStack).map((e) => e.branch_name),
-              )
-            }
-          >
-            <X className="w-3.5 h-3.5" />
-          </Button>
+          {!isStack && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 shrink-0"
+              disabled={dequeueBranches.isPending}
+              aria-label={`Remove ${entry.branch_name} from queue`}
+              title="Remove from queue"
+              onClick={() => dequeueBranches.mutate([entry.branch_name])}
+            >
+              <X className="w-3.5 h-3.5" />
+            </Button>
+          )}
         </div>
       ))}
     </div>

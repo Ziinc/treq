@@ -179,15 +179,15 @@ it("captures the stacked PR queue for an opted-in repo", async () => {
 		expectations: [
 			"The tab lists the queue directly, with no toggle row above it.",
 			"A single vertical line runs down the left of the whole list, with a round node on it for every entry -- the line is continuous across the stack groupings, not restarted per stack, showing one merge sequence.",
-			"Node colours follow status: PR #101 (Merging) is green, PR #102 (Testing) is amber, the Queued ones are grey.",
+			'Node colours follow status: PR #101 (Merging) is green, PR #102 ("Running checks") is amber, the Queued ones are grey.',
 		],
 	});
 	await captureDocument(document, {
 		name: "merge-queue-tab-02b-stacks-and-terminator",
 		expectations: [
 			'Two "Stack of N" headers appear inline in the list: "Stack of 3 · merges bottom-up into main" above entries 1-3, and "Stack of 2" above entries 5-6. Entry #4 has no stack header.',
-			'Each stack header has a "Remove stack" button, entries in a stack have a short vertical accent line to their left, and every entry row has its own small X remove button.',
-			'At the very bottom of the line is a down-arrow and the target branch "main"; the entry with no PR number reads "No PR".',
+			'Each stack header has a neutral outline "Remove" button; stacked PR rows have no per-entry X. The stack accent border aligns under the Layers icon.',
+			'At the very bottom of the line is a down-arrow and the target branch "main"; the entry with no PR number reads "No PR". The standalone fix/solo row still has its own X remove control.',
 		],
 	});
 
@@ -261,13 +261,13 @@ it("captures removing a single branch and a whole stack from the queue", async (
 	await captureDocument(document, {
 		name: "merge-queue-tab-05-removed-stack",
 		expectations: [
-			'The "Stack of 3" block\'s Remove stack button has been clicked; the three branches were dequeued top-down.',
+			'The "Stack of 3" block\'s outline Remove button has been clicked; the three branches were dequeued top-down.',
 			"The view is otherwise unchanged since the stubbed backend keeps returning the same queue contents.",
 		],
 	});
 }, 120000);
 
-it("removes the upper part of a stack when a middle branch is removed", async () => {
+it("does not offer per-entry remove inside a stack", async () => {
 	const { repoPath } = createTestRepo(false);
 	mockGetGitRemoteUrl.mockResolvedValue(REMOTE_INFO);
 	queueState.enabled = true;
@@ -281,17 +281,19 @@ it("removes the upper part of a stack when a middle branch is removed", async ()
 	await user.click(await screen.findByRole("tab", { name: /merge queue/i }));
 	await screen.findByText("PR #102");
 
-	// feat/top is stacked on feat/mid, so removing feat/mid alone would strand
-	// it. Both go, and nothing below feat/mid is touched.
-	await user.click(
-		screen.getByRole("button", { name: "Remove feat/mid from queue" }),
-	);
-	await waitFor(() => {
-		expect(mockInvoke).toHaveBeenCalledTimes(2);
-	});
-	expect(mockInvoke.mock.calls.map((call) => call[1].body.branch_name)).toEqual(
-		["feat/top", "feat/mid"],
-	);
+	expect(
+		screen.queryByRole("button", { name: "Remove feat/mid from queue" }),
+	).not.toBeInTheDocument();
+	expect(
+		screen.queryByRole("button", { name: "Remove feat/top from queue" }),
+	).not.toBeInTheDocument();
+	expect(
+		screen.getByRole("button", { name: "Remove stack of 3 from queue" }),
+	).toBeVisible();
+	// Standalone entries still get a per-row remove.
+	expect(
+		screen.getByRole("button", { name: "Remove fix/solo from queue" }),
+	).toBeVisible();
 }, 120000);
 
 it("captures the empty queue for a repo that has the queue switched on", async () => {
