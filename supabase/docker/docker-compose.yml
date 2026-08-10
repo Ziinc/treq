@@ -1,0 +1,24 @@
+services:
+  treq-supabase:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: treq-supabase:local
+    ports:
+      # Kong-compatible API gateway (Auth / REST / Functions)
+      - "54321:8000"
+      # Direct Postgres (optional)
+      - "54322:5432"
+    env_file:
+      - .env.example
+    volumes:
+      - treq-supabase-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+volumes:
+  treq-supabase-data:

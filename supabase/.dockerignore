@@ -1,0 +1,7 @@
+# Keep the supabase/ build context lean.
+**/.git
+**/.branches
+**/.temp
+**/node_modules
+**/.env
+functions/.env
