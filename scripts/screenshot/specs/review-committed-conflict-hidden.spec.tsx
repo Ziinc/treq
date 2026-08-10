@@ -63,18 +63,14 @@ it("captures committed-tip conflict after hiding Committed changes", async () =>
 	await captureDocument(document, {
 		name: "review-committed-conflict-hidden-01-before-toggle",
 		expectations: [
-			'The Review sidebar shows a red "Conflicts" section listing README.md while Committed changes are still visible.',
+			'The Review sidebar shows a red "Conflicts" section and a Committed section with a right-aligned Show button.',
+			"Committed file rows are visible in the sidebar while Show is active.",
 			"The workspace conflict indicator is present for the selected feature branch.",
 		],
 	});
 
-	const [committedToggle] = screen.getAllByRole("button", {
-		name: /^Committed$/,
-	});
-	if (!committedToggle) {
-		throw new Error("Committed toggle button not found");
-	}
-	await user.click(committedToggle);
+	const showButton = await screen.findByRole("button", { name: /^Show$/ });
+	await user.click(showButton);
 
 	const conflictsToggle = await screen.findByRole("button", {
 		name: "Conflicts",
@@ -87,9 +83,9 @@ it("captures committed-tip conflict after hiding Committed changes", async () =>
 	await captureDocument(document, {
 		name: "review-committed-conflict-hidden-02-after-hide-committed",
 		expectations: [
-			'After hiding Committed, the Conflicts section still lists README.md and the diff shows "Conflict 1 of 1".',
+			"After clicking Show off, the Committed section header remains with Show, but committed file rows are hidden.",
+			'The Conflicts section still lists README.md and the diff shows "Conflict 1 of 1".',
 			'Conflict side badges "Side #1", "Base", and "Side #2" remain visible on the card.',
-			'The main pane does not show an empty "No changes to review" state.',
 		],
 	});
 }, 60000);

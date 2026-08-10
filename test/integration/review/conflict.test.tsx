@@ -361,13 +361,8 @@ describe("Review - conflict rendering contract", () => {
     await navigateToReviewTab(user, fixture.branchName);
     await screen.findByText("Conflicts");
 
-    const [committedToggle] = screen.getAllByRole("button", {
-      name: /^Committed$/,
-    });
-    if (!committedToggle) {
-      throw new Error("Committed toggle button not found");
-    }
-    await user.click(committedToggle);
+    const showButton = screen.getByRole("button", { name: /^Show$/ });
+    await user.click(showButton);
 
     await clickFileInSection(user, "Conflicts", "README.md");
     await screen.findByText(/^Conflict 1 of 1$/);

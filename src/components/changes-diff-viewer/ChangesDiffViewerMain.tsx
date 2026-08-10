@@ -50,6 +50,7 @@ export const ChangesDiffViewer = memo(
         onCreateAgentWithReview,
         conflictedFiles = [],
         showCommittedChanges = false,
+        onShowCommittedChangesChange,
         onMoveFilesToNewWorkspace,
         workspace,
         baseBranch,
@@ -460,6 +461,11 @@ export const ChangesDiffViewer = memo(
             setExpandedLargeDiffs={setExpandedLargeDiffs}
             conflictFileRefs={conflictFileRefs}
             showCommittedChanges={showCommittedChanges}
+            onToggleShowCommitted={
+              onShowCommittedChangesChange
+                ? () => onShowCommittedChangesChange(!showCommittedChanges)
+                : undefined
+            }
             committedFiles={committedFiles}
             committedSectionCollapsed={committedSectionCollapsed}
             setCommittedSectionCollapsed={setCommittedSectionCollapsed}

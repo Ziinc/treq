@@ -112,11 +112,11 @@ export function useFileLoading({
         ]);
         const uncommittedPaths = new Set(parsed.map((file) => file.path));
 
-        // When Committed is hidden, still keep conflicted committed files —
-        // rebase conflicts live in committed hunks, not dirty WC changes.
-        let committed = (diff.committed_files ?? []).filter(
-          (file) => showCommittedChanges || conflictedHint.has(file.path),
-        );
+        // Keep the full committed file list so the Committed section header
+        // (and its Show toggle) stay available while committed diffs are hidden.
+        // Conflicted paths that aren't already in the committed list are still
+        // appended — rebase conflicts live in committed hunks.
+        let committed = [...(diff.committed_files ?? [])];
         for (const path of conflictedHint) {
           if (
             uncommittedPaths.has(path) ||
@@ -137,17 +137,14 @@ export function useFileLoading({
         }
         setCommittedFiles(committed);
 
-        const retainedCommittedPaths = new Set(
-          committed.map((file) => file.path),
-        );
+        // When Committed is hidden, still keep conflicted committed hunks —
+        // rebase conflicts live in committed hunks, not dirty WC changes.
         setCommittedFileHunks(
           new Map(
             (diff.hunks_by_file ?? [])
               .filter(
                 (fileDiff) =>
-                  showCommittedChanges ||
-                  retainedCommittedPaths.has(fileDiff.path) ||
-                  conflictedHint.has(fileDiff.path),
+                  showCommittedChanges || conflictedHint.has(fileDiff.path),
               )
               .map((fileDiff) => [
                 fileDiff.path,

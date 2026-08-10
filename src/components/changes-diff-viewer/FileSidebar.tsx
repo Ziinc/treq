@@ -41,6 +41,7 @@ interface FileSidebarProps {
   setExpandedLargeDiffs: React.Dispatch<React.SetStateAction<Set<string>>>;
   conflictFileRefs: React.MutableRefObject<Map<string, HTMLDivElement>>;
   showCommittedChanges: boolean | undefined;
+  onToggleShowCommitted: (() => void) | undefined;
   committedFiles: JjFileChange[];
   committedSectionCollapsed: boolean;
   setCommittedSectionCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
@@ -91,6 +92,7 @@ export function FileSidebar({
   setExpandedLargeDiffs,
   conflictFileRefs,
   showCommittedChanges,
+  onToggleShowCommitted,
   committedFiles,
   committedSectionCollapsed,
   setCommittedSectionCollapsed,
@@ -229,7 +231,7 @@ export function FileSidebar({
                 />
               </>
             ) : null}
-            {showCommittedChanges && committedFiles.length > 0 && (
+            {committedFiles.length > 0 && (
               <CommittedChangesSection
                 files={committedFiles}
                 isCollapsed={committedSectionCollapsed}
@@ -243,6 +245,8 @@ export function FileSidebar({
                   scrollToFileIfNeeded(path);
                 }}
                 workspacePath={workspacePath}
+                showCommittedChanges={showCommittedChanges ?? false}
+                onToggleShowCommitted={onToggleShowCommitted}
               />
             )}
           </>
