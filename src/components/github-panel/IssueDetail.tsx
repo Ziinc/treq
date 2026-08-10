@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, MessageSquare, X } from "lucide-react";
+import { Loader2, MessageSquare, Sparkles, X } from "lucide-react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
@@ -11,6 +11,7 @@ import {
   ghReopenIssue,
   ghViewIssue,
 } from "../../lib/api";
+import type { GitHubIssueAttachment } from "../../lib/promptAttachments";
 import { MarkdownContent } from "../MarkdownContent";
 import { formatDate, LabelChip, OpenInWebButton, StateChip } from "./shared";
 
@@ -18,10 +19,12 @@ export function IssueDetailPanel({
   repoFullName,
   issueNumber,
   onClose,
+  onStartPrompt,
 }: {
   repoFullName: string;
   issueNumber: number;
   onClose: () => void;
+  onStartPrompt?: (issue: GitHubIssueAttachment) => void;
 }) {
   const qc = useQueryClient();
   const [commentBody, setCommentBody] = useState("");
@@ -91,7 +94,25 @@ export function IssueDetailPanel({
               <h2 className="text-2xl font-semibold flex-1 min-w-0">
                 {issue.title}
               </h2>
-              <OpenInWebButton url={issue.url} />
+              <div className="flex items-center gap-2 shrink-0">
+                {onStartPrompt && (
+                  <Button
+                    size="sm"
+                    className="text-base gap-1.5"
+                    onClick={() =>
+                      onStartPrompt({
+                        number: issue.number,
+                        url: issue.url,
+                        title: issue.title,
+                      })
+                    }
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    Start prompt...
+                  </Button>
+                )}
+                <OpenInWebButton url={issue.url} />
+              </div>
             </div>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               <StateChip state={issue.state} />

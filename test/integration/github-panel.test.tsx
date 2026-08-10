@@ -475,6 +475,29 @@ describe("IssueDetailPanel markdown", () => {
       expect(api.ghCreateIssueComment).toHaveBeenCalled();
     });
   });
+
+  it("calls onStartPrompt with the issue when Start prompt is clicked", async () => {
+    const onStartPrompt = vi.fn();
+    render(
+      <IssueDetailPanel
+        repoFullName="acme/treq"
+        issueNumber={42}
+        onClose={() => {}}
+        onStartPrompt={onStartPrompt}
+      />,
+    );
+
+    await screen.findByText("Fix markdown");
+    await user.click(
+      screen.getByRole("button", { name: /start prompt/i }),
+    );
+
+    expect(onStartPrompt).toHaveBeenCalledWith({
+      number: 42,
+      url: "https://github.com/acme/treq/issues/42",
+      title: "Fix markdown",
+    });
+  });
 });
 
 describe("PrDetailPanel draft toggle", () => {
