@@ -88,6 +88,8 @@ Paths match hosted Supabase: `/auth/v1`, `/rest/v1`, `/functions/v1/<name>`.
 
 Prefer the fat image for agents/CI that cannot reliably run nested Docker bridges. Prefer the CLI for day-to-day schema iteration with Studio.
 
+Edge Functions bake `@supabase/supabase-js` into the image (import map remaps the `esm.sh` URL in source). Rebuild the image after changing function deps.
+
 ## Version pins
 
 See [versions.env](./versions.env). Bump when updating against [supabase/docker versions.md](https://github.com/supabase/supabase/blob/master/docker/versions.md).
