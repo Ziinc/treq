@@ -424,8 +424,8 @@ it("captures a 2-stack + independent + 3-stack with siblings through drain", asy
       name: "service-qa-ui-05-stacks-filled",
       viewport: { width: 560, height: 1000 },
       expectations: [
-        'Merge Queue shows a "Stack of 2" (feat/two-base → feat/two-top) and a "Stack of 3" (three-base → mid → top).',
-        "fix/solo appears as an independent entry between the stacks.",
+        'Merge Queue shows bordered stack cards: a "Stack of 2" (feat/two-base → feat/two-top) and a "Stack of 3" (three-base → mid → top).',
+        "fix/solo appears as its own card between the stacks.",
         "feat/three-sib is listed as the sibling of three-mid (same parent base).",
       ],
     });

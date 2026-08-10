@@ -417,6 +417,7 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
             <MergeQueueTab
               isPro={isPro}
               hasRemote={!!remoteInfo}
+              repoPath={repoPath}
               queueEnabled={queueEnabled}
               queueLoading={queueLoading}
               queueEntries={queueEntries}

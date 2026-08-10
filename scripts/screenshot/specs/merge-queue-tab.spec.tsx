@@ -20,6 +20,8 @@ const { queueState, mockGetGitRemoteUrl, mockSetEnabled, mockInvoke } =
 				status: QueueEntryStatus;
 				position: number;
 				target_branch: string;
+				insertions?: number;
+				deletions?: number;
 			}[],
 		},
 		mockGetGitRemoteUrl: vi.fn(),
@@ -95,6 +97,8 @@ const QUEUE = [
 		status: "merging" as QueueEntryStatus,
 		position: 1,
 		target_branch: "main",
+		insertions: 42,
+		deletions: 8,
 	},
 	{
 		branch_name: "feat/mid",
@@ -102,6 +106,8 @@ const QUEUE = [
 		status: "testing" as QueueEntryStatus,
 		position: 2,
 		target_branch: "feat/base",
+		insertions: 18,
+		deletions: 3,
 	},
 	{
 		branch_name: "feat/top",
@@ -109,6 +115,8 @@ const QUEUE = [
 		status: "queued" as QueueEntryStatus,
 		position: 3,
 		target_branch: "feat/mid",
+		insertions: 6,
+		deletions: 1,
 	},
 	// An independent branch queued behind the stack.
 	{
@@ -117,6 +125,8 @@ const QUEUE = [
 		status: "queued" as QueueEntryStatus,
 		position: 4,
 		target_branch: "main",
+		insertions: 12,
+		deletions: 4,
 	},
 	// A second, two-deep stack with no PR on its upper branch.
 	{
@@ -125,6 +135,8 @@ const QUEUE = [
 		status: "queued" as QueueEntryStatus,
 		position: 5,
 		target_branch: "main",
+		insertions: 30,
+		deletions: 10,
 	},
 	{
 		branch_name: "chore/top",
@@ -132,6 +144,8 @@ const QUEUE = [
 		status: "queued" as QueueEntryStatus,
 		position: 6,
 		target_branch: "chore/base",
+		insertions: 4,
+		deletions: 0,
 	},
 ];
 
@@ -177,17 +191,18 @@ it("captures the stacked PR queue for an opted-in repo", async () => {
 	await captureDocument(document, {
 		name: "merge-queue-tab-02-enabled-with-queue",
 		expectations: [
-			"The tab lists the queue directly, with no toggle row above it.",
-			"A single vertical line runs down the left of the whole list, with a round node on it for every entry -- the line is continuous across the stack groupings, not restarted per stack, showing one merge sequence.",
+			"The tab lists the queue as bordered cards (like the Code tab stack card), with no Show merged toggle when there is no history.",
+			"Each multi-PR stack is its own card with a Layers header; the standalone PR is its own card. Cards are spaced vertically.",
 			'Node colours follow status: PR #101 (Merging) is green, PR #102 ("Running checks") is amber, the Queued ones are grey.',
 		],
 	});
 	await captureDocument(document, {
 		name: "merge-queue-tab-02b-stacks-and-terminator",
+		viewport: { width: 480, height: 900 },
 		expectations: [
-			'Two "Stack of N" headers appear inline in the list: "Stack of 3 · merges bottom-up into main" above entries 1-3, and "Stack of 2" above entries 5-6. Entry #4 has no stack header.',
-			'Each stack header has a neutral outline "Remove" button; stacked PR rows have no per-entry X. The stack accent border aligns under the Layers icon.',
-			'At the very bottom of the line is a down-arrow and the target branch "main"; the entry with no PR number reads "No PR". The standalone fix/solo row still has its own X remove control.',
+			'Two stack cards show "Stack of 3" and "Stack of 2" headers with outline Remove buttons; stacked rows have no per-entry X.',
+			"Each PR row shows green +N / red -N LOC stats (and a small relative diff bar) like the Code tab stack card.",
+			'Below the cards is a down-arrow and the target branch "main". The entry with no PR number reads "No PR". The standalone fix/solo card still has its own X remove control.',
 		],
 	});
 
@@ -201,11 +216,21 @@ it("captures the stacked PR queue for an opted-in repo", async () => {
 		"merge-queue-entry-5",
 		"merge-queue-entry-6",
 	]);
-	expect(screen.getByTestId("merge-queue-stack-feat/base")).toBeInTheDocument();
-	expect(screen.getByTestId("merge-queue-single-fix/solo")).toBeInTheDocument();
-	expect(
-		screen.getByTestId("merge-queue-stack-chore/base"),
-	).toBeInTheDocument();
+	const featStack = screen.getByTestId("merge-queue-stack-feat/base");
+	expect(featStack).toHaveClass("border", "rounded-lg");
+	expect(screen.getByTestId("merge-queue-single-fix/solo")).toHaveClass(
+		"border",
+		"rounded-lg",
+	);
+	expect(screen.getByTestId("merge-queue-stack-chore/base")).toHaveClass(
+		"border",
+		"rounded-lg",
+	);
+	expect(within(featStack).getByText("+42")).toBeVisible();
+	expect(within(featStack).getByText("-8")).toBeVisible();
+	expect(within(featStack).getAllByTestId("diff-bar").length).toBeGreaterThan(
+		0,
+	);
 }, 120000);
 
 it("captures removing a single branch and a whole stack from the queue", async () => {
@@ -241,7 +266,7 @@ it("captures removing a single branch and a whole stack from the queue", async (
 	await captureDocument(document, {
 		name: "merge-queue-tab-04-removed-single",
 		expectations: [
-			"The queue still lists both stack blocks and the standalone PR #104 row (the list refetches from the server, which this harness holds fixed).",
+			"The queue still lists both stack cards and the standalone PR #104 card (the list refetches from the server, which this harness holds fixed).",
 			"No error is shown -- the remove click was accepted.",
 		],
 	});
@@ -261,7 +286,7 @@ it("captures removing a single branch and a whole stack from the queue", async (
 	await captureDocument(document, {
 		name: "merge-queue-tab-05-removed-stack",
 		expectations: [
-			'The "Stack of 3" block\'s outline Remove button has been clicked; the three branches were dequeued top-down.',
+			'The "Stack of 3" card\'s outline Remove button has been clicked; the three branches were dequeued top-down.',
 			"The view is otherwise unchanged since the stubbed backend keeps returning the same queue contents.",
 		],
 	});
@@ -330,6 +355,8 @@ it("hides fully merged stacks by default and shows them below main when toggled"
 			status: "queued",
 			position: 1,
 			target_branch: "main",
+			insertions: 9,
+			deletions: 2,
 		},
 		// Fully merged stack — highest positions so it sits just under main tip.
 		{
@@ -338,6 +365,8 @@ it("hides fully merged stacks by default and shows them below main when toggled"
 			status: "merged",
 			position: 20,
 			target_branch: "main",
+			insertions: 40,
+			deletions: 5,
 		},
 		{
 			branch_name: "feat/done-top",
@@ -345,6 +374,8 @@ it("hides fully merged stacks by default and shows them below main when toggled"
 			status: "merged",
 			position: 21,
 			target_branch: "feat/done-base",
+			insertions: 15,
+			deletions: 3,
 		},
 		// Older merged singles for Load more pagination (page size 5).
 		...[10, 11, 12, 13, 14, 15].map((n) => ({
@@ -353,6 +384,8 @@ it("hides fully merged stacks by default and shows them below main when toggled"
 			status: "merged" as QueueEntryStatus,
 			position: n,
 			target_branch: "main",
+			insertions: n,
+			deletions: 1,
 		})),
 	];
 
@@ -394,8 +427,8 @@ it("hides fully merged stacks by default and shows them below main when toggled"
 		name: "merge-queue-tab-07-history-shown",
 		viewport: { width: 480, height: 900 },
 		expectations: [
-			"With Show merged on, completed stacks appear below the main terminator.",
-			"The merged Stack of 2 (PR #101 / #102) is visible under main.",
+			"With Show merged on, completed stacks appear as cards below the main terminator.",
+			"The merged Stack of 2 (PR #101 / #102) card is visible under main with LOC stats.",
 			'A "Load more" button is present when history exceeds the first page.',
 		],
 	});
@@ -415,6 +448,8 @@ it("keeps a partially merged stack visible with the bottom PR labelled Merged", 
 			status: "merged",
 			position: 1,
 			target_branch: "main",
+			insertions: 22,
+			deletions: 4,
 		},
 		{
 			branch_name: "feat/top",
@@ -422,6 +457,8 @@ it("keeps a partially merged stack visible with the bottom PR labelled Merged", 
 			status: "testing",
 			position: 2,
 			target_branch: "feat/base",
+			insertions: 11,
+			deletions: 2,
 		},
 	];
 
@@ -437,8 +474,8 @@ it("keeps a partially merged stack visible with the bottom PR labelled Merged", 
 	await captureDocument(document, {
 		name: "merge-queue-tab-08-partial-stack-merged",
 		expectations: [
-			"A Stack of 2 remains above main while the upper PR is still Running checks.",
-			"The bottom PR shows a Merged chip and is still listed in the active stack.",
+			"A Stack of 2 card remains above main while the upper PR is still Running checks.",
+			"The bottom PR shows a Merged chip and LOC stats, still listed in the active stack card.",
 			"No merge history section is shown yet because the stack is not fully merged.",
 		],
 	});

@@ -6,6 +6,9 @@ export interface QueueEntry {
   status: QueueEntryStatus;
   position: number;
   target_branch: string;
+  /** Optional LOC from local workspace enrichment or fixtures. */
+  insertions?: number;
+  deletions?: number;
 }
 
 export interface QueueStack {

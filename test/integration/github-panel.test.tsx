@@ -203,7 +203,7 @@ describe("GitHubPanel", () => {
     expect(screen.getByText("feat/alpha → main")).toBeVisible();
     expect(screen.getByText("feat/beta → main")).toBeVisible();
     expect(screen.getByText(/queued/i)).toBeVisible();
-    expect(screen.getByText(/testing/i)).toBeVisible();
+    expect(screen.getByText(/running checks/i)).toBeVisible();
   });
 
   it("hides the queue and points at Settings when the repo has it disabled", async () => {
