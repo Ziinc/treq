@@ -7,15 +7,24 @@ import {
   supabase,
 } from "../lib/supabase";
 import {
+  authRetryDelayMs,
+  checkSupabaseAuthHealth,
+  classifySessionRestoreError,
+  type AuthAvailability,
+} from "../lib/supabaseHealth";
+import {
   createContext,
   useCallback,
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
+
+export type { AuthAvailability };
 
 export interface Subscription {
   status: "active" | "canceled" | "past_due" | "inactive";
@@ -27,22 +36,29 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  availability: AuthAvailability;
+  /** True when a session is saved locally, even if cloud restore has not succeeded. */
+  hasStoredSession: boolean;
   subscription: Subscription | null;
   signIn: () => Promise<void>;
   signOut: () => Promise<void>;
   refreshSubscription: () => Promise<void>;
   exchangeToken: (token: string) => Promise<void>;
+  retryConnection: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   session: null,
   loading: true,
+  availability: "checking",
+  hasStoredSession: false,
   subscription: null,
   signIn: async () => {},
   signOut: async () => {},
   refreshSubscription: async () => {},
   exchangeToken: async () => {},
+  retryConnection: async () => {},
 });
 
 AuthContext.displayName = "AuthContext";
@@ -55,7 +71,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [availability, setAvailability] =
+    useState<AuthAvailability>("checking");
+  const [hasStoredSession, setHasStoredSession] = useState(false);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
+
+  const retryAttemptRef = useRef(0);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const restoreInFlightRef = useRef<Promise<void> | null>(null);
+  const mountedRef = useRef(true);
+  const connectRef = useRef<(options?: { manual?: boolean }) => Promise<void>>(
+    async () => {},
+  );
+
+  const clearRetryTimer = useCallback(() => {
+    if (retryTimerRef.current !== null) {
+      clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
+  }, []);
+
+  const scheduleBackoff = useCallback(() => {
+    clearRetryTimer();
+    const delay = authRetryDelayMs(retryAttemptRef.current);
+    retryAttemptRef.current += 1;
+    retryTimerRef.current = setTimeout(() => {
+      void connectRef.current({ manual: false });
+    }, delay);
+  }, [clearRetryTimer]);
 
   const persistSession = useCallback(async (sess: Session | null) => {
     if (sess) {
@@ -66,56 +109,184 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           refreshToken: sess.refresh_token,
         }),
       );
+      setHasStoredSession(true);
     } else {
       await setSetting("supabase_session", "");
+      setHasStoredSession(false);
     }
   }, []);
 
-  const fetchSubscription = useCallback(async () => {
-    if (!session) {
-      setSubscription(null);
-      return;
-    }
-    try {
-      const { data, error } = await supabase
-        .from("subscriptions")
-        .select("*")
-        .single();
+  const clearStoredSession = useCallback(async () => {
+    await setSetting("supabase_session", "");
+    setHasStoredSession(false);
+  }, []);
 
-      if (!error && data) {
-        setSubscription(data as Subscription);
+  const fetchSubscription = useCallback(
+    async (activeSession: Session | null) => {
+      if (!activeSession) {
+        setSubscription(null);
+        return;
       }
-    } catch {
-      // Subscription fetch failed silently
-    }
-  }, [session]);
-
-  // Restore session on mount
-  useEffect(() => {
-    const restoreSession = async () => {
       try {
-        const stored = await getSetting("supabase_session");
-        if (stored) {
-          const tokens = JSON.parse(stored) as Record<string, string>;
-          const { accessToken } = tokens;
-          const { refreshToken } = tokens;
-          const { data, error } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken,
-          });
-          if (!error && data.session) {
-            setSession(data.session);
-            setUser(data.session.user);
-          }
+        const { data, error } = await supabase
+          .from("subscriptions")
+          .select("*")
+          .single();
+
+        if (!error && data) {
+          setSubscription(data as Subscription);
         }
       } catch {
-        // Failed to restore session
-      } finally {
-        setLoading(false);
+        // Subscription fetch failed silently
       }
-    };
-    restoreSession();
+    },
+    [],
+  );
+
+  const applySession = useCallback((next: Session | null) => {
+    setSession(next);
+    setUser(next?.user ?? null);
   }, []);
+
+  const restoreFromStoredTokens = useCallback(async (): Promise<
+    "ok" | "unavailable" | "signed_out"
+  > => {
+    const stored = await getSetting("supabase_session");
+    if (!stored) {
+      setHasStoredSession(false);
+      applySession(null);
+      return "signed_out";
+    }
+
+    setHasStoredSession(true);
+
+    let tokens: Record<string, string>;
+    try {
+      tokens = JSON.parse(stored) as Record<string, string>;
+    } catch (error) {
+      console.warn(
+        "Clearing malformed supabase_session setting",
+        error,
+      );
+      await clearStoredSession();
+      applySession(null);
+      return "signed_out";
+    }
+
+    const accessToken = tokens.accessToken ?? tokens.access_token;
+    const refreshToken = tokens.refreshToken ?? tokens.refresh_token;
+    if (!accessToken || !refreshToken) {
+      console.warn(
+        "Clearing malformed supabase_session setting: missing tokens",
+      );
+      await clearStoredSession();
+      applySession(null);
+      return "signed_out";
+    }
+
+    try {
+      const { data, error } = await supabase.auth.setSession({
+        access_token: accessToken,
+        refresh_token: refreshToken,
+      });
+      if (error) throw error;
+      if (data.session) {
+        applySession(data.session);
+        await persistSession(data.session);
+        return "ok";
+      }
+      return "signed_out";
+    } catch (error) {
+      const kind = classifySessionRestoreError(error);
+      if (kind === "network") {
+        // Keep credentials; cloud is temporarily unreachable.
+        return "unavailable";
+      }
+      if (kind === "invalid_token") {
+        await clearStoredSession();
+        applySession(null);
+        return "signed_out";
+      }
+      if (kind === "malformed_json") {
+        console.warn("Clearing malformed supabase_session setting", error);
+        await clearStoredSession();
+        applySession(null);
+        return "signed_out";
+      }
+      console.warn("Session restore failed", error);
+      return "unavailable";
+    }
+  }, [applySession, clearStoredSession, persistSession]);
+
+  const connect = useCallback(
+    async (options?: { manual?: boolean }) => {
+      const manual = options?.manual ?? false;
+      if (restoreInFlightRef.current) {
+        await restoreInFlightRef.current;
+        return;
+      }
+
+      const run = (async () => {
+        if (manual) {
+          retryAttemptRef.current = 0;
+          clearRetryTimer();
+        }
+
+        // Always learn whether credentials exist locally, even when offline.
+        const stored = await getSetting("supabase_session");
+        if (!mountedRef.current) return;
+        setHasStoredSession(Boolean(stored));
+
+        // Fail fast: never call setSession while the auth API is down.
+        const healthy = await checkSupabaseAuthHealth(SUPABASE_URL);
+        if (!mountedRef.current) return;
+
+        if (!healthy) {
+          setAvailability("unavailable");
+          setLoading(false);
+          scheduleBackoff();
+          return;
+        }
+
+        const result = await restoreFromStoredTokens();
+        if (!mountedRef.current) return;
+
+        if (result === "unavailable") {
+          setAvailability("unavailable");
+          setLoading(false);
+          scheduleBackoff();
+          return;
+        }
+
+        setAvailability("available");
+        retryAttemptRef.current = 0;
+        clearRetryTimer();
+        setLoading(false);
+      })();
+
+      restoreInFlightRef.current = run;
+      try {
+        await run;
+      } finally {
+        if (restoreInFlightRef.current === run) {
+          restoreInFlightRef.current = null;
+        }
+      }
+    },
+    [clearRetryTimer, restoreFromStoredTokens, scheduleBackoff],
+  );
+
+  connectRef.current = connect;
+
+  // Probe health and restore the saved session on mount.
+  useEffect(() => {
+    mountedRef.current = true;
+    void connectRef.current({ manual: false });
+    return () => {
+      mountedRef.current = false;
+      clearRetryTimer();
+    };
+  }, [clearRetryTimer]);
 
   // Exchange a one-time token for a Supabase session
   const exchangeToken = useCallback(
@@ -146,12 +317,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
       if (error) throw error;
       if (sessionData.session) {
-        setSession(sessionData.session);
-        setUser(sessionData.session.user);
+        applySession(sessionData.session);
+        setAvailability("available");
         await persistSession(sessionData.session);
       }
     },
-    [persistSession],
+    [applySession, persistSession],
   );
 
   // Listen for deep-link events (desktop auth callback)
@@ -180,7 +351,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   // Fetch subscription when session changes
   useEffect(() => {
     if (session) {
-      fetchSubscription();
+      void fetchSubscription(session);
     } else {
       setSubscription(null);
     }
@@ -191,37 +362,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   const signOut = useCallback(async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    setSession(null);
+    clearRetryTimer();
+    retryAttemptRef.current = 0;
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      // Sign-out may fail while offline; still clear local credentials.
+    }
+    applySession(null);
     setSubscription(null);
+    setAvailability("available");
     await persistSession(null);
-  }, [persistSession]);
+  }, [applySession, clearRetryTimer, persistSession]);
 
   const refreshSubscription = useCallback(async () => {
-    await fetchSubscription();
-  }, [fetchSubscription]);
+    await fetchSubscription(session);
+  }, [fetchSubscription, session]);
+
+  const retryConnection = useCallback(async () => {
+    setAvailability("checking");
+    await connect({ manual: true });
+  }, [connect]);
 
   const value = useMemo(
     () => ({
       user,
       session,
       loading,
+      availability,
+      hasStoredSession,
       subscription,
       signIn,
       signOut,
       refreshSubscription,
       exchangeToken,
+      retryConnection,
     }),
     [
       user,
       session,
       loading,
+      availability,
+      hasStoredSession,
       subscription,
       signIn,
       signOut,
       refreshSubscription,
       exchangeToken,
+      retryConnection,
     ],
   );
 

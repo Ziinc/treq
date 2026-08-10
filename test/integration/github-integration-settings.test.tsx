@@ -9,8 +9,11 @@ const auth = vi.hoisted(() => ({
   user: { id: "user-1" } as object | null,
   session: { access_token: "token" } as object | null,
   loading: false,
+  availability: "available" as "checking" | "available" | "unavailable",
+  hasStoredSession: true,
   subscription: null as { plan: string; status: string } | null,
   signIn: vi.fn(),
+  retryConnection: vi.fn(async () => {}),
 }));
 const query = vi.hoisted(() => vi.fn());
 
@@ -47,8 +50,11 @@ describe("GitHubIntegrationSettings", () => {
     auth.user = { id: "user-1" };
     auth.session = { access_token: "token" };
     auth.loading = false;
+    auth.availability = "available";
+    auth.hasStoredSession = true;
     auth.subscription = null;
     auth.signIn.mockReset();
+    auth.retryConnection.mockReset();
     query.mockReset();
     vi.mocked(openUrl).mockReset();
   });
@@ -114,5 +120,45 @@ describe("GitHubIntegrationSettings", () => {
         "http://localhost:3001/dashboard?tab=integrations",
       ),
     );
+  });
+
+  it("shows an offline banner and disables cloud controls when unavailable", async () => {
+    auth.availability = "unavailable";
+    auth.hasStoredSession = true;
+    auth.user = null;
+    auth.session = null;
+    render(<GitHubIntegrationSettings />);
+
+    expect(
+      await screen.findByText(
+        /treq cloud is unavailable\. local workspace features continue to work/i,
+      ),
+    ).toBeVisible();
+    expect(screen.queryByRole("button", { name: /sign in with browser/i })).toBeNull();
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /^retry$/i }));
+    expect(auth.retryConnection).toHaveBeenCalled();
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it("disables merge queue with an offline explanation when signed in but unavailable", async () => {
+    auth.availability = "unavailable";
+    auth.subscription = { plan: "pro", status: "active" };
+    query.mockResolvedValue({ data: repositories, error: null });
+    render(<GitHubIntegrationSettings repoPath="/tmp/repo" />);
+
+    expect(
+      await screen.findByText(
+        /treq cloud is unavailable\. local workspace features continue to work/i,
+      ),
+    ).toBeVisible();
+    expect(screen.getAllByText(/unavailable while offline/i).length).toBeGreaterThan(
+      0,
+    );
+    expect(
+      screen.queryByRole("button", { name: /enable merge queue/i }),
+    ).toBeNull();
+    expect(query).not.toHaveBeenCalled();
   });
 });

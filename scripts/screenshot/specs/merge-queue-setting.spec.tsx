@@ -30,8 +30,11 @@ const { queueState, repoState, mockGetGitRemoteUrl, mockSetEnabled, auth } =
 			user: { id: "user-1" },
 			session: { access_token: "token" },
 			loading: false,
+			availability: "available",
+			hasStoredSession: true,
 			subscription: { plan: "pro", status: "active" },
 			signIn: vi.fn(),
+			retryConnection: vi.fn(async () => {}),
 		},
 	}));
 

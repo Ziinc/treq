@@ -9,6 +9,7 @@ import {
 } from "../hooks/useMergeQueueStatus";
 import { FEATURES } from "../lib/features";
 import { supabase, WEB_URL } from "../lib/supabase";
+import { CloudUnavailableBanner } from "./CloudUnavailableBanner";
 import { Button } from "./ui/button";
 import { Switch } from "./ui/switch";
 
@@ -51,7 +52,14 @@ const MergeQueueSetting: React.FC<{
   isPro: boolean;
   repositories: GitHubRepository[];
   repositoriesLoading: boolean;
-}> = ({ repoPath, isPro, repositories, repositoriesLoading }) => {
+  cloudUnavailable?: boolean;
+}> = ({
+  repoPath,
+  isPro,
+  repositories,
+  repositoriesLoading,
+  cloudUnavailable = false,
+}) => {
   const { data: remoteInfo } = useGitRemoteInfo(repoPath);
   const { data: enabled, isLoading } = useMergeQueueEnabled(repoPath);
   const setEnabled = useSetMergeQueueEnabled(repoPath);
@@ -60,7 +68,7 @@ const MergeQueueSetting: React.FC<{
   const isLinked =
     !!remoteInfo &&
     repositories.some((repo) => repo.full_name === remoteInfo.full_name);
-  const isEligible = isPro && isLinked;
+  const isEligible = isPro && isLinked && !cloudUnavailable;
 
   async function apply(next: boolean) {
     setError(null);
@@ -72,6 +80,7 @@ const MergeQueueSetting: React.FC<{
   }
 
   function ineligibleReason(): string {
+    if (cloudUnavailable) return "Unavailable while offline";
     if (!remoteInfo) return "This repository has no GitHub remote.";
     if (!isPro) return "Upgrade to Pro to use the merge queue.";
     return `Install the Treq GitHub App on ${remoteInfo.full_name} to use the merge queue.`;
@@ -82,14 +91,18 @@ const MergeQueueSetting: React.FC<{
       <SettingRow
         title="Merge queue"
         description={
-          enabled
-            ? "Queued branches merge automatically once CI passes."
-            : isEligible || repositoriesLoading
-              ? "Merge branches automatically once CI passes."
-              : ineligibleReason()
+          cloudUnavailable
+            ? "Unavailable while offline"
+            : enabled
+              ? "Queued branches merge automatically once CI passes."
+              : isEligible || repositoriesLoading
+                ? "Merge branches automatically once CI passes."
+                : ineligibleReason()
         }
       >
-        {repositoriesLoading || isLoading ? (
+        {cloudUnavailable ? (
+          <span className="text-base text-muted-foreground">Offline</span>
+        ) : repositoriesLoading || isLoading ? (
           <Loader2
             aria-label="Loading merge queue setting"
             className="w-4 h-4 animate-spin text-muted-foreground"
@@ -141,20 +154,25 @@ export const GitHubIntegrationSettings: React.FC<
     user,
     session,
     loading: authLoading,
+    availability,
+    hasStoredSession,
     subscription,
     signIn,
+    retryConnection,
   } = useAuth();
   const [repositories, setRepositories] = useState<GitHubRepository[]>([]);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const isPro =
     subscription?.plan === "pro" && subscription.status === "active";
+  const cloudUnavailable = availability === "unavailable";
 
   const userId = user?.id;
   const isSignedIn = !!user && !!session;
 
   useEffect(() => {
-    if (!isSignedIn) return;
+    if (!isSignedIn || cloudUnavailable) return;
     let active = true;
     setLoading(true);
     setFailed(false);
@@ -171,7 +189,16 @@ export const GitHubIntegrationSettings: React.FC<
       active = false;
     };
     // Keyed on user identity, not the auth objects, so an unstable useAuth can't loop this.
-  }, [userId, isSignedIn]);
+  }, [userId, isSignedIn, cloudUnavailable]);
+
+  const handleRetry = async () => {
+    setRetrying(true);
+    try {
+      await retryConnection();
+    } finally {
+      setRetrying(false);
+    }
+  };
 
   if (authLoading) {
     return (
@@ -187,19 +214,34 @@ export const GitHubIntegrationSettings: React.FC<
   if (!isSignedIn) {
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-4 text-center">
+        {cloudUnavailable && (
+          <div className="w-full max-w-md text-left">
+            <CloudUnavailableBanner onRetry={handleRetry} retrying={retrying} />
+          </div>
+        )}
         <Github className="w-12 h-12 text-muted-foreground" />
         <div>
           <h3 className="text-lg font-semibold">
-            Sign in to manage integrations
+            {hasStoredSession && cloudUnavailable
+              ? "Treq Cloud is offline"
+              : "Sign in to manage integrations"}
           </h3>
           <p className="text-base text-muted-foreground mt-1">
-            Connect your GitHub repositories through Treq.
+            {hasStoredSession && cloudUnavailable
+              ? "Your account is saved locally. Integrations will return when the connection is restored."
+              : "Connect your GitHub repositories through Treq."}
           </p>
         </div>
-        <Button onClick={signIn} className="gap-2">
-          <ExternalLink className="w-4 h-4" />
-          Sign in with Browser
-        </Button>
+        {!(hasStoredSession && cloudUnavailable) && (
+          <Button
+            onClick={signIn}
+            className="gap-2"
+            disabled={cloudUnavailable}
+          >
+            <ExternalLink className="w-4 h-4" />
+            Sign in with Browser
+          </Button>
+        )}
       </div>
     );
   }
@@ -210,6 +252,10 @@ export const GitHubIntegrationSettings: React.FC<
 
   return (
     <div className="space-y-10">
+      {cloudUnavailable && (
+        <CloudUnavailableBanner onRetry={handleRetry} retrying={retrying} />
+      )}
+
       {/* One header per integration; settings sit directly beneath it. */}
       <section>
         <div className="flex items-center gap-3 pb-2 border-b border-border">
@@ -227,25 +273,29 @@ export const GitHubIntegrationSettings: React.FC<
               isPro={isPro}
               repositories={repositories}
               repositoriesLoading={loading}
+              cloudUnavailable={cloudUnavailable}
             />
           )}
 
           <SettingRow
             title="Connected repositories"
             description={
-              loading
-                ? "Loading GitHub repositories…"
-                : failed
-                  ? "Could not load GitHub repositories. Try again later."
-                  : visibleRepositories.length === 0
-                    ? "No enabled GitHub repositories."
-                    : `${visibleRepositories.length} enabled.`
+              cloudUnavailable
+                ? "Unavailable while offline"
+                : loading
+                  ? "Loading GitHub repositories…"
+                  : failed
+                    ? "Could not load GitHub repositories. Try again later."
+                    : visibleRepositories.length === 0
+                      ? "No enabled GitHub repositories."
+                      : `${visibleRepositories.length} enabled.`
             }
           >
             <Button
               variant="outline"
               size="sm"
               className="gap-2 text-base"
+              disabled={cloudUnavailable}
               onClick={() => openUrl(`${WEB_URL}/dashboard?tab=integrations`)}
             >
               <ExternalLink className="w-3 h-3" />
@@ -253,21 +303,24 @@ export const GitHubIntegrationSettings: React.FC<
             </Button>
           </SettingRow>
 
-          {!loading && !failed && visibleRepositories.length > 0 && (
-            <ul className="py-2">
-              {visibleRepositories.map((repo) => (
-                <li
-                  key={repo.id}
-                  className="flex items-center justify-between py-1.5 text-base"
-                >
-                  <span className="font-mono">{repo.full_name}</span>
-                  <span className="text-muted-foreground">
-                    {repo.private ? "Private" : "Public"}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
+          {!cloudUnavailable &&
+            !loading &&
+            !failed &&
+            visibleRepositories.length > 0 && (
+              <ul className="py-2">
+                {visibleRepositories.map((repo) => (
+                  <li
+                    key={repo.id}
+                    className="flex items-center justify-between py-1.5 text-base"
+                  >
+                    <span className="font-mono">{repo.full_name}</span>
+                    <span className="text-muted-foreground">
+                      {repo.private ? "Private" : "Public"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
         </div>
       </section>
     </div>

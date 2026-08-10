@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
+import { CloudUnavailableBanner } from "./CloudUnavailableBanner";
 import { WEB_URL } from "../lib/supabase";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useAuth } from "../hooks/useAuth";
@@ -16,11 +17,32 @@ import { useState } from "react";
 const isDev = import.meta.env.DEV;
 
 export const AccountSettings: React.FC = () => {
-  const { user, loading, subscription, signIn, signOut, exchangeToken } =
-    useAuth();
+  const {
+    user,
+    loading,
+    availability,
+    hasStoredSession,
+    subscription,
+    signIn,
+    signOut,
+    exchangeToken,
+    retryConnection,
+  } = useAuth();
   const [callbackUrl, setCallbackUrl] = useState("");
   const [devError, setDevError] = useState<string | null>(null);
   const [devLoading, setDevLoading] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+
+  const cloudUnavailable = availability === "unavailable";
+
+  const handleRetry = async () => {
+    setRetrying(true);
+    try {
+      await retryConnection();
+    } finally {
+      setRetrying(false);
+    }
+  };
 
   const handleDevCallback = async () => {
     setDevError(null);
@@ -37,7 +59,6 @@ export const AccountSettings: React.FC = () => {
         return;
       }
       await exchangeToken(token);
-      setCallbackUrl("");
     } catch (err: unknown) {
       setDevError(err instanceof Error ? err.message : "Token exchange failed");
     } finally {
@@ -53,9 +74,36 @@ export const AccountSettings: React.FC = () => {
     );
   }
 
+  // Stored account, but cloud unreachable — not the same as signed out.
+  if (!user && hasStoredSession && cloudUnavailable) {
+    return (
+      <div className="space-y-4">
+        <CloudUnavailableBanner onRetry={handleRetry} retrying={retrying} />
+        <p className="text-sm text-muted-foreground">
+          Your account is saved on this device. Cloud features will return when
+          the connection is restored.
+        </p>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2 text-destructive hover:text-destructive"
+          onClick={signOut}
+        >
+          <LogOut className="w-4 h-4" />
+          Sign Out
+        </Button>
+      </div>
+    );
+  }
+
   if (!user) {
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-4">
+        {cloudUnavailable && (
+          <div className="w-full max-w-md">
+            <CloudUnavailableBanner onRetry={handleRetry} retrying={retrying} />
+          </div>
+        )}
         <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
           <User className="w-8 h-8 text-muted-foreground" />
         </div>
@@ -65,10 +113,15 @@ export const AccountSettings: React.FC = () => {
             Sync your settings and manage your subscription
           </p>
         </div>
-        <Button onClick={signIn} className="gap-2">
+        <Button onClick={signIn} className="gap-2" disabled={cloudUnavailable}>
           <ExternalLink className="w-4 h-4" />
           Sign in with Browser
         </Button>
+        {cloudUnavailable && (
+          <p className="text-xs text-muted-foreground">
+            Unavailable while offline
+          </p>
+        )}
 
         {isDev && (
           <div className="w-full max-w-sm mt-4 p-3 border border-dashed border-yellow-500/50 rounded-lg bg-yellow-500/5">
@@ -111,6 +164,10 @@ export const AccountSettings: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {cloudUnavailable && (
+        <CloudUnavailableBanner onRetry={handleRetry} retrying={retrying} />
+      )}
+
       {/* User Info Card */}
       <div className="border border-border rounded-lg p-4">
         <div className="flex items-center gap-4">
@@ -140,51 +197,63 @@ export const AccountSettings: React.FC = () => {
           <CreditCard className="w-4 h-4" />
           <span className="font-medium">Subscription</span>
         </div>
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Plan</span>
-            <span className="text-sm font-medium flex items-center gap-1">
-              {isPro && <Crown className="w-3 h-3 text-yellow-500" />}
-              {isPro ? "Pro" : "Free"}
-            </span>
-          </div>
-          {subscription?.status && (
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Status</span>
-              <span
-                className={`text-sm font-medium ${
-                  subscription.status === "active"
-                    ? "text-green-600 dark:text-green-400"
-                    : subscription.status === "canceled"
-                      ? "text-yellow-600 dark:text-yellow-400"
-                      : "text-muted-foreground"
-                }`}
+        {cloudUnavailable ? (
+          <p className="text-sm text-muted-foreground">
+            Unavailable while offline
+          </p>
+        ) : (
+          <>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Plan</span>
+                <span className="text-sm font-medium flex items-center gap-1">
+                  {isPro && <Crown className="w-3 h-3 text-yellow-500" />}
+                  {isPro ? "Pro" : "Free"}
+                </span>
+              </div>
+              {subscription?.status && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Status</span>
+                  <span
+                    className={`text-sm font-medium ${
+                      subscription.status === "active"
+                        ? "text-green-600 dark:text-green-400"
+                        : subscription.status === "canceled"
+                          ? "text-yellow-600 dark:text-yellow-400"
+                          : "text-muted-foreground"
+                    }`}
+                  >
+                    {subscription.status.charAt(0).toUpperCase() +
+                      subscription.status.slice(1).replace("_", " ")}
+                  </span>
+                </div>
+              )}
+              {subscription?.current_period_end && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">
+                    Period ends
+                  </span>
+                  <span className="text-sm">
+                    {new Date(
+                      subscription.current_period_end,
+                    ).toLocaleDateString()}
+                  </span>
+                </div>
+              )}
+            </div>
+            <div className="mt-4">
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full gap-2"
+                onClick={() => openUrl(`${WEB_URL}/dashboard`)}
               >
-                {subscription.status.charAt(0).toUpperCase() +
-                  subscription.status.slice(1).replace("_", " ")}
-              </span>
+                <ExternalLink className="w-3 h-3" />
+                {isPro ? "Manage Subscription" : "Upgrade to Pro"}
+              </Button>
             </div>
-          )}
-          {subscription?.current_period_end && (
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Period ends</span>
-              <span className="text-sm">
-                {new Date(subscription.current_period_end).toLocaleDateString()}
-              </span>
-            </div>
-          )}
-        </div>
-        <div className="mt-4">
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full gap-2"
-            onClick={() => openUrl(`${WEB_URL}/dashboard`)}
-          >
-            <ExternalLink className="w-3 h-3" />
-            {isPro ? "Manage Subscription" : "Upgrade to Pro"}
-          </Button>
-        </div>
+          </>
+        )}
       </div>
 
       {/* Sign Out */}
