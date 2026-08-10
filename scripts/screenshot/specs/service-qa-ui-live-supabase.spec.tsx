@@ -317,17 +317,29 @@ it("simulates multi-workspace enqueue, CI, and merge until the queue drains", as
       expect(active).toHaveLength(0);
     });
 
-    // Panel still surfaces merged history; confirm each PR finished Merged.
+    // Fully merged work drops out of the default view.
     await waitFor(() => {
-      expect(screen.getAllByText("Merged").length).toBeGreaterThanOrEqual(3);
+      expect(screen.getByText("Merge queue is empty.")).toBeVisible();
     });
+    await screen.findByRole("switch", { name: /show merged/i });
     await captureDocument(document, {
       name: "service-qa-ui-04-queue-drained",
       viewport: { width: 520, height: 900 },
       expectations: [
-        "After simulated check_suite success webhooks and worker merges, no Queued/Running checks/Merging rows remain.",
-        "PR #201, #202, and #203 show Merged chips — the queue has been fully drained.",
+        "After the queue drains, the default view is empty above main.",
+        'A "Show merged" switch is available to reveal completed PRs below main.',
         "The Merge Queue tab is still selected.",
+      ],
+    });
+
+    await user.click(screen.getByRole("switch", { name: /show merged/i }));
+    await screen.findByTestId("merge-queue-history");
+    expect(screen.getAllByText("Merged").length).toBeGreaterThanOrEqual(3);
+    await captureDocument(document, {
+      name: "service-qa-ui-04b-queue-history",
+      viewport: { width: 520, height: 900 },
+      expectations: [
+        "With Show merged on, PR #201–#203 appear below the main terminator as Merged.",
       ],
     });
   } finally {
@@ -439,14 +451,21 @@ it("captures a 2-stack + independent + 3-stack with siblings through drain", asy
     });
 
     await waitFor(() => {
+      expect(screen.getByText("Merge queue is empty.")).toBeVisible();
+    });
+    await user.click(
+      await screen.findByRole("switch", { name: /show merged/i }),
+    );
+    await screen.findByTestId("merge-queue-history");
+    await waitFor(() => {
       expect(screen.getAllByText("Merged").length).toBeGreaterThanOrEqual(7);
     });
     await captureDocument(document, {
       name: "service-qa-ui-06-stacks-drained",
       viewport: { width: 560, height: 1000 },
       expectations: [
-        "After CI + merge drain, all seven PRs (#301–#307) show Merged — stacks and sibling included.",
-        "No Queued/Running checks/Merging chips remain.",
+        "With Show merged on after drain, all seven PRs (#301–#307) appear as Merged below main.",
+        "The active queue above main is empty.",
       ],
     });
   } finally {

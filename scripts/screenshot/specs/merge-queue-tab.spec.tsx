@@ -312,8 +312,134 @@ it("captures the empty queue for a repo that has the queue switched on", async (
 	await captureDocument(document, {
 		name: "merge-queue-tab-03-enabled-empty",
 		expectations: [
-			'The toggle row reads "Enabled for this repository." with the switch in the ON position.',
 			'The body shows the "Merge queue is empty." empty state with a merge icon -- distinct from the "off for this repository" state.',
+			"No Show merged toggle is present when there is no merge history.",
+			"The target branch terminator is still shown below the empty state.",
+		],
+	});
+}, 120000);
+
+it("hides fully merged stacks by default and shows them below main when toggled", async () => {
+	const { repoPath } = createTestRepo(false);
+	mockGetGitRemoteUrl.mockResolvedValue(REMOTE_INFO);
+	queueState.enabled = true;
+	queueState.entries = [
+		{
+			branch_name: "feat/live",
+			pr_number: 201,
+			status: "queued",
+			position: 1,
+			target_branch: "main",
+		},
+		// Fully merged stack — highest positions so it sits just under main tip.
+		{
+			branch_name: "feat/done-base",
+			pr_number: 101,
+			status: "merged",
+			position: 20,
+			target_branch: "main",
+		},
+		{
+			branch_name: "feat/done-top",
+			pr_number: 102,
+			status: "merged",
+			position: 21,
+			target_branch: "feat/done-base",
+		},
+		// Older merged singles for Load more pagination (page size 5).
+		...[10, 11, 12, 13, 14, 15].map((n) => ({
+			branch_name: `chore/old-${n}`,
+			pr_number: 100 + n,
+			status: "merged" as QueueEntryStatus,
+			position: n,
+			target_branch: "main",
+		})),
+	];
+
+	const user = userEvent.setup();
+	render(<GitHubPanel repoPath={repoPath} />);
+	await user.click(await screen.findByRole("tab", { name: /merge queue/i }));
+
+	await screen.findByText("PR #201");
+	expect(screen.queryByText("PR #101")).not.toBeInTheDocument();
+	expect(screen.getByTestId("merge-queue-target")).toHaveTextContent("main");
+
+	await captureDocument(document, {
+		name: "merge-queue-tab-06-history-hidden",
+		expectations: [
+			"Only the live queued PR #201 appears above the main terminator.",
+			"Fully merged stacks are not listed in the default view.",
+			'A "Show merged" switch is visible and off.',
+		],
+	});
+
+	await user.click(screen.getByRole("switch", { name: /show merged/i }));
+	await screen.findByTestId("merge-queue-history");
+	expect(screen.getByText("PR #101")).toBeVisible();
+	expect(screen.getByText("Stack of 2")).toBeVisible();
+
+	// History sits below the target terminator in the DOM.
+	const list = screen.getByTestId("merge-queue-list");
+	const target = screen.getByTestId("merge-queue-target");
+	const history = screen.getByTestId("merge-queue-history");
+	expect(
+		Boolean(
+			target.compareDocumentPosition(history) &
+				Node.DOCUMENT_POSITION_FOLLOWING,
+		),
+	).toBe(true);
+	expect(list).toContainElement(history);
+
+	await captureDocument(document, {
+		name: "merge-queue-tab-07-history-shown",
+		viewport: { width: 480, height: 900 },
+		expectations: [
+			"With Show merged on, completed stacks appear below the main terminator.",
+			"The merged Stack of 2 (PR #101 / #102) is visible under main.",
+			'A "Load more" button is present when history exceeds the first page.',
+		],
+	});
+
+	expect(screen.getByRole("button", { name: /load more/i })).toBeVisible();
+	await user.click(screen.getByRole("button", { name: /load more/i }));
+}, 120000);
+
+it("keeps a partially merged stack visible with the bottom PR labelled Merged", async () => {
+	const { repoPath } = createTestRepo(false);
+	mockGetGitRemoteUrl.mockResolvedValue(REMOTE_INFO);
+	queueState.enabled = true;
+	queueState.entries = [
+		{
+			branch_name: "feat/base",
+			pr_number: 11,
+			status: "merged",
+			position: 1,
+			target_branch: "main",
+		},
+		{
+			branch_name: "feat/top",
+			pr_number: 12,
+			status: "testing",
+			position: 2,
+			target_branch: "feat/base",
+		},
+	];
+
+	const user = userEvent.setup();
+	render(<GitHubPanel repoPath={repoPath} />);
+	await user.click(await screen.findByRole("tab", { name: /merge queue/i }));
+
+	const stack = await screen.findByTestId("merge-queue-stack-feat/base");
+	expect(within(stack).getByText("Merged")).toBeVisible();
+	expect(within(stack).getByText("Running checks")).toBeVisible();
+	expect(screen.queryByTestId("merge-queue-history")).not.toBeInTheDocument();
+
+	await captureDocument(document, {
+		name: "merge-queue-tab-08-partial-stack-merged",
+		expectations: [
+			"A Stack of 2 remains above main while the upper PR is still Running checks.",
+			"The bottom PR shows a Merged chip and is still listed in the active stack.",
+			"No merge history section is shown yet because the stack is not fully merged.",
 		],
 	});
 }, 120000);

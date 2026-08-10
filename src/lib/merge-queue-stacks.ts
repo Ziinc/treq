@@ -15,6 +15,9 @@ export interface QueueStack {
   entries: QueueEntry[];
 }
 
+/** Default page size for merged history below the target-branch terminator. */
+export const MERGE_QUEUE_HISTORY_PAGE_SIZE = 5;
+
 /**
  * Group flat queue entries into stacks.
  *
@@ -67,4 +70,69 @@ export function buildQueueStacks(entries: readonly QueueEntry[]): QueueStack[] {
       Math.min(...a.entries.map((e) => e.position)) -
       Math.min(...b.entries.map((e) => e.position)),
   );
+}
+
+export function isStackFullyMerged(stack: QueueStack): boolean {
+  return (
+    stack.entries.length > 0 &&
+    stack.entries.every((entry) => entry.status === "merged")
+  );
+}
+
+export type PartitionedQueueStacks = {
+  /** Still in the queue (may include Merged rows at the bottom of a partial stack). */
+  active: QueueStack[];
+  /**
+   * Fully merged stacks, newest first (closest to the target-branch tip).
+   * Shown only when the history toggle is on, below the terminator.
+   */
+  history: QueueStack[];
+};
+
+/**
+ * Split stacks into the live queue vs completed merge history.
+ *
+ * A stack stays **active** until every entry is `merged` — so the first PR in
+ * a stack can show as Merged while upper PRs are still running. Once the whole
+ * stack has merged bottom-up, it moves to **history** (hidden by default).
+ */
+export function partitionQueueStacks(
+  entries: readonly QueueEntry[],
+): PartitionedQueueStacks {
+  const stacks = buildQueueStacks(entries);
+  const active: QueueStack[] = [];
+  const history: QueueStack[] = [];
+
+  for (const stack of stacks) {
+    if (isStackFullyMerged(stack)) history.push(stack);
+    else active.push(stack);
+  }
+
+  // Newest completed stacks sit just under the target branch tip.
+  history.sort(
+    (a, b) =>
+      Math.min(...b.entries.map((e) => e.position)) -
+      Math.min(...a.entries.map((e) => e.position)),
+  );
+
+  return { active, history };
+}
+
+/** Take the first stacks whose combined entry count reaches `limit`. */
+export function takeHistoryPage(
+  history: readonly QueueStack[],
+  limit: number,
+): { visible: QueueStack[]; hasMore: boolean } {
+  if (limit <= 0) return { visible: [], hasMore: history.length > 0 };
+
+  const visible: QueueStack[] = [];
+  let count = 0;
+  for (const stack of history) {
+    if (count >= limit) break;
+    visible.push(stack);
+    count += stack.entries.length;
+  }
+  const visibleEntries = visible.reduce((n, s) => n + s.entries.length, 0);
+  const totalEntries = history.reduce((n, s) => n + s.entries.length, 0);
+  return { visible, hasMore: visibleEntries < totalEntries };
 }
