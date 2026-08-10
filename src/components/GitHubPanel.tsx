@@ -41,6 +41,8 @@ interface GitHubPanelProps {
   onOpenSettings?: (tab?: string) => void;
   /** Open the agent prompt dialog with a GitHub issue chip pre-attached. */
   onStartPromptFromIssue?: (issue: GitHubIssueAttachment) => void;
+  /** Navigate to a workspace after creating/opening one from a PR. */
+  onOpenWorkspace?: (workspaceId: number) => void;
 }
 
 const FILTERS: { label: string; value: GitHubStateFilter }[] = [
@@ -53,6 +55,7 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
   repoPath,
   onOpenSettings,
   onStartPromptFromIssue,
+  onOpenWorkspace,
 }) => {
   const { subscription } = useAuth();
   const isPro =
@@ -437,9 +440,11 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
           )}
           {activeTab === "prs" && selectedPr !== null && (
             <PrDetailPanel
+              repoPath={repoPath}
               repoFullName={repoFullName}
               prNumber={selectedPr}
               onClose={handleCloseDetail}
+              onOpenWorkspace={onOpenWorkspace}
             />
           )}
         </div>

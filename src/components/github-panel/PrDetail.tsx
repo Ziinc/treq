@@ -1,18 +1,27 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ListChecks, Loader2, MessageSquare, X } from "lucide-react";
+import {
+  GitBranchPlus,
+  ListChecks,
+  Loader2,
+  MessageSquare,
+  X,
+} from "lucide-react";
 import { CiStatusButton } from "../CiStatusIndicator";
 import { usePrChecksForPr } from "../../hooks/useMergeQueueStatus";
+import { useToast } from "../ui/toast";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Textarea } from "../ui/textarea";
 import {
+  getWorkspaces,
   ghClosePr,
   ghCreatePr,
   ghCreatePrComment,
   ghReopenPr,
   ghSetPrDraft,
   ghViewPr,
+  openOrCreateWorkspaceFromPr,
 } from "../../lib/api";
 import { MarkdownContent } from "../MarkdownContent";
 import { compareCiChecksBySeverity } from "../../lib/ci-status";
@@ -25,15 +34,20 @@ import {
 } from "./shared";
 
 export function PrDetailPanel({
+  repoPath,
   repoFullName,
   prNumber,
   onClose,
+  onOpenWorkspace,
 }: {
+  repoPath: string;
   repoFullName: string;
   prNumber: number;
   onClose: () => void;
+  onOpenWorkspace?: (workspaceId: number) => void;
 }) {
   const qc = useQueryClient();
+  const { addToast } = useToast();
   const [commentBody, setCommentBody] = useState("");
 
   const { data: pr, isLoading } = useQuery({
@@ -41,7 +55,48 @@ export function PrDetailPanel({
     queryFn: () => ghViewPr(repoFullName, prNumber),
   });
 
+  const { data: workspaces = [] } = useQuery({
+    queryKey: ["workspaces", repoPath],
+    queryFn: () => getWorkspaces(repoPath),
+    enabled: !!repoPath,
+  });
+
+  const existingWorkspace = pr
+    ? (workspaces.find((w) => w.branch_name === pr.head_ref_name) ?? null)
+    : null;
+
   const { data: ciStatus } = usePrChecksForPr(repoFullName, prNumber);
+
+  const openOrCreateWorkspace = useMutation({
+    mutationFn: async () => {
+      if (!pr) throw new Error("PR not loaded");
+      return openOrCreateWorkspaceFromPr(
+        repoPath,
+        pr.head_ref_name,
+        pr.base_ref_name,
+        pr.title,
+        `From GitHub PR #${pr.number}`,
+      );
+    },
+    onSuccess: async (result) => {
+      await qc.invalidateQueries({ queryKey: ["workspaces", repoPath] });
+      addToast({
+        title: result.created ? "Workspace created" : "Workspace opened",
+        description: result.created
+          ? `Created workspace for ${pr?.head_ref_name ?? "PR head"}`
+          : `Opened existing workspace for ${pr?.head_ref_name ?? "PR head"}`,
+        type: "success",
+      });
+      onOpenWorkspace?.(result.workspaceId);
+    },
+    onError: (error) => {
+      addToast({
+        title: "Failed to open workspace",
+        description: error instanceof Error ? error.message : String(error),
+        type: "error",
+      });
+    },
+  });
 
   const addComment = useMutation({
     mutationFn: () => ghCreatePrComment(repoFullName, prNumber, commentBody),
@@ -113,7 +168,23 @@ export function PrDetailPanel({
               <h2 className="text-2xl font-semibold flex-1 min-w-0">
                 {pr.title}
               </h2>
-              <OpenInWebButton url={pr.url} />
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  size="sm"
+                  variant={existingWorkspace ? "outline" : "default"}
+                  className="text-base gap-1.5"
+                  disabled={openOrCreateWorkspace.isPending}
+                  onClick={() => openOrCreateWorkspace.mutate()}
+                >
+                  {openOrCreateWorkspace.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <GitBranchPlus className="w-4 h-4" />
+                  )}
+                  {existingWorkspace ? "Open Workspace" : "Create Workspace"}
+                </Button>
+                <OpenInWebButton url={pr.url} />
+              </div>
             </div>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               <StateChip state={pr.state} isDraft={Boolean(pr.is_draft)} />

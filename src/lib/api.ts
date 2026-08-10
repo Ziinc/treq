@@ -60,6 +60,27 @@ export const createWorkspace = (
     metadata: metadata ?? null,
   });
 
+export type OpenOrCreateWorkspaceFromPrResult = {
+  workspaceId: number;
+  created: boolean;
+};
+
+/** Open or create a workspace for a GitHub PR head branch (base becomes target). */
+export const openOrCreateWorkspaceFromPr = (
+  repoPath: string,
+  headBranch: string,
+  baseBranch: string,
+  title?: string,
+  description?: string,
+): Promise<OpenOrCreateWorkspaceFromPrResult> =>
+  invoke("open_or_create_workspace_from_pr", {
+    repoPath,
+    headBranch,
+    baseBranch,
+    title: title ?? null,
+    description: description ?? null,
+  });
+
 export const deleteWorkspace = (repoPath: string, id: number): Promise<void> =>
   invoke("delete_workspace", {
     repoPath,

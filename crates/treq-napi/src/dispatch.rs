@@ -434,6 +434,32 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
       Ok(Value::Number(serde_json::Number::from(workspace_id)))
     }
 
+    "open_or_create_workspace_from_pr" => {
+      let repo_path = get_str(&args, "repoPath")?;
+      let head_branch = get_str(&args, "headBranch")?;
+      let base_branch = get_str(&args, "baseBranch")?;
+      let title = args
+        .get("title")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+      let description = args
+        .get("description")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+
+      let (workspace, created) = treq_lib::core::open_or_create_workspace_from_pr(
+        &repo_path,
+        &head_branch,
+        &base_branch,
+        title.as_deref(),
+        description.as_deref(),
+      )?;
+      Ok(serde_json::json!({
+        "workspaceId": workspace.id,
+        "created": created,
+      }))
+    }
+
     "delete_workspace" => {
       let repo_path = get_str(&args, "repoPath")?;
       let id: i64 = get_i64(&args, "id")?;

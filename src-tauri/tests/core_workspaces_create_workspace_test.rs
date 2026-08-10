@@ -351,6 +351,95 @@ fn test_can_create_workspace_from_remote_branch() {
   );
 }
 
+#[test]
+fn test_open_or_create_workspace_from_pr_creates_from_remote_head() {
+  let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+  let default_branch = repo.default_branch().to_string();
+
+  let (workspace, created) = treq_lib::core::open_or_create_workspace_from_pr(
+    &repo.repo_path,
+    "feature-remote",
+    &default_branch,
+    Some("PR title"),
+    Some("From GitHub PR #42"),
+  )
+  .expect("should create workspace from PR head");
+
+  assert!(created, "first call should create the workspace");
+  assert_eq!(workspace.branch_name, "feature-remote");
+  assert_eq!(
+    workspace.target_branch.as_deref(),
+    Some(default_branch.as_str())
+  );
+  assert_eq!(workspace.title, "PR title");
+  assert_eq!(
+    workspace.description.as_deref(),
+    Some("From GitHub PR #42")
+  );
+
+  let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+  assert!(
+    workspace_path.join("feature.txt").exists(),
+    "workspace should contain files from the PR head branch"
+  );
+}
+
+#[test]
+fn test_open_or_create_workspace_from_pr_returns_existing() {
+  let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+  let default_branch = repo.default_branch().to_string();
+
+  let (first, created_first) = treq_lib::core::open_or_create_workspace_from_pr(
+    &repo.repo_path,
+    "feature-remote",
+    &default_branch,
+    Some("PR title"),
+    None,
+  )
+  .expect("should create workspace from PR head");
+  assert!(created_first);
+
+  let (second, created_second) = treq_lib::core::open_or_create_workspace_from_pr(
+    &repo.repo_path,
+    "feature-remote",
+    "some-other-base",
+    Some("ignored"),
+    None,
+  )
+  .expect("should return existing workspace");
+
+  assert!(!created_second, "second call should not recreate");
+  assert_eq!(second.id, first.id);
+  assert_eq!(
+    second.target_branch.as_deref(),
+    Some(default_branch.as_str()),
+    "existing workspace target should be left unchanged"
+  );
+  assert_eq!(second.title, "PR title");
+}
+
+#[test]
+fn test_open_or_create_workspace_from_pr_errors_when_head_missing() {
+  let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+  let default_branch = repo.default_branch().to_string();
+
+  let err = treq_lib::core::open_or_create_workspace_from_pr(
+    &repo.repo_path,
+    "does-not-exist-on-remote",
+    &default_branch,
+    None,
+    None,
+  )
+  .expect_err("missing PR head should fail");
+
+  assert!(
+    err.to_lowercase().contains("does-not-exist-on-remote")
+      || err.to_lowercase().contains("not found")
+      || err.to_lowercase().contains("missing"),
+    "error should mention the missing head branch, got: {err}"
+  );
+}
+
 // TODO: create a workspace from non-default home repo branch
 
 #[test]

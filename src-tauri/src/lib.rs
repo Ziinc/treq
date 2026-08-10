@@ -488,6 +488,7 @@ pub fn run() {
             commands::get_treq_bin_dir,
             commands::get_workspaces,
             commands::create_workspace,
+            commands::open_or_create_workspace_from_pr,
             commands::delete_workspace,
             commands::get_repo_default_branch,
             commands::push_workspace_to_remote,

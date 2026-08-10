@@ -109,6 +109,46 @@ pub async fn create_workspace(
   result
 }
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpenOrCreateWorkspaceFromPrResult {
+  pub workspace_id: i64,
+  pub created: bool,
+}
+
+/// Open an existing workspace for a PR head branch, or create one from the
+/// remote tip with the PR base as the rebase target.
+#[tauri::command]
+pub async fn open_or_create_workspace_from_pr(
+  repo_path: String,
+  head_branch: String,
+  base_branch: String,
+  title: Option<String>,
+  description: Option<String>,
+) -> Result<OpenOrCreateWorkspaceFromPrResult, String> {
+  let started_at = Instant::now();
+  let result = tauri::async_runtime::spawn_blocking(move || {
+    let (workspace, created) = crate::core::open_or_create_workspace_from_pr(
+      &repo_path,
+      &head_branch,
+      &base_branch,
+      title.as_deref(),
+      description.as_deref(),
+    )?;
+    Ok(OpenOrCreateWorkspaceFromPrResult {
+      workspace_id: workspace.id,
+      created,
+    })
+  })
+  .await
+  .map_err(|e| format!("Failed to join open_or_create_workspace_from_pr task: {e}"))?;
+  log::debug!(
+    "open_or_create_workspace_from_pr completed in {:?}",
+    started_at.elapsed()
+  );
+  result
+}
+
 /// Unified delete workspace command that handles both filesystem and DB cleanup
 /// Delegates to core::delete_workspace which correctly constructs the full workspace path
 #[tauri::command]
