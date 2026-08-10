@@ -45,15 +45,16 @@ deploy:
 		supabase functions deploy "$${function_dir##*/}" || exit $$?; \
 	done
 
-# ── Fat Supabase image (Auth + PostgREST + Edge + Postgres in one container) ──
+# ── Fat Supabase API image (Alpine) + external supabase/postgres sidecar ──
 
 supabase.docker.build:
 	docker build -f supabase/docker/Dockerfile -t treq-supabase:local supabase
 
 supabase.docker.up: supabase.docker.build
+	@bash supabase/docker/prepare-network.sh
 	docker compose -f supabase/docker/docker-compose.yml up -d --build
 	@echo "Waiting for health..."
-	@for i in $$(seq 1 60); do \
+	@for i in $$(seq 1 90); do \
 		if curl -sf http://127.0.0.1:54321/health >/dev/null; then \
 			echo "treq-supabase ready at http://127.0.0.1:54321"; \
 			exit 0; \
