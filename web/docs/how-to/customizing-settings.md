@@ -72,9 +72,9 @@ Set **file watching** to ignore the paths you never need, such as `node_modules/
 
 ## Integrations
 
-Settings → Integrations manages the Treq account link to GitHub. Sign in with the browser, open **Manage GitHub** to install or adjust the Treq GitHub App, and review connected repositories for your plan. Free accounts see public repos. Pro accounts see all linked repos. A [merge queue](/docs/how-to/using-the-merge-queue) toggle may appear for Pro, but that feature is still WIP.
+Settings → Integrations manages the Treq account link to the GitHub App for Pro users. Sign in with the browser, open **Manage GitHub** to install or adjust the Treq GitHub App, and review connected repositories. Premium features such as the [merge queue](/docs/how-to/using-the-merge-queue) toggle appear for Pro users.
 
-Day-to-day create PR, CI, and review-thread actions still use the local `gh` CLI. See [Connecting GitHub](/docs/how-to/connecting-github).
+Day-to-day create PR, CI, and review-thread actions on Free still use the local `gh` CLI. See [Connecting GitHub](/docs/how-to/connecting-github).
 
 ## Privacy
 

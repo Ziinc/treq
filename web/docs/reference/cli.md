@@ -52,7 +52,7 @@ Show workspace status.
 treq st [workspace_name]
 ```
 
-Omit `workspace_name` to list all workspaces. When the repository has a GitHub remote and `gh` can resolve the branch PR, the status includes a `GitHub: owner/repo#N` line and a short checks summary.
+Omit `workspace_name` to list all workspaces. GitHub pull request information will be included if there is a valid GitHub integration.
 
 ### `treq mv`
 

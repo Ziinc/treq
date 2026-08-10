@@ -6,7 +6,7 @@ sidebar_position: 6
 
 _Create, open, and inspect GitHub pull requests from a Treq workspace._
 
-Once the repository has a GitHub `origin` remote and `gh` is authenticated, each workspace can create and open its pull request without leaving the app. Treq-account App linking is only required for connected-repo management and the WIP merge queue. See [Connecting GitHub](/docs/how-to/connecting-github).
+Once the repository has a GitHub `origin` remote and GitHub access is set up, each workspace can create and open its pull request without leaving the app. See [Connecting GitHub](/docs/how-to/connecting-github).
 
 ## Create a Pull Request
 
@@ -29,7 +29,7 @@ From the Review tab, open the Commit split button and choose **Commit and create
 
 ## View a Pull Request
 
-Click **View PR** in the workspace header to open the in-app GitHub panel on that PR. The Open or Closed filter follows the PR state. Use the secondary control, or the toast action, to open the same URL in your browser.
+Click **View PR** in the workspace header to open the in-app GitHub panel on that PR.
 
 Right-click the workspace in the sidebar and choose **Copy link to GitHub PR** when Treq already has the PR URL.
 
@@ -40,32 +40,21 @@ From the command palette (`Cmd+K`):
 | Open Workspace PR in Browser | Opens the PR URL with the system browser helper |
 | Open Workspace PR | Navigates the app webview to the PR URL on GitHub |
 
-Prefer **View PR** when you want the dual-pane panel inside Treq.
-
 ## Use the GitHub Panel
 
-Open **GitHub** in the sidebar, then **Pull Requests**. Select Open, Closed, or All. Click a row to open detail beside the list.
-
-From detail you can:
-
-- Read title, state, draft chip, head and base, labels, and body
-- Read conversation comments and add a new comment
-- Mark ready for review or convert to draft
-- Close or reopen the PR
-- Open the PR on GitHub
-- Inspect the Checks section for the same CI rollup as the workspace header
+Open **GitHub** in the sidebar, then **Pull Requests**. Select Open, Closed, or All. Click a row to open detail beside the list. From detail you can manage the PR: read the conversation, add comments, change draft state, close or reopen, inspect checks, and open the PR on GitHub.
 
 Use **New** on the PR list when you need a manual title, body, base, and head instead of the workspace Create PR flow. Issues under the same GitHub panel follow the same list and detail pattern.
 
 ## Read CI Status
 
-When checks exist for the open PR, the workspace header shows a `passed/total` pill. Open it to see each check, sorted with failures first. Durations appear when GitHub reports them. Click a check to open its URL when one is present.
+When CI checks are available, Treq will display the status of each check within the PR details panel.
 
-The Merge button on the workspace turns solid green when every check has passed. That signals readiness. It does not merge on its own. When the [merge queue](/docs/how-to/using-the-merge-queue) finishes shipping and is enabled, Merge is intended to enqueue the open PR instead of only opening a local merge preview.
+Treq does not perform merges automatically once CI checks pass. However, this can be achieved through the [merge queue](/docs/how-to/using-the-merge-queue) if enabled, and allows enqueuing PRs to be merged automatically.
 
 ## Read GitHub Review Threads
 
-Open the Review tab on a workspace that already has a PR. Treq loads GitHub review threads and places them on matching hunks in both uncommitted and committed diffs. Quote a thread into a local comment when you want an agent to act on it. Local comments still do not publish back to GitHub. See [Changes and Reviews](/docs/concepts/changes-and-reviews).
+Treq interleaves GitHub PR comments with code changes when reviewing a branch workspace, allowing users to optionally quote and include external comments when delegating work to agents. Local comments within Treq are for agentic usage. See [Changes and Reviews](/docs/concepts/changes-and-reviews).
 
 ## Next Steps
 
