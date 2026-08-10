@@ -14,6 +14,8 @@ export POSTGRES_PORT="${POSTGRES_PORT:-${PGPORT}}"
 export JWT_EXP="${JWT_EXP:-3600}"
 export PGPASSWORD="${POSTGRES_PASSWORD}"
 export PGHOST="${PGHOST:-/var/run/postgresql}"
+export PGUSER="${POSTGRES_USER}"
+export PGDATABASE="${POSTGRES_DB}"
 
 # Public URL clients use to reach this container (mapped host port).
 export SUPABASE_PUBLIC_URL="${SUPABASE_PUBLIC_URL:-http://127.0.0.1:8000}"
@@ -82,35 +84,67 @@ export MERGE_QUEUE_GITHUB_STUB="${MERGE_QUEUE_GITHUB_STUB:-0}"
 mkdir -p /var/run/postgresql /tmp
 chmod 03775 /var/run/postgresql || true
 
+psql_admin() {
+  psql -v ON_ERROR_STOP=1 --no-psqlrc \
+    -h "${PGHOST}" -p "${PGPORT}" -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" "$@"
+}
+
+# First boot uses a temporary postmaster for init scripts, then stops it and
+# starts the real server. Require several consecutive successful connections
+# with migrate.sh not running so we land on the durable postmaster.
+wait_postgres_fully_initialized() {
+  local ready_count=0
+  local i
+  for i in $(seq 1 240); do
+    if ! kill -0 "${PG_PID}" 2>/dev/null; then
+      echo "Postgres entrypoint exited unexpectedly" >&2
+      return 1
+    fi
+    if pgrep -f '/docker-entrypoint-initdb.d/migrate.sh' >/dev/null 2>&1; then
+      ready_count=0
+      sleep 1
+      continue
+    fi
+    if psql_admin -tAc "select 1" >/dev/null 2>&1 \
+      && psql_admin -tAc "select 1 from pg_roles where rolname = 'authenticator'" 2>/dev/null | grep -q 1; then
+      ready_count=$((ready_count + 1))
+      if [ "${ready_count}" -ge 5 ]; then
+        return 0
+      fi
+    else
+      ready_count=0
+    fi
+    sleep 1
+  done
+  echo "Postgres init did not finish in time" >&2
+  return 1
+}
+
+set_role_password() {
+  local role="$1"
+  local exists
+  exists="$(psql_admin -tAc "select 1 from pg_roles where rolname = '${role}'" || true)"
+  if [ "${exists}" = "1" ]; then
+    psql_admin -c "alter role \"${role}\" with password '${POSTGRES_PASSWORD}'"
+  else
+    echo "skip password for missing role ${role}"
+  fi
+}
+
 echo "Starting Postgres..."
 /usr/local/bin/docker-entrypoint.sh postgres \
   -c config_file=/etc/postgresql/postgresql.conf \
   -c log_min_messages=fatal &
 PG_PID=$!
 
-echo "Waiting for Postgres..."
-for i in $(seq 1 90); do
-  if pg_isready -U postgres -h "${PGHOST}" -p "${PGPORT}" >/dev/null 2>&1; then
-    break
-  fi
-  if ! kill -0 "${PG_PID}" 2>/dev/null; then
-    echo "Postgres exited unexpectedly" >&2
-    exit 1
-  fi
-  sleep 1
-done
-if ! pg_isready -U postgres -h "${PGHOST}" -p "${PGPORT}" >/dev/null 2>&1; then
-  echo "Postgres did not become ready in time" >&2
-  exit 1
-fi
+echo "Waiting for Postgres init to finish..."
+wait_postgres_fully_initialized
 
 echo "Applying role passwords + JWT settings..."
-psql -v ON_ERROR_STOP=1 --no-psqlrc -U "${POSTGRES_USER}" -f /opt/treq/db/roles.sql
-psql -v ON_ERROR_STOP=1 --no-psqlrc -U "${POSTGRES_USER}" -f /opt/treq/db/jwt.sql
-
-# Ensure the login role `postgres` can authenticate with POSTGRES_PASSWORD.
-psql -v ON_ERROR_STOP=1 --no-psqlrc -U "${POSTGRES_USER}" \
-  -c "alter user postgres with password '${POSTGRES_PASSWORD}'" || true
+for role in authenticator pgbouncer supabase_auth_admin supabase_storage_admin supabase_functions_admin postgres; do
+  set_role_password "${role}"
+done
+psql_admin -f /opt/treq/db/jwt.sql
 
 echo "Applying treq migrations..."
 /opt/treq/bin/apply-treq-migrations.sh

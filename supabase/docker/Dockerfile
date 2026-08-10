@@ -49,6 +49,19 @@ COPY docker/entrypoint.sh /opt/treq/bin/entrypoint.sh
 COPY docker/apply-treq-migrations.sh /opt/treq/bin/apply-treq-migrations.sh
 COPY docker/merge-queue-cron.sh /opt/treq/bin/merge-queue-cron.sh
 
+# Vendor supabase-js so Edge Functions boot without registry egress.
+# Import map remaps the esm.sh URL used in source to the local package.
+RUN apk add --no-cache nodejs npm \
+  && printf '%s\n' \
+       '{"name":"treq-edge-functions","private":true,"dependencies":{"@supabase/supabase-js":"2.95.3"}}' \
+       > /home/deno/functions/package.json \
+  && printf '%s\n' \
+       '{"nodeModulesDir":"manual","imports":{"@supabase/supabase-js":"./node_modules/@supabase/supabase-js/dist/index.mjs","https://esm.sh/@supabase/supabase-js@2":"./node_modules/@supabase/supabase-js/dist/index.mjs"}}' \
+       > /home/deno/functions/deno.json \
+  && npm install --omit=dev --prefix /home/deno/functions \
+  && apk del npm \
+  && find /home/deno/functions -name '.env' -delete 2>/dev/null || true
+
 RUN chmod +x \
       /opt/treq/bin/entrypoint.sh \
       /opt/treq/bin/apply-treq-migrations.sh \
@@ -56,8 +69,7 @@ RUN chmod +x \
       /usr/local/bin/auth \
       /usr/local/bin/postgrest \
       /usr/local/bin/edge-runtime \
-  && mkdir -p /var/log/nginx /var/lib/nginx /run/nginx \
-  && find /home/deno/functions -name '.env' -delete 2>/dev/null || true
+  && mkdir -p /var/log/nginx /var/lib/nginx /run/nginx
 
 ENV POSTGRES_DB=postgres \
     POSTGRES_USER=supabase_admin \

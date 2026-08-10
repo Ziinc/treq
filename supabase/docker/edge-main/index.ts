@@ -1,18 +1,15 @@
 /**
  * Edge Runtime main router for the treq fat image.
  *
- * Mirrors supabase/docker/volumes/functions/main with one treq-specific rule:
- * `github-webhook` skips JWT verification (HMAC is checked inside the function),
- * matching supabase/config.toml [functions.github-webhook] verify_jwt = false.
+ * No remote imports — the fat image must boot offline after build.
+ * `github-webhook` skips JWT verification (HMAC is checked inside the
+ * function), matching supabase/config.toml.
  */
-import * as jose from "jsr:@panva/jose@6";
 
 console.log("treq edge main function started");
 
 const JWT_SECRET = Deno.env.get("JWT_SECRET");
 const VERIFY_JWT = Deno.env.get("VERIFY_JWT") === "true";
-
-/** Functions that authenticate themselves (do not require a Supabase JWT). */
 const SKIP_JWT = new Set(["github-webhook"]);
 
 function getAuthToken(req: Request): string {
@@ -27,17 +24,53 @@ function getAuthToken(req: Request): string {
   return token;
 }
 
-async function isValidLegacyJWT(jwt: string): Promise<boolean> {
+function b64urlToBytes(input: string): Uint8Array {
+  const padded = input.replace(/-/g, "+").replace(/_/g, "/") +
+    "=".repeat((4 - (input.length % 4)) % 4);
+  const binary = atob(padded);
+  const out = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
+  return out;
+}
+
+function decodeJwtPart(part: string): Record<string, unknown> {
+  return JSON.parse(new TextDecoder().decode(b64urlToBytes(part)));
+}
+
+async function isValidHs256Jwt(jwt: string): Promise<boolean> {
   if (!JWT_SECRET) {
     console.error("JWT_SECRET not available for HS256 token verification");
     return false;
   }
-  const secretKey = new TextEncoder().encode(JWT_SECRET);
+  const parts = jwt.split(".");
+  if (parts.length !== 3) return false;
+
   try {
-    await jose.jwtVerify(jwt, secretKey);
+    const header = decodeJwtPart(parts[0]);
+    if (header.alg !== "HS256") {
+      console.error(`Unsupported JWT alg: ${header.alg}`);
+      return false;
+    }
+    const key = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(JWT_SECRET),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["verify"],
+    );
+    const data = new TextEncoder().encode(`${parts[0]}.${parts[1]}`);
+    const signature = b64urlToBytes(parts[2]);
+    const ok = await crypto.subtle.verify("HMAC", key, signature, data);
+    if (!ok) return false;
+
+    const payload = decodeJwtPart(parts[1]);
+    if (typeof payload.exp === "number" && payload.exp * 1000 < Date.now()) {
+      console.error("JWT expired");
+      return false;
+    }
     return true;
   } catch (e) {
-    console.error("Symmetric Legacy JWT verification error", e);
+    console.error("JWT verification error", e);
     return false;
   }
 }
@@ -59,7 +92,7 @@ Deno.serve(async (req: Request) => {
   if (req.method !== "OPTIONS" && VERIFY_JWT && !skipJwt) {
     try {
       const token = getAuthToken(req);
-      const ok = await isValidLegacyJWT(token);
+      const ok = await isValidHs256Jwt(token);
       if (!ok) {
         return new Response(JSON.stringify({ msg: "Invalid JWT" }), {
           status: 401,
@@ -87,7 +120,7 @@ Deno.serve(async (req: Request) => {
       memoryLimitMb: 150,
       workerTimeoutMs: 60_000,
       noModuleCache: false,
-      importMapPath: null,
+      importMapPath: "/home/deno/functions/deno.json",
       envVars,
     });
     return await worker.fetch(req);
