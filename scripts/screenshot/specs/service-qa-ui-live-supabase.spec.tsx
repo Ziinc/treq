@@ -30,6 +30,7 @@ import {
   simulateEnqueueWorkspace,
   type WorkspacePr,
 } from "../../service-qa/webhook";
+import { TWO_PLUS_INDEPENDENT_PLUS_THREE_WITH_SIBLING } from "../../service-qa/topologies";
 
 const { mockGetGitRemoteUrl, auth } = vi.hoisted(() => ({
   mockGetGitRemoteUrl: vi.fn(),
@@ -338,3 +339,122 @@ it("simulates multi-workspace enqueue, CI, and merge until the queue drains", as
     await deleteTestUser(admin, testUser.user.id);
   }
 }, 180_000);
+
+it("captures a 2-stack + independent + 3-stack with siblings through drain", async () => {
+  const fullName = `service-qa/ui-stacks-${Date.now()}`;
+  const { admin, testUser, linked } = await seedLiveSupabaseUser(fullName);
+  const { repoPath } = createTestRepo(false);
+  openRepo(repoPath);
+
+  const [owner, repo] = fullName.split("/");
+  mockGetGitRemoteUrl.mockResolvedValue({ owner, repo, full_name: fullName });
+
+  let refetchQueue: (() => Promise<void>) | null = null;
+
+  try {
+    const { error: enableErr } = await supabase.rpc("set_merge_queue_enabled", {
+      p_repo_full_name: fullName,
+      p_enabled: true,
+    });
+    expect(enableErr).toBeNull();
+
+    await admin
+      .from("merge_queue_configs")
+      .update({ batch_size: 1, max_parallel_queues: 1 })
+      .eq("repo_id", linked.repoId);
+
+    const user = userEvent.setup();
+    render(
+      <div className="h-[900px] w-[520px] border border-border bg-background">
+        <RefetchBridge
+          repoFullName={fullName}
+          onReady={(fn) => {
+            refetchQueue = fn;
+          }}
+        />
+        <GitHubPanel repoPath={repoPath} onOpenSettings={vi.fn()} />
+      </div>,
+    );
+
+    await user.click(await screen.findByRole("tab", { name: /merge queue/i }));
+    await screen.findByText(/merge queue is empty|merge queue is off/i);
+
+    for (const pr of TWO_PLUS_INDEPENDENT_PLUS_THREE_WITH_SIBLING) {
+      await simulateEnqueueWorkspace({
+        installationId: linked.installationId,
+        repoId: linked.repoId,
+        fullName,
+        pr,
+      });
+    }
+    await drainMergeQueueWorker();
+    await refetchQueue?.();
+
+    expect(
+      await screen.findByTestId("merge-queue-stack-feat/two-base"),
+    ).toBeTruthy();
+    expect(
+      await screen.findByTestId("merge-queue-stack-feat/three-base"),
+    ).toBeTruthy();
+    expect(await screen.findByTestId("merge-queue-single-fix/solo")).toBeTruthy();
+    expect(
+      await screen.findByTestId("merge-queue-single-feat/three-sib"),
+    ).toBeTruthy();
+
+    expect(screen.getByText("Stack of 2")).toBeVisible();
+    expect(screen.getByText("Stack of 3")).toBeVisible();
+    expect(screen.getByText("PR #301")).toBeVisible();
+    expect(screen.getByText("PR #303")).toBeVisible();
+    expect(screen.getByText("PR #306")).toBeVisible();
+    expect(screen.getByText("PR #307")).toBeVisible();
+
+    await captureDocument(document, {
+      name: "service-qa-ui-05-stacks-filled",
+      viewport: { width: 560, height: 1000 },
+      expectations: [
+        'Merge Queue shows a "Stack of 2" (feat/two-base → feat/two-top) and a "Stack of 3" (three-base → mid → top).',
+        "fix/solo appears as an independent entry between the stacks.",
+        "feat/three-sib is listed as the sibling of three-mid (same parent base).",
+      ],
+    });
+
+    await drainQueueViaCiAndMerge({
+      installationId: linked.installationId,
+      repoId: linked.repoId,
+      fullName,
+      maxCycles: 40,
+    });
+    await refetchQueue?.();
+
+    await waitFor(async () => {
+      const { data, error } = await supabase.rpc(
+        "get_repo_branch_queue_statuses",
+        { p_repo_full_name: fullName },
+      );
+      expect(error).toBeNull();
+      const active = ((data ?? []) as { status: string }[]).filter((r) =>
+        ["queued", "testing", "merging"].includes(r.status),
+      );
+      expect(active).toHaveLength(0);
+    });
+
+    await waitFor(() => {
+      expect(screen.getAllByText("Merged").length).toBeGreaterThanOrEqual(7);
+    });
+    await captureDocument(document, {
+      name: "service-qa-ui-06-stacks-drained",
+      viewport: { width: 560, height: 1000 },
+      expectations: [
+        "After CI + merge drain, all seven PRs (#301–#307) show Merged — stacks and sibling included.",
+        "No Queued/Testing/Merging chips remain.",
+      ],
+    });
+  } finally {
+    await supabase.auth.signOut();
+    await admin
+      .from("github_app_installations")
+      .delete()
+      .eq("id", linked.installationId);
+    await deleteTestUser(admin, testUser.user.id);
+  }
+}, 240_000);
