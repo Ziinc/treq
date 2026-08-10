@@ -231,7 +231,8 @@ impl PtyManager {
           Ok(n) => {
             let data = process_utf8_chunk(&mut pending_bytes, &buffer[..n]);
             if data.is_empty() {
-              continue;            }
+              continue;
+            }
 
             // Check if filtering is active
             let filter_cmd = {

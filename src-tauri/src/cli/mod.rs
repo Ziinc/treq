@@ -191,80 +191,80 @@ pub(super) fn dispatch_agent_request(
 }
 
 pub(super) fn dispatch_send_request(
-    request: &crate::send_dispatch::SendDispatchRequest,
+  request: &crate::send_dispatch::SendDispatchRequest,
 ) -> Result<(), String> {
-    let now = agent_dispatch::now_millis();
-    local_db::prune_stale_instance_registry(
-        &request.repo,
-        now,
-        agent_dispatch::HEARTBEAT_TIMEOUT_MS,
-    )?;
-    let instances = local_db::list_instance_registry(&request.repo)?;
+  let now = agent_dispatch::now_millis();
+  local_db::prune_stale_instance_registry(
+    &request.repo,
+    now,
+    agent_dispatch::HEARTBEAT_TIMEOUT_MS,
+  )?;
+  let instances = local_db::list_instance_registry(&request.repo)?;
 
-    let instance =
-        agent_dispatch::resolve_target_instance(&instances, &request.repo).ok_or_else(|| {
-            format!(
-                "No running Treq instance has repo '{}'. Open this repo in Treq first.",
-                request.repo
-            )
-        })?;
+  let instance =
+    agent_dispatch::resolve_target_instance(&instances, &request.repo).ok_or_else(|| {
+      format!(
+        "No running Treq instance has repo '{}'. Open this repo in Treq first.",
+        request.repo
+      )
+    })?;
 
-    let response = send_json_dispatch_request(
-        &instance.endpoint,
-        request,
-        Duration::from_millis(250),
-        Duration::from_millis(600),
-    )?;
-    if response.status == "handled" {
-        return Ok(());
-    }
-    Err(format!(
-        "Send request not handled by instance '{}': {}",
-        instance.instance_id,
-        response
-            .reason
-            .unwrap_or_else(|| "unknown dispatch failure".to_string())
-    ))
+  let response = send_json_dispatch_request(
+    &instance.endpoint,
+    request,
+    Duration::from_millis(250),
+    Duration::from_millis(600),
+  )?;
+  if response.status == "handled" {
+    return Ok(());
+  }
+  Err(format!(
+    "Send request not handled by instance '{}': {}",
+    instance.instance_id,
+    response
+      .reason
+      .unwrap_or_else(|| "unknown dispatch failure".to_string())
+  ))
 }
 
 fn send_json_dispatch_request<T: serde::Serialize>(
-    endpoint: &str,
-    request: &T,
-    connect_timeout: Duration,
-    io_timeout: Duration,
+  endpoint: &str,
+  request: &T,
+  connect_timeout: Duration,
+  io_timeout: Duration,
 ) -> Result<agent_dispatch::AgentDispatchResponse, String> {
-    use std::io::{Read, Write};
-    use std::net::{Shutdown, TcpStream};
+  use std::io::{Read, Write};
+  use std::net::{Shutdown, TcpStream};
 
-    let addr = endpoint
-        .parse()
-        .map_err(|e| format!("invalid endpoint '{}': {}", endpoint, e))?;
-    let mut stream = TcpStream::connect_timeout(&addr, connect_timeout)
-        .map_err(|e| format!("failed to connect to endpoint {}: {}", endpoint, e))?;
+  let addr = endpoint
+    .parse()
+    .map_err(|e| format!("invalid endpoint '{}': {}", endpoint, e))?;
+  let mut stream = TcpStream::connect_timeout(&addr, connect_timeout)
+    .map_err(|e| format!("failed to connect to endpoint {}: {}", endpoint, e))?;
 
-    stream
-        .set_read_timeout(Some(io_timeout))
-        .map_err(|e| format!("failed to set read timeout: {}", e))?;
-    stream
-        .set_write_timeout(Some(io_timeout))
-        .map_err(|e| format!("failed to set write timeout: {}", e))?;
+  stream
+    .set_read_timeout(Some(io_timeout))
+    .map_err(|e| format!("failed to set read timeout: {}", e))?;
+  stream
+    .set_write_timeout(Some(io_timeout))
+    .map_err(|e| format!("failed to set write timeout: {}", e))?;
 
-    let payload = serde_json::to_vec(request)
-        .map_err(|e| format!("failed to serialize dispatch request: {}", e))?;
-    stream
-        .write_all(&payload)
-        .map_err(|e| format!("failed to send dispatch request: {}", e))?;
-    stream
-        .shutdown(Shutdown::Write)
-        .map_err(|e| format!("failed to finish dispatch write: {}", e))?;
+  let payload = serde_json::to_vec(request)
+    .map_err(|e| format!("failed to serialize dispatch request: {}", e))?;
+  stream
+    .write_all(&payload)
+    .map_err(|e| format!("failed to send dispatch request: {}", e))?;
+  stream
+    .shutdown(Shutdown::Write)
+    .map_err(|e| format!("failed to finish dispatch write: {}", e))?;
 
-    let mut response = String::new();
-    stream
-        .read_to_string(&mut response)
-        .map_err(|e| format!("failed reading dispatch response: {}", e))?;
+  let mut response = String::new();
+  stream
+    .read_to_string(&mut response)
+    .map_err(|e| format!("failed reading dispatch response: {}", e))?;
 
-    serde_json::from_str::<agent_dispatch::AgentDispatchResponse>(response.trim())
-        .map_err(|e| format!("invalid dispatch response payload: {}", e))
+  serde_json::from_str::<agent_dispatch::AgentDispatchResponse>(response.trim())
+    .map_err(|e| format!("invalid dispatch response payload: {}", e))
 }
 
 mod workspace_handlers;

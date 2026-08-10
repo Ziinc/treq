@@ -118,21 +118,21 @@ pub(crate) fn route_agent_dispatch_request(
 }
 
 pub(crate) fn route_send_dispatch_request(
-    app: &AppHandle,
-    request: &crate::send_dispatch::SendDispatchRequest,
+  app: &AppHandle,
+  request: &crate::send_dispatch::SendDispatchRequest,
 ) -> agent_dispatch::AgentDispatchResponse {
-    if let Some(label) = find_target_window_label_for_repo(app, &request.repo) {
-        let _ = app.emit_to(
-            EventTarget::webview_window(&label),
-            "treq-send-received",
-            request.clone(),
-        );
-        return agent_dispatch::AgentDispatchResponse::handled();
-    }
-    agent_dispatch::AgentDispatchResponse::not_handled(format!(
-        "no matching window for repo '{}' request_id '{}'",
-        request.repo, request.request_id
-    ))
+  if let Some(label) = find_target_window_label_for_repo(app, &request.repo) {
+    let _ = app.emit_to(
+      EventTarget::webview_window(&label),
+      "treq-send-received",
+      request.clone(),
+    );
+    return agent_dispatch::AgentDispatchResponse::handled();
+  }
+  agent_dispatch::AgentDispatchResponse::not_handled(format!(
+    "no matching window for repo '{}' request_id '{}'",
+    request.repo, request.request_id
+  ))
 }
 
 pub(crate) fn start_agent_ipc_listener(app: AppHandle, listener: std::net::TcpListener) {

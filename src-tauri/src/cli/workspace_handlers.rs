@@ -493,54 +493,54 @@ pub(super) fn handle_workspace_commit(matches: &Matches) -> bool {
 }
 
 pub(super) fn handle_send(matches: &Matches) -> bool {
-    use std::io::IsTerminal;
+  use std::io::IsTerminal;
 
-    let path_arg = get_arg_value(matches, "path");
-    let is_stdin_tty = std::io::stdin().is_terminal();
+  let path_arg = get_arg_value(matches, "path");
+  let is_stdin_tty = std::io::stdin().is_terminal();
 
-    let repo_path = match detect_repo_path() {
-        Ok(path) => path,
-        Err(error) => {
-            super::log_cli_error(&format!("Error: {}", error));
-            return false;
-        }
-    };
-
-    if let Err(error) = core::init(&repo_path) {
-        super::log_cli_error(&format!("Error initializing repo: {}", error));
-        return false;
+  let repo_path = match detect_repo_path() {
+    Ok(path) => path,
+    Err(error) => {
+      super::log_cli_error(&format!("Error: {}", error));
+      return false;
     }
+  };
 
-    let mut stdin = std::io::stdin();
-    let (path, media_type, title) = match crate::send_dispatch::resolve_send_path(
-        &repo_path,
-        path_arg.as_deref(),
-        &mut stdin,
-        is_stdin_tty,
-    ) {
-        Ok(resolved) => resolved,
-        Err(error) => {
-            super::log_cli_error(&format!("Error: {}", error));
-            eprintln!("Usage: treq send [path|-]");
-            return false;
-        }
-    };
+  if let Err(error) = core::init(&repo_path) {
+    super::log_cli_error(&format!("Error initializing repo: {}", error));
+    return false;
+  }
 
-    let request_id = format!("send-{}", chrono::Utc::now().timestamp_millis());
-    let mut request = crate::send_dispatch::SendDispatchRequest::new(
-        request_id,
-        &repo_path,
-        media_type,
-        path.to_string_lossy().to_string(),
-    );
-    request.title = Some(title);
-    request.pty_session_id = crate::send_dispatch::pty_session_id_from_env();
-
-    if let Err(error) = dispatch_send_request(&request) {
-        super::log_cli_error(&format!("Error dispatching send request: {}", error));
-        return false;
+  let mut stdin = std::io::stdin();
+  let (path, media_type, title) = match crate::send_dispatch::resolve_send_path(
+    &repo_path,
+    path_arg.as_deref(),
+    &mut stdin,
+    is_stdin_tty,
+  ) {
+    Ok(resolved) => resolved,
+    Err(error) => {
+      super::log_cli_error(&format!("Error: {}", error));
+      eprintln!("Usage: treq send [path|-]");
+      return false;
     }
+  };
 
-    println!("Sent {} ({})", request.path, request.media_type);
-    true
+  let request_id = format!("send-{}", chrono::Utc::now().timestamp_millis());
+  let mut request = crate::send_dispatch::SendDispatchRequest::new(
+    request_id,
+    &repo_path,
+    media_type,
+    path.to_string_lossy().to_string(),
+  );
+  request.title = Some(title);
+  request.pty_session_id = crate::send_dispatch::pty_session_id_from_env();
+
+  if let Err(error) = dispatch_send_request(&request) {
+    super::log_cli_error(&format!("Error dispatching send request: {}", error));
+    return false;
+  }
+
+  println!("Sent {} ({})", request.path, request.media_type);
+  true
 }

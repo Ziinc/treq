@@ -38,7 +38,9 @@ const AllTheProviders = ({ children }: { children: ReactNode }) => {
             <QueryClientProvider client={queryClient}>
               <DiffSettingsProvider>
                 <ZoomSettingsProvider>
-                  <TerminalSettingsProvider>{children}</TerminalSettingsProvider>
+                  <TerminalSettingsProvider>
+                    {children}
+                  </TerminalSettingsProvider>
                 </ZoomSettingsProvider>
               </DiffSettingsProvider>
             </QueryClientProvider>

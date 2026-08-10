@@ -48,24 +48,24 @@ fn send_is_handled_by_cli_dispatch() {
 
 #[test]
 fn send_subcommand_defines_optional_path_positional() {
-    let config_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tauri.conf.json");
-    let config = fs::read_to_string(config_path).expect("failed to read tauri.conf.json");
-    let json: Value = serde_json::from_str(&config).expect("failed to parse tauri.conf.json");
-    let send = json["plugins"]["cli"]["subcommands"]["send"]
-        .as_object()
-        .expect("send subcommand must exist");
-    let args = send
-        .get("args")
-        .and_then(Value::as_array)
-        .expect("send args must be an array");
+  let config_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tauri.conf.json");
+  let config = fs::read_to_string(config_path).expect("failed to read tauri.conf.json");
+  let json: Value = serde_json::from_str(&config).expect("failed to parse tauri.conf.json");
+  let send = json["plugins"]["cli"]["subcommands"]["send"]
+    .as_object()
+    .expect("send subcommand must exist");
+  let args = send
+    .get("args")
+    .and_then(Value::as_array)
+    .expect("send args must be an array");
 
-    let path = args
-        .iter()
-        .find(|arg| arg.get("name").and_then(Value::as_str) == Some("path"))
-        .expect("send must define path positional arg");
-    assert_eq!(path.get("index").and_then(Value::as_i64), Some(1));
-    assert_eq!(path.get("takesValue").and_then(Value::as_bool), Some(true));
-    assert_ne!(path.get("required").and_then(Value::as_bool), Some(true));
+  let path = args
+    .iter()
+    .find(|arg| arg.get("name").and_then(Value::as_str) == Some("path"))
+    .expect("send must define path positional arg");
+  assert_eq!(path.get("index").and_then(Value::as_i64), Some(1));
+  assert_eq!(path.get("takesValue").and_then(Value::as_bool), Some(true));
+  assert_ne!(path.get("required").and_then(Value::as_bool), Some(true));
 }
 
 #[test]
