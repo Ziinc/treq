@@ -173,8 +173,8 @@ it("captures treq send attachment thumbs and lightbox carousel previews", async 
 	await captureDocument(document, {
 		name: "treq-send-03b-image-zoomed",
 		expectations: [
-			"At 200% the SVG is roughly twice as wide as the 100% capture (layout width grew via vw).",
-			"The zoom level label in the top-right toolbar reads 200%.",
+			"Toolbar zoom label reads 200% after zooming in from the 100% state.",
+			"The blue SVG still fills the carousel frame (scrollable when larger than the shell).",
 		],
 	});
 

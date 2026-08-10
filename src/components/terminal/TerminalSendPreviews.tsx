@@ -444,6 +444,7 @@ function SendAssetLightbox({
       </div>
 
       <div
+        data-testid="treq-send-preview-carousel-shell"
         className="relative min-w-[75vw] w-[90vw] px-14"
         onClick={(event) => event.stopPropagation()}
       >

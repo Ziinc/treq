@@ -160,13 +160,11 @@ describe("TerminalSendPreviews", () => {
     await user.click(await screen.findByTestId("terminal-send-preview-send-2"));
     await screen.findByTestId("treq-send-preview-lightbox");
 
-    const carouselShell = screen
-      .getByTestId("treq-send-preview-lightbox")
-      .querySelector('[data-slot="carousel"]')
-      ?.closest(".relative") as HTMLElement | null;
-    expect(carouselShell).toBeTruthy();
-    expect(carouselShell!.className).toMatch(/w-\[90vw\]/);
-    expect(carouselShell!.className).toMatch(/min-w-\[75vw\]/);
+    const carouselShell = screen.getByTestId(
+      "treq-send-preview-carousel-shell",
+    );
+    expect(carouselShell.className).toMatch(/w-\[90vw\]/);
+    expect(carouselShell.className).toMatch(/min-w-\[75vw\]/);
 
     const image = screen
       .getByTestId("treq-send-preview-lightbox")
