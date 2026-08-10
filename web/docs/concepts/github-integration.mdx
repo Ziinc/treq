@@ -78,7 +78,7 @@ You can quote a GitHub thread into a local pending review comment for an agent. 
 
 ## Merge Queue
 
-:::note Work in progress
+:::note[Work in progress]
 
 The merge queue is not fully shipped. UI, opt-in settings, and backend pieces exist, but the end-to-end product is still incomplete. The rest of this section describes the intended design.
 
@@ -90,10 +90,12 @@ When finished, enabling the queue will let you enqueue an open PR from the works
 
 ## Plans
 
-| Plan | GitHub scope |
+Connected-repository listing and the WIP merge queue are plan-gated through your Treq account. Day-to-day Create PR, CI, and review-thread actions use local `gh` and are not plan-gated.
+
+| Plan | Connected repos and queue |
 |---|---|
-| Free | Public repositories |
-| Pro | Public and private repositories, plus merge queue when that work ships |
+| Free | Public repositories in the connected list |
+| Pro | Public and private repositories in the connected list, plus merge queue when that work ships |
 
 Install and plan management live on the web dashboard under Integrations. The desktop Settings → Integrations page lists connected repos for the current account and exposes the merge queue toggle while that feature is under development.
 

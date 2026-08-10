@@ -6,7 +6,7 @@ sidebar_position: 6
 
 _Create, open, and inspect GitHub pull requests from a Treq workspace._
 
-Once [GitHub is connected](/docs/how-to/connecting-github) and `gh` is authenticated, each workspace with a GitHub remote can create and open its pull request without leaving the app.
+Once the repository has a GitHub `origin` remote and `gh` is authenticated, each workspace can create and open its pull request without leaving the app. Treq-account App linking is only required for connected-repo management and the WIP merge queue. See [Connecting GitHub](/docs/how-to/connecting-github).
 
 ## Create a Pull Request
 
@@ -14,7 +14,7 @@ Once [GitHub is connected](/docs/how-to/connecting-github) and `gh` is authentic
 2. Make at least one commit. Working-copy changes alone do not enable Create PR.
 3. In the workspace header, click **Create PR**.
 
-Treq pushes the branch when it is missing on the remote, then creates the PR. The title comes from a conventional-commit derivation of the workspace title or branch name. The body uses the workspace description when one exists.
+Treq pushes the branch when it is missing on the remote, then creates the PR. From the header **Create PR** control (including draft and manual compare), the title comes from a conventional-commit derivation of the workspace title or branch name. The body uses the workspace description when one exists.
 
 Use the chevron next to **Create PR** for:
 
@@ -25,7 +25,7 @@ Use the chevron next to **Create PR** for:
 
 After the PR exists, **Create PR** hides. A toast offers **Open in Web**.
 
-From the Review tab, open the Commit split button and choose **Commit and create PR** to commit, push if needed, and create the PR in one action. **Commit and push** pushes without creating a PR.
+From the Review tab, open the Commit split button and choose **Commit and create PR** to commit, push if needed, and create the PR in one action. That path uses the workspace title or branch name as the PR title and does not run the conventional-commit derivation. **Commit and push** pushes without creating a PR.
 
 ## View a Pull Request
 

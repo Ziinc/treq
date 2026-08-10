@@ -46,7 +46,7 @@ Back in the desktop app, Connected repositories should list the repos the App ca
 
 ## Enable the Merge Queue for a Repo
 
-:::note Work in progress
+:::note[Work in progress]
 
 The merge queue is not fully shipped. The Integrations toggle may appear while the end-to-end product is still incomplete.
 

@@ -21,9 +21,11 @@ description: >-
 - Any prose whose job is to help a reader understand, not to sell or fill space.
 
 For full site docs under `web/` (concept articles, READMEs, changelogs, release
-notes), also use the `writing` skill. That skill owns article structure and
-interlinking. This skill owns the voice. Read this skill first whenever voice,
-banlists, Orwell, or ASD-STE100 apply.
+notes), also use the matching structure skill. Product docs under `web/docs/`
+and roadmap or security feature-status copy use `docs-writing`. Learn articles
+under `web/learn/` use `writing`. Those skills own article structure, accuracy
+rules, and interlinking. This skill owns the voice. Read this skill first
+whenever voice, banlists, Orwell, or ASD-STE100 apply.
 
 Read `web/STYLE_GUIDE.md` as the formatting baseline for published docs. Where
 the two agree on formatting, the style guide wins. Where you need the voice

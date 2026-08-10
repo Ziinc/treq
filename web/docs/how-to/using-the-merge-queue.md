@@ -6,7 +6,7 @@ sidebar_position: 7
 
 _Intended workflow for enqueueing stacked GitHub pull requests through Treq's managed merge queue._
 
-:::note Work in progress
+:::note[Work in progress]
 
 The merge queue is not fully shipped. Settings, panel UI, and backend foundations exist in the codebase, but the end-to-end product is still incomplete. Use this page as a preview of the planned design, not as a guarantee of current behavior.
 
