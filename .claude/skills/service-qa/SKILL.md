@@ -34,7 +34,7 @@ description: >-
 |---|---|---|
 | `/app-qa` | UI pixels and interaction | real jj + NAPI + jsdom React; **mocks** Supabase |
 | `/service-qa` | Auth, RLS, RPCs, Edge Functions | real local Supabase CLI; **no** mocked supabase-js |
-| UI + live Supabase | Desktop button → real RPC/RLS | screenshot harness **without** mocking `src/lib/supabase` (see `scripts/screenshot/specs/service-qa-ui-live-supabase.spec.tsx`) |
+| UI + live Supabase | Desktop button → real RPC/RLS + webhook drain | screenshot harness **without** mocking `src/lib/supabase` (see `scripts/screenshot/specs/service-qa-ui-live-supabase.spec.tsx`); enqueue via simulated `pull_request` labeled webhooks, CI via `check_suite`, merges via worker + `MERGE_QUEUE_GITHUB_STUB` |
 
 Do not substitute one for the other. A green `/app-qa` screenshot with a mocked
 `supabase.rpc` does not prove the migration or Edge Function works. A green

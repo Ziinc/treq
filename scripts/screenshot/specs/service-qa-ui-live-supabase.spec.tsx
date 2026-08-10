@@ -1,12 +1,13 @@
 /**
- * UI proof that Settings › Integrations talks to the live local Supabase CLI
- * (email/password session + real get/set_merge_queue_enabled RPCs).
+ * Live UI + GitHub webhook simulation against local Supabase.
  *
- * Unlike merge-queue-setting.spec.tsx, this does NOT mock src/lib/supabase.
- * useAuth is only stubbed for the Pro subscription gate (Stripe FDW is empty
- * locally); the singleton supabase client holds a real session.
+ * Does NOT seed merge_queue_entries. Workspaces enter via simulated
+ * pull_request labeled webhooks; CI via check_suite; merges via the worker
+ * (MERGE_QUEUE_GITHUB_STUB). Screenshots show the GitHub Merge Queue tab
+ * updating through the real get_repo_branch_queue_statuses RPC.
  */
 import * as React from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import userEvent from "@testing-library/user-event";
 import { expect, it, vi } from "vitest";
 import { SettingsPage } from "../../../src/components/SettingsPage";
@@ -15,15 +16,20 @@ import { supabase } from "../../../src/lib/supabase";
 import { render, screen, waitFor, within } from "../../../test/test-utils";
 import { createTestRepo, openRepo } from "../../../test/utils";
 import { captureDocument } from "../capture";
+import { getServiceClient } from "../../service-qa/clients";
+import { FEATURES as SERVICE_QA_FEATURES } from "../../service-qa/features";
 import {
   createTestUser,
   deleteTestUser,
   linkGithubRepo,
   signInWithEmailPassword,
-  enqueueBranch,
 } from "../../service-qa/seed";
-import { getServiceClient } from "../../service-qa/clients";
-import { FEATURES as SERVICE_QA_FEATURES } from "../../service-qa/features";
+import {
+  drainMergeQueueWorker,
+  drainQueueViaCiAndMerge,
+  simulateEnqueueWorkspace,
+  type WorkspacePr,
+} from "../../service-qa/webhook";
 
 const { mockGetGitRemoteUrl, auth } = vi.hoisted(() => ({
   mockGetGitRemoteUrl: vi.fn(),
@@ -63,13 +69,33 @@ vi.mock("../../../src/lib/api", async () => {
   return {
     ...actual,
     getGitRemoteUrl: mockGetGitRemoteUrl,
-    // Keep GitHub CLI out of scope — this spec proves Supabase I/O only.
     ghListIssues: vi.fn().mockResolvedValue({ items: [], hasMore: false }),
     ghListPrs: vi.fn().mockResolvedValue({ items: [], hasMore: false }),
   };
 });
 
 expect(SERVICE_QA_FEATURES.emailSignup).toBe(true);
+
+const WORKSPACES: WorkspacePr[] = [
+  {
+    number: 201,
+    branch: "feat/workspace-one",
+    headSha: "1111111111111111111111111111111111111111",
+    title: "Workspace one",
+  },
+  {
+    number: 202,
+    branch: "feat/workspace-two",
+    headSha: "2222222222222222222222222222222222222222",
+    title: "Workspace two",
+  },
+  {
+    number: 203,
+    branch: "feat/workspace-three",
+    headSha: "3333333333333333333333333333333333333333",
+    title: "Workspace three",
+  },
+];
 
 async function seedLiveSupabaseUser(fullName: string) {
   const admin = getServiceClient();
@@ -87,7 +113,6 @@ async function seedLiveSupabaseUser(fullName: string) {
     throw new Error(`getSession failed: ${error?.message ?? "no session"}`);
   }
 
-  // Drive the app singleton — hooks/RPCs use this client, not the seed client.
   const { error: setErr } = await supabase.auth.setSession({
     access_token: session.access_token,
     refresh_token: session.refresh_token,
@@ -108,6 +133,31 @@ async function seedLiveSupabaseUser(fullName: string) {
   return { admin, testUser, linked, session };
 }
 
+/** Force React Query to re-hit live RPCs after webhook/worker advances. */
+function RefetchBridge({
+  repoFullName,
+  onReady,
+}: {
+  repoFullName: string;
+  onReady: (refetch: () => Promise<void>) => void;
+}) {
+  const qc = useQueryClient();
+  React.useEffect(() => {
+    onReady(async () => {
+      await qc.invalidateQueries({
+        queryKey: ["repo-branch-queue-statuses-panel", repoFullName],
+      });
+      await qc.invalidateQueries({
+        queryKey: ["merge-queue-enabled", repoFullName],
+      });
+      await qc.refetchQueries({
+        queryKey: ["repo-branch-queue-statuses-panel", repoFullName],
+      });
+    });
+  }, [qc, repoFullName, onReady]);
+  return null;
+}
+
 it("captures Enable merge queue against live local Supabase RPCs", async () => {
   const fullName = `service-qa/ui-${Date.now()}`;
   const { admin, testUser, linked } = await seedLiveSupabaseUser(fullName);
@@ -118,7 +168,6 @@ it("captures Enable merge queue against live local Supabase RPCs", async () => {
   mockGetGitRemoteUrl.mockResolvedValue({ owner, repo, full_name: fullName });
 
   try {
-    // Prove the queue is off via the same RPC the UI will call.
     const { data: before, error: beforeErr } = await supabase.rpc(
       "get_merge_queue_enabled",
       { p_repo_full_name: fullName },
@@ -152,7 +201,6 @@ it("captures Enable merge queue against live local Supabase RPCs", async () => {
       expect(toggle).toHaveAttribute("aria-checked", "true");
     });
 
-    // Prove the UI mutation landed in Postgres (not a mock).
     const { data: after, error: afterErr } = await supabase.rpc(
       "get_merge_queue_enabled",
       { p_repo_full_name: fullName },
@@ -179,8 +227,8 @@ it("captures Enable merge queue against live local Supabase RPCs", async () => {
   }
 }, 120_000);
 
-it("captures the GitHub Merge Queue tab listing a live seeded entry", async () => {
-  const fullName = `service-qa/ui-tab-${Date.now()}`;
+it("simulates multi-workspace enqueue, CI, and merge until the queue drains", async () => {
+  const fullName = `service-qa/ui-drain-${Date.now()}`;
   const { admin, testUser, linked } = await seedLiveSupabaseUser(fullName);
   const { repoPath } = createTestRepo(false);
   openRepo(repoPath);
@@ -188,47 +236,97 @@ it("captures the GitHub Merge Queue tab listing a live seeded entry", async () =
   const [owner, repo] = fullName.split("/");
   mockGetGitRemoteUrl.mockResolvedValue({ owner, repo, full_name: fullName });
 
+  let refetchQueue: (() => Promise<void>) | null = null;
+
   try {
-    // Enable + seed a queued PR the way the backend would after enqueue.
     const { error: enableErr } = await supabase.rpc("set_merge_queue_enabled", {
       p_repo_full_name: fullName,
       p_enabled: true,
     });
     expect(enableErr).toBeNull();
 
-    await enqueueBranch(admin, {
-      repoId: linked.repoId,
-      branchName: "feat/live-ui-queue",
-      prNumber: 101,
-      prSha: "deadbeef",
-      position: 1,
-      targetBranch: linked.defaultBranch,
-    });
+    // Serial lanes so the tab shows a multi-entry queue before CI finishes.
+    const { error: cfgErr } = await admin
+      .from("merge_queue_configs")
+      .update({ batch_size: 1, max_parallel_queues: 1 })
+      .eq("repo_id", linked.repoId);
+    expect(cfgErr).toBeNull();
 
     const user = userEvent.setup();
     render(
-      <div className="h-[800px] w-[420px] border border-border bg-background">
+      <div className="h-[800px] w-[480px] border border-border bg-background">
+        <RefetchBridge
+          repoFullName={fullName}
+          onReady={(fn) => {
+            refetchQueue = fn;
+          }}
+        />
         <GitHubPanel repoPath={repoPath} onOpenSettings={vi.fn()} />
       </div>,
     );
 
     await user.click(await screen.findByRole("tab", { name: /merge queue/i }));
+    await screen.findByText(/merge queue is empty|merge queue is off/i);
 
-    // Branch + target share one <p> ("feat/live-ui-queue → main"), so match
-    // with a regex rather than an exact full-string getByText.
-    await screen.findByText(/feat\/live-ui-queue/);
-    await screen.findByText("PR #101");
-    expect(
-      screen.getByTestId("merge-queue-single-feat/live-ui-queue"),
-    ).toBeInTheDocument();
+    // Simulate Add-to-Queue for three workspaces (GitHub labeled webhooks).
+    for (const pr of WORKSPACES) {
+      await simulateEnqueueWorkspace({
+        installationId: linked.installationId,
+        repoId: linked.repoId,
+        fullName,
+        pr: { ...pr, baseBranch: linked.defaultBranch },
+      });
+    }
+    await drainMergeQueueWorker();
+    await refetchQueue?.();
+
+    await screen.findByText("PR #201");
+    await screen.findByText("PR #202");
+    await screen.findByText("PR #203");
+    await screen.findByText(/feat\/workspace-one/);
 
     await captureDocument(document, {
-      name: "service-qa-ui-03-merge-queue-tab",
-      viewport: { width: 480, height: 820 },
+      name: "service-qa-ui-03-queue-filled",
+      viewport: { width: 520, height: 900 },
       expectations: [
-        "The GitHub panel Merge Queue tab is selected.",
-        "A queued branch feat/live-ui-queue from the live Supabase seed is listed.",
-        "PR #101 is visible for that queue entry.",
+        "Merge Queue tab lists three workspaces added via simulated labeled webhooks (PR #201–#203).",
+        "feat/workspace-one, feat/workspace-two, and feat/workspace-three are visible.",
+        "At least one entry shows Queued or Testing — entries were not DB-seeded.",
+      ],
+    });
+
+    // CI completion + stubbed merge until nothing left active.
+    await drainQueueViaCiAndMerge({
+      installationId: linked.installationId,
+      repoId: linked.repoId,
+      fullName,
+    });
+    await refetchQueue?.();
+
+    await waitFor(async () => {
+      const { data, error } = await supabase.rpc(
+        "get_repo_branch_queue_statuses",
+        { p_repo_full_name: fullName },
+      );
+      expect(error).toBeNull();
+      const rows = (data ?? []) as { status: string }[];
+      const active = rows.filter((r) =>
+        ["queued", "testing", "merging"].includes(r.status),
+      );
+      expect(active).toHaveLength(0);
+    });
+
+    // Panel still surfaces merged history; confirm each PR finished Merged.
+    await waitFor(() => {
+      expect(screen.getAllByText("Merged").length).toBeGreaterThanOrEqual(3);
+    });
+    await captureDocument(document, {
+      name: "service-qa-ui-04-queue-drained",
+      viewport: { width: 520, height: 900 },
+      expectations: [
+        "After simulated check_suite success webhooks and worker merges, no Queued/Testing/Merging rows remain.",
+        "PR #201, #202, and #203 show Merged chips — the queue has been fully drained.",
+        "The Merge Queue tab is still selected.",
       ],
     });
   } finally {
@@ -239,4 +337,4 @@ it("captures the GitHub Merge Queue tab listing a live seeded entry", async () =
       .eq("id", linked.installationId);
     await deleteTestUser(admin, testUser.user.id);
   }
-}, 120_000);
+}, 180_000);

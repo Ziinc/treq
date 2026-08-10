@@ -31,6 +31,13 @@ fi
 # (Deno nodeModulesDir), so workers do not need registry access at boot.
 npm install --omit=dev --prefix supabase/functions
 
+# Local-only Edge secrets for webhook HMAC + GitHub stub (not for production).
+# Loaded automatically from supabase/functions/.env on `supabase start`.
+cat > supabase/functions/.env <<'EOF'
+GITHUB_WEBHOOK_SECRET=service-qa-local-webhook-secret
+MERGE_QUEUE_GITHUB_STUB=1
+EOF
+
 # Skip analytics/studio/storage — not required for Auth/RPC/Edge service-qa.
 excludes=(logflare vector studio imgproxy storage-api)
 

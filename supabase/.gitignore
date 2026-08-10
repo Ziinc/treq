@@ -5,6 +5,9 @@
 # Edge Function deps (installed by `npm install --prefix supabase/functions`)
 functions/node_modules/
 
+# Local Edge secrets (written by scripts/service-qa/up.sh)
+functions/.env
+
 # dotenvx
 .env.keys
 .env.local

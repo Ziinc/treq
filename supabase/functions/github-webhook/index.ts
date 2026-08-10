@@ -56,8 +56,12 @@ async function sha256Hex(input: string): Promise<string> {
 
 // Best-effort nudge so commands are usually picked up immediately.
 // Correctness never depends on this: the cron-driven worker is the
-// recovery mechanism.
+// recovery mechanism. Skipped under MERGE_QUEUE_GITHUB_STUB so service-qa
+// can drain the worker serially without racing the webhook nudge.
 function invokeWorkerSoon(): void {
+  const stub = Deno.env.get("MERGE_QUEUE_GITHUB_STUB") ?? "";
+  if (stub === "1" || stub.toLowerCase() === "true") return;
+
   const url = Deno.env.get("SUPABASE_URL");
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   if (!url || !key) return;
