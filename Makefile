@@ -45,7 +45,7 @@ deploy:
 		supabase functions deploy "$${function_dir##*/}" || exit $$?; \
 	done
 
-# ── Fat Supabase API image (Alpine) + external supabase/postgres sidecar ──
+# Fat Supabase API image (Alpine, single-tenant) + postgres sidecar
 
 supabase.docker.build:
 	docker build -f supabase/docker/Dockerfile -t treq-supabase:local supabase
@@ -71,9 +71,16 @@ supabase.docker.down:
 supabase.docker.smoke:
 	bash supabase/docker/smoke.sh
 
+supabase.docker.test:
+	@bash supabase/docker/prepare-network.sh
+	docker compose -f supabase/docker/docker-compose.test.yml down -v --remove-orphans 2>/dev/null || true
+	docker compose -f supabase/docker/docker-compose.test.yml up -d --build --wait
+	bash supabase/docker/test/verify-self-hosted.sh
+	docker compose -f supabase/docker/docker-compose.test.yml down -v
+
 supabase.docker.logs:
 	docker compose -f supabase/docker/docker-compose.yml logs -f
 
 .PHONY: bump start stop restart db.reset db.diff deploy \
 	supabase.docker.build supabase.docker.up supabase.docker.down \
-	supabase.docker.smoke supabase.docker.logs
+	supabase.docker.smoke supabase.docker.test supabase.docker.logs

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Wait for external Postgres, apply treq migrations, run Auth / PostgREST / Edge / nginx.
+# Wait for external Postgres, apply treq migrations, run PostgREST / Edge / nginx.
+# Single-tenant self-hosted: no GoTrue.
 set -euo pipefail
 
 : "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
@@ -19,48 +20,12 @@ export PGDATABASE="${POSTGRES_DB}"
 
 # Public URL clients use to reach this container (mapped host port).
 export SUPABASE_PUBLIC_URL="${SUPABASE_PUBLIC_URL:-http://127.0.0.1:8000}"
-export API_EXTERNAL_URL="${API_EXTERNAL_URL:-${SUPABASE_PUBLIC_URL}/auth/v1}"
-export SITE_URL="${SITE_URL:-http://localhost:3001}"
-export ADDITIONAL_REDIRECT_URLS="${ADDITIONAL_REDIRECT_URLS:-https://127.0.0.1:3001,treq://auth/callback,https://treq.dev/auth/callback}"
 
 # Internal loopback URL used by Edge Functions talking back to the gateway.
 export SUPABASE_URL="${SUPABASE_URL:-http://127.0.0.1:8000}"
 export SUPABASE_ANON_KEY="${ANON_KEY}"
 export SUPABASE_SERVICE_ROLE_KEY="${SERVICE_ROLE_KEY}"
 export SUPABASE_DB_URL="${SUPABASE_DB_URL:-postgresql://postgres:${POSTGRES_PASSWORD}@${PGHOST}:${PGPORT}/${POSTGRES_DB}}"
-
-# GoTrue → external Postgres
-export GOTRUE_API_HOST="${GOTRUE_API_HOST:-0.0.0.0}"
-export GOTRUE_API_PORT="${GOTRUE_API_PORT:-9999}"
-export GOTRUE_DB_DRIVER=postgres
-export GOTRUE_DB_DATABASE_URL="postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@${PGHOST}:${PGPORT}/${POSTGRES_DB}"
-export GOTRUE_SITE_URL="${SITE_URL}"
-export GOTRUE_URI_ALLOW_LIST="${ADDITIONAL_REDIRECT_URLS}"
-export GOTRUE_DISABLE_SIGNUP="${GOTRUE_DISABLE_SIGNUP:-false}"
-export GOTRUE_JWT_ADMIN_ROLES=service_role
-export GOTRUE_JWT_AUD=authenticated
-export GOTRUE_JWT_DEFAULT_GROUP_NAME=authenticated
-export GOTRUE_JWT_EXP="${JWT_EXP}"
-export GOTRUE_JWT_SECRET="${JWT_SECRET}"
-export GOTRUE_JWT_ISSUER="${API_EXTERNAL_URL}"
-export GOTRUE_EXTERNAL_EMAIL_ENABLED="${GOTRUE_EXTERNAL_EMAIL_ENABLED:-true}"
-export GOTRUE_MAILER_AUTOCONFIRM="${GOTRUE_MAILER_AUTOCONFIRM:-true}"
-export GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED="${GOTRUE_EXTERNAL_ANONYMOUS_USERS_ENABLED:-false}"
-export API_EXTERNAL_URL
-
-# Optional OAuth (disabled unless secrets are provided).
-if [ -n "${GOTRUE_EXTERNAL_GOOGLE_SECRET:-${SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET:-}}" ]; then
-  export GOTRUE_EXTERNAL_GOOGLE_ENABLED=true
-  export GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID="${GOTRUE_EXTERNAL_GOOGLE_CLIENT_ID:-719573767717-9vj4pg35shehqe5h2c4f260nu4v7a7qb.apps.googleusercontent.com}"
-  export GOTRUE_EXTERNAL_GOOGLE_SECRET="${GOTRUE_EXTERNAL_GOOGLE_SECRET:-${SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET}}"
-  export GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI="${GOTRUE_EXTERNAL_GOOGLE_REDIRECT_URI:-${API_EXTERNAL_URL}/callback}"
-fi
-if [ -n "${GOTRUE_EXTERNAL_GITHUB_SECRET:-${SUPABASE_AUTH_EXTERNAL_GITHUB_SECRET:-}}" ]; then
-  export GOTRUE_EXTERNAL_GITHUB_ENABLED=true
-  export GOTRUE_EXTERNAL_GITHUB_CLIENT_ID="${GOTRUE_EXTERNAL_GITHUB_CLIENT_ID:-Ov23liS0JwuPu5iE1GI3}"
-  export GOTRUE_EXTERNAL_GITHUB_SECRET="${GOTRUE_EXTERNAL_GITHUB_SECRET:-${SUPABASE_AUTH_EXTERNAL_GITHUB_SECRET}}"
-  export GOTRUE_EXTERNAL_GITHUB_REDIRECT_URI="${GOTRUE_EXTERNAL_GITHUB_REDIRECT_URI:-${API_EXTERNAL_URL}/callback}"
-fi
 
 # PostgREST → external Postgres
 export PGRST_DB_URI="postgres://authenticator:${POSTGRES_PASSWORD}@${PGHOST}:${PGPORT}/${POSTGRES_DB}"
@@ -73,9 +38,9 @@ export PGRST_DB_USE_LEGACY_GUCS=false
 export PGRST_APP_SETTINGS_JWT_SECRET="${JWT_SECRET}"
 export PGRST_APP_SETTINGS_JWT_EXP="${JWT_EXP}"
 
-# Edge Runtime
+# Edge Runtime — single-tenant defaults to no gateway JWT checks.
 export JWT_SECRET
-export VERIFY_JWT="${VERIFY_JWT:-true}"
+export VERIFY_JWT="${VERIFY_JWT:-false}"
 export GITHUB_WEBHOOK_SECRET="${GITHUB_WEBHOOK_SECRET:-}"
 export GITHUB_APP_ID="${GITHUB_APP_ID:-}"
 export GITHUB_APP_PRIVATE_KEY_BASE64="${GITHUB_APP_PRIVATE_KEY_BASE64:-}"
@@ -88,8 +53,6 @@ psql_admin() {
     -h "${PGHOST}" -p "${PGPORT}" -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" "$@"
 }
 
-# Wait until the external Supabase Postgres has finished its own init
-# (authenticator role exists) and accepts connections.
 wait_for_postgres() {
   local ready_count=0
   local i
@@ -133,5 +96,5 @@ psql_admin -f /opt/treq/db/jwt.sql
 echo "Applying treq migrations..."
 /opt/treq/bin/apply-treq-migrations.sh
 
-echo "Starting Auth, PostgREST, Edge Runtime, nginx..."
+echo "Starting PostgREST, Edge Runtime, nginx..."
 exec /usr/bin/supervisord -c /etc/supervisord.conf

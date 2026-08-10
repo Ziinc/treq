@@ -1,0 +1,41 @@
+name: Supabase Docker
+
+on:
+  pull_request:
+    paths:
+      - "supabase/**"
+      - ".github/workflows/supabase-docker.yml"
+  push:
+    branches: [main]
+    paths:
+      - "supabase/**"
+      - ".github/workflows/supabase-docker.yml"
+  workflow_dispatch:
+
+jobs:
+  self-hosted:
+    name: single-tenant self-hosted image
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare nested Docker networking
+        run: bash supabase/docker/prepare-network.sh
+
+      - name: Build and start test stack
+        run: |
+          docker compose -f supabase/docker/docker-compose.test.yml up -d --build --wait
+          docker compose -f supabase/docker/docker-compose.test.yml ps
+
+      - name: Verify API (data + edge, no GoTrue)
+        run: bash supabase/docker/test/verify-self-hosted.sh
+
+      - name: Dump logs on failure
+        if: failure()
+        run: docker compose -f supabase/docker/docker-compose.test.yml logs --tail=200
+
+      - name: Tear down
+        if: always()
+        run: docker compose -f supabase/docker/docker-compose.test.yml down -v

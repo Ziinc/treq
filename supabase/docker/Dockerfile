@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 #
-# Fat API image (Alpine): GoTrue + PostgREST + Edge Runtime + nginx
-# with treq migrations and Edge Functions baked in.
+# Fat API image (Alpine): PostgREST + Edge Runtime + nginx
+# Single-tenant self-hosted mode — no GoTrue / user auth.
 # Postgres is external — see docker-compose.yml (supabase/postgres sidecar).
 #
 # Build (from repo root; context is supabase/):
@@ -11,11 +11,9 @@
 #   docker compose -f supabase/docker/docker-compose.yml up --build
 
 ARG ALPINE_IMAGE=alpine:3.23
-ARG GOTRUE_IMAGE=supabase/gotrue:v2.189.0
 ARG POSTGREST_IMAGE=postgrest/postgrest:v14.12
 ARG EDGE_RUNTIME_IMAGE=supabase/edge-runtime:v1.74.0
 
-FROM ${GOTRUE_IMAGE} AS gotrue
 FROM ${POSTGREST_IMAGE} AS postgrest
 FROM ${EDGE_RUNTIME_IMAGE} AS edge
 
@@ -23,21 +21,12 @@ FROM ${EDGE_RUNTIME_IMAGE} AS edge
 FROM ${ALPINE_IMAGE}
 
 # ── System packages ──────────────────────────────────────────────────────────
-# bash: entrypoint / cron scripts
-# curl: healthchecks + merge-queue cron
-# nginx: Kong-compatible gateway
-# supervisor: multi-process
-# postgresql17-client: psql for migrations / role setup
-# nodejs+npm: vendor Edge Function deps at build (npm removed after install)
 RUN apk add --no-cache \
       bash \
       curl \
       nginx \
       supervisor \
       postgresql17-client
-
-# ── GoTrue (static binary) ───────────────────────────────────────────────────
-COPY --from=gotrue /usr/local/bin/auth /usr/local/bin/auth
 
 # ── PostgREST (static binary) ────────────────────────────────────────────────
 COPY --from=postgrest /bin/postgrest /usr/local/bin/postgrest
@@ -63,7 +52,6 @@ COPY docker/apply-treq-migrations.sh /opt/treq/bin/apply-treq-migrations.sh
 COPY docker/merge-queue-cron.sh /opt/treq/bin/merge-queue-cron.sh
 
 # Vendor supabase-js so Edge Functions boot without registry egress.
-# Import map remaps the esm.sh URL used in source to the local package.
 RUN apk add --no-cache nodejs npm \
   && printf '%s\n' \
        '{"name":"treq-edge-functions","private":true,"dependencies":{"@supabase/supabase-js":"2.95.3"}}' \
@@ -78,23 +66,21 @@ RUN apk add --no-cache nodejs npm \
       /opt/treq/bin/entrypoint.sh \
       /opt/treq/bin/apply-treq-migrations.sh \
       /opt/treq/bin/merge-queue-cron.sh \
-      /usr/local/bin/auth \
       /usr/local/bin/postgrest \
       /usr/local/bin/edge-runtime \
   && mkdir -p /var/log/nginx /var/lib/nginx /run/nginx /tmp
 
+# Single-tenant defaults: no gateway JWT checks on Edge Functions.
 ENV POSTGRES_DB=postgres \
     POSTGRES_USER=supabase_admin \
     PGHOST=db \
     PGPORT=5432 \
     JWT_EXP=3600 \
-    VERIFY_JWT=true \
-    GOTRUE_MAILER_AUTOCONFIRM=true \
-    GOTRUE_EXTERNAL_EMAIL_ENABLED=true
+    VERIFY_JWT=false
 
 EXPOSE 8000
 
 HEALTHCHECK --interval=10s --timeout=5s --start-period=45s --retries=12 \
-  CMD curl -sf http://127.0.0.1:8000/health && curl -sf http://127.0.0.1:9999/health || exit 1
+  CMD curl -sf http://127.0.0.1:8000/health && curl -sf http://127.0.0.1:3000/ || exit 1
 
 ENTRYPOINT ["/opt/treq/bin/entrypoint.sh"]
