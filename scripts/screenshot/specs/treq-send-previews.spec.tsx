@@ -158,9 +158,9 @@ it("captures treq send attachment thumbs and lightbox carousel previews", async 
 	await captureDocument(document, {
 		name: "treq-send-03-image-lightbox",
 		expectations: [
-			"A blurred backdrop covers the app with no modal chrome around the asset.",
-			"The blue SVG image is shown large in the center.",
-			"Top-right toolbar includes zoom out, 100%, zoom in, plus copy, reveal, and close.",
+			"At 100% zoom the blue SVG fills most of the viewport width (about three-quarters or more) — readable without zooming in.",
+			"The carousel/content area spans at least three-quarters of the viewport; no small centered postage-stamp image.",
+			"Top-right toolbar shows zoom out, 100%, zoom in, plus copy, reveal, and close on a blurred backdrop.",
 		],
 	});
 
@@ -173,7 +173,7 @@ it("captures treq send attachment thumbs and lightbox carousel previews", async 
 	await captureDocument(document, {
 		name: "treq-send-03b-image-zoomed",
 		expectations: [
-			"The SVG is roughly twice as wide as in the 100% capture (layout width grew).",
+			"At 200% the SVG is roughly twice as wide as the 100% capture (layout width grew via vw).",
 			"The zoom level label in the top-right toolbar reads 200%.",
 		],
 	});
