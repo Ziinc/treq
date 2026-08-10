@@ -1,7 +1,7 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { ArrowDown, GitMerge, Layers2, Loader2, Rocket, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { UseMutationResult } from "@tanstack/react-query";
 import type { QueueEntryStatus } from "../../lib/api-types";
 import { listCommits, listWorkspaceStatuses } from "../../lib/api";
@@ -19,7 +19,6 @@ import {
 } from "../../lib/workspace-stack";
 import { DiffStatsInline } from "../DiffBar";
 import { Button } from "../ui/button";
-import { Switch } from "../ui/switch";
 import { EmptyState } from "./shared";
 
 function queueStatusLabel(status: QueueEntryStatus): string {
@@ -155,6 +154,9 @@ function QueueStackBlock({
   dequeueBranches,
   showRemove = true,
 }: QueueStackBlockProps) {
+  // `stack.entries` stays merge-order (root first) for dequeue; reverse only
+  // for display so the next-to-merge PR sits at the bottom of the card.
+  const displayEntries = [...stack.entries].reverse();
   const isStack = stack.entries.length > 1;
   const stackKey = stack.entries[0].branch_name;
   const maxChange = stackMaxChange(stack.entries);
@@ -199,7 +201,7 @@ function QueueStackBlock({
       */}
       <div className="relative">
         <ul className="space-y-0">
-          {stack.entries.map((entry) => {
+          {displayEntries.map((entry) => {
             const insertions = entry.insertions ?? 0;
             const deletions = entry.deletions ?? 0;
             return (
@@ -285,6 +287,9 @@ interface MergeQueueListProps {
   queueLoading: boolean;
   queueEntries: QueueEntry[];
   dequeueBranches: UseMutationResult<string[], Error, string[]>;
+  showMergedHistory: boolean;
+  historyLimit: number;
+  onHistoryLimitChange: (limit: number) => void;
 }
 
 function MergeQueueList({
@@ -292,10 +297,10 @@ function MergeQueueList({
   queueLoading,
   queueEntries,
   dequeueBranches,
+  showMergedHistory,
+  historyLimit,
+  onHistoryLimitChange,
 }: MergeQueueListProps) {
-  const [showMergedHistory, setShowMergedHistory] = useState(false);
-  const [historyLimit, setHistoryLimit] = useState(MERGE_QUEUE_HISTORY_PAGE_SIZE);
-
   const { data: workspaceStatuses } = useQuery({
     queryKey: ["workspace-statuses", repoPath],
     queryFn: () => listWorkspaceStatuses(repoPath),
@@ -359,32 +364,13 @@ function MergeQueueList({
     history,
     showMergedHistory ? historyLimit : 0,
   );
+  // Next-to-merge stack sits just above the target-branch terminator.
+  const displayActive = [...active].reverse();
   const targetBranch =
     active[0]?.targetBranch ?? history[0]?.targetBranch ?? "main";
-  const hasHistory = history.length > 0;
 
   return (
     <div className="flex flex-col h-full" data-testid="merge-queue-list">
-      {hasHistory && (
-        <div className="flex items-center justify-between gap-3 px-3 pt-3 pb-1 shrink-0">
-          <label
-            htmlFor="merge-queue-show-merged"
-            className="text-base text-muted-foreground"
-          >
-            Show merged
-          </label>
-          <Switch
-            id="merge-queue-show-merged"
-            checked={showMergedHistory}
-            onCheckedChange={(next) => {
-              setShowMergedHistory(next);
-              if (next) setHistoryLimit(MERGE_QUEUE_HISTORY_PAGE_SIZE);
-            }}
-            aria-label="Show merged pull requests"
-          />
-        </div>
-      )}
-
       {/*
         Continuous rail: p-3 (12) + card p-4 (16) + half node (7) = 35px.
         Drawn above card backgrounds so it stays visible through cards and
@@ -398,12 +384,12 @@ function MergeQueueList({
         />
 
         <div className="relative space-y-3">
-          {active.length === 0 ? (
+          {displayActive.length === 0 ? (
             <div className="relative z-10 py-8">
               <EmptyState icon={GitMerge} message="Merge queue is empty." />
             </div>
           ) : (
-            active.map((stack) => (
+            displayActive.map((stack) => (
               <QueueStackBlock
                 key={stack.entries[0].branch_name}
                 stack={stack}
@@ -439,7 +425,9 @@ function MergeQueueList({
                     size="sm"
                     className="text-base"
                     onClick={() =>
-                      setHistoryLimit((n) => n + MERGE_QUEUE_HISTORY_PAGE_SIZE)
+                      onHistoryLimitChange(
+                        historyLimit + MERGE_QUEUE_HISTORY_PAGE_SIZE,
+                      )
                     }
                   >
                     Load more
@@ -462,6 +450,9 @@ export interface MergeQueueTabProps {
   queueLoading: boolean;
   queueEntries: QueueEntry[];
   dequeueBranches: UseMutationResult<string[], Error, string[]>;
+  showMergedHistory: boolean;
+  historyLimit: number;
+  onHistoryLimitChange: (limit: number) => void;
   onOpenSettings?: (tab?: string) => void;
 }
 
@@ -473,6 +464,9 @@ export function MergeQueueTab({
   queueLoading,
   queueEntries,
   dequeueBranches,
+  showMergedHistory,
+  historyLimit,
+  onHistoryLimitChange,
   onOpenSettings,
 }: MergeQueueTabProps) {
   if (!isPro) return <MergeQueueUpsell />;
@@ -486,6 +480,9 @@ export function MergeQueueTab({
       queueLoading={queueLoading}
       queueEntries={queueEntries}
       dequeueBranches={dequeueBranches}
+      showMergedHistory={showMergedHistory}
+      historyLimit={historyLimit}
+      onHistoryLimitChange={onHistoryLimitChange}
     />
   );
 }

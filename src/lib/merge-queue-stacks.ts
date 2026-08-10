@@ -139,3 +139,21 @@ export function takeHistoryPage(
   const totalEntries = history.reduce((n, s) => n + s.entries.length, 0);
   return { visible, hasMore: visibleEntries < totalEntries };
 }
+
+/**
+ * Flip merge-order stacks for the UI: tip of each stack first, and the stack
+ * that merges next closest to the target-branch terminator (list bottom).
+ * Keeps `entries` merge-order elsewhere (e.g. dequeue still reverses top-down).
+ */
+export function stacksForDisplay(
+  stacks: readonly QueueStack[],
+  options: { reverseStackOrder: boolean } = { reverseStackOrder: true },
+): QueueStack[] {
+  const withTipFirst = stacks.map((stack) => ({
+    ...stack,
+    entries: [...stack.entries].reverse(),
+  }));
+  return options.reverseStackOrder
+    ? withTipFirst.reverse()
+    : withTipFirst;
+}

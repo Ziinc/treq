@@ -191,31 +191,35 @@ it("captures the stacked PR queue for an opted-in repo", async () => {
 	await captureDocument(document, {
 		name: "merge-queue-tab-02-enabled-with-queue",
 		expectations: [
-			"The tab lists the queue as bordered cards with a single continuous vertical rail through every card and the gaps between them.",
-			"Each multi-PR stack is its own card with a Layers header; the standalone PR is its own card. Cards are spaced vertically.",
-			'Node colours follow status: PR #101 (Merging) is green, PR #102 ("Running checks") is amber, the Queued ones are grey.',
+			"Below the Merge Queue tab is a toolbar with a Show merged switch (off) and a refresh button.",
+			"Queue cards sit on a continuous vertical rail. Stacks are tip-first: the next-to-merge PR is at the bottom of each card, closest to the main terminator.",
+			'Node colours follow status: PR #101 (Merging) is green near main, PR #102 ("Running checks") is amber above it, Queued nodes are grey.',
 		],
 	});
 	await captureDocument(document, {
 		name: "merge-queue-tab-02b-stacks-and-terminator",
 		viewport: { width: 480, height: 900 },
 		expectations: [
-			'Two stack cards show "Stack of 3" and "Stack of 2" headers with outline Remove buttons; stacked rows have no per-entry X.',
-			"Each PR row shows green +N / red -N LOC stats (and a small relative diff bar) like the Code tab stack card.",
-			'A continuous rail links all PR nodes across cards and ends at a down-arrow + "main". The entry with no PR number reads "No PR". The standalone fix/solo card still has its own X remove control.',
+			'Stack cards show "Stack of 3" and "Stack of 2" with outline Remove; the Stack of 3 (next to merge) is just above main.',
+			"Within the Stack of 3, PR #103 is at the top of the card and PR #101 (Merging) is at the bottom near the rail terminator.",
+			'Each PR row shows +N / -N LOC. A continuous rail links all nodes to a down-arrow + "main".',
 		],
 	});
 
-	// Entries render in merge order across the stacks.
+	// Tip-first within stacks; stacks ordered so next-to-merge is last (near main).
 	const entries = await screen.findAllByTestId(/^merge-queue-entry-/);
 	expect(entries.map((el) => el.getAttribute("data-testid"))).toEqual([
-		"merge-queue-entry-1",
-		"merge-queue-entry-2",
-		"merge-queue-entry-3",
-		"merge-queue-entry-4",
-		"merge-queue-entry-5",
 		"merge-queue-entry-6",
+		"merge-queue-entry-5",
+		"merge-queue-entry-4",
+		"merge-queue-entry-3",
+		"merge-queue-entry-2",
+		"merge-queue-entry-1",
 	]);
+	expect(screen.getByTestId("merge-queue-toolbar")).toBeInTheDocument();
+	expect(
+		screen.getByRole("switch", { name: /show merged/i }),
+	).not.toBeChecked();
 	expect(screen.getByTestId("merge-queue-rail")).toBeInTheDocument();
 	const featStack = screen.getByTestId("merge-queue-stack-feat/base");
 	expect(featStack).toHaveClass("border", "rounded-lg");
@@ -339,7 +343,7 @@ it("captures the empty queue for a repo that has the queue switched on", async (
 		name: "merge-queue-tab-03-enabled-empty",
 		expectations: [
 			'The body shows the "Merge queue is empty." empty state with a merge icon -- distinct from the "off for this repository" state.',
-			"No Show merged toggle is present when there is no merge history.",
+			"The Show merged switch sits in the toolbar under the Merge Queue tab (off).",
 			"The target branch terminator is still shown below the empty state.",
 		],
 	});
@@ -403,7 +407,7 @@ it("hides fully merged stacks by default and shows them below main when toggled"
 		expectations: [
 			"Only the live queued PR #201 appears above the main terminator.",
 			"Fully merged stacks are not listed in the default view.",
-			'A "Show merged" switch is visible and off.',
+			'A "Show merged" switch sits in the toolbar under the Merge Queue tab and is off.',
 		],
 	});
 
@@ -428,8 +432,8 @@ it("hides fully merged stacks by default and shows them below main when toggled"
 		name: "merge-queue-tab-07-history-shown",
 		viewport: { width: 480, height: 900 },
 		expectations: [
-			"With Show merged on, completed stacks appear as cards below the main terminator.",
-			"The merged Stack of 2 (PR #101 / #102) card is visible under main with LOC stats.",
+			"Show merged is on in the toolbar; completed stacks appear as cards below the main terminator.",
+			"In the merged Stack of 2, tip PR #102 is above base PR #101 (tip-first).",
 			'A "Load more" button is present when history exceeds the first page.',
 		],
 	});
@@ -476,7 +480,7 @@ it("keeps a partially merged stack visible with the bottom PR labelled Merged", 
 		name: "merge-queue-tab-08-partial-stack-merged",
 		expectations: [
 			"A Stack of 2 card remains above main while the upper PR is still Running checks.",
-			"The bottom PR shows a Merged chip and LOC stats, still listed in the active stack card.",
+			"The Merged bottom PR sits at the bottom of the card next to the main terminator; tip shows Running checks.",
 			"No merge history section is shown yet because the stack is not fully merged.",
 		],
 	});

@@ -3,6 +3,7 @@ import {
   buildQueueStacks,
   isStackFullyMerged,
   partitionQueueStacks,
+  stacksForDisplay,
   takeHistoryPage,
   type QueueEntry,
 } from "./merge-queue-stacks";
@@ -205,5 +206,46 @@ describe("takeHistoryPage", () => {
     // First stack has 2 entries; we still take the whole stack as one unit.
     expect(stackBranches(page.visible)).toEqual([["base", "top"]]);
     expect(page.hasMore).toBe(true);
+  });
+});
+
+describe("stacksForDisplay", () => {
+  it("puts tip first and the next-to-merge stack closest to the terminator", () => {
+    const stacks = buildQueueStacks([
+      entry({ branch: "feat/base", target: "main", position: 1 }),
+      entry({ branch: "feat/top", target: "feat/base", position: 2 }),
+      entry({ branch: "solo", target: "main", position: 3 }),
+    ]);
+
+    expect(stackBranches(stacksForDisplay(stacks))).toEqual([
+      ["solo"],
+      ["feat/top", "feat/base"],
+    ]);
+  });
+
+  it("keeps history stack order and only flips entries tip-first", () => {
+    const historyOrdered = [
+      {
+        targetBranch: "main",
+        entries: [
+          entry({ branch: "newer-base", target: "main", position: 5 }),
+          entry({
+            branch: "newer-top",
+            target: "newer-base",
+            position: 6,
+          }),
+        ],
+      },
+      {
+        targetBranch: "main",
+        entries: [entry({ branch: "old", target: "main", position: 1 })],
+      },
+    ];
+
+    expect(
+      stackBranches(
+        stacksForDisplay(historyOrdered, { reverseStackOrder: false }),
+      ),
+    ).toEqual([["newer-top", "newer-base"], ["old"]]);
   });
 });

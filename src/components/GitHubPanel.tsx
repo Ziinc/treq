@@ -8,6 +8,7 @@ import {
   Plus,
   RefreshCw,
 } from "lucide-react";
+import { useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useAuth } from "../hooks/useAuth";
 import {
@@ -26,13 +27,17 @@ import {
   type GitHubStateFilter,
   type GitHubTab,
 } from "../lib/githubRoutes";
-import type { QueueEntry } from "../lib/merge-queue-stacks";
+import {
+  MERGE_QUEUE_HISTORY_PAGE_SIZE,
+  type QueueEntry,
+} from "../lib/merge-queue-stacks";
 import { supabase } from "../lib/supabase";
 import { MergeQueueTab } from "./github-panel/MergeQueueTab";
 import { CreateIssueForm, IssueDetailPanel } from "./github-panel/IssueDetail";
 import { CreatePrForm, PrDetailPanel } from "./github-panel/PrDetail";
 import { EmptyState, IssueListItem, PrListItem } from "./github-panel/shared";
 import { Button } from "./ui/button";
+import { Switch } from "./ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
 
 interface GitHubPanelProps {
@@ -64,6 +69,8 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
     useGitRemoteInfo(repoPath);
   const { data: queueEnabled } = useMergeQueueEnabled(repoPath);
   const dequeueBranches = useDequeueBranches(repoPath);
+  const [showMergedHistory, setShowMergedHistory] = useState(false);
+  const [historyLimit, setHistoryLimit] = useState(MERGE_QUEUE_HISTORY_PAGE_SIZE);
 
   // Routing: the current tab, filter, selection, and create-form state all
   // live in the URL (as /github/<tab>/<filter>/<selector?>) so browser
@@ -299,6 +306,42 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
           </div>
         )}
 
+        {activeTab === "merge-queue" &&
+          isPro &&
+          queueEnabled === true &&
+          !!remoteInfo && (
+            <div
+              className="flex items-center gap-2 px-4 pb-2 shrink-0"
+              data-testid="merge-queue-toolbar"
+            >
+              <label
+                htmlFor="merge-queue-show-merged"
+                className="text-base text-muted-foreground"
+              >
+                Show merged
+              </label>
+              <Switch
+                id="merge-queue-show-merged"
+                checked={showMergedHistory}
+                onCheckedChange={(next) => {
+                  setShowMergedHistory(next);
+                  if (next) setHistoryLimit(MERGE_QUEUE_HISTORY_PAGE_SIZE);
+                }}
+                aria-label="Show merged pull requests"
+              />
+              <div className="flex-1" />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={handleRefresh}
+                title="Refresh"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+          )}
+
         {showCreateForm && remoteInfo && isListTab && (
           <div className="shrink-0 overflow-y-auto">
             {activeTab === "issues" ? (
@@ -422,6 +465,9 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
               queueLoading={queueLoading}
               queueEntries={queueEntries}
               dequeueBranches={dequeueBranches}
+              showMergedHistory={showMergedHistory}
+              historyLimit={historyLimit}
+              onHistoryLimitChange={setHistoryLimit}
               onOpenSettings={onOpenSettings}
             />
           )}
