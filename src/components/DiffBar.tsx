@@ -81,10 +81,7 @@ export function DiffStatsInline({
       <span className="text-xs font-mono text-green-600 dark:text-green-400">
         +{insertions}
       </span>
-      <DiffBar
-        diffStats={{ insertions, deletions }}
-        maxChange={maxChange}
-      />
+      <DiffBar diffStats={{ insertions, deletions }} maxChange={maxChange} />
       <span className="text-xs font-mono text-red-600 dark:text-red-400">
         -{deletions}
       </span>

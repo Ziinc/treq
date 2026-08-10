@@ -278,7 +278,6 @@ describe("GitHubPanel", () => {
       "feat/base",
       "feat/top",
     ]);
-    // Stack members are only removable via the stack Remove control.
     expect(
       screen.queryByRole("button", { name: "Remove feat/base from queue" }),
     ).not.toBeInTheDocument();

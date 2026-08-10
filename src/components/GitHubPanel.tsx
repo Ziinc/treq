@@ -71,7 +71,9 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
   const { data: queueEnabled } = useMergeQueueEnabled(repoPath);
   const dequeueBranches = useDequeueBranches(repoPath);
   const [showMergedHistory, setShowMergedHistory] = useState(false);
-  const [historyLimit, setHistoryLimit] = useState(MERGE_QUEUE_HISTORY_PAGE_SIZE);
+  const [historyLimit, setHistoryLimit] = useState(
+    MERGE_QUEUE_HISTORY_PAGE_SIZE,
+  );
 
   // Routing: the current tab, filter, selection, and create-form state all
   // live in the URL (as /github/<tab>/<filter>/<selector?>) so browser

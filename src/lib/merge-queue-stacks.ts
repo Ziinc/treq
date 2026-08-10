@@ -155,7 +155,5 @@ export function stacksForDisplay(
     ...stack,
     entries: [...stack.entries].reverse(),
   }));
-  return options.reverseStackOrder
-    ? withTipFirst.reverse()
-    : withTipFirst;
+  return options.reverseStackOrder ? withTipFirst.reverse() : withTipFirst;
 }
