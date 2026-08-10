@@ -33,11 +33,16 @@ description: >-
 | Skill | Proves | Stack |
 |---|---|---|
 | `/app-qa` | UI pixels and interaction | real jj + NAPI + jsdom React; **mocks** Supabase |
-| `/service-qa` | Auth, RLS, RPCs, Edge Functions | real local Supabase CLI; **no** UI, **no** mocks |
+| `/service-qa` | Auth, RLS, RPCs, Edge Functions | real local Supabase CLI; **no** mocked supabase-js |
+| UI + live Supabase | Desktop button → real RPC/RLS | screenshot harness **without** mocking `src/lib/supabase` (see `scripts/screenshot/specs/service-qa-ui-live-supabase.spec.tsx`) |
 
-Do not substitute one for the other. A green screenshot with a mocked
+Do not substitute one for the other. A green `/app-qa` screenshot with a mocked
 `supabase.rpc` does not prove the migration or Edge Function works. A green
-service-qa RPC does not prove the desktop button wiring is correct.
+service-qa RPC alone does not prove the desktop button wiring is correct — when
+the user asks for screenshots of the UI talking to Supabase, capture via the
+screenshot harness against `http://127.0.0.1:54321` (email/password session on
+the app singleton, Pro gate stubbed only if local Stripe FDW has no plan). Never
+paste terminal logs or outcome HTML as stand-ins for those UI captures.
 
 Pure `_shared/merge-queue` unit tests under `test/merge-queue/` stay in
 `npm test`. service-qa covers the **I/O boundary**: Postgres, Auth Admin API,
