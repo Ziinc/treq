@@ -143,14 +143,19 @@ function TargetBranchMarker({
   tipShortId,
   tipCommitId,
   tipPrNumber,
+  tipPrTitle,
 }: {
   targetBranch: string;
   tipShortId: string | null;
   tipCommitId: string | null;
   tipPrNumber: number | null;
+  tipPrTitle: string | null;
 }) {
   const [copied, setCopied] = useState(false);
   const copyValue = tipCommitId ?? tipShortId;
+  const title =
+    tipPrTitle?.trim() ||
+    (tipPrNumber != null ? `PR #${tipPrNumber}` : null);
 
   async function handleCopy() {
     if (!copyValue) return;
@@ -172,12 +177,17 @@ function TargetBranchMarker({
         <ArrowDown className="w-3.5 h-3.5" />
       </div>
       <div className="min-w-0 flex-1 flex items-center gap-2">
-        <div className="min-w-0">
-          <p className="text-sm font-mono truncate">{targetBranch}</p>
-          {tipPrNumber != null && (
-            <p className="text-xs text-muted-foreground mt-0.5 truncate">
-              PR #{tipPrNumber}
-            </p>
+        <div className="min-w-0 flex items-center gap-2">
+          <span
+            className="inline-flex items-center shrink-0 px-1.5 py-0.5 rounded text-xs font-mono font-medium bg-muted text-foreground"
+            data-testid="merge-queue-target-branch"
+          >
+            {targetBranch}
+          </span>
+          {title && (
+            <span className="text-sm text-foreground truncate min-w-0">
+              {title}
+            </span>
           )}
         </div>
         {tipShortId && (
@@ -508,7 +518,9 @@ function MergeQueueList({
     defaultBranchName ??
     "main";
   // Newest fully-merged stack's root is what last landed on the target tip.
-  const tipPrNumber = history[0]?.entries[0]?.pr_number ?? null;
+  const tipEntry = history[0]?.entries[0] ?? null;
+  const tipPrNumber = tipEntry?.pr_number ?? null;
+  const tipPrTitle = tipEntry?.pr_title ?? null;
   const tipCommit = homeLog?.commits[0] ?? null;
   const tipShortId = tipCommit?.short_id ?? null;
   const tipCommitId = tipCommit?.commit_id ?? null;
@@ -547,6 +559,7 @@ function MergeQueueList({
             tipShortId={tipShortId}
             tipCommitId={tipCommitId}
             tipPrNumber={tipPrNumber}
+            tipPrTitle={tipPrTitle}
           />
 
           {showMergedHistory && visibleHistory.length > 0 && (

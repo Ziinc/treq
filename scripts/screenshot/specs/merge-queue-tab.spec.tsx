@@ -17,6 +17,7 @@ const { queueState, mockGetGitRemoteUrl, mockSetEnabled, mockInvoke } =
 			entries: [] as {
 				branch_name: string;
 				pr_number: number | null;
+				pr_title?: string | null;
 				status: QueueEntryStatus;
 				position: number;
 				target_branch: string;
@@ -241,7 +242,9 @@ it("captures the stacked PR queue for an opted-in repo", async () => {
 		0,
 	);
 	const target = screen.getByTestId("merge-queue-target");
-	expect(target).toHaveTextContent("main");
+	expect(screen.getByTestId("merge-queue-target-branch")).toHaveTextContent(
+		"main",
+	);
 	await waitFor(() => {
 		expect(screen.getByTestId("merge-queue-tip-sha")).toBeVisible();
 	});
@@ -356,7 +359,7 @@ it("captures the empty queue for a repo that has the queue switched on", async (
 		expectations: [
 			'The body shows the "Merge queue is empty." empty state with a merge icon -- distinct from the "off for this repository" state.',
 			'The "Merged" checkmark control sits in the toolbar under the Merge Queue tab (unchecked).',
-			"The target branch terminator shows main with the tip commit SHA on the right and a ghost copy button.",
+			"The main terminator shows a main branch label, with tip SHA on the right and a ghost copy button.",
 		],
 	});
 }, 120000);
@@ -379,6 +382,7 @@ it("hides fully merged stacks by default and shows them below main when toggled"
 		{
 			branch_name: "feat/done-base",
 			pr_number: 101,
+			pr_title: "feat: land done-base on main",
 			status: "merged",
 			position: 20,
 			target_branch: "main",
@@ -388,6 +392,7 @@ it("hides fully merged stacks by default and shows them below main when toggled"
 		{
 			branch_name: "feat/done-top",
 			pr_number: 102,
+			pr_title: "feat: finish done-top",
 			status: "merged",
 			position: 21,
 			target_branch: "feat/done-base",
@@ -398,6 +403,7 @@ it("hides fully merged stacks by default and shows them below main when toggled"
 		...[10, 11, 12, 13, 14, 15].map((n) => ({
 			branch_name: `chore/old-${n}`,
 			pr_number: 100 + n,
+			pr_title: `chore: old change ${n}`,
 			status: "merged" as QueueEntryStatus,
 			position: n,
 			target_branch: "main",
@@ -416,22 +422,26 @@ it("hides fully merged stacks by default and shows them below main when toggled"
 	).not.toBeInTheDocument();
 	expect(screen.queryByTestId("merge-queue-history")).not.toBeInTheDocument();
 	const targetBefore = screen.getByTestId("merge-queue-target");
-	expect(targetBefore).toHaveTextContent("main");
+	expect(screen.getByTestId("merge-queue-target-branch")).toHaveTextContent(
+		"main",
+	);
 	// Tip still names the newest landed PR even while history cards are hidden.
-	expect(targetBefore).toHaveTextContent("PR #101");
+	expect(targetBefore).toHaveTextContent("feat: land done-base on main");
 
 	await captureDocument(document, {
 		name: "merge-queue-tab-06-history-hidden",
 		expectations: [
 			"Only the live queued PR #201 appears above the main terminator.",
-			"Fully merged stacks are not listed in the default view.",
+			'The main tip row shows a "main" label and the landed PR title on one line, with tip SHA + ghost copy on the right.',
 			'A "Merged" checkmark control sits in the toolbar under the Merge Queue tab and is unchecked.',
 		],
 	});
 
 	await user.click(screen.getByRole("checkbox", { name: /^merged$/i }));
 	await screen.findByTestId("merge-queue-history");
-	expect(screen.getAllByText("PR #101").length).toBeGreaterThanOrEqual(2);
+	expect(
+		screen.getAllByText("feat: land done-base on main").length,
+	).toBeGreaterThanOrEqual(1);
 	expect(screen.getByText("Stack of 2")).toBeVisible();
 
 	// History sits below the target terminator in the DOM.
@@ -445,16 +455,16 @@ it("hides fully merged stacks by default and shows them below main when toggled"
 		),
 	).toBe(true);
 	expect(list).toContainElement(history);
-	// Tip marker shows the newest merged root PR under main.
-	expect(target).toHaveTextContent("PR #101");
+	// Tip marker shows the newest merged root PR title beside the branch label.
+	expect(target).toHaveTextContent("feat: land done-base on main");
 	expect(within(history).getByText("PR #101")).toBeVisible();
 
 	await captureDocument(document, {
 		name: "merge-queue-tab-07-history-shown",
 		viewport: { width: 480, height: 900 },
 		expectations: [
-			'Merged is checked in the toolbar; completed stacks appear as cards below the main terminator.',
-			"The main tip row shows PR #101 under main, with the tip commit SHA pulled right next to a ghost copy button.",
+			"Merged is checked in the toolbar; completed stacks appear as cards below the main terminator.",
+			'The main tip row keeps the "main" label + landed PR title on one line, SHA pulled right with copy.',
 			'A "Load more" button is present when history exceeds the first page.',
 		],
 	});

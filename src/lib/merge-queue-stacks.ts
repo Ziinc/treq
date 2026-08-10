@@ -3,6 +3,8 @@ import type { QueueEntryStatus } from "./api-types";
 export interface QueueEntry {
   branch_name: string;
   pr_number: number | null;
+  /** Present when returned by get_repo_branch_queue_statuses. */
+  pr_title?: string | null;
   status: QueueEntryStatus;
   position: number;
   target_branch: string;
