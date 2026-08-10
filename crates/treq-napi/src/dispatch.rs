@@ -438,10 +438,7 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
       let repo_path = get_str(&args, "repoPath")?;
       let head_branch = get_str(&args, "headBranch")?;
       let base_branch = get_str(&args, "baseBranch")?;
-      let title = args
-        .get("title")
-        .and_then(|v| v.as_str())
-        .map(String::from);
+      let title = args.get("title").and_then(|v| v.as_str()).map(String::from);
       let description = args
         .get("description")
         .and_then(|v| v.as_str())

@@ -372,10 +372,7 @@ fn test_open_or_create_workspace_from_pr_creates_from_remote_head() {
     Some(default_branch.as_str())
   );
   assert_eq!(workspace.title, "PR title");
-  assert_eq!(
-    workspace.description.as_deref(),
-    Some("From GitHub PR #42")
-  );
+  assert_eq!(workspace.description.as_deref(), Some("From GitHub PR #42"));
 
   let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
   assert!(
