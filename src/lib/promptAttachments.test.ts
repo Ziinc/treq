@@ -21,9 +21,7 @@ describe("formatPromptWithGitHubIssue", () => {
   });
 
   it("omits the title suffix when the issue has no title", () => {
-    expect(
-      formatPromptWithGitHubIssue("", { ...issue, title: "" }),
-    ).toBe(
+    expect(formatPromptWithGitHubIssue("", { ...issue, title: "" })).toBe(
       "Address GitHub issue #42\n\nhttps://github.com/acme/treq/issues/42",
     );
   });
