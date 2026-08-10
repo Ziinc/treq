@@ -1,19 +1,21 @@
-# Treq Supabase fat image
+# Treq Supabase fat API image (Alpine)
 
-Single container with everything needed to run treq's Supabase server-side stack:
+Alpine-based image with the Supabase **API** processes treq needs. Postgres
+is **not** baked in — compose runs `supabase/postgres` as a sidecar.
 
 | Process | Role |
 |---|---|
-| Postgres 17 (`supabase/postgres`) | DB + `pgmq` / `wrappers` / vault |
 | GoTrue | Auth (`/auth/v1`) |
 | PostgREST | REST + RPC (`/rest/v1`) |
 | Edge Runtime | Deno functions (`/functions/v1`) |
 | nginx | Kong-compatible public gateway (`:8000`) |
 | merge-queue cron | Nudges worker (60s) + reconciler (10m) |
 
-Baked in at build time: `supabase/migrations/**`, `supabase/seed.sql`, and `supabase/functions/**`.
+Baked in at build time: `supabase/migrations/**`, `supabase/seed.sql`, and
+`supabase/functions/**` (with `@supabase/supabase-js` vendored).
 
-This is for local / CI / self-hosted smoke — not a drop-in replacement for Supabase Cloud HA.
+Dockerfile layers are incremental from `alpine:3.23`: system packages →
+GoTrue → PostgREST → Edge Runtime → treq app → npm vendor.
 
 ## Quick start
 
@@ -38,23 +40,24 @@ make supabase.docker.down
 
 ```bash
 docker build -f supabase/docker/Dockerfile -t treq-supabase:local supabase
-docker run --rm --name treq-supabase \
-  -p 54321:8000 -p 54322:5432 \
-  --env-file supabase/docker/.env.example \
-  -v treq-supabase-data:/var/lib/postgresql/data \
-  treq-supabase:local
+docker compose -f supabase/docker/docker-compose.yml up --build
 ```
 
-Or Compose:
+The fat image alone needs a reachable Supabase Postgres (`PGHOST`):
 
 ```bash
-docker compose -f supabase/docker/docker-compose.yml up --build
+docker run --rm --name treq-supabase \
+  -p 54321:8000 \
+  --env-file supabase/docker/.env.example \
+  -e PGHOST=host.docker.internal \
+  treq-supabase:local
 ```
 
 ## Environment
 
 See [`.env.example`](./.env.example). Required:
 
+- `PGHOST` — Postgres hostname (compose sets `db`)
 - `POSTGRES_PASSWORD`
 - `JWT_SECRET` (≥ 32 chars)
 - `ANON_KEY` / `SERVICE_ROLE_KEY` (must match `JWT_SECRET`)
@@ -62,12 +65,10 @@ See [`.env.example`](./.env.example). Required:
 Merge-queue Edge secrets (optional for Auth/REST-only):
 
 - `GITHUB_WEBHOOK_SECRET` (required for webhook acceptance)
-- `GITHUB_APP_ID` / `GITHUB_APP_PRIVATE_KEY_BASE64` (or `MERGE_QUEUE_GITHUB_STUB=1` for stubbed GitHub side effects)
+- `GITHUB_APP_ID` / `GITHUB_APP_PRIVATE_KEY_BASE64` (or `MERGE_QUEUE_GITHUB_STUB=1`)
 - OAuth: `SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET`, `SUPABASE_AUTH_EXTERNAL_GITHUB_SECRET`
 
 ## Client wiring
-
-Point the desktop / web client at the gateway:
 
 ```ts
 createClient("http://127.0.0.1:54321", ANON_KEY)
@@ -75,21 +76,30 @@ createClient("http://127.0.0.1:54321", ANON_KEY)
 
 Paths match hosted Supabase: `/auth/v1`, `/rest/v1`, `/functions/v1/<name>`.
 
-`github-webhook` skips gateway JWT checks (HMAC inside the function), same as `supabase/config.toml`.
+`github-webhook` skips gateway JWT checks (HMAC inside the function), same as
+`supabase/config.toml`.
 
 ## Relationship to `supabase start`
 
-| | Fat image | `supabase start` (CLI) |
+| | Fat API image + DB sidecar | `supabase start` (CLI) |
 |---|---|---|
-| Process model | One container | Many containers |
+| API process model | One Alpine container | Many containers |
+| Postgres | Separate `supabase/postgres` | Separate container |
 | Studio / Inbucket / Analytics | No | Yes (optional) |
-| Nested Docker | Not required | Required |
-| Migrations / functions | Baked into image | Live-mounted from repo |
+| Nested Docker bridges | Only 2 containers | Full CLI stack |
+| Migrations / functions | Baked into API image | Live-mounted from repo |
 
-Prefer the fat image for agents/CI that cannot reliably run nested Docker bridges. Prefer the CLI for day-to-day schema iteration with Studio.
+Prefer this layout for agents/CI. Prefer the CLI for day-to-day schema
+iteration with Studio.
 
-Edge Functions bake `@supabase/supabase-js` into the image (import map remaps the `esm.sh` URL in source). Rebuild the image after changing function deps.
+`make supabase.docker.up` runs [`prepare-network.sh`](./prepare-network.sh)
+first — nested Docker often needs bridge netfilter disabled so the API
+container can reach the DB sidecar.
+
+Edge Functions bake `@supabase/supabase-js` into the image (import map remaps
+the `esm.sh` URL in source). Rebuild the image after changing function deps.
 
 ## Version pins
 
-See [versions.env](./versions.env). Bump when updating against [supabase/docker versions.md](https://github.com/supabase/supabase/blob/master/docker/versions.md).
+See [versions.env](./versions.env). Bump when updating against
+[supabase/docker versions.md](https://github.com/supabase/supabase/blob/master/docker/versions.md).

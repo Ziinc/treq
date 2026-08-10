@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Boot Postgres, apply treq migrations, then run Auth / PostgREST / Edge / nginx.
+# Wait for external Postgres, apply treq migrations, run Auth / PostgREST / Edge / nginx.
 set -euo pipefail
 
 : "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}"
 : "${JWT_SECRET:?JWT_SECRET is required}"
 : "${ANON_KEY:?ANON_KEY is required}"
 : "${SERVICE_ROLE_KEY:?SERVICE_ROLE_KEY is required}"
+: "${PGHOST:?PGHOST is required (external Postgres hostname)}"
 
 export POSTGRES_DB="${POSTGRES_DB:-postgres}"
 export POSTGRES_USER="${POSTGRES_USER:-supabase_admin}"
@@ -13,7 +14,6 @@ export PGPORT="${PGPORT:-5432}"
 export POSTGRES_PORT="${POSTGRES_PORT:-${PGPORT}}"
 export JWT_EXP="${JWT_EXP:-3600}"
 export PGPASSWORD="${POSTGRES_PASSWORD}"
-export PGHOST="${PGHOST:-/var/run/postgresql}"
 export PGUSER="${POSTGRES_USER}"
 export PGDATABASE="${POSTGRES_DB}"
 
@@ -23,17 +23,17 @@ export API_EXTERNAL_URL="${API_EXTERNAL_URL:-${SUPABASE_PUBLIC_URL}/auth/v1}"
 export SITE_URL="${SITE_URL:-http://localhost:3001}"
 export ADDITIONAL_REDIRECT_URLS="${ADDITIONAL_REDIRECT_URLS:-https://127.0.0.1:3001,treq://auth/callback,https://treq.dev/auth/callback}"
 
-# Internal loopback URL used by Edge Functions talking back to the stack.
+# Internal loopback URL used by Edge Functions talking back to the gateway.
 export SUPABASE_URL="${SUPABASE_URL:-http://127.0.0.1:8000}"
 export SUPABASE_ANON_KEY="${ANON_KEY}"
 export SUPABASE_SERVICE_ROLE_KEY="${SERVICE_ROLE_KEY}"
-export SUPABASE_DB_URL="${SUPABASE_DB_URL:-postgresql://postgres:${POSTGRES_PASSWORD}@127.0.0.1:${PGPORT}/${POSTGRES_DB}}"
+export SUPABASE_DB_URL="${SUPABASE_DB_URL:-postgresql://postgres:${POSTGRES_PASSWORD}@${PGHOST}:${PGPORT}/${POSTGRES_DB}}"
 
-# GoTrue
+# GoTrue → external Postgres
 export GOTRUE_API_HOST="${GOTRUE_API_HOST:-0.0.0.0}"
 export GOTRUE_API_PORT="${GOTRUE_API_PORT:-9999}"
 export GOTRUE_DB_DRIVER=postgres
-export GOTRUE_DB_DATABASE_URL="postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@127.0.0.1:${PGPORT}/${POSTGRES_DB}"
+export GOTRUE_DB_DATABASE_URL="postgres://supabase_auth_admin:${POSTGRES_PASSWORD}@${PGHOST}:${PGPORT}/${POSTGRES_DB}"
 export GOTRUE_SITE_URL="${SITE_URL}"
 export GOTRUE_URI_ALLOW_LIST="${ADDITIONAL_REDIRECT_URLS}"
 export GOTRUE_DISABLE_SIGNUP="${GOTRUE_DISABLE_SIGNUP:-false}"
@@ -62,8 +62,8 @@ if [ -n "${GOTRUE_EXTERNAL_GITHUB_SECRET:-${SUPABASE_AUTH_EXTERNAL_GITHUB_SECRET
   export GOTRUE_EXTERNAL_GITHUB_REDIRECT_URI="${GOTRUE_EXTERNAL_GITHUB_REDIRECT_URI:-${API_EXTERNAL_URL}/callback}"
 fi
 
-# PostgREST
-export PGRST_DB_URI="postgres://authenticator:${POSTGRES_PASSWORD}@127.0.0.1:${PGPORT}/${POSTGRES_DB}"
+# PostgREST → external Postgres
+export PGRST_DB_URI="postgres://authenticator:${POSTGRES_PASSWORD}@${PGHOST}:${PGPORT}/${POSTGRES_DB}"
 export PGRST_DB_SCHEMAS="${PGRST_DB_SCHEMAS:-public,graphql_public}"
 export PGRST_DB_EXTRA_SEARCH_PATH="${PGRST_DB_EXTRA_SEARCH_PATH:-public,extensions}"
 export PGRST_DB_ANON_ROLE=anon
@@ -81,34 +81,25 @@ export GITHUB_APP_ID="${GITHUB_APP_ID:-}"
 export GITHUB_APP_PRIVATE_KEY_BASE64="${GITHUB_APP_PRIVATE_KEY_BASE64:-}"
 export MERGE_QUEUE_GITHUB_STUB="${MERGE_QUEUE_GITHUB_STUB:-0}"
 
-mkdir -p /var/run/postgresql /tmp
-chmod 03775 /var/run/postgresql || true
+mkdir -p /tmp
 
 psql_admin() {
   psql -v ON_ERROR_STOP=1 --no-psqlrc \
     -h "${PGHOST}" -p "${PGPORT}" -U "${POSTGRES_USER}" -d "${POSTGRES_DB}" "$@"
 }
 
-# First boot uses a temporary postmaster for init scripts, then stops it and
-# starts the real server. Require several consecutive successful connections
-# with migrate.sh not running so we land on the durable postmaster.
-wait_postgres_fully_initialized() {
+# Wait until the external Supabase Postgres has finished its own init
+# (authenticator role exists) and accepts connections.
+wait_for_postgres() {
   local ready_count=0
   local i
+  echo "Waiting for Postgres at ${PGHOST}:${PGPORT}..."
   for i in $(seq 1 240); do
-    if ! kill -0 "${PG_PID}" 2>/dev/null; then
-      echo "Postgres entrypoint exited unexpectedly" >&2
-      return 1
-    fi
-    if pgrep -f '/docker-entrypoint-initdb.d/migrate.sh' >/dev/null 2>&1; then
-      ready_count=0
-      sleep 1
-      continue
-    fi
     if psql_admin -tAc "select 1" >/dev/null 2>&1 \
       && psql_admin -tAc "select 1 from pg_roles where rolname = 'authenticator'" 2>/dev/null | grep -q 1; then
       ready_count=$((ready_count + 1))
-      if [ "${ready_count}" -ge 5 ]; then
+      if [ "${ready_count}" -ge 3 ]; then
+        echo "Postgres is ready."
         return 0
       fi
     else
@@ -116,7 +107,7 @@ wait_postgres_fully_initialized() {
     fi
     sleep 1
   done
-  echo "Postgres init did not finish in time" >&2
+  echo "Postgres at ${PGHOST}:${PGPORT} did not become ready in time" >&2
   return 1
 }
 
@@ -131,14 +122,7 @@ set_role_password() {
   fi
 }
 
-echo "Starting Postgres..."
-/usr/local/bin/docker-entrypoint.sh postgres \
-  -c config_file=/etc/postgresql/postgresql.conf \
-  -c log_min_messages=fatal &
-PG_PID=$!
-
-echo "Waiting for Postgres init to finish..."
-wait_postgres_fully_initialized
+wait_for_postgres
 
 echo "Applying role passwords + JWT settings..."
 for role in authenticator pgbouncer supabase_auth_admin supabase_storage_admin supabase_functions_admin postgres; do
