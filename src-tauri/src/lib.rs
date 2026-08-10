@@ -151,6 +151,16 @@ pub fn run() {
 
             // Read saved repo path to embed in the window URL (avoids Onboarding flash)
             let saved_repo_path = db.get_setting("last_opened_repo_path").ok().flatten();
+            if let Some(ref path) = saved_repo_path {
+                if let Err(error) = commands::settings::allow_repository_assets(app.handle(), path)
+                {
+                    log::warn!(
+                        "Failed to allow saved repository assets for {}: {}",
+                        path,
+                        error
+                    );
+                }
+            }
             let window_url = if let Some(ref path) = saved_repo_path {
                 let encoded = urlencoding::encode(path).into_owned();
                 format!("index.html?repo={}", encoded)

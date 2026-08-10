@@ -16,8 +16,11 @@
       "assetProtocol": {
         "enable": true,
         "scope": {
-          "allow": ["$HOME/**/*", "$HOME/**/.treq/**/*"],
-          "deny": ["$HOME/.ssh/**"]
+          "allow": [
+            "$HOME/**/.treq/**/*"
+          ],
+          "deny": ["$HOME/.ssh/**"],
+          "requireLiteralLeadingDot": false
         }
       }
     }
