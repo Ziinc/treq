@@ -198,6 +198,17 @@
               "description": "Push to remote after committing"
             }
           ]
+        },
+        "send": {
+          "description": "Send a file or stdin content to the Treq UI for preview",
+          "args": [
+            {
+              "name": "path",
+              "index": 1,
+              "takesValue": true,
+              "description": "File path to preview, or '-' to read stdin"
+            }
+          ]
         }
       }
     },

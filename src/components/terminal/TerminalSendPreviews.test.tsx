@@ -1,0 +1,200 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ReactElement } from "react";
+import userEvent from "@testing-library/user-event";
+import { listen } from "@tauri-apps/api/event";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { render, screen, waitFor } from "@testing-library/react";
+import { TerminalSendPreviews } from "./TerminalSendPreviews";
+import { TreqSendProvider, useTreqSend } from "../../hooks/useTreqSend";
+import { ToastProvider } from "../ui/toast";
+import { TREQ_SEND_EVENT } from "../../lib/treqSend";
+import * as api from "../../lib/api";
+import * as treqSend from "../../lib/treqSend";
+import * as utils from "../../lib/utils";
+
+vi.spyOn(api, "readFile").mockResolvedValue("hello from send");
+vi.spyOn(treqSend, "treqSendFileSrc").mockImplementation(
+  (path: string) => `asset://localhost${path}`,
+);
+vi.spyOn(utils, "copyTextToClipboard").mockResolvedValue(undefined);
+
+function SendHarness({
+  ptySessionId,
+  isActive = true,
+}: {
+  ptySessionId: string;
+  isActive?: boolean;
+}) {
+  const { ingestPayload } = useTreqSend();
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() =>
+          ingestPayload({
+            kind: "send",
+            request_id: "send-1",
+            repo: "/tmp/repo",
+            pty_session_id: ptySessionId,
+            media_type: "text",
+            path: "/tmp/repo/.treq/send/note.txt",
+            title: "note.txt",
+          })
+        }
+      >
+        Inject text
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          ingestPayload({
+            kind: "send",
+            request_id: "send-2",
+            repo: "/tmp/repo",
+            pty_session_id: ptySessionId,
+            media_type: "image",
+            path: "/tmp/repo/shot.png",
+            title: "shot.png",
+          })
+        }
+      >
+        Inject image
+      </button>
+      <TerminalSendPreviews ptySessionId={ptySessionId} isActive={isActive} />
+    </div>
+  );
+}
+
+function renderSend(ui: ReactElement) {
+  return render(
+    <ToastProvider>
+      <TreqSendProvider>{ui}</TreqSendProvider>
+    </ToastProvider>,
+  );
+}
+
+describe("TerminalSendPreviews", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(api.readFile).mockResolvedValue("hello from send");
+    vi.mocked(treqSend.treqSendFileSrc).mockImplementation(
+      (path: string) => `asset://localhost${path}`,
+    );
+    vi.mocked(utils.copyTextToClipboard).mockResolvedValue(undefined);
+  });
+
+  it("shows attachment thumbnails and opens a lightbox text preview on click", async () => {
+    const user = userEvent.setup();
+    renderSend(<SendHarness ptySessionId="session-1" />);
+
+    await user.click(screen.getByRole("button", { name: "Inject text" }));
+    expect(await screen.findByTestId("terminal-send-previews")).toBeTruthy();
+    const thumb = await screen.findByTestId("terminal-send-preview-send-1");
+    await user.click(thumb);
+
+    expect(
+      await screen.findByTestId("treq-send-preview-lightbox"),
+    ).toBeTruthy();
+    await waitFor(() => {
+      expect(screen.getByTestId("treq-send-text-preview").textContent).toBe(
+        "hello from send",
+      );
+    });
+    expect(screen.queryByTestId("treq-send-preview-modal")).toBeNull();
+    expect(api.readFile).toHaveBeenCalledWith("/tmp/repo/.treq/send/note.txt");
+  });
+
+  it("renders image thumbnails with asset URLs", async () => {
+    const user = userEvent.setup();
+    renderSend(<SendHarness ptySessionId="session-1" />);
+    await user.click(screen.getByRole("button", { name: "Inject image" }));
+    const thumb = await screen.findByTestId("terminal-send-preview-send-2");
+    const attachment = thumb.closest('[data-slot="attachment"]');
+    const img = attachment?.querySelector("img");
+    expect(img?.getAttribute("src")).toBe(
+      "asset://localhost/tmp/repo/shot.png",
+    );
+  });
+
+  it("dismisses a thumbnail when its x button is clicked", async () => {
+    const user = userEvent.setup();
+    renderSend(<SendHarness ptySessionId="session-1" />);
+    await user.click(screen.getByRole("button", { name: "Inject text" }));
+    const thumb = await screen.findByTestId("terminal-send-preview-send-1");
+    const attachment = thumb.closest('[data-slot="attachment"]') as HTMLElement;
+    await user.hover(attachment);
+    await user.click(screen.getByTestId("terminal-send-dismiss-send-1"));
+    await waitFor(() => {
+      expect(screen.queryByTestId("terminal-send-preview-send-1")).toBeNull();
+      expect(screen.queryByTestId("terminal-send-previews")).toBeNull();
+    });
+  });
+
+  it("copies text assets and reveals them in the file manager", async () => {
+    const user = userEvent.setup();
+    renderSend(<SendHarness ptySessionId="session-1" />);
+    await user.click(screen.getByRole("button", { name: "Inject text" }));
+    await user.click(await screen.findByTestId("terminal-send-preview-send-1"));
+    await screen.findByTestId("treq-send-preview-lightbox");
+
+    await user.click(screen.getByTestId("treq-send-copy"));
+    await waitFor(() => {
+      expect(utils.copyTextToClipboard).toHaveBeenCalledWith("hello from send");
+    });
+
+    await user.click(screen.getByTestId("treq-send-reveal"));
+    expect(revealItemInDir).toHaveBeenCalledWith(
+      "/tmp/repo/.treq/send/note.txt",
+    );
+
+    await user.click(screen.getByTestId("treq-send-close"));
+    await waitFor(() => {
+      expect(screen.queryByTestId("treq-send-preview-lightbox")).toBeNull();
+    });
+  });
+
+  it("zooms image assets in and out from the lightbox toolbar", async () => {
+    const user = userEvent.setup();
+    renderSend(<SendHarness ptySessionId="session-1" />);
+    await user.click(screen.getByRole("button", { name: "Inject image" }));
+    await user.click(await screen.findByTestId("terminal-send-preview-send-2"));
+    await screen.findByTestId("treq-send-preview-lightbox");
+
+    const zoomIn = screen.getByTestId("treq-send-zoom-in");
+    const zoomOut = screen.getByTestId("treq-send-zoom-out");
+    expect(zoomIn).toBeTruthy();
+    expect(zoomOut).toBeTruthy();
+
+    const image = screen
+      .getByTestId("treq-send-preview-lightbox")
+      .querySelector('img[alt="shot.png"]') as HTMLImageElement;
+    expect(image).toBeTruthy();
+    expect(image.style.width).toBe("256px");
+
+    await user.click(zoomIn);
+    expect(image.style.width).toBe("320px");
+
+    await user.click(zoomOut);
+    expect(image.style.width).toBe("256px");
+  });
+
+  it("hides zoom controls for text assets", async () => {
+    const user = userEvent.setup();
+    renderSend(<SendHarness ptySessionId="session-1" />);
+    await user.click(screen.getByRole("button", { name: "Inject text" }));
+    await user.click(await screen.findByTestId("terminal-send-preview-send-1"));
+    await screen.findByTestId("treq-send-preview-lightbox");
+
+    expect(screen.queryByTestId("treq-send-zoom-in")).toBeNull();
+    expect(screen.queryByTestId("treq-send-zoom-out")).toBeNull();
+  });
+
+  it("listens for treq-send-received events", async () => {
+    renderSend(<SendHarness ptySessionId="session-listen" />);
+    const hasSendListener = () =>
+      vi.mocked(listen).mock.calls.some((args) => args[0] === TREQ_SEND_EVENT);
+    await waitFor(() => {
+      expect(hasSendListener()).toBe(true);
+    });
+  });
+});

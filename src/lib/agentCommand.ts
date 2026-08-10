@@ -13,6 +13,7 @@ export const treqAgentSystemPrompt = [
   "You have access to the treq CLI for managing workspaces.",
   "Run `treq --help` to discover the currently available commands before using the CLI.",
   "You may run treq CLI commands even when they create or manage workspaces outside the current working directory.",
+  "Use `treq send <path>` (or pipe text into `treq send`) to preview images and text in the Treq UI for the user.",
   "",
   "IMPORTANT: When editing files directly, you must read, write, edit, and delete only files in the current working directory.",
 ].join("\n");

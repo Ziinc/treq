@@ -7,6 +7,7 @@ import { TerminalSettingsProvider } from "../src/hooks/useTerminalSettings";
 import { ZoomSettingsProvider } from "../src/hooks/useZoomSettings";
 import { ThemeProvider } from "../src/hooks/useTheme";
 import { DiffSettingsProvider } from "../src/hooks/useDiffSettings";
+import { TreqSendProvider } from "../src/hooks/useTreqSend";
 import {
   RenderOptions,
   act,
@@ -32,15 +33,19 @@ const AllTheProviders = ({ children }: { children: ReactNode }) => {
   return (
     <Router hook={useHashLocation}>
       <ThemeProvider>
-        <ToastProvider>
-          <QueryClientProvider client={queryClient}>
-            <DiffSettingsProvider>
-              <ZoomSettingsProvider>
-                <TerminalSettingsProvider>{children}</TerminalSettingsProvider>
-              </ZoomSettingsProvider>
-            </DiffSettingsProvider>
-          </QueryClientProvider>
-        </ToastProvider>
+        <TreqSendProvider>
+          <ToastProvider>
+            <QueryClientProvider client={queryClient}>
+              <DiffSettingsProvider>
+                <ZoomSettingsProvider>
+                  <TerminalSettingsProvider>
+                    {children}
+                  </TerminalSettingsProvider>
+                </ZoomSettingsProvider>
+              </DiffSettingsProvider>
+            </QueryClientProvider>
+          </ToastProvider>
+        </TreqSendProvider>
       </ThemeProvider>
     </Router>
   );

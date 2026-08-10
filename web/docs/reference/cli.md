@@ -79,3 +79,21 @@ treq agent <branch> <prompt> [-m <edit|plan>]
 - `branch`: workspace branch name.
 - `prompt`: prompt to send to the agent.
 - `-m, --mode`: [permission mode](/docs/concepts/agent-sessions). Use `edit` or `plan`.
+
+### `treq send`
+
+Send a file or stdin content to the open Treq window for preview. Images show as square thumbnails in the terminal that ran the command; click a thumbnail to open a modal. Text opens a read-only, selectable preview.
+
+```bash
+treq send <path>
+treq send -
+echo "notes" | treq send
+```
+
+- `path`: existing file on disk. Omit or use `-` to read stdin.
+- Image types: `png`, `jpg`, `jpeg`, `gif`, `webp`, `bmp`, `svg`.
+- Everything else is treated as text.
+- Piped stdin is staged under `.treq/send/` in the repo (already gitignored).
+- When run inside a Treq terminal, previews attach to that pane via `TREQ_PTY_SESSION_ID`.
+
+Treq must already have this repository open.

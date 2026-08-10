@@ -46,6 +46,7 @@ import {
   treqAgentSystemPrompt,
 } from "../../lib/agentCommand";
 import { type ClaudeSessionData } from "./types";
+import { TerminalSendPreviews } from "./TerminalSendPreviews";
 
 export interface AgentTerminalPanelProps {
   sessionData: ClaudeSessionData;
@@ -485,28 +486,34 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
 
           {/* Terminal */}
           {isModelLoaded ? (
-            <ConsolidatedTerminal
-              key={`${sessionData.ptySessionId}-${terminalInstanceKey}`}
-              ref={(el) => {
-                if (el) {
-                  terminalRefs.current.set(terminalId, el);
-                } else {
-                  terminalRefs.current.delete(terminalId);
+            <>
+              <TerminalSendPreviews
+                ptySessionId={sessionData.ptySessionId}
+                isActive={!!isActive}
+              />
+              <ConsolidatedTerminal
+                key={`${sessionData.ptySessionId}-${terminalInstanceKey}`}
+                ref={(el) => {
+                  if (el) {
+                    terminalRefs.current.set(terminalId, el);
+                  } else {
+                    terminalRefs.current.delete(terminalId);
+                  }
+                }}
+                sessionId={sessionData.ptySessionId}
+                workingDirectory={
+                  sessionData.workspacePath || sessionData.repoPath
                 }
-              }}
-              sessionId={sessionData.ptySessionId}
-              workingDirectory={
-                sessionData.workspacePath || sessionData.repoPath
-              }
-              autoCommand={autoCommand}
-              onSessionError={onSessionError}
-              onClose={onClose}
-              onTerminalOutput={handleTerminalOutput}
-              onTerminalIdle={onTerminalIdle}
-              containerClassName="h-full w-full overflow-hidden"
-              terminalPaneClassName="w-full h-full"
-              isHidden={isHidden}
-            />
+                autoCommand={autoCommand}
+                onSessionError={onSessionError}
+                onClose={onClose}
+                onTerminalOutput={handleTerminalOutput}
+                onTerminalIdle={onTerminalIdle}
+                containerClassName="h-full w-full overflow-hidden"
+                terminalPaneClassName="w-full h-full"
+                isHidden={isHidden}
+              />
+            </>
           ) : (
             <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
               Loading...

@@ -56,6 +56,9 @@ vi.mock("@tauri-apps/api/core", () => ({
       );
     }
   },
+  // Local file:// URLs so <img> tags survive Chromium rasterization of the
+  // serialized DOM (asset: protocol is Tauri-webview-only).
+  convertFileSrc: (filePath: string) => `file://${filePath}`,
 }));
 
 afterEach(() => {

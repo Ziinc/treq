@@ -164,6 +164,8 @@ impl PtyManager {
       cmd.cwd(dir);
     }
     cmd.env("TERM", "xterm-256color");
+    // Lets `treq send` target the terminal pane that spawned the command.
+    cmd.env("TREQ_PTY_SESSION_ID", &session_id);
 
     // Set extended PATH so terminal can find jj, git, claude binaries
     cmd.env("PATH", crate::binary_paths::get_extended_path());

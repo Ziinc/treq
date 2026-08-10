@@ -12,6 +12,7 @@ import { Kbd, KbdGroup } from "../ui/kbd";
 import { cn } from "../../lib/utils";
 import { getTreqBinDir } from "../../lib/api";
 import { type ShellTerminalData, type TerminalRefsMap } from "./types";
+import { TerminalSendPreviews } from "./TerminalSendPreviews";
 
 interface ShellTerminalPanelProps {
   terminalData: ShellTerminalData;
@@ -109,9 +110,13 @@ export const ShellTerminalPanel = memo<ShellTerminalPanelProps>(
 
         {/* Terminal */}
         <div
-          className="flex-1 min-h-0 overflow-hidden border-r border-border"
+          className="relative flex min-h-0 flex-1 flex-col overflow-hidden border-r border-border"
           style={{ backgroundColor: "#1e1e1e" }}
         >
+          <TerminalSendPreviews
+            ptySessionId={terminalData.id}
+            isActive={!!isActive}
+          />
           <ConsolidatedTerminal
             ref={(el) => {
               if (el) {

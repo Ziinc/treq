@@ -13,6 +13,7 @@ pub mod jj;
 pub mod local_db;
 pub mod pr_status;
 pub mod pty;
+mod send_dispatch;
 pub mod telemetry;
 
 use agent_runtime::{
