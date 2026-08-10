@@ -2,6 +2,9 @@
 .branches
 .temp
 
+# Edge Function deps (installed by `npm install --prefix supabase/functions`)
+functions/node_modules/
+
 # dotenvx
 .env.keys
 .env.local

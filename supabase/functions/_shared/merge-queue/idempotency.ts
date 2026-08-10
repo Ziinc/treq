@@ -5,7 +5,7 @@
 //   command_id         — internal command dedupe (merge_queue_command_executions)
 //   operation_key      — logical action dedupe (unique partial index on success)
 
-import type { SupabaseClient } from "../supabase-js.ts";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type ClaimOutcome =
   | { kind: "claimed"; attempt: number }

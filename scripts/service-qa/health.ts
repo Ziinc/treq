@@ -1,13 +1,18 @@
 /**
  * Fail fast when the local Supabase CLI stack is not reachable.
+ * Also warms the Edge runtime so the first node_modules isolate boot does
+ * not eat a whole spec timeout.
  */
 import {
+  getAnonKey,
+  getFunctionsBaseUrl,
   LOCAL_ANON_KEY,
   LOCAL_SUPABASE_URL,
   resolveLocalKeys,
 } from "./clients";
 
 const HEALTH_TIMEOUT_MS = 5_000;
+const EDGE_WARM_TIMEOUT_MS = 120_000;
 
 export async function assertLocalSupabaseUp(): Promise<void> {
   const { url, anonKey } = (() => {
@@ -49,5 +54,47 @@ export async function assertLocalSupabaseUp(): Promise<void> {
       `Local Supabase at ${url} responded HTTP ${response.status}. ` +
         `Run \`npm run service-qa:up\` and check \`supabase status\`.`,
     );
+  }
+
+  await warmEdgeFunctions();
+}
+
+/** Hit exchange-desktop-token once so Deno loads node_modules before specs. */
+async function warmEdgeFunctions(): Promise<void> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), EDGE_WARM_TIMEOUT_MS);
+  try {
+    const response = await fetch(
+      `${getFunctionsBaseUrl()}/exchange-desktop-token`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${getAnonKey()}`,
+          apikey: getAnonKey(),
+        },
+        body: JSON.stringify({}),
+        signal: controller.signal,
+      },
+    );
+    // 400 "Token is required" means the worker booted and ran.
+    if (response.status !== 400 && response.status !== 200) {
+      const body = await response.text().catch(() => "");
+      throw new Error(
+        `Edge warm-up for exchange-desktop-token returned HTTP ${response.status}: ${body}. ` +
+          `Ensure \`npm install --prefix supabase/functions\` has run (see service-qa:up).`,
+      );
+    }
+  } catch (err) {
+    if (err instanceof Error && err.message.startsWith("Edge warm-up")) {
+      throw err;
+    }
+    const reason = err instanceof Error ? err.message : String(err);
+    throw new Error(
+      `Edge Functions are not reachable (${reason}). ` +
+        `Run \`npm run service-qa:up\` and confirm edge_runtime is up.`,
+    );
+  } finally {
+    clearTimeout(timer);
   }
 }

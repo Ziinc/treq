@@ -110,6 +110,9 @@ assert DB rows, RPC return values, and HTTP status codes from Edge Functions.
 4. **Seed helpers** — `createTestUser` (email/password `signUp`),
    `signInWithEmailPassword`, `linkGithubRepo`, `withMergeQueueFixture`
    (setup + teardown). Profile rows are auto-created by `handle_new_user`.
+   Edge Functions import `@supabase/supabase-js` from
+   `supabase/functions/node_modules` (see `deno.json` import map); `service-qa:up`
+   runs `npm install --prefix supabase/functions`.
 5. **`recordOutcome(name, { expectations, details })`** — writes
    `scripts/service-qa/.generated/<name>.json`. Like app-qa's
    `captureDocument` expectations, these are plain-English claims for the

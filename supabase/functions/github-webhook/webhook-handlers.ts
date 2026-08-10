@@ -5,7 +5,7 @@
 // writes), every state change is expressed as a PGMQ command executed by the
 // merge-queue-worker.
 
-import type { SupabaseClient } from "../_shared/supabase-js.ts";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { MergeQueueCommand } from "../_shared/merge-queue/messages.ts";
 import { isQueueTestBranch } from "../_shared/merge-queue/scheduler.ts";
 

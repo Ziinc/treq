@@ -27,8 +27,9 @@ elif command -v sysctl >/dev/null 2>&1; then
 	sysctl -w net.bridge.bridge-nf-call-ip6tables=0 >/dev/null 2>&1 || true
 fi
 
-# Offline Edge Function client bundle (avoids Deno npm/esm registry at worker boot).
-node scripts/service-qa/bundle-supabase-js.mjs
+# Edge Functions resolve `npm:@supabase/supabase-js@2` from this local install
+# (Deno nodeModulesDir), so workers do not need registry access at boot.
+npm install --omit=dev --prefix supabase/functions
 
 # Skip analytics/studio/storage — not required for Auth/RPC/Edge service-qa.
 excludes=(logflare vector studio imgproxy storage-api)
