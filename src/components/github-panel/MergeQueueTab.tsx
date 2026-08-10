@@ -4,13 +4,14 @@ import {
   ArrowDown,
   Check,
   CircleHelp,
+  Copy,
   ExternalLink,
   GitMerge,
   Layers2,
   Loader2,
   Rocket,
 } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import type { UseMutationResult } from "@tanstack/react-query";
 import type { QueueEntryStatus } from "../../lib/api-types";
 import {
@@ -134,6 +135,78 @@ function StackHelpTooltip({ targetBranch }: { targetBranch: string }) {
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>
+  );
+}
+
+function TargetBranchMarker({
+  targetBranch,
+  tipShortId,
+  tipCommitId,
+  tipPrNumber,
+}: {
+  targetBranch: string;
+  tipShortId: string | null;
+  tipCommitId: string | null;
+  tipPrNumber: number | null;
+}) {
+  const [copied, setCopied] = useState(false);
+  const copyValue = tipCommitId ?? tipShortId;
+
+  async function handleCopy() {
+    if (!copyValue) return;
+    try {
+      await navigator.clipboard.writeText(copyValue);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard may be unavailable in some test / WebView contexts.
+    }
+  }
+
+  return (
+    <div
+      className="relative z-10 flex items-center gap-3 py-2 pl-4 text-muted-foreground"
+      data-testid="merge-queue-target"
+    >
+      <div className="shrink-0 w-[14px] h-[14px] flex items-center justify-center">
+        <ArrowDown className="w-3.5 h-3.5" />
+      </div>
+      <div className="min-w-0 flex-1 flex items-center gap-2">
+        <div className="min-w-0">
+          <p className="text-sm font-mono truncate">{targetBranch}</p>
+          {tipPrNumber != null && (
+            <p className="text-xs text-muted-foreground mt-0.5 truncate">
+              PR #{tipPrNumber}
+            </p>
+          )}
+        </div>
+        {tipShortId && (
+          <div className="ml-auto flex items-center gap-0.5 shrink-0">
+            <span
+              className="text-xs font-mono text-muted-foreground"
+              data-testid="merge-queue-tip-sha"
+            >
+              {tipShortId}
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-muted-foreground"
+              aria-label={copied ? "Commit SHA copied" : "Copy commit SHA"}
+              title={copied ? "Copied" : "Copy commit SHA"}
+              onClick={() => void handleCopy()}
+            >
+              {copied ? (
+                <Check className="w-3 h-3" />
+              ) : (
+                <Copy className="w-3 h-3" />
+              )}
+            </Button>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -436,7 +509,9 @@ function MergeQueueList({
     "main";
   // Newest fully-merged stack's root is what last landed on the target tip.
   const tipPrNumber = history[0]?.entries[0]?.pr_number ?? null;
-  const tipShortId = homeLog?.commits[0]?.short_id ?? null;
+  const tipCommit = homeLog?.commits[0] ?? null;
+  const tipShortId = tipCommit?.short_id ?? null;
+  const tipCommitId = tipCommit?.commit_id ?? null;
 
   return (
     <div className="flex flex-col h-full" data-testid="merge-queue-list">
@@ -467,28 +542,12 @@ function MergeQueueList({
             ))
           )}
 
-          <div
-            className="relative z-10 flex items-start gap-3 py-2 pl-4 text-muted-foreground"
-            data-testid="merge-queue-target"
-          >
-            <div className="shrink-0 mt-0.5 w-[14px] h-[14px] flex items-center justify-center">
-              <ArrowDown className="w-3.5 h-3.5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-sm font-mono truncate">{targetBranch}</p>
-              {(tipShortId || tipPrNumber != null) && (
-                <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                  {tipShortId && (
-                    <span className="font-mono">{tipShortId}</span>
-                  )}
-                  {tipShortId && tipPrNumber != null && (
-                    <span aria-hidden="true"> · </span>
-                  )}
-                  {tipPrNumber != null && <span>PR #{tipPrNumber}</span>}
-                </p>
-              )}
-            </div>
-          </div>
+          <TargetBranchMarker
+            targetBranch={targetBranch}
+            tipShortId={tipShortId}
+            tipCommitId={tipCommitId}
+            tipPrNumber={tipPrNumber}
+          />
 
           {showMergedHistory && visibleHistory.length > 0 && (
             <div data-testid="merge-queue-history" className="space-y-3 pt-1">

@@ -202,7 +202,7 @@ it("captures the stacked PR queue for an opted-in repo", async () => {
 		expectations: [
 			'Stack cards show "Stack of N" with a help (?) tooltip instead of inline "merges bottom-up" copy; outline Remove on stacks and singles.',
 			"Within the Stack of 3, tip PR is at the top of the card and the Merging PR is at the bottom near main.",
-			"Status is on the second row left of branch → target; LOC stays on the right. Continuous rail ends at main + tip commit.",
+			"Status is on the second row left of branch → target; LOC stays on the right. Continuous rail ends at main with tip SHA pulled right + ghost copy.",
 		],
 	});
 
@@ -243,8 +243,11 @@ it("captures the stacked PR queue for an opted-in repo", async () => {
 	const target = screen.getByTestId("merge-queue-target");
 	expect(target).toHaveTextContent("main");
 	await waitFor(() => {
-		expect(target.textContent ?? "").toMatch(/[0-9a-f]{7,}/i);
+		expect(screen.getByTestId("merge-queue-tip-sha")).toBeVisible();
 	});
+	expect(
+		screen.getByRole("button", { name: /copy commit sha/i }),
+	).toBeVisible();
 }, 120000);
 
 it("captures removing a single branch and a whole stack from the queue", async () => {
@@ -353,7 +356,7 @@ it("captures the empty queue for a repo that has the queue switched on", async (
 		expectations: [
 			'The body shows the "Merge queue is empty." empty state with a merge icon -- distinct from the "off for this repository" state.',
 			'The "Merged" checkmark control sits in the toolbar under the Merge Queue tab (unchecked).',
-			"The target branch terminator shows main and the tip commit short SHA.",
+			"The target branch terminator shows main with the tip commit SHA on the right and a ghost copy button.",
 		],
 	});
 }, 120000);
@@ -451,7 +454,7 @@ it("hides fully merged stacks by default and shows them below main when toggled"
 		viewport: { width: 480, height: 900 },
 		expectations: [
 			'Merged is checked in the toolbar; completed stacks appear as cards below the main terminator.',
-			"The main tip row shows the tip commit and PR #101 (newest merged root).",
+			"The main tip row shows PR #101 under main, with the tip commit SHA pulled right next to a ghost copy button.",
 			'A "Load more" button is present when history exceeds the first page.',
 		],
 	});
