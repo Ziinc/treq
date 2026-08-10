@@ -4,9 +4,9 @@ sidebar_position: 5
 
 # Connecting GitHub
 
-_Set up the GitHub CLI and the Treq GitHub App so workspaces can open PRs and use the merge queue._
+_Set up the GitHub CLI and the Treq GitHub App so workspaces can open PRs and manage repository linking._
 
-Treq talks to GitHub in two ways. Pull requests, issues, CI, and review threads use the local `gh` CLI. Connected repositories and the merge queue use the Treq GitHub App through your Treq account. Complete both paths when you want the full integration.
+Treq talks to GitHub in two ways. Pull requests, issues, CI, and review threads use the local `gh` CLI. Connected repositories and the in-progress merge queue use the Treq GitHub App through your Treq account. Complete the `gh` path for Create PR and CI. Add the App when you need connected-repo management or want to follow merge queue progress.
 
 ## Confirm a GitHub Remote
 
@@ -33,7 +33,7 @@ Without a working `gh` session, Create PR, View PR, the GitHub panel, CI status,
 
 Open Settings → Integrations in the desktop app. If you are signed out, choose **Sign in with Browser** and finish the Treq account flow.
 
-Free accounts see public connected repositories. Pro accounts see public and private ones, and can enable the merge queue.
+Free accounts see public connected repositories. Pro accounts see public and private ones. Merge queue opt-in appears for Pro when that work is available, but the queue itself is still WIP.
 
 ## Install the Treq GitHub App
 
@@ -46,13 +46,19 @@ Back in the desktop app, Connected repositories should list the repos the App ca
 
 ## Enable the Merge Queue for a Repo
 
-The merge queue needs Pro, an App-linked repository, and a per-repo opt-in:
+:::note Work in progress
+
+The merge queue is not fully shipped. The Integrations toggle may appear while the end-to-end product is still incomplete.
+
+:::
+
+The planned merge queue needs Pro, an App-linked repository, and a per-repo opt-in:
 
 1. Open the repository in Treq.
 2. Go to Settings → Integrations.
 3. Under GitHub, turn on **Merge queue**, or choose **Enable merge queue** when the control is available.
 
-If the toggle is missing, the page states the blocker: no GitHub remote, Free plan, or App not installed on that `owner/repo`. Full queue usage is covered in [Using the Merge Queue](/docs/how-to/using-the-merge-queue).
+If the toggle is missing, the page states the blocker: no GitHub remote, Free plan, or App not installed on that `owner/repo`. The intended queue workflow is covered in [Using the Merge Queue](/docs/how-to/using-the-merge-queue).
 
 ## Verify the Connection
 

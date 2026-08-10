@@ -61,7 +61,7 @@ Use **New** on the PR list when you need a manual title, body, base, and head in
 
 When checks exist for the open PR, the workspace header shows a `passed/total` pill. Open it to see each check, sorted with failures first. Durations appear when GitHub reports them. Click a check to open its URL when one is present.
 
-The Merge button on the workspace turns solid green when every check has passed. That signals readiness. It does not merge on its own. With the [merge queue](/docs/how-to/using-the-merge-queue) enabled, Merge enqueues the open PR instead of only opening a local merge preview.
+The Merge button on the workspace turns solid green when every check has passed. That signals readiness. It does not merge on its own. When the [merge queue](/docs/how-to/using-the-merge-queue) finishes shipping and is enabled, Merge is intended to enqueue the open PR instead of only opening a local merge preview.
 
 ## Read GitHub Review Threads
 
