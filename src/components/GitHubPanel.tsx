@@ -1,6 +1,7 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import {
   AlertCircle,
+  Check,
   CircleDot,
   Github,
   GitPullRequest,
@@ -32,12 +33,12 @@ import {
   type QueueEntry,
 } from "../lib/merge-queue-stacks";
 import { supabase } from "../lib/supabase";
+import { cn } from "../lib/utils";
 import { MergeQueueTab } from "./github-panel/MergeQueueTab";
 import { CreateIssueForm, IssueDetailPanel } from "./github-panel/IssueDetail";
 import { CreatePrForm, PrDetailPanel } from "./github-panel/PrDetail";
 import { EmptyState, IssueListItem, PrListItem } from "./github-panel/shared";
 import { Button } from "./ui/button";
-import { Switch } from "./ui/switch";
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
 
 interface GitHubPanelProps {
@@ -314,21 +315,36 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
               className="flex items-center gap-2 px-4 pb-2 shrink-0"
               data-testid="merge-queue-toolbar"
             >
-              <label
-                htmlFor="merge-queue-show-merged"
-                className="text-base text-muted-foreground"
-              >
-                Show merged
-              </label>
-              <Switch
-                id="merge-queue-show-merged"
-                checked={showMergedHistory}
-                onCheckedChange={(next) => {
+              <button
+                type="button"
+                role="checkbox"
+                aria-checked={showMergedHistory}
+                aria-label="Merged"
+                onClick={() => {
+                  const next = !showMergedHistory;
                   setShowMergedHistory(next);
                   if (next) setHistoryLimit(MERGE_QUEUE_HISTORY_PAGE_SIZE);
                 }}
-                aria-label="Show merged pull requests"
-              />
+                className={cn(
+                  "inline-flex items-center gap-1.5 h-7 px-2 rounded-md border text-base transition-colors",
+                  showMergedHistory
+                    ? "border-primary/40 bg-primary/10 text-foreground"
+                    : "border-border bg-background text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <span
+                  className={cn(
+                    "flex h-3.5 w-3.5 items-center justify-center rounded-sm border",
+                    showMergedHistory
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-muted-foreground/40",
+                  )}
+                  aria-hidden="true"
+                >
+                  {showMergedHistory ? <Check className="h-3 w-3" /> : null}
+                </span>
+                Merged
+              </button>
               <div className="flex-1" />
               <Button
                 variant="ghost"

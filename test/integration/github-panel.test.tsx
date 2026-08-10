@@ -264,7 +264,12 @@ describe("GitHubPanel", () => {
     await user.click(screen.getByRole("tab", { name: /merge queue/i }));
 
     expect(await screen.findByText("Stack of 2")).toBeVisible();
-    expect(screen.getByText(/merges bottom-up into main/i)).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "What is a stack?" }),
+    ).toBeVisible();
+    expect(
+      screen.queryByText(/merges bottom-up into main/i),
+    ).not.toBeInTheDocument();
 
     await user.click(
       screen.getByRole("button", { name: "Remove stack of 2 from queue" }),

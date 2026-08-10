@@ -191,18 +191,18 @@ it("captures the stacked PR queue for an opted-in repo", async () => {
 	await captureDocument(document, {
 		name: "merge-queue-tab-02-enabled-with-queue",
 		expectations: [
-			"Below the Merge Queue tab is a toolbar with a Show merged switch (off) and a refresh button.",
-			"Queue cards sit on a continuous vertical rail. Stacks are tip-first: the next-to-merge PR is at the bottom of each card, closest to the main terminator.",
-			'Node colours follow status: PR #101 (Merging) is green near main, PR #102 ("Running checks") is amber above it, Queued nodes are grey.',
+			'Below the Merge Queue tab is a toolbar with a "Merged" checkmark control (unchecked) and a refresh button.',
+			"Queue cards sit on a continuous vertical rail. Status chips sit on the second line left of the branch path; singles use an outline Remove button.",
+			"The main terminator shows the tip commit short SHA under the branch name.",
 		],
 	});
 	await captureDocument(document, {
 		name: "merge-queue-tab-02b-stacks-and-terminator",
 		viewport: { width: 480, height: 900 },
 		expectations: [
-			'Stack cards show "Stack of 3" and "Stack of 2" with outline Remove; the Stack of 3 (next to merge) is just above main.',
-			"Within the Stack of 3, PR #103 is at the top of the card and PR #101 (Merging) is at the bottom near the rail terminator.",
-			'Each PR row shows +N / -N LOC. A continuous rail links all nodes to a down-arrow + "main".',
+			'Stack cards show "Stack of N" with a help (?) tooltip instead of inline "merges bottom-up" copy; outline Remove on stacks and singles.',
+			"Within the Stack of 3, tip PR is at the top of the card and the Merging PR is at the bottom near main.",
+			"Status is on the second row left of branch → target; LOC stays on the right. Continuous rail ends at main + tip commit.",
 		],
 	});
 
@@ -217,10 +217,14 @@ it("captures the stacked PR queue for an opted-in repo", async () => {
 		"merge-queue-entry-1",
 	]);
 	expect(screen.getByTestId("merge-queue-toolbar")).toBeInTheDocument();
-	expect(
-		screen.getByRole("switch", { name: /show merged/i }),
-	).not.toBeChecked();
+	expect(screen.getByRole("checkbox", { name: /^merged$/i })).not.toBeChecked();
 	expect(screen.getByTestId("merge-queue-rail")).toBeInTheDocument();
+	expect(
+		screen.queryByText(/merges bottom-up into/i),
+	).not.toBeInTheDocument();
+	expect(
+		screen.getAllByRole("button", { name: "What is a stack?" }).length,
+	).toBeGreaterThanOrEqual(1);
 	const featStack = screen.getByTestId("merge-queue-stack-feat/base");
 	expect(featStack).toHaveClass("border", "rounded-lg");
 	expect(screen.getByTestId("merge-queue-single-fix/solo")).toHaveClass(
@@ -236,6 +240,11 @@ it("captures the stacked PR queue for an opted-in repo", async () => {
 	expect(within(featStack).getAllByTestId("diff-bar").length).toBeGreaterThan(
 		0,
 	);
+	const target = screen.getByTestId("merge-queue-target");
+	expect(target).toHaveTextContent("main");
+	await waitFor(() => {
+		expect(target.textContent ?? "").toMatch(/[0-9a-f]{7,}/i);
+	});
 }, 120000);
 
 it("captures removing a single branch and a whole stack from the queue", async () => {
@@ -343,8 +352,8 @@ it("captures the empty queue for a repo that has the queue switched on", async (
 		name: "merge-queue-tab-03-enabled-empty",
 		expectations: [
 			'The body shows the "Merge queue is empty." empty state with a merge icon -- distinct from the "off for this repository" state.',
-			"The Show merged switch sits in the toolbar under the Merge Queue tab (off).",
-			"The target branch terminator is still shown below the empty state.",
+			'The "Merged" checkmark control sits in the toolbar under the Merge Queue tab (unchecked).',
+			"The target branch terminator shows main and the tip commit short SHA.",
 		],
 	});
 }, 120000);
@@ -399,21 +408,27 @@ it("hides fully merged stacks by default and shows them below main when toggled"
 	await user.click(await screen.findByRole("tab", { name: /merge queue/i }));
 
 	await screen.findByText("PR #201");
-	expect(screen.queryByText("PR #101")).not.toBeInTheDocument();
-	expect(screen.getByTestId("merge-queue-target")).toHaveTextContent("main");
+	expect(
+		screen.queryByTestId("merge-queue-stack-feat/done-base"),
+	).not.toBeInTheDocument();
+	expect(screen.queryByTestId("merge-queue-history")).not.toBeInTheDocument();
+	const targetBefore = screen.getByTestId("merge-queue-target");
+	expect(targetBefore).toHaveTextContent("main");
+	// Tip still names the newest landed PR even while history cards are hidden.
+	expect(targetBefore).toHaveTextContent("PR #101");
 
 	await captureDocument(document, {
 		name: "merge-queue-tab-06-history-hidden",
 		expectations: [
 			"Only the live queued PR #201 appears above the main terminator.",
 			"Fully merged stacks are not listed in the default view.",
-			'A "Show merged" switch sits in the toolbar under the Merge Queue tab and is off.',
+			'A "Merged" checkmark control sits in the toolbar under the Merge Queue tab and is unchecked.',
 		],
 	});
 
-	await user.click(screen.getByRole("switch", { name: /show merged/i }));
+	await user.click(screen.getByRole("checkbox", { name: /^merged$/i }));
 	await screen.findByTestId("merge-queue-history");
-	expect(screen.getByText("PR #101")).toBeVisible();
+	expect(screen.getAllByText("PR #101").length).toBeGreaterThanOrEqual(2);
 	expect(screen.getByText("Stack of 2")).toBeVisible();
 
 	// History sits below the target terminator in the DOM.
@@ -427,13 +442,16 @@ it("hides fully merged stacks by default and shows them below main when toggled"
 		),
 	).toBe(true);
 	expect(list).toContainElement(history);
+	// Tip marker shows the newest merged root PR under main.
+	expect(target).toHaveTextContent("PR #101");
+	expect(within(history).getByText("PR #101")).toBeVisible();
 
 	await captureDocument(document, {
 		name: "merge-queue-tab-07-history-shown",
 		viewport: { width: 480, height: 900 },
 		expectations: [
-			"Show merged is on in the toolbar; completed stacks appear as cards below the main terminator.",
-			"In the merged Stack of 2, tip PR #102 is above base PR #101 (tip-first).",
+			'Merged is checked in the toolbar; completed stacks appear as cards below the main terminator.',
+			"The main tip row shows the tip commit and PR #101 (newest merged root).",
 			'A "Load more" button is present when history exceeds the first page.',
 		],
 	});

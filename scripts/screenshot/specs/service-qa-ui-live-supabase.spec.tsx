@@ -321,25 +321,25 @@ it("simulates multi-workspace enqueue, CI, and merge until the queue drains", as
     await waitFor(() => {
       expect(screen.getByText("Merge queue is empty.")).toBeVisible();
     });
-    await screen.findByRole("switch", { name: /show merged/i });
+    await screen.findByRole("checkbox", { name: /^merged$/i });
     await captureDocument(document, {
       name: "service-qa-ui-04-queue-drained",
       viewport: { width: 520, height: 900 },
       expectations: [
         "After the queue drains, the default view is empty above main.",
-        'A "Show merged" switch is available to reveal completed PRs below main.',
+        'A "Merged" checkmark control is available to reveal completed PRs below main.',
         "The Merge Queue tab is still selected.",
       ],
     });
 
-    await user.click(screen.getByRole("switch", { name: /show merged/i }));
+    await user.click(screen.getByRole("checkbox", { name: /^merged$/i }));
     await screen.findByTestId("merge-queue-history");
     expect(screen.getAllByText("Merged").length).toBeGreaterThanOrEqual(3);
     await captureDocument(document, {
       name: "service-qa-ui-04b-queue-history",
       viewport: { width: 520, height: 900 },
       expectations: [
-        "With Show merged on, PR #201–#203 appear below the main terminator as Merged.",
+        "With Merged checked, PR #201–#203 appear below the main terminator as Merged.",
       ],
     });
   } finally {
@@ -454,7 +454,7 @@ it("captures a 2-stack + independent + 3-stack with siblings through drain", asy
       expect(screen.getByText("Merge queue is empty.")).toBeVisible();
     });
     await user.click(
-      await screen.findByRole("switch", { name: /show merged/i }),
+      await screen.findByRole("checkbox", { name: /^merged$/i }),
     );
     await screen.findByTestId("merge-queue-history");
     await waitFor(() => {
@@ -464,7 +464,7 @@ it("captures a 2-stack + independent + 3-stack with siblings through drain", asy
       name: "service-qa-ui-06-stacks-drained",
       viewport: { width: 560, height: 1000 },
       expectations: [
-        "With Show merged on after drain, all seven PRs (#301–#307) appear as Merged below main.",
+        "With Merged checked after drain, all seven PRs (#301–#307) appear as Merged below main.",
         "The active queue above main is empty.",
       ],
     });
