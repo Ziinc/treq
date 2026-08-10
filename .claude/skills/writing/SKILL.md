@@ -1,21 +1,25 @@
 ---
 name: writing
 description: >-
-  Write or revise docs and articles under web/, READMEs, changelogs, and release
-  notes. Owns article structure, interlinking, and the doc revision pass. Voice,
-  Orwell's rules, ASD-STE100, buzzword banlists, and AI-tell checks live in the
-  explain-to-me skill: read that first whenever you draft or edit prose. Use
-  when drafting or editing any .mdx or .md doc under web/, a README, a changelog,
-  or release notes.
+  Write or revise Learn articles under web/learn/, READMEs, changelogs, and
+  release notes. Owns Learn-site article structure, interlinking, and the doc
+  revision pass for those surfaces. For technical product docs under
+  web/docs/** (and roadmap/security feature-status copy), use the docs-writing
+  skill instead. Voice, Orwell's rules, ASD-STE100, buzzword banlists, and
+  AI-tell checks live in the explain-to-me skill: read that first whenever you
+  draft or edit prose.
 ---
 
 # Writing in the treq voice
 
 ## When to use
 
-- Drafting a new doc or concept/workflow article.
-- Revising existing prose to match the house voice.
-- Running a de-slop edit pass on AI-generated text before it ships.
+- Drafting or revising Learn articles under `web/learn/**`.
+- Revising existing Learn prose to match the house voice.
+- Running a de-slop edit pass on AI-generated Learn text before it ships.
+- READMEs, changelogs, and release notes that are not product how-tos.
+
+**Technical product docs (`web/docs/**`, roadmap feature status, security claims about product integrations) use `/docs-writing`.** That skill owns shipped-vs-WIP accuracy, prerequisites, and cross-page consistency. Come back here for Learn-site structure and interlinking.
 
 **Voice and banlists live in `explain-to-me`.** Read
 `.claude/skills/explain-to-me/SKILL.md` before you draft or revise. It owns:

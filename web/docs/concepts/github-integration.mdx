@@ -1,0 +1,88 @@
+---
+sidebar_position: 6
+---
+
+import ThemeAwareImage from '@site/src/components/ThemeAwareImage';
+
+# GitHub Integration
+
+_How Treq connects workspaces to GitHub pull requests, CI checks, review threads, and a merge queue._
+
+Treq's GitHub integration links each workspace branch to its remote pull request. You create and open PRs from the workspace, watch CI in the header, and read GitHub review threads on the Review tab.
+
+:::note[Work in progress]
+
+A Treq-managed merge queue is under development and is not fully shipped yet.
+
+:::
+
+The integration has two layers. Day-to-day PR and CI actions use the local [GitHub CLI](https://cli.github.com/) (`gh`) with your GitHub credentials. Repository linking and the merge queue use the Treq GitHub App through your Treq account. See [Connecting GitHub](/docs/how-to/connecting-github).
+
+## Prerequisites
+
+Treq shows GitHub controls only when the repository's `origin` remote points at `github.com`. Other hosts stay on plain Git push and pull.
+
+| Capability | Auth path |
+|---|---|
+| Create, view, and comment on PRs and issues | Local `gh` |
+| CI status in the workspace header and PR detail | Local `gh` |
+| Inline GitHub review threads on the Review tab | Local `gh` |
+| Merge queue (WIP) | Treq Pro + GitHub App |
+
+## Pull Requests
+
+When a workspace has commits and no open PR yet, the workspace header shows **Create PR**. The primary action pushes the branch if needed, then creates the PR. The dropdown adds **Create draft PR** and **Create PR manually**, which opens GitHub's compare page after a push.
+
+<ThemeAwareImage
+  src="/img/docs/create-pr-dropdown.png"
+  alt="Create PR button with dropdown open showing Create draft PR and Create PR manually"
+  caption="Create PR split button with draft and manual options"
+/>
+
+Treq derives a conventional-commit title from the workspace title or branch name when it creates the PR.
+
+**View PR** opens the in-app GitHub panel on that pull request. A secondary control opens the same PR in the browser. The sidebar context menu can copy the PR URL when Treq already knows it.
+
+The Review tab Commit control can **Commit and create PR** or **Commit and push** in one step. Those actions share creation state with the header button, so an in-flight create shows as pending on both surfaces.
+
+For the full create and view flow, see [Creating and Viewing Pull Requests](/docs/how-to/creating-and-viewing-pull-requests).
+
+## GitHub Panel
+
+Open **GitHub** in the workspace sidebar to reach Issues and Pull Requests. A Merge Queue tab is also present while that feature is under development. The panel uses hash routes such as `#/github/prs/open` so the `?repo=` query stays intact.
+
+Pull Requests and Issues use a dual-pane list and detail layout. Filters are Open, Closed, and All. From a PR you can read the body and conversation, add a comment, mark draft or ready, close or reopen, and open the PR on GitHub. The list also has a New form for creating a PR by hand with title, body, base, and head.
+
+## CI Checks
+
+Treq only displays active GitHub checks, and does not merge the PR automatically once the checks pass.
+
+## Review Threads
+
+When a workspace has an open PR, the Review tab loads GitHub review comment threads and loads them inline for referencing during the code review.
+
+You can quote a GitHub thread into a local pending review comment for an agent. Quoting does not post back to GitHub. Local [review comments](/docs/concepts/changes-and-reviews) can be copied to clipboard or sent to an agent terminal.
+
+## Merge Queue
+
+:::note[Work in progress]
+
+The merge queue is not fully shipped and the end-to-end product is still incomplete. The rest of this section describes the intended design.
+
+:::
+
+The merge queue is Treq-managed. It is not [GitHub's native merge queue](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue). It will require users to be on the Pro plan with the Treq GitHub App installed and granted permissions to the repository.
+
+The Treq-managed merge queue will let you enqueue an open PR or stacks of open PRs from the Treq user interface. The merge queue can be inspected and managed in the GitHub integration page in the Treq app, under the **Merge Queue** tab.
+
+Merges run sequentially, and only after all configured GitHub CI checks pass. See [Using the Merge Queue](/docs/how-to/using-the-merge-queue) for a more detailed walkthrough on using the merge queue.
+
+## Availability
+
+| Features | Free | Pro |
+|---|---|---|
+| Issues | ✅* | ✅ |
+| Pull Requests | ✅* | ✅ |
+| Merge Queue | ❌ | ✅ |
+
+\* Requires `gh` CLI

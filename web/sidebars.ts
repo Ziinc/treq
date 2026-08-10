@@ -43,6 +43,9 @@ const sidebars: SidebarsConfig = {
         'how-to/discarding-changes',
         'how-to/moving-files-between-workspaces',
         'how-to/customizing-settings',
+        'how-to/connecting-github',
+        'how-to/creating-and-viewing-pull-requests',
+        'how-to/using-the-merge-queue',
       ],
     },
     {
@@ -55,6 +58,7 @@ const sidebars: SidebarsConfig = {
         'concepts/agent-sessions',
         'concepts/terminal-sessions',
         'concepts/commit-management',
+        'concepts/github-integration',
       ],
     },
     {

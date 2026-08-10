@@ -52,7 +52,7 @@ Show workspace status.
 treq st [workspace_name]
 ```
 
-Omit `workspace_name` to list all workspaces.
+Omit `workspace_name` to list all workspaces. GitHub pull request information will be included if there is a valid GitHub integration.
 
 ### `treq mv`
 

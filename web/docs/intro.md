@@ -36,7 +36,7 @@ The source repository stays the authority for shared history. Workspaces are mea
 
 Treq reviews are local. Comments attach to files and line ranges in the workspace diff. The review screen keeps file navigation, the diff, inline comments, and commit history in one place, so a reviewer can read the whole change or one commit at a time.
 
-Review comments do not sync to a remote review system by default.
+Review comments do not sync to a remote review system by default. When a workspace has an open GitHub pull request, the Review tab can also show GitHub review threads inline. See [GitHub Integration](/docs/concepts/github-integration).
 
 ## Terminal Behavior
 
@@ -50,6 +50,7 @@ Terminal state belongs to the workspace. Closing a session can kill the process 
 - [Workspaces](/docs/concepts/workspaces)
 - [Using Treq with a Git Repository](/docs/tutorials/using-treq-with-git-repo)
 - [Changes and Reviews](/docs/concepts/changes-and-reviews)
+- [GitHub Integration](/docs/concepts/github-integration)
 - [Under the Hood](/docs/under-the-hood)
 - [Terminal Sessions](/docs/concepts/terminal-sessions)
 - [CLI](/docs/reference/cli)

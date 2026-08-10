@@ -30,6 +30,18 @@ Q1 and Q2 have nothing planned. Q3 targets GitHub merge-queue integration and wo
 
 ## GitHub Integration with Merge Queue
 
+:::tip[Partial ship]
+
+Pull request create and view, CI status, and inline review threads are available. See [GitHub Integration](/docs/concepts/github-integration).
+
+:::
+
+:::note[Work in progress]
+
+The Treq-managed merge queue is still under development.
+
+:::
+
 [Treq workspaces](/docs/concepts/workspaces) already model stacked branches. The missing piece is first-class GitHub pull request and merge queue control from the same place you review diffs and drive agents.
 
 **App integration** connects each workspace to its remote pull request. You will see PR status, checks, and queue position without leaving Treq. Creating or updating a pull request from a stacked workspace will keep the GitHub base branch aligned with the stack parent, matching the [stacked PR](/learn/concepts/git/stacked-prs) model.

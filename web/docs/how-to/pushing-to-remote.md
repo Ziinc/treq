@@ -20,6 +20,12 @@ After the first push, subsequent pushes only need `git push`.
 
 Click the push icon (↑) on the workspace card, or right-click and select **Push**. Status indicators show commits ahead (↑2) and behind (↓3) relative to the remote.
 
+On a GitHub remote, the workspace header **Create PR** control pushes the branch when needed, then opens a pull request. The Review tab Commit dropdown also offers **Commit and push** and **Commit and create PR**. See [Creating and Viewing Pull Requests](/docs/how-to/creating-and-viewing-pull-requests).
+
+## Auto-Push After Commit
+
+Repository Settings includes **Auto-push to remote**. When enabled, Treq pushes after every commit in that repository. Leave it off if you prefer to push only when you ask, or when Create PR pushes for you.
+
 ## Handling Rejections
 
 If remote has commits you don't have ("Updates were rejected"), pull first:
@@ -47,4 +53,11 @@ Use `--force-with-lease` instead of `--force`. It fails if someone else pushed, 
 ## Best Practices
 
 Push often to keep local and remote in sync. Pull before pushing to avoid conflicts. Never force push main or shared branches.
+
+## Next Steps
+
+- [Creating and Viewing Pull Requests](/docs/how-to/creating-and-viewing-pull-requests)
+- [Connecting GitHub](/docs/how-to/connecting-github)
+- [Customizing Settings](/docs/how-to/customizing-settings)
+- [Commit Management](/docs/concepts/commit-management)
 

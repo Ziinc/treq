@@ -20,7 +20,9 @@ The base Treq app stores nothing on remote servers. Workspace checkouts, review 
 
 Repository history remains in your Git and Jujutsu stores. Treq metadata lives under `.treq` inside the repository and in the app data directory. See [Under the Hood](/docs/under-the-hood) for the storage layout.
 
-When Treq connects to a remote, the connection goes directly to that host. Traffic does not pass through Treq servers.
+When Treq connects to a remote Git host, the connection goes directly to that host. Traffic does not pass through Treq servers.
+
+Optional [GitHub Integration](/docs/concepts/github-integration) uses two extra paths. Pull request, issue, CI, and review-thread actions run through the local `gh` CLI with your GitHub credentials on the machine. Repository linking uses the Treq GitHub App after you sign in and install the App. GitHub App integration requires Treq's backend for features such as merge queue orchestration. Local review comments, application logs, and telemetry all stay locally on disk unless you copy or send them to the Treq developers explicitly.
 
 ## CLI Safety
 
@@ -49,5 +51,7 @@ Audit the code yourself, or follow the public history of changes. These files ar
 ## Learn More
 
 - [Under the Hood](/docs/under-the-hood)
+- [GitHub Integration](/docs/concepts/github-integration)
+- [Connecting GitHub](/docs/how-to/connecting-github)
 - [CLI](/docs/reference/cli)
 - [Contributing](/docs/reference/contributing)

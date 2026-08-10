@@ -10,6 +10,8 @@ Open settings with the gear icon (⚙️) in the sidebar. Settings split into tw
 
 ## Repository Settings
 
+**Auto-push to remote** pushes after every commit in this repository when enabled. It is off by default. Turn it on when you want each commit on the remote without a separate push step. Create PR still pushes on its own when the branch is missing remotely.
+
 **Branch naming pattern** builds branch names from variables.
 
 | Variable | Value |
@@ -67,6 +69,12 @@ Toggle line numbers, the minimap, word wrap, and whitespace visibility. Pick a s
 ## Performance
 
 Set **file watching** to ignore the paths you never need, such as `node_modules/`, `.git/`, and `dist/`, and set the polling interval between 100 and 1000ms. The **git cache** holds 100 to 1000 entries, and you can clear it to force a refresh. For large repositories, consider shallow [clones](/learn/concepts/git/git-worktrees-vs-clones), sparse checkout, or LFS support.
+
+## Integrations
+
+Settings → Integrations manages the Treq account link to the GitHub App for Pro users. Sign in with the browser, open **Manage GitHub** to install or adjust the Treq GitHub App, and review connected repositories. Premium features such as the [merge queue](/docs/how-to/using-the-merge-queue) toggle appear for Pro users.
+
+Day-to-day create PR, CI, and review-thread actions on Free still use the local `gh` CLI. See [Connecting GitHub](/docs/how-to/connecting-github).
 
 ## Privacy
 
