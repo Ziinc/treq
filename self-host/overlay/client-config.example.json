@@ -1,0 +1,7 @@
+{
+  "supabase": {
+    "url": "https://supabase.example.com",
+    "anonKey": "REPLACE_WITH_ANON_KEY"
+  },
+  "webUrl": "https://treq.example.com"
+}

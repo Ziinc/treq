@@ -42,4 +42,10 @@ deploy:
 		supabase functions deploy "$${function_dir##*/}" || exit $$?; \
 	done
 
-.PHONY: bump start db.ßdiff deploy restart db.reset stop
+selfhost.test:
+	sh self-host/tests/run.sh
+
+selfhost.pack:
+	sh self-host/pack.sh --skip-refresh
+
+.PHONY: bump start db.diff deploy restart db.reset stop selfhost.test selfhost.pack

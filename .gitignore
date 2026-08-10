@@ -61,3 +61,6 @@ scripts/screenshot/.generated/
 *storybook.log
 storybook-static
 scripts/storybook/.generated/
+
+# self-host pack output
+self-host/dist/

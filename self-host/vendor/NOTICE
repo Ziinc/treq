@@ -1,0 +1,5 @@
+# Vendored from https://github.com/supabase/supabase (docker/)
+# Tag: see ../../SUPABASE_REF
+# License: Apache-2.0 (Supabase)
+#
+# Refresh with: sh ../scripts/refresh-vendor.sh
