@@ -476,7 +476,7 @@ describe("IssueDetailPanel markdown", () => {
     });
   });
 
-  it("calls onStartPrompt with the issue when Start prompt is clicked", async () => {
+  it("calls onStartPrompt with the issue when Agent is clicked", async () => {
     const onStartPrompt = vi.fn();
     render(
       <IssueDetailPanel
@@ -488,9 +488,7 @@ describe("IssueDetailPanel markdown", () => {
     );
 
     await screen.findByText("Fix markdown");
-    await user.click(
-      screen.getByRole("button", { name: /start prompt/i }),
-    );
+    await user.click(screen.getByRole("button", { name: /^agent/i }));
 
     expect(onStartPrompt).toHaveBeenCalledWith({
       number: 42,

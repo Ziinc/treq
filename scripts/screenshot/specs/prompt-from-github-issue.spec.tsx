@@ -1,6 +1,6 @@
 /**
  * Verifies starting an agent prompt from a GitHub issue: the issue detail
- * page exposes "Start prompt...", and clicking it opens the agent prompt
+ * page exposes "Agent...", and clicking it opens the agent prompt
  * dialog with a GitHub issue chip (#N) pre-attached.
  */
 
@@ -76,19 +76,19 @@ it("opens the agent prompt dialog with a GitHub issue chip from issue detail", a
 	await user.click(await screen.findByText("Fix the login redirect"));
 	await screen.findByText("Issue #42");
 
-	const startPrompt = await screen.findByRole("button", {
-		name: /start prompt/i,
+	const agentButton = await screen.findByRole("button", {
+		name: /^agent/i,
 	});
 
 	await captureDocument(document, {
 		name: "prompt-from-github-issue-01-detail",
 		expectations: [
 			'Issue detail for "#42 Fix the login redirect" is open beside the issues list.',
-			'A primary "Start prompt..." button sits beside "Open in Web" in the issue header.',
+			'A primary "Agent..." button sits beside "Open in Web" in the issue header.',
 		],
 	});
 
-	await user.click(startPrompt);
+	await user.click(agentButton);
 
 	const promptDialog = (
 		await screen.findByRole("heading", {

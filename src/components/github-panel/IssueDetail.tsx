@@ -108,7 +108,7 @@ export function IssueDetailPanel({
                     }
                   >
                     <Sparkles className="w-4 h-4" />
-                    Start prompt...
+                    Agent...
                   </Button>
                 )}
                 <OpenInWebButton url={issue.url} />
