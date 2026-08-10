@@ -191,7 +191,7 @@ it("captures the stacked PR queue for an opted-in repo", async () => {
 	await captureDocument(document, {
 		name: "merge-queue-tab-02-enabled-with-queue",
 		expectations: [
-			"The tab lists the queue as bordered cards (like the Code tab stack card), with no Show merged toggle when there is no history.",
+			"The tab lists the queue as bordered cards with a single continuous vertical rail through every card and the gaps between them.",
 			"Each multi-PR stack is its own card with a Layers header; the standalone PR is its own card. Cards are spaced vertically.",
 			'Node colours follow status: PR #101 (Merging) is green, PR #102 ("Running checks") is amber, the Queued ones are grey.',
 		],
@@ -202,7 +202,7 @@ it("captures the stacked PR queue for an opted-in repo", async () => {
 		expectations: [
 			'Two stack cards show "Stack of 3" and "Stack of 2" headers with outline Remove buttons; stacked rows have no per-entry X.',
 			"Each PR row shows green +N / red -N LOC stats (and a small relative diff bar) like the Code tab stack card.",
-			'Below the cards is a down-arrow and the target branch "main". The entry with no PR number reads "No PR". The standalone fix/solo card still has its own X remove control.',
+			'A continuous rail links all PR nodes across cards and ends at a down-arrow + "main". The entry with no PR number reads "No PR". The standalone fix/solo card still has its own X remove control.',
 		],
 	});
 
@@ -216,6 +216,7 @@ it("captures the stacked PR queue for an opted-in repo", async () => {
 		"merge-queue-entry-5",
 		"merge-queue-entry-6",
 	]);
+	expect(screen.getByTestId("merge-queue-rail")).toBeInTheDocument();
 	const featStack = screen.getByTestId("merge-queue-stack-feat/base");
 	expect(featStack).toHaveClass("border", "rounded-lg");
 	expect(screen.getByTestId("merge-queue-single-fix/solo")).toHaveClass(

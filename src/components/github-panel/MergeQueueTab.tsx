@@ -169,7 +169,7 @@ function QueueStackBlock({
       className="border rounded-lg p-4 bg-background"
     >
       {isStack && (
-        <div className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground mb-3">
+        <div className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground mb-3 pl-[26px]">
           <Layers2 className="w-4 h-4 shrink-0" />
           <span>Stack of {stack.entries.length}</span>
           <span className="text-xs font-normal text-muted-foreground truncate">
@@ -193,13 +193,11 @@ function QueueStackBlock({
         </div>
       )}
 
+      {/*
+        Per-card rail is omitted on purpose: a single continuous rail on the
+        list container runs through every card and the gaps between them.
+      */}
       <div className="relative">
-        {isStack && (
-          <div
-            className="absolute left-[7px] top-2 bottom-2 w-0.5 bg-border"
-            aria-hidden="true"
-          />
-        )}
         <ul className="space-y-0">
           {stack.entries.map((entry) => {
             const insertions = entry.insertions ?? 0;
@@ -387,57 +385,70 @@ function MergeQueueList({
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto p-3 space-y-3">
-        {active.length === 0 ? (
-          <div className="py-8">
-            <EmptyState icon={GitMerge} message="Merge queue is empty." />
-          </div>
-        ) : (
-          active.map((stack) => (
-            <QueueStackBlock
-              key={stack.entries[0].branch_name}
-              stack={stack}
-              dequeueBranches={dequeueBranches}
-            />
-          ))
-        )}
-
+      {/*
+        Continuous rail: p-3 (12) + card p-4 (16) + half node (7) = 35px.
+        Drawn above card backgrounds so it stays visible through cards and
+        the gaps between them, linking every PR down to the target branch.
+      */}
+      <div className="relative flex-1 overflow-y-auto p-3">
         <div
-          className="flex items-center gap-3 py-1 px-1 text-muted-foreground"
-          data-testid="merge-queue-target"
-        >
-          <div className="shrink-0 w-[14px] h-[14px] flex items-center justify-center">
-            <ArrowDown className="w-3.5 h-3.5" />
-          </div>
-          <p className="text-sm font-mono truncate">{targetBranch}</p>
-        </div>
+          className="pointer-events-none absolute left-[35px] top-3 bottom-3 z-[5] w-0.5 bg-border"
+          data-testid="merge-queue-rail"
+          aria-hidden="true"
+        />
 
-        {showMergedHistory && visibleHistory.length > 0 && (
-          <div data-testid="merge-queue-history" className="space-y-3 pt-1">
-            {visibleHistory.map((stack) => (
+        <div className="relative space-y-3">
+          {active.length === 0 ? (
+            <div className="relative z-10 py-8">
+              <EmptyState icon={GitMerge} message="Merge queue is empty." />
+            </div>
+          ) : (
+            active.map((stack) => (
               <QueueStackBlock
-                key={`history-${stack.entries[0].branch_name}`}
+                key={stack.entries[0].branch_name}
                 stack={stack}
                 dequeueBranches={dequeueBranches}
-                showRemove={false}
               />
-            ))}
-            {hasMore && (
-              <div className="flex justify-center pt-1 pb-1">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-base"
-                  onClick={() =>
-                    setHistoryLimit((n) => n + MERGE_QUEUE_HISTORY_PAGE_SIZE)
-                  }
-                >
-                  Load more
-                </Button>
-              </div>
-            )}
+            ))
+          )}
+
+          <div
+            className="relative z-10 flex items-center gap-3 py-2 pl-4 text-muted-foreground"
+            data-testid="merge-queue-target"
+          >
+            <div className="shrink-0 w-[14px] h-[14px] flex items-center justify-center">
+              <ArrowDown className="w-3.5 h-3.5" />
+            </div>
+            <p className="text-sm font-mono truncate">{targetBranch}</p>
           </div>
-        )}
+
+          {showMergedHistory && visibleHistory.length > 0 && (
+            <div data-testid="merge-queue-history" className="space-y-3 pt-1">
+              {visibleHistory.map((stack) => (
+                <QueueStackBlock
+                  key={`history-${stack.entries[0].branch_name}`}
+                  stack={stack}
+                  dequeueBranches={dequeueBranches}
+                  showRemove={false}
+                />
+              ))}
+              {hasMore && (
+                <div className="relative z-10 flex justify-center pt-1 pb-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-base"
+                    onClick={() =>
+                      setHistoryLimit((n) => n + MERGE_QUEUE_HISTORY_PAGE_SIZE)
+                    }
+                  >
+                    Load more
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
