@@ -9,7 +9,7 @@
 //
 // All queue orchestration happens in the merge-queue-worker function.
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "../_shared/supabase-js.ts";
 import { publishMergeQueueCommand } from "../_shared/merge-queue/commands-queue.ts";
 import { applyInstallationFacts, commandsForEvent } from "./webhook-handlers.ts";
 

@@ -1,9 +1,15 @@
 /**
  * Seed helpers for service-qa specs. Prefer these over hand-rolled inserts so
  * specs stay consistent with the migration schema and RLS expectations.
+ *
+ * Auth: email/password only. `createTestUser` uses the public `signUp` API
+ * (same path the web UI uses when `emailSignup` is on). The service-qa
+ * feature override forces that flag on — see `features.ts`.
  */
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 import { randomBytes } from "node:crypto";
+import { getAnonClient, getServiceClient } from "./clients";
+import { FEATURES } from "./features";
 
 export type TestUser = {
   user: User;
@@ -15,24 +21,73 @@ function uniqueEmail(prefix = "service-qa"): string {
   return `${prefix}-${randomBytes(6).toString("hex")}@example.com`;
 }
 
-export async function createTestUser(
-  admin: SupabaseClient,
-  opts?: { email?: string; password?: string },
-): Promise<TestUser> {
-  const email = opts?.email ?? uniqueEmail();
-  const password =
-    opts?.password ?? `Pw-${randomBytes(9).toString("base64url")}!a1`;
+function randomPassword(): string {
+  return `Pw-${randomBytes(9).toString("base64url")}!a1`;
+}
 
-  const { data, error } = await admin.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-  });
-  if (error || !data.user) {
-    throw new Error(`createTestUser failed: ${error?.message ?? "no user"}`);
+/**
+ * Sign up a new user via Auth email/password (`signUp`), not the Admin API.
+ * Local config has `enable_confirmations = false`, so signUp returns a session.
+ */
+export async function createTestUser(opts?: {
+  email?: string;
+  password?: string;
+}): Promise<TestUser> {
+  if (!FEATURES.emailSignup) {
+    throw new Error(
+      "createTestUser requires FEATURES.emailSignup=true (service-qa override).",
+    );
   }
 
+  const email = opts?.email ?? uniqueEmail();
+  const password = opts?.password ?? randomPassword();
+  const anon = getAnonClient();
+
+  const { data, error } = await anon.auth.signUp({ email, password });
+  if (error || !data.user) {
+    throw new Error(`signUp failed: ${error?.message ?? "no user"}`);
+  }
+
+  // Drop the signup session so each spec signs in explicitly with password.
+  await anon.auth.signOut();
+
   return { user: data.user, email, password };
+}
+
+/** Hard-delete a user (cascades profile + desktop tokens via FK). */
+export async function deleteTestUser(
+  admin: SupabaseClient,
+  userId: string,
+): Promise<void> {
+  const { error } = await admin.auth.admin.deleteUser(userId);
+  if (error) {
+    throw new Error(`deleteTestUser failed: ${error.message}`);
+  }
+}
+
+/**
+ * Email/password sign-in returning a fresh anon client that holds the session.
+ */
+export async function signInWithEmailPassword(
+  email: string,
+  password: string,
+): Promise<{ client: SupabaseClient; user: User }> {
+  if (!FEATURES.emailSignup) {
+    throw new Error(
+      "signInWithEmailPassword requires FEATURES.emailSignup=true.",
+    );
+  }
+  const client = getAnonClient();
+  const { data, error } = await client.auth.signInWithPassword({
+    email,
+    password,
+  });
+  if (error || !data.session || !data.user) {
+    throw new Error(
+      `signInWithPassword failed: ${error?.message ?? "no session"}`,
+    );
+  }
+  return { client, user: data.user };
 }
 
 export type LinkedRepo = {
@@ -104,6 +159,59 @@ export async function linkGithubRepo(
 }
 
 /**
+ * Ensure a merge_queues row exists and insert a queued entry for a branch.
+ * Used to exercise desktop status RPCs without calling GitHub.
+ */
+export async function enqueueBranch(
+  admin: SupabaseClient,
+  opts: {
+    repoId: number;
+    branchName: string;
+    prNumber: number;
+    prSha: string;
+    position: number;
+    targetBranch: string;
+  },
+): Promise<{ queueId: string; entryId: string }> {
+  const { data: queue, error: queueError } = await admin
+    .from("merge_queues")
+    .upsert(
+      {
+        repo_id: opts.repoId,
+        target_branch: opts.targetBranch,
+        paused: false,
+        bisect_mode: false,
+      },
+      { onConflict: "repo_id,target_branch" },
+    )
+    .select("id")
+    .single();
+  if (queueError || !queue) {
+    throw new Error(`enqueueBranch queue: ${queueError?.message ?? "no row"}`);
+  }
+
+  const { data: entry, error: entryError } = await admin
+    .from("merge_queue_entries")
+    .insert({
+      queue_id: queue.id,
+      pr_number: opts.prNumber,
+      pr_sha: opts.prSha,
+      pr_title: `service-qa ${opts.branchName}`,
+      pr_author: "service-qa",
+      position: opts.position,
+      status: "queued",
+      branch_name: opts.branchName,
+    })
+    .select("id")
+    .single();
+  if (entryError || !entry) {
+    throw new Error(`enqueueBranch entry: ${entryError?.message ?? "no row"}`);
+  }
+
+  return { queueId: queue.id as string, entryId: entry.id as string };
+}
+
+/**
  * Call create_desktop_token as the signed-in user (RLS / auth.uid() path the
  * web auth callback uses).
  */
@@ -117,4 +225,9 @@ export async function createDesktopToken(
     );
   }
   return data;
+}
+
+/** Convenience: service client for teardown paths that need Admin Auth. */
+export function adminClient(): SupabaseClient {
+  return getServiceClient();
 }

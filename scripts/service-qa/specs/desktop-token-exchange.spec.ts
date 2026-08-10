@@ -1,19 +1,43 @@
 /**
  * Worked example: desktop auth handoff that useAuth.exchangeToken depends on.
  *
+ * Uses Auth email/password signup+login (service-qa overrides emailSignup on).
  * Web calls create_desktop_token (RPC), then the desktop hits
  * functions/v1/exchange-desktop-token and receives a session. Tokens are
  * single-use and reject when missing/invalid.
+ *
+ * Each case signs up / signs in / tears down the Auth user.
  */
-import { it, expect } from "vitest";
+import { it, expect, afterEach } from "vitest";
 import {
   getAnonClient,
   getAnonKey,
   getFunctionsBaseUrl,
   getServiceClient,
 } from "../clients";
-import { createDesktopToken, createTestUser } from "../seed";
+import { FEATURES } from "../features";
+import {
+  createDesktopToken,
+  createTestUser,
+  deleteTestUser,
+  signInWithEmailPassword,
+  type TestUser,
+} from "../seed";
 import { recordOutcome } from "../record";
+
+const usersToDelete: string[] = [];
+
+afterEach(async () => {
+  const admin = getServiceClient();
+  while (usersToDelete.length > 0) {
+    const id = usersToDelete.pop()!;
+    try {
+      await deleteTestUser(admin, id);
+    } catch {
+      // already deleted
+    }
+  }
+});
 
 async function exchangeDesktopToken(token: string): Promise<Response> {
   return fetch(`${getFunctionsBaseUrl()}/exchange-desktop-token`, {
@@ -27,17 +51,24 @@ async function exchangeDesktopToken(token: string): Promise<Response> {
   });
 }
 
+async function signedInUser(): Promise<{
+  testUser: TestUser;
+  client: ReturnType<typeof getAnonClient>;
+}> {
+  expect(FEATURES.emailSignup).toBe(true);
+  const testUser = await createTestUser();
+  usersToDelete.push(testUser.user.id);
+  const { client } = await signInWithEmailPassword(
+    testUser.email,
+    testUser.password,
+  );
+  return { testUser, client };
+}
+
 it("exchanges a one-time desktop token for a session", async () => {
-  const admin = getServiceClient();
-  const { email, password } = await createTestUser(admin);
+  const { testUser, client } = await signedInUser();
 
-  const anon = getAnonClient();
-  const { data: signIn, error: signInError } =
-    await anon.auth.signInWithPassword({ email, password });
-  expect(signInError).toBeNull();
-  expect(signIn.session).toBeTruthy();
-
-  const token = await createDesktopToken(anon);
+  const token = await createDesktopToken(client);
   const response = await exchangeDesktopToken(token);
   expect(response.status).toBe(200);
 
@@ -57,7 +88,10 @@ it("exchanges a one-time desktop token for a session", async () => {
       refresh_token: body.refresh_token!,
     });
   expect(sessionError).toBeNull();
-  expect(sessionData.session?.user.email).toBe(email);
+  expect(sessionData.session?.user.email).toBe(testUser.email);
+
+  await client.auth.signOut();
+  await sessionClient.auth.signOut();
 
   await recordOutcome("desktop-token-exchange-01-happy-path", {
     expectations: [
@@ -65,7 +99,7 @@ it("exchanges a one-time desktop token for a session", async () => {
       "setSession with those tokens yields a session for the same user email.",
     ],
     details: {
-      email,
+      email: testUser.email,
       httpStatus: response.status,
       userId: sessionData.session?.user.id,
     },
@@ -73,17 +107,9 @@ it("exchanges a one-time desktop token for a session", async () => {
 }, 60_000);
 
 it("rejects a reused desktop token", async () => {
-  const admin = getServiceClient();
-  const { email, password } = await createTestUser(admin);
+  const { client } = await signedInUser();
 
-  const anon = getAnonClient();
-  const { error: signInError } = await anon.auth.signInWithPassword({
-    email,
-    password,
-  });
-  expect(signInError).toBeNull();
-
-  const token = await createDesktopToken(anon);
+  const token = await createDesktopToken(client);
   const first = await exchangeDesktopToken(token);
   expect(first.status).toBe(200);
 
@@ -91,6 +117,8 @@ it("rejects a reused desktop token", async () => {
   expect(second.status).toBe(401);
   const body = (await second.json()) as { error?: string };
   expect(body.error).toMatch(/invalid|expired/i);
+
+  await client.auth.signOut();
 
   await recordOutcome("desktop-token-exchange-02-single-use", {
     expectations: [

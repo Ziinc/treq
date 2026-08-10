@@ -80,9 +80,14 @@ Every call inside a service-qa spec must hit the local CLI stack at
 for seeding / admin). Never `vi.mock("../../src/lib/supabase")`. Never point
 at production (`*.supabase.co`).
 
-If a flow needs a signed-in user, create one with the Auth Admin API
-(`createTestUser` in `scripts/service-qa/seed.ts`) and sign in with the anon
-client. Do not hard-code production user IDs or paste live session tokens.
+If a flow needs a signed-in user, use **email/password only** via
+`createTestUser` / `signInWithEmailPassword` in `scripts/service-qa/seed.ts`
+(public `signUp` + `signInWithPassword`). Do not use OAuth. service-qa overrides
+`package.json` → `featureFlags.emailSignup` to `true` in
+`scripts/service-qa/features.ts` so this path stays available even when the
+shipped product flag is off. Do not hard-code production user IDs or paste live
+session tokens. Prefer `withMergeQueueFixture` (or an equivalent try/finally)
+so every user, install, and queue row is torn down.
 
 GitHub App side effects (labeling PRs, merging) are out of scope for early
 specs unless you mock only the **outbound GitHub adapter** inside an Edge
@@ -102,9 +107,9 @@ assert DB rows, RPC return values, and HTTP status codes from Edge Functions.
 3. **Clients** — `getAnonClient()` / `getServiceClient()` read keys from
    `supabase status -o env` when available, falling back to the standard local
    demo JWTs (same anon key as `package.json` → `env.dev.supabase`).
-4. **Seed helpers** — `createTestUser`, `linkGithubRepo`, etc. insert the
-   minimum rows a contract needs (profile is auto-created by the
-   `handle_new_user` trigger).
+4. **Seed helpers** — `createTestUser` (email/password `signUp`),
+   `signInWithEmailPassword`, `linkGithubRepo`, `withMergeQueueFixture`
+   (setup + teardown). Profile rows are auto-created by `handle_new_user`.
 5. **`recordOutcome(name, { expectations, details })`** — writes
    `scripts/service-qa/.generated/<name>.json`. Like app-qa's
    `captureDocument` expectations, these are plain-English claims for the
@@ -133,7 +138,10 @@ Optional secrets for flows that need them (OAuth, GitHub App):
   `supabase/functions/_shared/merge-queue/README.md`)
 
 Email confirmations are **off** locally (`[auth.email] enable_confirmations =
-false`), so password signup works without Inbucket for basic auth specs.
+false`), so password signup works without Inbucket. service-qa **overrides**
+`featureFlags.emailSignup` to `true` in `scripts/service-qa/features.ts` and
+creates users only via Auth email/password (`signUp` / `signInWithPassword`) —
+never OAuth.
 
 Stripe FDW (`002_stripe_fdw.sql`) uses a vault placeholder locally. Specs that
 read `subscriptions` must tolerate an empty/unavailable Stripe remote — prefer
@@ -149,9 +157,11 @@ asserting Auth + treq tables/RPCs first.
    yourself.
 
 2. **Write or extend a spec** under
-   `scripts/service-qa/specs/<slug>.spec.ts`. One spec per contract. If an
-   existing spec already covers this flow, add steps to it rather than
-   duplicating seed setup. Shape:
+   `scripts/service-qa/specs/<slug>.spec.ts`. One spec per contract. Auth must
+   use email/password (`createTestUser` / `signInWithEmailPassword` /
+   `withMergeQueueFixture`) — the service-qa feature override keeps
+   `emailSignup` on. If an existing spec already covers this flow, add steps
+   to it rather than duplicating seed setup. Shape:
 
    ```ts
    import { it, expect } from "vitest";
