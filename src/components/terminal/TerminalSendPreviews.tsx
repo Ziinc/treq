@@ -226,10 +226,7 @@ function SendAssetLightbox({
     // Fit to at least ~75vw of the viewport (carousel is min 75vw / typically 90vw).
     const maxW = Math.min(
       window.innerWidth * 0.9,
-      Math.max(
-        img.parentElement?.clientWidth || 0,
-        window.innerWidth * 0.75,
-      ),
+      Math.max(img.parentElement?.clientWidth || 0, window.innerWidth * 0.75),
     );
     // Allow upscaling so small assets fill the lightbox on initial load.
     const fitScale = Math.min(
