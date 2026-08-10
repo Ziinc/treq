@@ -47,13 +47,21 @@ Comments use plain text. State whether the agent should fix a defect, answer a q
 
 :::note
 
-Review data stays on your machine. Treq does not publish comments to GitHub or another remote review service.
+Local review data stays on your machine. Treq does not publish these comments to GitHub or another remote review service.
 
 :::
+
+## GitHub Review Threads
+
+When the workspace branch has an open GitHub pull request and `gh` is authenticated, the Review tab also loads GitHub review comment threads. Treq places those threads on matching diff hunks in the uncommitted and committed views. Threads whose lines no longer appear in the visible diff sit in an outdated comments group for that file.
+
+You can quote a GitHub thread into a local pending comment so an agent can act on it. Quoting does not reply on GitHub. Creating and viewing the PR itself is covered under [GitHub Integration](/docs/concepts/github-integration).
 
 ## Learn More
 
 - [Code Review Workflow](/docs/tutorials/code-review-workflow)
+- [GitHub Integration](/docs/concepts/github-integration)
+- [Creating and Viewing Pull Requests](/docs/how-to/creating-and-viewing-pull-requests)
 - [Workspaces](/docs/concepts/workspaces)
 - [Commit Management](/docs/concepts/commit-management)
 - [Agent Sessions](/docs/concepts/agent-sessions)

@@ -13,4 +13,7 @@ Concise, task-focused guides for accomplishing specific things with Treq.
   {type: 'link', href: '/docs/how-to/discarding-changes', label: 'Discarding Changes'},
   {type: 'link', href: '/docs/how-to/moving-files-between-workspaces', label: 'Moving Files Between Workspaces'},
   {type: 'link', href: '/docs/how-to/customizing-settings', label: 'Customizing Settings'},
+  {type: 'link', href: '/docs/how-to/connecting-github', label: 'Connecting GitHub'},
+  {type: 'link', href: '/docs/how-to/creating-and-viewing-pull-requests', label: 'Creating and Viewing Pull Requests'},
+  {type: 'link', href: '/docs/how-to/using-the-merge-queue', label: 'Using the Merge Queue'},
 ]} />

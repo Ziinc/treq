@@ -26,17 +26,23 @@ _Year-by-year product milestones for Treq. Newer years are added above older one
 
 <RoadmapGraphicTabs version="2026" />
 
-Q1 and Q2 have nothing planned. Q3 targets GitHub merge-queue integration and workspace checks. Q4 targets SSH remote development.
+Q1 and Q2 have nothing planned. GitHub pull requests, CI, review threads, and the Treq-managed merge queue shipped in [0.2.0](/changelog). Q3 targets workspace checks. Q4 targets SSH remote development.
 
 ## GitHub Integration with Merge Queue
 
-[Treq workspaces](/docs/concepts/workspaces) already model stacked branches. The missing piece is first-class GitHub pull request and merge queue control from the same place you review diffs and drive agents.
+:::tip Shipped in v0.2.0
 
-**App integration** connects each workspace to its remote pull request. You will see PR status, checks, and queue position without leaving Treq. Creating or updating a pull request from a stacked workspace will keep the GitHub base branch aligned with the stack parent, matching the [stacked PR](/learn/concepts/git/stacked-prs) model.
+Pull request create and view, CI status, inline GitHub review threads, and the Treq-managed merge queue are available now. See [GitHub Integration](/docs/concepts/github-integration).
 
-**Merge queue integration** is a Treq-managed merge queue, not [GitHub's native merge queue](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue). GitHub's built-in queue requires GitHub Enterprise Cloud for private repositories. Treq's queue does not. You enqueue stacked PRs the way you already manage stacks locally: load an entire stack in one action, or enqueue layers one by one when a lower PR still needs review. The app respects dependency order so a higher layer does not jump ahead of its required base.
+:::
 
-This milestone turns the stack you already build in Treq into a path that ends on `main` through a Treq-managed merge queue, without hand-managing each PR's base and queue entry.
+[Treq workspaces](/docs/concepts/workspaces) model stacked branches. The GitHub integration connects each workspace to its remote pull request from the same place you review diffs and drive agents.
+
+**App integration** links a workspace to its PR. You see PR state on the sidebar icon, checks in the workspace header, and queue position when the merge queue is on. Creating a pull request from a workspace pushes the branch when needed and opens the PR against the stack parent base when the workspace targets another branch, matching the [stacked PR](/learn/concepts/git/stacked-prs) model.
+
+**Merge queue integration** is a Treq-managed merge queue, not [GitHub's native merge queue](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue). GitHub's built-in queue requires GitHub Enterprise Cloud for private repositories. Treq's queue does not. You enqueue stacked PRs the way you already manage stacks locally: load layers one by one when a lower PR still needs review, or clear higher layers when you dequeue mid-stack. The queue respects dependency order so a higher layer does not jump ahead of its required base.
+
+Setup and daily use are covered in [Connecting GitHub](/docs/how-to/connecting-github), [Creating and Viewing Pull Requests](/docs/how-to/creating-and-viewing-pull-requests), and [Using the Merge Queue](/docs/how-to/using-the-merge-queue).
 
 ## Workspace Checks
 
@@ -58,12 +64,14 @@ This matters when the project needs a machine you do not run locally. Examples i
 
 ## How These Fit Together
 
-Workspace Checks decide whether a layer is ready. GitHub Integration with Merge Queue moves ready layers onto the remote merge path. SSH Remote Development decides where that work runs when local hardware is not enough.
+Workspace Checks decide whether a layer is ready. [GitHub Integration](/docs/concepts/github-integration) moves ready layers onto the remote merge path. SSH Remote Development decides where that work runs when local hardware is not enough.
 
 You build in a stacked workspace, locally or over SSH, and run checks until the assertions pass. Then you open or update the PR from Treq and enqueue that PR alone or with the rest of the stack. The same verification story that protects local agent loops also protects what you put into the queue.
 
 ## Learn More
 
+- [GitHub Integration](/docs/concepts/github-integration)
+- [Using the Merge Queue](/docs/how-to/using-the-merge-queue)
 - [Workspaces](/docs/concepts/workspaces)
 - [Terminal Sessions](/docs/concepts/terminal-sessions)
 - [Stacked PRs](/learn/concepts/git/stacked-prs)

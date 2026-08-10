@@ -6,11 +6,13 @@ sidebar_position: 5
 
 _How to review code using Treq's built-in review tools._
 
-Treq's review interface lets you examine [changes](/docs/concepts/changes-and-reviews) in a dedicated [workspace](/docs/concepts/workspaces) without disrupting your current work. You can add inline comments, test changes locally, and export review summaries for pull requests.
+Treq's review interface lets you examine [changes](/docs/concepts/changes-and-reviews) in a dedicated [workspace](/docs/concepts/workspaces) without disrupting your current work. You can add inline comments, read GitHub review threads on an open PR, test changes locally, and export review summaries.
 
 ## Starting a Review
 
 Click the **Review** button on any workspace in the dashboard. To review someone else's branch, fetch remote changes (`git fetch origin`), create a workspace from their branch via "New Workspace" → "From existing branch," then open the review interface.
+
+If the branch already has a [GitHub pull request](/docs/concepts/github-integration), the Review tab also shows GitHub review threads on matching hunks. Local comments you add still stay on your machine until you copy or send them.
 
 ## The Review Interface
 
@@ -40,6 +42,8 @@ When you've reviewed all files, choose your verdict. Click **Approve** if everyt
 
 The review panel shows your progress: total comments, files reviewed, and diff statistics. Use **Copy Summary** to generate formatted markdown you can paste into GitHub, GitLab, or other platforms.
 
+When the workspace is ready for a remote review, use **Create PR** in the workspace header or **Commit and create PR** from the Review tab Commit control. See [Creating and Viewing Pull Requests](/docs/how-to/creating-and-viewing-pull-requests).
+
 ## Testing Locally
 
 Since the workspace contains the actual code, you can run it during review. Open a terminal session, install dependencies if needed, run the application, and execute tests. Finding bugs locally is more valuable than catching them after merge.
@@ -51,3 +55,10 @@ Review commit-by-commit to understand the development progression, or view the c
 ## Keyboard Shortcuts
 
 `J`/`K` for next/previous file, `C` to add comment, `R` to mark reviewed, `A` to approve, `X` to request changes.
+
+## Next Steps
+
+- [Changes and Reviews](/docs/concepts/changes-and-reviews)
+- [Creating and Viewing Pull Requests](/docs/how-to/creating-and-viewing-pull-requests)
+- [GitHub Integration](/docs/concepts/github-integration)
+- [Committing Changes](/docs/tutorials/committing-changes)

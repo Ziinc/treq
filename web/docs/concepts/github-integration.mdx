@@ -1,0 +1,100 @@
+---
+sidebar_position: 6
+---
+
+# GitHub Integration
+
+_How Treq connects workspaces to GitHub pull requests, CI checks, review threads, and a merge queue._
+
+Treq's GitHub integration links each workspace branch to its remote pull request. You create and open PRs from the workspace, watch CI in the header, read GitHub review threads on the Review tab, and optionally enqueue merges through a Treq-managed queue.
+
+The integration has two layers. Day-to-day PR and CI actions use the local [GitHub CLI](https://cli.github.com/) (`gh`) with your GitHub credentials. Repository linking and the merge queue use the Treq GitHub App through your Treq account.
+
+## Prerequisites
+
+Treq shows GitHub controls only when the repository's `origin` remote points at `github.com`. Other hosts stay on plain Git push and pull.
+
+PR list, create, comment, and CI commands need the GitHub CLI (`gh`) installed and authenticated on the same machine as the app:
+
+```bash
+gh auth login
+gh auth status
+```
+
+Merge queue and connected-repo management need a signed-in Treq account and the Treq GitHub App installed on the repository. See [Connecting GitHub](/docs/how-to/connecting-github).
+
+| Capability | Auth path |
+|---|---|
+| Create, view, and comment on PRs and issues | Local `gh` |
+| CI status in the workspace header and PR detail | Local `gh` |
+| Inline GitHub review threads on the Review tab | Local `gh` |
+| Connected repositories list | Treq account + GitHub App |
+| Merge queue | Treq Pro + GitHub App + per-repo opt-in |
+
+## Pull Requests
+
+When a workspace has commits and no open PR yet, the workspace header shows **Create PR**. The primary action pushes the branch if needed, then creates the PR with `gh`. The dropdown adds **Create draft PR** and **Create PR manually**, which opens GitHub's compare page after a push.
+
+Treq derives a conventional-commit title from the workspace title or branch name when it creates the PR. The button stays disabled until the workspace has at least one real commit. Uncommitted working-copy changes alone do not count. After a PR exists, **Create PR** hides and **View PR** takes its place.
+
+**View PR** opens the in-app GitHub panel on that pull request. A secondary control opens the same PR in the browser. The sidebar context menu can copy the PR URL when Treq already knows it.
+
+The Review tab Commit control can **Commit and create PR** or **Commit and push** in one step. Those actions share creation state with the header button, so an in-flight create shows as pending on both surfaces.
+
+For the full create and view flow, see [Creating and Viewing Pull Requests](/docs/how-to/creating-and-viewing-pull-requests).
+
+## GitHub Panel
+
+Open **GitHub** in the workspace sidebar to reach Issues, Pull Requests, and Merge Queue. The panel uses hash routes such as `#/github/prs/open` so the `?repo=` query stays intact.
+
+Pull Requests and Issues use a dual-pane list and detail layout. Filters are Open, Closed, and All. From a PR you can read the body and conversation, add a comment, mark draft or ready, close or reopen, and open the PR on GitHub. The list also has a New form for creating a PR by hand with title, body, base, and head.
+
+## Sidebar Indicators
+
+Each workspace row colors its branch icon from the cached PR state:
+
+| Color | PR state |
+|---|---|
+| Muted | Draft |
+| Green | Open |
+| Purple | Merged |
+| Red | Closed |
+
+When the merge queue is enabled, a status dot on the row shows queued, testing, merging, merged, or failed. Treq refreshes PR and CI caches in the background so the UI reads local state instead of blocking on every paint.
+
+## CI Checks
+
+If the open PR has checks, the workspace header shows a `passed/total` pill. Open it for the check list, sorted with failures first. Each row can show duration and open the check URL when GitHub provides one.
+
+The same rollup appears on the PR detail view. The workspace Merge button stays outline by default and turns solid green when every check has passed. That color change is a readiness signal. It does not merge the PR by itself.
+
+`treq st` prints the linked PR and a short checks summary when `gh` can resolve them.
+
+## Review Threads
+
+When a workspace has an open PR, the Review tab loads GitHub review comment threads and places them on matching diff hunks for both uncommitted and committed views. Resolved threads start collapsed. Threads whose lines no longer appear in the visible diff group under an outdated comments section for that file.
+
+You can quote a GitHub thread into a local pending review comment for an agent. Quoting does not post back to GitHub. Local [review comments](/docs/concepts/changes-and-reviews) still stay on your machine unless you export or send them yourself.
+
+## Merge Queue
+
+The merge queue is Treq-managed. It is not [GitHub's native merge queue](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue). It requires Pro, the GitHub App on the repo, and an explicit opt-in under Settings → Integrations.
+
+Enabling the queue lets you enqueue an open PR from the workspace. The queue tab in the GitHub panel shows stack-aware entries and lets you remove a branch or the stack above it. Merges run only after configured checks pass on the tested head SHA. See [Using the Merge Queue](/docs/how-to/using-the-merge-queue).
+
+## Plans
+
+| Plan | GitHub scope |
+|---|---|
+| Free | Public repositories |
+| Pro | Public and private repositories, plus merge queue |
+
+Install and plan management live on the web dashboard under Integrations. The desktop Settings → Integrations page lists connected repos for the current account and toggles the merge queue for the open repository.
+
+## Next Steps
+
+- [Connecting GitHub](/docs/how-to/connecting-github): install `gh`, sign in, and link the GitHub App
+- [Creating and Viewing Pull Requests](/docs/how-to/creating-and-viewing-pull-requests): create, view, and inspect CI from a workspace
+- [Using the Merge Queue](/docs/how-to/using-the-merge-queue): opt in and enqueue stacked PRs
+- [Changes and Reviews](/docs/concepts/changes-and-reviews): local comments versus GitHub threads
+- [Stacked PRs](/learn/concepts/git/stacked-prs): how stack bases map to pull request order
