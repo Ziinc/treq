@@ -1,0 +1,50 @@
+# Postgres is a separate service. The Alpine fat image is API-only
+# (PostgREST + Edge Runtime + nginx). No GoTrue — single-tenant self-hosted.
+
+services:
+  db:
+    image: supabase/postgres:17.6.1.136
+    restart: unless-stopped
+    ports:
+      - "54322:5432"
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      JWT_SECRET: ${JWT_SECRET:-super-secret-jwt-token-with-at-least-32-characters-long}
+      JWT_EXP: ${JWT_EXP:-3600}
+      POSTGRES_DB: postgres
+    volumes:
+      - treq-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -h localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+
+  treq-supabase:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: treq-supabase:local
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      # Kong-compatible API gateway (REST / Functions)
+      - "54321:8000"
+    env_file:
+      - .env.example
+    environment:
+      PGHOST: db
+      PGPORT: "5432"
+      VERIFY_JWT: "false"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://127.0.0.1:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 45s
+
+volumes:
+  treq-db-data:

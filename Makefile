@@ -13,6 +13,9 @@ bump:
 	(cd src-tauri && cargo update -p treq 2>/dev/null) || true; \
 	echo "Done."
 
+start:
+	supabase start
+
 stop:
 	supabase stop
 
@@ -42,4 +45,42 @@ deploy:
 		supabase functions deploy "$${function_dir##*/}" || exit $$?; \
 	done
 
-.PHONY: bump start db.ßdiff deploy restart db.reset stop
+# Fat Supabase API image (Alpine, single-tenant) + postgres sidecar
+
+supabase.docker.build:
+	docker build -f supabase/docker/Dockerfile -t treq-supabase:local supabase
+
+supabase.docker.up: supabase.docker.build
+	@bash supabase/docker/prepare-network.sh
+	docker compose -f supabase/docker/docker-compose.yml up -d --build
+	@echo "Waiting for health..."
+	@for i in $$(seq 1 90); do \
+		if curl -sf http://127.0.0.1:54321/health >/dev/null; then \
+			echo "treq-supabase ready at http://127.0.0.1:54321"; \
+			exit 0; \
+		fi; \
+		sleep 2; \
+	done; \
+	echo "treq-supabase failed to become healthy" >&2; \
+	docker compose -f supabase/docker/docker-compose.yml logs --tail=80; \
+	exit 1
+
+supabase.docker.down:
+	docker compose -f supabase/docker/docker-compose.yml down
+
+supabase.docker.smoke:
+	bash supabase/docker/smoke.sh
+
+supabase.docker.test:
+	@bash supabase/docker/prepare-network.sh
+	docker compose -f supabase/docker/docker-compose.test.yml down -v --remove-orphans 2>/dev/null || true
+	docker compose -f supabase/docker/docker-compose.test.yml up -d --build --wait
+	bash supabase/docker/test/verify-self-hosted.sh
+	docker compose -f supabase/docker/docker-compose.test.yml down -v
+
+supabase.docker.logs:
+	docker compose -f supabase/docker/docker-compose.yml logs -f
+
+.PHONY: bump start stop restart db.reset db.diff deploy \
+	supabase.docker.build supabase.docker.up supabase.docker.down \
+	supabase.docker.smoke supabase.docker.test supabase.docker.logs
