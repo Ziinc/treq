@@ -16,7 +16,9 @@ export type SessionRestoreErrorKind =
 export const HEALTH_CHECK_TIMEOUT_MS = 1500;
 
 /** Backoff schedule for automatic reconnection attempts (ms). */
-export const AUTH_RETRY_BACKOFF_MS = [1000, 2000, 5000, 10_000, 30_000] as const;
+export const AUTH_RETRY_BACKOFF_MS = [
+  1000, 2000, 5000, 10_000, 30_000,
+] as const;
 
 export function authRetryDelayMs(attempt: number): number {
   const index = Math.min(
@@ -39,10 +41,13 @@ export async function checkSupabaseAuthHealth(
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetchFn(`${supabaseUrl.replace(/\/$/, "")}/auth/v1/health`, {
-      method: "GET",
-      signal: controller.signal,
-    });
+    const response = await fetchFn(
+      `${supabaseUrl.replace(/\/$/, "")}/auth/v1/health`,
+      {
+        method: "GET",
+        signal: controller.signal,
+      },
+    );
     return response.ok;
   } catch {
     return false;
