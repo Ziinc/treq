@@ -91,7 +91,6 @@ describe("ShowWorkspace - committed diff dedupe integration", () => {
       expect(screen.queryByTitle("committed-only.txt")).not.toBeInTheDocument();
       expect(screen.queryByText("committed only")).not.toBeInTheDocument();
       expect(screen.getByTitle("uncommitted-only.txt")).toBeInTheDocument();
-      // Dirty overlapping committed files stay visible (sidebar + diff).
       expect(screen.getAllByText("shared.txt").length).toBeGreaterThanOrEqual(
         2,
       );
