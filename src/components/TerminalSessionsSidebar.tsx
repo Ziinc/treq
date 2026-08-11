@@ -21,8 +21,9 @@ interface TerminalSessionsSidebarProps {
 // How often to force a re-render so idle status and last-activity ordering
 // stay live even when no new terminal output arrives.
 const TICK_INTERVAL_MS = 5000;
-// Reorder animation duration for terminals shifting position in the list.
-const REORDER_TRANSITION_MS = 250;
+// Keep reorders noticeable without making items travel/bounce across the list.
+const REORDER_TRANSITION_MS = 180;
+const REORDER_OFFSET_PX = 8;
 
 export const TerminalSessionsSidebar: React.FC<
   TerminalSessionsSidebarProps
@@ -44,7 +45,7 @@ export const TerminalSessionsSidebar: React.FC<
   const now = Date.now();
 
   const orderedSessions = useMemo(
-    () => [...sessions].sort((a, b) => b.lastActivityAt - a.lastActivityAt),
+    () => [...sessions].sort((a, b) => b.lastUserInputAt - a.lastUserInputAt),
     [sessions],
   );
 
@@ -75,12 +76,16 @@ export const TerminalSessionsSidebar: React.FC<
       nextRects.set(id, rect);
       const prevRect = prevRectsRef.current.get(id);
       if (prevRect) {
-        const dy = prevRect.top - rect.top;
+        const fullDistance = prevRect.top - rect.top;
+        const dy = Math.max(
+          -REORDER_OFFSET_PX,
+          Math.min(REORDER_OFFSET_PX, fullDistance),
+        );
         if (dy) {
           node.style.transition = "none";
           node.style.transform = `translateY(${dy}px)`;
           requestAnimationFrame(() => {
-            node.style.transition = `transform ${REORDER_TRANSITION_MS}ms ease`;
+            node.style.transition = `transform ${REORDER_TRANSITION_MS}ms cubic-bezier(0.2, 0, 0, 1)`;
             node.style.transform = "";
           });
         }

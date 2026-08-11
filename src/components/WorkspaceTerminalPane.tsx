@@ -406,6 +406,7 @@ const WorkspaceTerminalPaneInner = forwardRef<
     // the sidebar's terminal sessions list (ordering, idle icon, spinner).
     const {
       handleTerminalOutput,
+      handleTerminalInput,
       handleTerminalIdlePulse,
       terminalSummariesRef,
     } = useTerminalSessionSummaries({
@@ -537,6 +538,7 @@ const WorkspaceTerminalPaneInner = forwardRef<
         handleCloseClaudeSession={handleCloseClaudeSession}
         onTerminalDoubleClick={handleTerminalDoubleClick}
         onTerminalOutput={handleTerminalOutput}
+        onTerminalInput={handleTerminalInput}
         onTerminalIdle={handleTerminalIdlePulse}
       />
     );

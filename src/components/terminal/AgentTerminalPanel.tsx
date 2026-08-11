@@ -57,6 +57,7 @@ export interface AgentTerminalPanelProps {
   onClose?: () => void;
   onSessionError?: (message: string) => void;
   onTerminalOutput?: (output: string) => void;
+  onTerminalInput?: () => void;
   onTerminalIdle?: () => void;
   terminalRefs: React.MutableRefObject<
     Map<string, ConsolidatedTerminalHandle | null>
@@ -74,6 +75,7 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
     onClose,
     onSessionError,
     onTerminalOutput,
+    onTerminalInput,
     onTerminalIdle,
     terminalRefs,
     width,
@@ -508,6 +510,7 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
                 onSessionError={onSessionError}
                 onClose={onClose}
                 onTerminalOutput={handleTerminalOutput}
+                onTerminalInput={onTerminalInput}
                 onTerminalIdle={onTerminalIdle}
                 containerClassName="h-full w-full overflow-hidden"
                 terminalPaneClassName="w-full h-full"

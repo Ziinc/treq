@@ -40,6 +40,8 @@ export interface TerminalSessionSummary {
   agent?: "claude" | "codex" | "cursor";
   /** Epoch ms of the last output/creation event. */
   lastActivityAt: number;
+  /** Epoch ms of the last user input sent to this terminal, or 0 if none. */
+  lastUserInputAt: number;
   /** True while output is actively streaming (shows a spinner). */
   isStreaming: boolean;
 }
