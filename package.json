@@ -40,6 +40,7 @@
     "test": "DEBUG_PRINT_LIMIT=50 vitest run",
     "screenshot:css": "node scripts/screenshot/build-css.mjs",
     "screenshot": "npm run build:napi --silent && npm run screenshot:css && vitest run --config vitest.screenshot.config.ts",
+    "screenshot:readme": "npm run build:napi --silent && npm run screenshot:css && vitest run --config vitest.screenshot.config.ts scripts/screenshot/specs/readme-*.spec.tsx",
     "format": "biome format  --write ./src ./test && cargo fmt",
     "check:format": "biome format ./src ./test",
     "check": "tsc && ast-grep test",

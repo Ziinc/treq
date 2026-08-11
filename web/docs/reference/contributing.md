@@ -60,9 +60,12 @@ npm run build:napi
 npm run test:run
 npm test
 cargo test --manifest-path src-tauri/Cargo.toml
+npm run screenshot:readme
 ```
 
 Run `npm run build:napi` after Rust changes that integration tests depend on.
+
+`npm run screenshot:readme` regenerates the project readme marketing images under `assets/screenshots/` from `scripts/screenshot/specs/readme-*.spec.tsx` (same capture path as the `docs-*` screenshot specs).
 
 ## Implementation Rules
 

@@ -45,6 +45,14 @@ Coding agents work in isolated copies of the codebase, ensuring changes are inde
 
 ## Developer
 
+### Regenerating README screenshots
+
+The marketing images under `assets/screenshots/` are produced by the same Chromium rasterization harness as the docs captures (`scripts/screenshot/specs/docs-*.spec.tsx`). Specs live at `scripts/screenshot/specs/readme-*.spec.tsx` and publish via `captureDocument({ publishTo })`.
+
+```bash
+npm run screenshot:readme
+```
+
 ### Bumping the version
 
 ```bash

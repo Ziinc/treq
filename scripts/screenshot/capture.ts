@@ -21,61 +21,101 @@ import { chromium } from "playwright-core";
 
 const GENERATED_DIR = path.join(__dirname, ".generated");
 const CSS_PATH = path.join(GENERATED_DIR, "app.css");
-const CHROMIUM_EXECUTABLE =
-	process.env.PLAYWRIGHT_CHROMIUM_PATH ??
-	"/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
+const REPO_ROOT = path.resolve(__dirname, "..", "..");
+const DEFAULT_CHROMIUM_CANDIDATES = [
+  "/opt/pw-browsers/chromium-1194/chrome-linux/chrome",
+  path.join(
+    process.env.HOME ?? "",
+    ".cache/ms-playwright/chromium-1234/chrome-linux64/chrome",
+  ),
+];
+
+function resolveChromiumExecutable(): string {
+  if (process.env.PLAYWRIGHT_CHROMIUM_PATH) {
+    return process.env.PLAYWRIGHT_CHROMIUM_PATH;
+  }
+  for (const candidate of DEFAULT_CHROMIUM_CANDIDATES) {
+    if (candidate && fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  throw new Error(
+    "No Chromium executable found. Set PLAYWRIGHT_CHROMIUM_PATH or install " +
+      "Playwright Chromium (`npx playwright install chromium`).",
+  );
+}
 
 export type CaptureOptions = {
-	/** Base file name (no extension) for the .html/.png/.json written under .generated/ */
-	name: string;
-	viewport?: { width: number; height: number };
-	/**
-	 * Non-empty: what a viewer should be able to confirm by looking at this
-	 * screenshot, e.g. "The 'Push to remote' button is not visible in the
-	 * header" or "A green toast reading 'Pushed to remote' is shown". These
-	 * are checked visually against the PNG, not against the DOM.
-	 */
-	expectations: string[];
-	/**
-	 * CSS selector for an element to scroll into view before rasterizing.
-	 * jsdom's scrollTop never carries into the re-rendered static HTML, so a
-	 * target sitting below the fold of a scrollable region (e.g. the cmdk
-	 * list's `overflow-y-auto`) is otherwise clipped out of the screenshot
-	 * even though it's present in the DOM.
-	 */
-	scrollIntoView?: string;
+  /** Base file name (no extension) for the .html/.png/.json written under .generated/ */
+  name: string;
+  viewport?: { width: number; height: number };
+  /**
+   * Device pixel ratio for the rasterized PNG. Marketing/README shots use 2
+   * to match retina assets under assets/screenshots/.
+   */
+  deviceScaleFactor?: number;
+  /**
+   * Non-empty: what a viewer should be able to confirm by looking at this
+   * screenshot, e.g. "The 'Push to remote' button is not visible in the
+   * header" or "A green toast reading 'Pushed to remote' is shown". These
+   * are checked visually against the PNG, not against the DOM.
+   */
+  expectations: string[];
+  /**
+   * CSS selector for an element to scroll into view before rasterizing.
+   * jsdom's scrollTop never carries into the re-rendered static HTML, so a
+   * target sitting below the fold of a scrollable region (e.g. the cmdk
+   * list's `overflow-y-auto`) is otherwise clipped out of the screenshot
+   * even though it's present in the DOM.
+   */
+  scrollIntoView?: string;
+  /**
+   * Optional CSS selector whose bounding box is captured instead of the full
+   * viewport. Used for docs crops (button + menu) when a full-window shot
+   * would bury the control.
+   */
+  clipSelector?: string;
+  /**
+   * Repo-relative or absolute path to also write the PNG after capture.
+   * README marketing shots publish to `assets/screenshots/*.png`; docs crops
+   * publish to `web/static/img/docs/*.png`.
+   */
+  publishTo?: string;
 };
 
 export async function captureDocument(
-	doc: Document,
-	options: CaptureOptions,
+  doc: Document,
+  options: CaptureOptions,
 ): Promise<string> {
-	const {
-		name,
-		viewport = { width: 1440, height: 900 },
-		expectations,
-		scrollIntoView,
-	} = options;
+  const {
+    name,
+    viewport = { width: 1440, height: 900 },
+    deviceScaleFactor = 1,
+    expectations,
+    scrollIntoView,
+    clipSelector,
+    publishTo,
+  } = options;
 
-	if (!expectations || expectations.length === 0) {
-		throw new Error(
-			`captureDocument("${name}") requires a non-empty "expectations" list -- ` +
-				"plain-English claims about what this screenshot should show, for an " +
-				"agent to verify visually. See the app-qa skill.",
-		);
-	}
+  if (!expectations || expectations.length === 0) {
+    throw new Error(
+      `captureDocument("${name}") requires a non-empty "expectations" list -- ` +
+        "plain-English claims about what this screenshot should show, for an " +
+        "agent to verify visually. See the app-qa skill.",
+    );
+  }
 
-	if (!fs.existsSync(CSS_PATH)) {
-		throw new Error(
-			`Missing compiled CSS at ${CSS_PATH}. Run \`npm run screenshot:css\` first.`,
-		);
-	}
-	const css = fs.readFileSync(CSS_PATH, "utf8");
+  if (!fs.existsSync(CSS_PATH)) {
+    throw new Error(
+      `Missing compiled CSS at ${CSS_PATH}. Run \`npm run screenshot:css\` first.`,
+    );
+  }
+  const css = fs.readFileSync(CSS_PATH, "utf8");
 
-	const htmlClass = doc.documentElement.className;
-	const bodyHtml = doc.body.innerHTML;
+  const htmlClass = doc.documentElement.className;
+  const bodyHtml = doc.body.innerHTML;
 
-	const html = `<!doctype html>
+  const html = `<!doctype html>
 <html class="${htmlClass}">
 <head>
 <meta charset="utf-8" />
@@ -87,36 +127,56 @@ ${css}
 <body class="${doc.body.className}">${bodyHtml}</body>
 </html>`;
 
-	fs.mkdirSync(GENERATED_DIR, { recursive: true });
-	const htmlPath = path.join(GENERATED_DIR, `${name}.html`);
-	const pngPath = path.join(GENERATED_DIR, `${name}.png`);
-	const manifestPath = path.join(GENERATED_DIR, `${name}.json`);
-	fs.writeFileSync(htmlPath, html);
+  fs.mkdirSync(GENERATED_DIR, { recursive: true });
+  const htmlPath = path.join(GENERATED_DIR, `${name}.html`);
+  const pngPath = path.join(GENERATED_DIR, `${name}.png`);
+  const manifestPath = path.join(GENERATED_DIR, `${name}.json`);
+  fs.writeFileSync(htmlPath, html);
 
-	const browser = await chromium.launch({ executablePath: CHROMIUM_EXECUTABLE });
-	try {
-		const page = await browser.newPage({ viewport });
-		await page.goto(`file://${htmlPath}`);
-		if (scrollIntoView) {
-			await page.locator(scrollIntoView).first().scrollIntoViewIfNeeded();
-		}
-		await page.screenshot({ path: pngPath });
-	} finally {
-		await browser.close();
-	}
+  const browser = await chromium.launch({
+    executablePath: resolveChromiumExecutable(),
+  });
+  try {
+    const page = await browser.newPage({
+      viewport,
+      deviceScaleFactor,
+    });
+    await page.goto(`file://${htmlPath}`);
+    if (scrollIntoView) {
+      await page.locator(scrollIntoView).first().scrollIntoViewIfNeeded();
+    }
+    if (clipSelector) {
+      const locator = page.locator(clipSelector).first();
+      await locator.waitFor({ state: "visible" });
+      await locator.screenshot({ path: pngPath });
+    } else {
+      await page.screenshot({ path: pngPath });
+    }
+  } finally {
+    await browser.close();
+  }
 
-	fs.writeFileSync(
-		manifestPath,
-		JSON.stringify(
-			{
-				name,
-				capturedAt: new Date().toISOString(),
-				expectations,
-			},
-			null,
-			2,
-		),
-	);
+  if (publishTo) {
+    const dest = path.isAbsolute(publishTo)
+      ? publishTo
+      : path.join(REPO_ROOT, publishTo);
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.copyFileSync(pngPath, dest);
+  }
 
-	return pngPath;
+  fs.writeFileSync(
+    manifestPath,
+    JSON.stringify(
+      {
+        name,
+        capturedAt: new Date().toISOString(),
+        expectations,
+        ...(publishTo ? { publishTo } : {}),
+      },
+      null,
+      2,
+    ),
+  );
+
+  return pngPath;
 }
