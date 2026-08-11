@@ -20,6 +20,8 @@ export interface CommittedChangesSectionProps {
   /** When provided with onToggleShowCommitted, renders a right-aligned Show control. */
   showCommittedChanges?: boolean;
   onToggleShowCommitted?: () => void;
+  /** Paths that stay listed when Show is off (WC-dirty or conflicted). */
+  alwaysVisiblePaths?: ReadonlySet<string>;
 }
 
 export const CommittedChangesSection = memo<CommittedChangesSectionProps>(
@@ -32,13 +34,17 @@ export const CommittedChangesSection = memo<CommittedChangesSectionProps>(
     workspacePath,
     showCommittedChanges = true,
     onToggleShowCommitted,
+    alwaysVisiblePaths,
   }) => {
     // Don't render if no files
     if (files.length === 0) {
       return null;
     }
 
-    const showFiles = showCommittedChanges && !isCollapsed;
+    const visibleFiles = showCommittedChanges
+      ? files
+      : files.filter((file) => alwaysVisiblePaths?.has(file.path));
+    const showFiles = !isCollapsed && visibleFiles.length > 0;
 
     return (
       <div className="mt-4">
@@ -96,7 +102,7 @@ export const CommittedChangesSection = memo<CommittedChangesSectionProps>(
         </div>
         {showFiles && (
           <div className="mt-2 overflow-hidden select-none font-sans">
-            {files.map((file) => (
+            {visibleFiles.map((file) => (
               <GitFileRow
                 key={file.path}
                 file={file}

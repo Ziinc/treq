@@ -245,7 +245,7 @@ describe("CommittedChangesSection", () => {
     expect(onToggleCollapse).not.toHaveBeenCalled();
   });
 
-  it("hides the file list when showCommittedChanges is false", () => {
+  it("hides clean committed rows when showCommittedChanges is false", () => {
     render(
       <CommittedChangesSection
         files={mockFiles}
@@ -261,5 +261,23 @@ describe("CommittedChangesSection", () => {
     expect(screen.getByText("Committed")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^Show$/ })).toBeInTheDocument();
     expect(screen.queryByText("file1.ts")).not.toBeInTheDocument();
+  });
+
+  it("keeps dirty committed rows visible when showCommittedChanges is false", () => {
+    render(
+      <CommittedChangesSection
+        files={mockFiles}
+        isCollapsed={false}
+        onToggleCollapse={vi.fn()}
+        activeFilePath={null}
+        onFileSelect={vi.fn()}
+        showCommittedChanges={false}
+        onToggleShowCommitted={vi.fn()}
+        alwaysVisiblePaths={new Set(["src/file1.ts"])}
+      />,
+    );
+
+    expect(screen.getByText("file1.ts")).toBeInTheDocument();
+    expect(screen.queryByText("file2.ts")).not.toBeInTheDocument();
   });
 });

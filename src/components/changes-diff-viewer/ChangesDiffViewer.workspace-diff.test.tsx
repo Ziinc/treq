@@ -144,4 +144,108 @@ describe("ChangesDiffViewer workspace diff contract", () => {
     ).toBeGreaterThan(0);
     expect(api.getWorkspaceChangedFiles).not.toHaveBeenCalled();
   });
+
+  it("keeps overlapping committed files visible when Show is off", async () => {
+    const api = await import("../../lib/api");
+    vi.mocked(api.getWorkspaceDiff).mockResolvedValue({
+      committed_files: [
+        {
+          path: "src/shared.ts",
+          status: "M",
+          changed_line_count: 1,
+          diff_deferred: false,
+        },
+        {
+          path: "src/committed-only.ts",
+          status: "A",
+          changed_line_count: 1,
+          diff_deferred: false,
+        },
+      ],
+      hunks_by_file: [
+        {
+          path: "src/shared.ts",
+          hunks: [
+            {
+              id: "shared-committed",
+              header: "@@ -1,2 +1,3 @@",
+              lines: [
+                " export const shared = 'committed';",
+                "+export const extra = true;",
+              ],
+              patch: "...",
+            },
+          ],
+        },
+        {
+          path: "src/committed-only.ts",
+          hunks: [
+            {
+              id: "committed-only",
+              header: "@@ -0,0 +1,1 @@",
+              lines: ["+export const only = true;"],
+              patch: "...",
+            },
+          ],
+        },
+      ],
+      uncommitted_files: [
+        {
+          path: "src/shared.ts",
+          status: "M",
+          changed_line_count: 1,
+          diff_deferred: false,
+        },
+      ],
+      conflicted_files: [],
+      too_large_to_render: false,
+      render_block_reason: null,
+    });
+    vi.mocked(api.getWorkspaceFileHunks).mockResolvedValue([
+      {
+        id: "shared-wc",
+        header: "@@ -1,3 +1,3 @@",
+        lines: [
+          "-export const shared = 'committed';",
+          "+export const shared = 'dirty';",
+        ],
+        patch: "...",
+      },
+    ]);
+
+    const { rerender } = render(
+      <ChangesDiffViewer
+        workspacePath="/tmp/workspace"
+        repoPath="/tmp/repo"
+        workspaceId={1}
+        initialSelectedFile={null}
+        showCommittedChanges={true}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("committed-only.ts")).toBeInTheDocument();
+      expect(screen.getAllByText("shared.ts").length).toBeGreaterThanOrEqual(2);
+    });
+
+    rerender(
+      <ChangesDiffViewer
+        workspacePath="/tmp/workspace"
+        repoPath="/tmp/repo"
+        workspaceId={1}
+        initialSelectedFile={null}
+        showCommittedChanges={false}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByText("committed-only.ts")).not.toBeInTheDocument();
+    });
+    expect(screen.getAllByText("shared.ts").length).toBeGreaterThanOrEqual(2);
+    expect(
+      screen.getAllByText(
+        (_, element) => element?.textContent?.includes("extra = true") ?? false,
+      ).length,
+    ).toBeGreaterThan(0);
+  });
 });

@@ -5,6 +5,7 @@ import { escapeRegex } from "../../../lib/text-search";
 import { useDebounce } from "../../../hooks/useDebounce";
 import { useKeyboardShortcut } from "../../../hooks/useKeyboard";
 import { computeHunkLineNumbers } from "../utils";
+import { filterVisibleCommittedFiles } from "../utils";
 import type { DiffSearchData, FileHunksData } from "../types";
 
 interface UseDiffSearchParams {
@@ -132,9 +133,16 @@ export function useDiffSearch({
       }
     };
     for (const file of files) processFile(file.path, allFileHunks);
-    if (showCommittedChanges) {
-      for (const file of committedFiles)
-        processFile(file.path, committedFileHunks);
+    const alwaysVisible = new Set([
+      ...files.map((file) => file.path),
+      ...conflictLineLookups.keys(),
+    ]);
+    for (const file of filterVisibleCommittedFiles(
+      committedFiles,
+      showCommittedChanges,
+      alwaysVisible,
+    )) {
+      processFile(file.path, committedFileHunks);
     }
     return { matches, matchesByKey };
   }, [

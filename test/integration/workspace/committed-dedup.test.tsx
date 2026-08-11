@@ -78,8 +78,12 @@ describe("ShowWorkspace - committed diff dedupe integration", () => {
     });
 
     expect(await screen.findByText("committed only")).toBeInTheDocument();
-    expect(await screen.findByText("shared v2")).toBeInTheDocument();
-    expect(await screen.findByText("shared v3")).toBeInTheDocument();
+    expect(
+      (await screen.findAllByText("shared v2")).length,
+    ).toBeGreaterThanOrEqual(1);
+    expect(
+      (await screen.findAllByText("shared v3")).length,
+    ).toBeGreaterThanOrEqual(1);
     expect(await screen.findByText("working only")).toBeInTheDocument();
 
     await user.click(getCommittedShowButton());
@@ -87,10 +91,14 @@ describe("ShowWorkspace - committed diff dedupe integration", () => {
       expect(screen.queryByTitle("committed-only.txt")).not.toBeInTheDocument();
       expect(screen.queryByText("committed only")).not.toBeInTheDocument();
       expect(screen.getByTitle("uncommitted-only.txt")).toBeInTheDocument();
+      // Dirty overlapping committed files stay visible (sidebar + diff).
+      expect(screen.getAllByText("shared.txt").length).toBeGreaterThanOrEqual(
+        2,
+      );
     });
 
-    expect(await screen.findByText("shared v2")).toBeInTheDocument();
-    expect(await screen.findByText("shared v3")).toBeInTheDocument();
+    expect(screen.getAllByText("shared v2").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("shared v3").length).toBeGreaterThanOrEqual(1);
     expect(await screen.findByText("working only")).toBeInTheDocument();
 
     await user.click(getCommittedShowButton());
@@ -102,8 +110,8 @@ describe("ShowWorkspace - committed diff dedupe integration", () => {
     });
 
     expect(await screen.findByText("committed only")).toBeInTheDocument();
-    expect(await screen.findByText("shared v2")).toBeInTheDocument();
-    expect(await screen.findByText("shared v3")).toBeInTheDocument();
+    expect(screen.getAllByText("shared v2").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("shared v3").length).toBeGreaterThanOrEqual(1);
     expect(await screen.findByText("working only")).toBeInTheDocument();
   });
 });

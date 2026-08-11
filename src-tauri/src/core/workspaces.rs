@@ -2442,19 +2442,12 @@ fn workspace_diff_with_conflict_style(
   )
   .map_err(|e| format!("Failed to get workspace diff: {}", e))?;
 
+  // Keep overlapping paths in both lists. Review's Committed Show toggle hides
+  // clean committed-only files; dirty committed files must remain visible.
   let uncommitted_files = jj::jj_get_changed_files(workspace_dir_str)
     .map_err(|e| format!("Failed to get uncommitted workspace changes: {}", e))?;
-  let uncommitted_paths: std::collections::HashSet<String> = uncommitted_files
-    .iter()
-    .map(|file| file.path.clone())
-    .collect();
   let conflicted_files = jj::get_conflicted_files(workspace_dir_str, Some(target_branch))
     .map_err(|e| format!("Failed to get conflicted workspace files: {}", e))?;
-  let conflicted_paths: std::collections::HashSet<String> =
-    conflicted_files.iter().cloned().collect();
-  diff.committed_files.retain(|file| {
-    !uncommitted_paths.contains(&file.path) || conflicted_paths.contains(&file.path)
-  });
   diff.uncommitted_files = uncommitted_files;
   diff.conflicted_files = conflicted_files;
 
