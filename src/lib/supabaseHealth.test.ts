@@ -36,17 +36,10 @@ describe("checkSupabaseAuthHealth", () => {
 
   it("returns false when the health check times out", async () => {
     vi.useFakeTimers();
-    const fetchFn = vi.fn(
-      (_url: string, init?: { signal?: AbortSignal }) =>
-        new Promise<Response>((_resolve, reject) => {
-          init?.signal?.addEventListener("abort", () => {
-            reject(new DOMException("Aborted", "AbortError"));
-          });
-        }),
-    );
+    const fetchFn = vi.fn(hangUntilAbort) as unknown as typeof fetch;
 
     const pending = checkSupabaseAuthHealth("http://127.0.0.1:54321", {
-      fetchFn: fetchFn as typeof fetch,
+      fetchFn,
       timeoutMs: HEALTH_CHECK_TIMEOUT_MS,
     });
 
@@ -54,6 +47,18 @@ describe("checkSupabaseAuthHealth", () => {
     await expect(pending).resolves.toBe(false);
   });
 });
+
+/** Fetch stub that never resolves unless the AbortSignal fires. */
+function hangUntilAbort(
+  _url: string,
+  init?: { signal?: AbortSignal },
+): Promise<Response> {
+  return new Promise((_resolve, reject) => {
+    init?.signal?.addEventListener("abort", () => {
+      reject(new DOMException("Aborted", "AbortError"));
+    });
+  });
+}
 
 describe("classifySessionRestoreError", () => {
   it("classifies network and timeout failures", () => {
