@@ -5,6 +5,7 @@ import "prismjs/components/prism-c";
 import "prismjs/components/prism-cpp";
 import "prismjs/components/prism-css";
 import "prismjs/components/prism-elixir";
+import "prismjs/components/prism-erlang";
 import "prismjs/components/prism-go";
 import "prismjs/components/prism-typescript";
 import "prismjs/components/prism-javascript";
@@ -26,11 +27,13 @@ const extensionToLanguage: Record<string, string> = {
   ".cc": "cpp",
   ".cpp": "cpp",
   ".css": "css",
+  ".erl": "erlang",
   ".ex": "elixir",
   ".exs": "elixir",
   ".go": "go",
   ".h": "c",
   ".hpp": "cpp",
+  ".hrl": "erlang",
   ".htm": "html",
   ".html": "html",
   ".java": "java",
