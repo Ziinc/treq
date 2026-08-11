@@ -25,7 +25,10 @@ export function useTerminalSessionSummaries({
   onTerminalsChange,
 }: UseTerminalSessionSummariesOptions) {
   const [activity, setActivity] = useState<
-    Map<string, { lastActivityAt: number; isStreaming: boolean }>
+    Map<
+      string,
+      { lastActivityAt: number; lastUserInputAt: number; isStreaming: boolean }
+    >
   >(new Map());
 
   // Seed a fresh activity entry for every newly-mounted terminal, and prune
@@ -38,7 +41,11 @@ export function useTerminalSessionSummaries({
       const next = new Map(prev);
       for (const id of liveIds) {
         if (!next.has(id)) {
-          next.set(id, { lastActivityAt: Date.now(), isStreaming: false });
+          next.set(id, {
+            lastActivityAt: Date.now(),
+            lastUserInputAt: 0,
+            isStreaming: false,
+          });
           changed = true;
         }
       }
@@ -55,7 +62,24 @@ export function useTerminalSessionSummaries({
   const handleTerminalOutput = useCallback((id: string) => {
     setActivity((prev) => {
       const next = new Map(prev);
-      next.set(id, { lastActivityAt: Date.now(), isStreaming: true });
+      next.set(id, {
+        lastActivityAt: Date.now(),
+        lastUserInputAt: prev.get(id)?.lastUserInputAt ?? 0,
+        isStreaming: true,
+      });
+      return next;
+    });
+  }, []);
+
+  const handleTerminalInput = useCallback((id: string) => {
+    setActivity((prev) => {
+      const existing = prev.get(id);
+      const next = new Map(prev);
+      next.set(id, {
+        lastActivityAt: existing?.lastActivityAt ?? Date.now(),
+        lastUserInputAt: Date.now(),
+        isStreaming: existing?.isStreaming ?? false,
+      });
       return next;
     });
   }, []);
@@ -76,6 +100,7 @@ export function useTerminalSessionSummaries({
         const id = getTerminalSummaryId(t);
         const act = activity.get(id) ?? {
           lastActivityAt: 0,
+          lastUserInputAt: 0,
           isStreaming: false,
         };
         if (t.type === "claude") {
@@ -87,6 +112,7 @@ export function useTerminalSessionSummaries({
             isMainRepo: !t.data.workspaceName,
             agent: t.data.agent,
             lastActivityAt: act.lastActivityAt,
+            lastUserInputAt: act.lastUserInputAt,
             isStreaming: act.isStreaming,
           };
         }
@@ -100,6 +126,7 @@ export function useTerminalSessionSummaries({
           branchName: resolvedBranch ?? currentBranch ?? null,
           isMainRepo: resolvedBranch === undefined,
           lastActivityAt: act.lastActivityAt,
+          lastUserInputAt: act.lastUserInputAt,
           isStreaming: act.isStreaming,
         };
       }),
@@ -131,6 +158,7 @@ export function useTerminalSessionSummaries({
 
   return {
     handleTerminalOutput,
+    handleTerminalInput,
     handleTerminalIdlePulse,
     terminalSummariesRef,
   };

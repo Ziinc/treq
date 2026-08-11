@@ -71,6 +71,7 @@ interface WorkspaceTerminalPaneViewProps {
   handleCloseClaudeSession: (sessionId: number) => void | Promise<void>;
   onTerminalDoubleClick: (terminalId: string) => void;
   onTerminalOutput?: (terminalId: string) => void;
+  onTerminalInput?: (terminalId: string) => void;
   onTerminalIdle?: (terminalId: string) => void;
 }
 
@@ -104,6 +105,7 @@ export const WorkspaceTerminalPaneView: React.FC<
   handleCloseClaudeSession,
   onTerminalDoubleClick,
   onTerminalOutput,
+  onTerminalInput,
   onTerminalIdle,
 }) => (
   <div
@@ -372,6 +374,9 @@ export const WorkspaceTerminalPaneView: React.FC<
                             onTerminalOutput={() =>
                               onTerminalOutput?.(terminalId)
                             }
+                            onTerminalInput={() =>
+                              onTerminalInput?.(terminalId)
+                            }
                             onTerminalIdle={() => onTerminalIdle?.(terminalId)}
                             terminalRefs={
                               terminalRefs as React.MutableRefObject<
@@ -418,6 +423,7 @@ export const WorkspaceTerminalPaneView: React.FC<
                           onTerminalOutput={() =>
                             onTerminalOutput?.(terminalId)
                           }
+                          onTerminalInput={() => onTerminalInput?.(terminalId)}
                           onTerminalIdle={() => onTerminalIdle?.(terminalId)}
                           terminalRefs={
                             terminalRefs as React.MutableRefObject<
