@@ -1,0 +1,91 @@
+import * as React from "react";
+import { it } from "vitest";
+import userEvent from "@testing-library/user-event";
+import {
+	createTestRepo,
+	findSidebarBranchElement,
+	openRepo,
+	resolveWorkspacePath,
+	writeWorkspaceFile,
+} from "../../../test/utils";
+import { render, screen, waitFor } from "../../../test/test-utils";
+import { Dashboard } from "../../../src/components/Dashboard";
+import {
+	createCommit,
+	createWorkspace,
+	getWorkspaces,
+} from "../../../src/lib/api";
+import { captureDocument } from "../capture";
+
+it("keeps dirty committed files visible after hiding Committed Show", async () => {
+	const { repoPath } = createTestRepo(false);
+	openRepo(repoPath);
+
+	const user = userEvent.setup();
+
+	const workspaceId = await createWorkspace(
+		repoPath,
+		"feat/committed-dirty-show",
+	);
+	const workspace = (await getWorkspaces(repoPath)).find(
+		(w) => w.id === workspaceId,
+	);
+	if (!workspace) throw new Error("Workspace not found");
+	const workspacePath = resolveWorkspacePath(
+		repoPath,
+		workspace.workspace_path,
+	);
+
+	writeWorkspaceFile(workspacePath, "shared.txt", "shared v1\n");
+	await createCommit(repoPath, workspaceId, "commit shared file");
+	writeWorkspaceFile(workspacePath, "shared.txt", "shared v2\n");
+	writeWorkspaceFile(workspacePath, "committed-only.txt", "committed only\n");
+	await createCommit(repoPath, workspaceId, "commit committed-only file");
+	writeWorkspaceFile(workspacePath, "shared.txt", "shared v3\n");
+	writeWorkspaceFile(workspacePath, "uncommitted-only.txt", "working only\n");
+
+	render(<Dashboard />);
+	await user.click(
+		await findSidebarBranchElement("feat/committed-dirty-show"),
+	);
+
+	const reviewTab = await screen.findByRole("tab", { name: /^Review/ });
+	await user.click(reviewTab);
+	await screen.findByRole("tab", { name: /^Review/, selected: true });
+
+	await waitFor(() => {
+		expect(screen.getAllByText("shared.txt").length).toBeGreaterThanOrEqual(
+			2,
+		);
+		expect(screen.getByTitle("committed-only.txt")).toBeInTheDocument();
+		expect(screen.getByTitle("uncommitted-only.txt")).toBeInTheDocument();
+	});
+
+	await captureDocument(document, {
+		name: "review-committed-dirty-toggle-01-show-on",
+		expectations: [
+			"Review shows shared.txt under both Changes and Committed.",
+			"committed-only.txt is listed under Committed; uncommitted-only.txt under Changes.",
+			"The Committed section Show control is on (eye icon).",
+		],
+	});
+
+	await user.click(await screen.findByRole("button", { name: /^Show$/ }));
+
+	await waitFor(() => {
+		expect(screen.queryByTitle("committed-only.txt")).not.toBeInTheDocument();
+		expect(screen.getAllByText("shared.txt").length).toBeGreaterThanOrEqual(
+			2,
+		);
+		expect(screen.getByTitle("uncommitted-only.txt")).toBeInTheDocument();
+	});
+
+	await captureDocument(document, {
+		name: "review-committed-dirty-toggle-02-show-off",
+		expectations: [
+			"After hiding Committed, committed-only.txt is gone from the sidebar.",
+			"shared.txt remains visible in both Changes and Committed.",
+			"uncommitted-only.txt remains listed under Changes.",
+		],
+	});
+}, 60000);
