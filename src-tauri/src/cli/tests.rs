@@ -69,6 +69,20 @@ fn send_subcommand_defines_optional_path_positional() {
 }
 
 #[test]
+fn asset_protocol_allows_files_below_hidden_workspace_directories() {
+  let config_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tauri.conf.json");
+  let config = fs::read_to_string(config_path).expect("failed to read tauri.conf.json");
+  let json: Value = serde_json::from_str(&config).expect("failed to parse tauri.conf.json");
+  let scope = &json["app"]["security"]["assetProtocol"]["scope"];
+
+  assert_eq!(
+    scope["requireLiteralLeadingDot"].as_bool(),
+    Some(false),
+    "workspace paths pass through the hidden .treq directory"
+  );
+}
+
+#[test]
 fn top_level_help_arg_is_handled_by_global_dispatch() {
   let mut matches = Matches::default();
   let mut help_arg = tauri_plugin_cli::ArgData::default();
