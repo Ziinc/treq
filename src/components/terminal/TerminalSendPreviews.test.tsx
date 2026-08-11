@@ -153,6 +153,26 @@ describe("TerminalSendPreviews", () => {
     });
   });
 
+  it("opens image lightbox with viewport-scaled carousel and base width", async () => {
+    const user = userEvent.setup();
+    renderSend(<SendHarness ptySessionId="session-1" />);
+    await user.click(screen.getByRole("button", { name: "Inject image" }));
+    await user.click(await screen.findByTestId("terminal-send-preview-send-2"));
+    await screen.findByTestId("treq-send-preview-lightbox");
+
+    const carouselShell = screen.getByTestId(
+      "treq-send-preview-carousel-shell",
+    );
+    expect(carouselShell.className).toMatch(/w-\[90vw\]/);
+    expect(carouselShell.className).toMatch(/min-w-\[75vw\]/);
+
+    const image = screen
+      .getByTestId("treq-send-preview-lightbox")
+      .querySelector('img[alt="shot.png"]') as HTMLImageElement;
+    expect(image).toBeTruthy();
+    expect(image.style.width).toBe("75vw");
+  });
+
   it("zooms image assets in and out from the lightbox toolbar", async () => {
     const user = userEvent.setup();
     renderSend(<SendHarness ptySessionId="session-1" />);
@@ -169,13 +189,13 @@ describe("TerminalSendPreviews", () => {
       .getByTestId("treq-send-preview-lightbox")
       .querySelector('img[alt="shot.png"]') as HTMLImageElement;
     expect(image).toBeTruthy();
-    expect(image.style.width).toBe("256px");
+    expect(image.style.width).toBe("75vw");
 
     await user.click(zoomIn);
-    expect(image.style.width).toBe("320px");
+    expect(image.style.width).toBe("93.75vw");
 
     await user.click(zoomOut);
-    expect(image.style.width).toBe("256px");
+    expect(image.style.width).toBe("75vw");
   });
 
   it("hides zoom controls for text assets", async () => {

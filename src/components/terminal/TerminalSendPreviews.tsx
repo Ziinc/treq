@@ -32,14 +32,25 @@ const IMAGE_ZOOM_MIN = 0.5;
 const IMAGE_ZOOM_MAX = 4;
 const IMAGE_ZOOM_STEP = 0.25;
 const IMAGE_ZOOM_DEFAULT = 1;
-/** Fallback display width before natural size is known (and in jsdom captures). */
-const IMAGE_ZOOM_FALLBACK_BASE_PX = 256;
+/**
+ * Fallback display width as a fraction of the viewport when natural size is
+ * unknown (jsdom captures, slow decode). Uses `vw` so Chromium screenshot
+ * rasterization matches the real viewport, not jsdom's innerWidth.
+ */
+const IMAGE_ZOOM_FALLBACK_VIEWPORT_FRACTION = 0.75;
 
 function clampImageZoom(value: number): number {
   return Math.min(
     IMAGE_ZOOM_MAX,
     Math.max(IMAGE_ZOOM_MIN, Math.round(value * 100) / 100),
   );
+}
+
+function fallbackImageWidth(zoomFactor: number): string {
+  const vw =
+    Math.round(IMAGE_ZOOM_FALLBACK_VIEWPORT_FRACTION * zoomFactor * 10000) /
+    100;
+  return `${vw}vw`;
 }
 
 interface TerminalSendPreviewsProps {
@@ -212,12 +223,13 @@ function SendAssetLightbox({
   const rememberFittedBaseSize = (assetId: string, img: HTMLImageElement) => {
     if (img.naturalWidth <= 0 || img.naturalHeight <= 0) return;
     const maxH = window.innerHeight * 0.8;
+    // Fit to at least ~75vw of the viewport (carousel is min 75vw / typically 90vw).
     const maxW = Math.min(
       window.innerWidth * 0.9,
-      img.parentElement?.clientWidth || window.innerWidth,
+      Math.max(img.parentElement?.clientWidth || 0, window.innerWidth * 0.75),
     );
+    // Allow upscaling so small assets fill the lightbox on initial load.
     const fitScale = Math.min(
-      1,
       maxW / img.naturalWidth,
       maxH / img.naturalHeight,
     );
@@ -245,7 +257,7 @@ function SendAssetLightbox({
       };
     }
     return {
-      width: IMAGE_ZOOM_FALLBACK_BASE_PX * zoomFactor,
+      width: fallbackImageWidth(zoomFactor),
       height: "auto",
       maxWidth: "none",
       maxHeight: "none",
@@ -429,7 +441,8 @@ function SendAssetLightbox({
       </div>
 
       <div
-        className="relative w-full max-w-5xl px-14"
+        data-testid="treq-send-preview-carousel-shell"
+        className="relative min-w-[75vw] w-[90vw] px-14"
         onClick={(event) => event.stopPropagation()}
       >
         {current && (
