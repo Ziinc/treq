@@ -404,4 +404,42 @@ describe("Review - conflict rendering contract", () => {
     ).not.toBeInTheDocument();
     getHunksSpy.mockRestore();
   });
+
+  it("delete/modify conflict shows a deleted-side card for the absent side", async () => {
+    const { repoPath, defaultBranch } = createTestRepo(false);
+    openRepo(repoPath);
+
+    const workspaceId = await createWorkspace(
+      repoPath,
+      "feat/delete-modify-conflict",
+    );
+    const workspace = (await getWorkspaces(repoPath)).find(
+      (w) => w.id === workspaceId,
+    );
+    if (!workspace) throw new Error("Workspace not found");
+    const workspacePath = resolveWorkspacePath(
+      repoPath,
+      workspace.workspace_path,
+    );
+
+    writeWorkspaceFile(workspacePath, "shared.txt", "workspace side\n");
+    await createCommit(repoPath, workspaceId, "workspace modify");
+
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    fs.unlinkSync(path.join(repoPath, "shared.txt"));
+    await createCommit(repoPath, null, "main delete");
+
+    await checkAndRebaseWorkspaces(repoPath, workspaceId, defaultBranch, true);
+    await ensureWorkspaceIndexed(repoPath, workspaceId, workspacePath);
+
+    render(<Dashboard />);
+    await screen.findByTestId(`workspace-conflict-indicator-${workspaceId}`);
+    await navigateToReviewTab(user, "feat/delete-modify-conflict");
+    await clickFileInSection(user, "Conflicts", "shared.txt");
+
+    await screen.findByText(/^Conflict 1 of 1$/);
+    const deletedCard = await screen.findByTestId("conflict-deleted-side");
+    expect(deletedCard).toHaveTextContent(/deleted this file/);
+  });
 });

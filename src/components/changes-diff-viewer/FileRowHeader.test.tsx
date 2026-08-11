@@ -106,3 +106,53 @@ describe("Review tab collapsible copy file path button", () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe("Review tab deleted file collapsible", () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    const api = await import("../../lib/api");
+    vi.mocked(api.getWorkspaceDiff).mockResolvedValue({
+      committed_files: [],
+      hunks_by_file: [],
+      uncommitted_files: [
+        {
+          path: "gone.txt",
+          status: "D",
+          changed_line_count: 3,
+          diff_deferred: false,
+        },
+      ],
+      conflicted_files: [],
+      too_large_to_render: false,
+      render_block_reason: null,
+    });
+    vi.mocked(api.getWorkspaceFileHunks).mockResolvedValue([
+      {
+        id: "hunk-del",
+        header: "@@ -1,3 +0,0 @@",
+        lines: ["-line one", "-line two", "-line three"],
+        patch: "...",
+      },
+    ]);
+  });
+
+  it("marks the file as deleted and does not render deleted file contents", async () => {
+    render(
+      <ChangesDiffViewer
+        workspacePath="/tmp/workspace"
+        repoPath="/tmp/repo"
+        workspaceId={1}
+        initialSelectedFile={null}
+      />,
+    );
+
+    await screen.findByText("gone.txt");
+    expect(await screen.findByText("Deleted")).toBeInTheDocument();
+    expect(
+      await screen.findByTestId("deleted-file-placeholder"),
+    ).toHaveTextContent("File deleted");
+    expect(screen.queryByText("line one")).not.toBeInTheDocument();
+    expect(screen.queryByText("line two")).not.toBeInTheDocument();
+    expect(screen.queryByText("line three")).not.toBeInTheDocument();
+  });
+});
