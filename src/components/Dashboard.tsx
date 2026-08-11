@@ -40,7 +40,10 @@ import {
   updateSessionAccess,
   type Workspace,
 } from "../lib/api";
-import { dispatchRefreshWorkspaceChanges } from "../lib/change-file-drag";
+import {
+  dispatchRefreshWorkspaceChanges,
+  type ChangeFilesMoveRequest,
+} from "../lib/change-file-drag";
 import { invalidateReviewChangeCount } from "../lib/review-change-count";
 import {
   AlertDialog,
@@ -867,19 +870,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
   );
 
   const handleDropChangeFiles = useCallback(
-    (
-      files: string[],
-      sourceBranch: string,
-      destinationBranch: string,
-      destinationLabel: string,
-    ) => {
-      if (files.length === 0 || sourceBranch === destinationBranch) return;
-      setPendingChangeMove({
-        files,
-        sourceBranch,
-        destinationBranch,
-        destinationLabel,
-      });
+    (request: ChangeFilesMoveRequest) => {
+      if (
+        request.files.length === 0 ||
+        request.sourceBranch === request.destinationBranch
+      ) {
+        return;
+      }
+      setPendingChangeMove(request);
     },
     [],
   );
@@ -904,7 +902,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
         type: "success",
       });
       setPendingChangeMove(null);
-      await queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
+      await queryClient.invalidateQueries({
+        queryKey: ["workspaces", repoPath],
+      });
       await queryClient.invalidateQueries({
         queryKey: ["workspace-statuses", repoPath],
       });

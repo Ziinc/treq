@@ -73,10 +73,6 @@ function createDataTransfer(): DataTransfer {
   } as DataTransfer;
 }
 
-/**
- * HTML5 custom MIME drag/drop is not fully replayed by userEvent in jsdom.
- * fireEvent is used only for the drag transfer; confirmation uses userEvent.
- */
 function dragAndDrop(sourceEl: HTMLElement, dropTarget: HTMLElement) {
   const dataTransfer = createDataTransfer();
   fireEvent.dragStart(sourceEl, { dataTransfer });

@@ -22,6 +22,7 @@ import { getWorkspaceTitle as getWorkspaceTitleFromUtils } from "../lib/workspac
 import {
   getChangeFilesDragData,
   isChangeFilesDrag,
+  type ChangeFilesMoveRequest,
 } from "../lib/change-file-drag";
 import { Button } from "./ui/button";
 import {
@@ -136,12 +137,7 @@ interface WorkspaceSidebarItemProps {
   prInfo?: PrInfo | null;
   /** Whether the repo has a GitHub remote (gates PR icon coloring). */
   hasRemote?: boolean;
-  onDropChangeFiles?: (
-    files: string[],
-    sourceBranch: string,
-    destinationBranch: string,
-    destinationLabel: string,
-  ) => void;
+  onDropChangeFiles?: (request: ChangeFilesMoveRequest) => void;
 }
 
 function prIconStyle(prInfo: PrInfo): { color: string; label: string } {
@@ -273,12 +269,12 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                         e.stopPropagation();
                         if (payload.sourceBranch === workspace.branch_name)
                           return;
-                        onDropChangeFiles(
-                          payload.files,
-                          payload.sourceBranch,
-                          workspace.branch_name,
-                          workspaceTitle,
-                        );
+                        onDropChangeFiles({
+                          files: payload.files,
+                          sourceBranch: payload.sourceBranch,
+                          destinationBranch: workspace.branch_name,
+                          destinationLabel: workspaceTitle,
+                        });
                       }}
                     >
                       <GitBranch

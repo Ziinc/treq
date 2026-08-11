@@ -4,7 +4,7 @@ import {
   getChangeFilesDragData,
   isChangeFilesDrag,
   setChangeFilesDragData,
-} from "../src/lib/change-file-drag";
+} from "./change-file-drag";
 
 function mockDataTransfer(initialTypes: string[] = []): DataTransfer {
   const store = new Map<string, string>();

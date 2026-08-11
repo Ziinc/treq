@@ -13,6 +13,14 @@ export interface ChangeFilesDragPayload {
   sourceBranch: string;
 }
 
+/** Pending move opened after dropping Review changes onto a sidebar target. */
+export interface ChangeFilesMoveRequest {
+  files: string[];
+  sourceBranch: string;
+  destinationBranch: string;
+  destinationLabel: string;
+}
+
 export function setChangeFilesDragData(
   dataTransfer: DataTransfer,
   payload: ChangeFilesDragPayload,

@@ -2,9 +2,7 @@ import React, { useState } from "react";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import type { JjFileChange } from "../../lib/api";
 import type { ParsedFileChange } from "../../lib/git-utils";
-import {
-  setChangeFilesDragData,
-} from "../../lib/change-file-drag";
+import { setChangeFilesDragData } from "../../lib/change-file-drag";
 import {
   AlertDialog,
   AlertDialogAction,
