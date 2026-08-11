@@ -27,6 +27,13 @@ const xtermCssPath = path.join(
 	"css",
 	"xterm.css",
 );
+const prismThemeCssPath = path.join(
+	repoRoot,
+	"node_modules",
+	"prism-themes",
+	"themes",
+	"prism-vs.css",
+);
 
 fs.mkdirSync(outDir, { recursive: true });
 
@@ -40,6 +47,9 @@ const result = await postcss([
 const xtermCss = fs.existsSync(xtermCssPath)
 	? fs.readFileSync(xtermCssPath, "utf8")
 	: "";
+const prismThemeCss = fs.existsSync(prismThemeCssPath)
+	? fs.readFileSync(prismThemeCssPath, "utf8")
+	: "";
 
 // Captures are rasterized from a file:// page, where the app's server-absolute
 // /fonts/*.woff2 URLs would resolve against the filesystem root and 404. Point
@@ -51,6 +61,6 @@ const css = result.css.replace(
 	(_match, quote) => `url(${quote}file://${fontsDir}/`,
 );
 
-fs.writeFileSync(outFile, `${xtermCss}\n${css}\n`);
+fs.writeFileSync(outFile, `${xtermCss}\n${prismThemeCss}\n${css}\n`);
 
 console.log(`Wrote compiled CSS -> ${path.relative(repoRoot, outFile)}`);
