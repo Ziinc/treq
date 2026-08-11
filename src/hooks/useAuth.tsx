@@ -164,10 +164,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       tokens = JSON.parse(stored) as Record<string, string>;
     } catch (error) {
-      console.warn(
-        "Clearing malformed supabase_session setting",
-        error,
-      );
+      console.warn("Clearing malformed supabase_session setting", error);
       await clearStoredSession();
       applySession(null);
       return "signed_out";
