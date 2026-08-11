@@ -20,7 +20,10 @@ describe("checkSupabaseAuthHealth", () => {
     ).resolves.toBe(true);
     expect(fetchFn).toHaveBeenCalledWith(
       "http://127.0.0.1:54321/auth/v1/health",
-      expect.objectContaining({ method: "GET", signal: expect.any(AbortSignal) }),
+      expect.objectContaining({
+        method: "GET",
+        signal: expect.any(AbortSignal),
+      }),
     );
   });
 
