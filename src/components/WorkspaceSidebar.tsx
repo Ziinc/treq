@@ -54,6 +54,11 @@ import {
   PathContextMenuItems,
   WorkspaceSidebarItem,
 } from "./WorkspaceSidebarItem";
+import {
+  getChangeFilesDragData,
+  HOME_MOVE_ENDPOINT,
+  isChangeFilesDrag,
+} from "../lib/change-file-drag";
 
 interface WorkspaceSidebarProps {
   repoPath?: string;
@@ -86,6 +91,13 @@ interface WorkspaceSidebarProps {
   onCloseAllTerminalSessions?: () => void;
   onCreateAgentTerminal?: () => void;
   onCreateShellTerminal?: () => void;
+  /** Drop target for dragging uncommitted Review changes onto a workspace. */
+  onDropChangeFiles?: (
+    files: string[],
+    sourceBranch: string,
+    destinationBranch: string,
+    destinationLabel: string,
+  ) => void;
 }
 
 export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
@@ -115,6 +127,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
     onCloseAllTerminalSessions,
     onCreateAgentTerminal,
     onCreateShellTerminal,
+    onDropChangeFiles,
   }) => {
     const {
       data: workspaces = [],
@@ -348,6 +361,27 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                         }
                         onWorkspaceClick?.(undefined as unknown as Workspace);
                       }}
+                      onDragOver={(e) => {
+                        if (!onDropChangeFiles || !isChangeFilesDrag(e.dataTransfer))
+                          return;
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = "move";
+                      }}
+                      onDrop={(e) => {
+                        if (!onDropChangeFiles) return;
+                        const payload = getChangeFilesDragData(e.dataTransfer);
+                        if (!payload) return;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (payload.sourceBranch === HOME_MOVE_ENDPOINT) return;
+                        const label = homeRepoDisplayRef || "home";
+                        onDropChangeFiles(
+                          payload.files,
+                          payload.sourceBranch,
+                          HOME_MOVE_ENDPOINT,
+                          label,
+                        );
+                      }}
                     >
                       <Home
                         className={`w-3 h-3 mr-1 shrink-0 ${
@@ -472,6 +506,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                           ] ?? null
                         }
                         hasRemote={!!remoteInfo}
+                        onDropChangeFiles={onDropChangeFiles}
                       />
                     ))}
                     {droppableProvided.placeholder}

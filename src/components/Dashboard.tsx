@@ -32,6 +32,7 @@ import {
   initRepo,
   listRepoBranches,
   listWorkspaceStatuses,
+  moveWorkspaceChanges,
   selectFolder,
   setSessionModel,
   setSetting,
@@ -39,6 +40,18 @@ import {
   updateSessionAccess,
   type Workspace,
 } from "../lib/api";
+import { dispatchRefreshWorkspaceChanges } from "../lib/change-file-drag";
+import { invalidateReviewChangeCount } from "../lib/review-change-count";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "./ui/alert-dialog";
 import {
   GITHUB_BASE_PATH,
   githubDetailPath,
@@ -107,6 +120,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
   );
   const [unifiedDialogDefaults, setUnifiedDialogDefaults] =
     useState<WorkspaceDialogDefaults | null>(null);
+  const [pendingChangeMove, setPendingChangeMove] = useState<{
+    files: string[];
+    sourceBranch: string;
+    destinationBranch: string;
+    destinationLabel: string;
+  } | null>(null);
+  const [changeMovePending, setChangeMovePending] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode);
   const [location, navigate] = useLocation();
   const previousViewModeRef = useRef<ViewMode>(
@@ -846,6 +866,71 @@ export const Dashboard: React.FC<DashboardProps> = ({
     [moveWorkspace, addToast],
   );
 
+  const handleDropChangeFiles = useCallback(
+    (
+      files: string[],
+      sourceBranch: string,
+      destinationBranch: string,
+      destinationLabel: string,
+    ) => {
+      if (files.length === 0 || sourceBranch === destinationBranch) return;
+      setPendingChangeMove({
+        files,
+        sourceBranch,
+        destinationBranch,
+        destinationLabel,
+      });
+    },
+    [],
+  );
+
+  const handleConfirmChangeMove = useCallback(async () => {
+    if (!pendingChangeMove || !repoPath) return;
+    setChangeMovePending(true);
+    try {
+      await moveWorkspaceChanges(
+        repoPath,
+        pendingChangeMove.sourceBranch,
+        pendingChangeMove.destinationBranch,
+        {
+          files: pendingChangeMove.files,
+          hunks: [],
+          commits: [],
+        },
+      );
+      addToast({
+        title: "Files moved",
+        description: `Moved ${pendingChangeMove.files.length} file(s) to ${pendingChangeMove.destinationLabel}`,
+        type: "success",
+      });
+      setPendingChangeMove(null);
+      await queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
+      await queryClient.invalidateQueries({
+        queryKey: ["workspace-statuses", repoPath],
+      });
+      await invalidateReviewChangeCount(
+        queryClient,
+        repoPath,
+        selectedWorkspace?.id ?? null,
+      );
+      dispatchRefreshWorkspaceChanges();
+    } catch (error) {
+      addToast({
+        title: "Failed to move files",
+        description: error instanceof Error ? error.message : String(error),
+        type: "error",
+      });
+    } finally {
+      setChangeMovePending(false);
+    }
+  }, [
+    pendingChangeMove,
+    repoPath,
+    addToast,
+    queryClient,
+    selectedWorkspace?.id,
+  ]);
+
   const handleSelectStack = useCallback((workspaceIds: Set<number>) => {
     setSelectedWorkspaceIds(workspaceIds);
   }, []);
@@ -1268,6 +1353,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         onCloseAllTerminalSessions={handleCloseAllTerminalSessions}
         onCreateAgentTerminal={handleCreateAgentTerminalFromSidebar}
         onCreateShellTerminal={handleCreateShellTerminalFromSidebar}
+        onDropChangeFiles={handleDropChangeFiles}
         onOpenGitHub={openGitHub}
         currentPage={
           viewMode === "settings"
@@ -1486,6 +1572,46 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
       {/* Global Dialogs */}
       {/* Note: MergeDialog removed - git-specific feature */}
+
+      <AlertDialog
+        open={pendingChangeMove !== null}
+        onOpenChange={(open) => {
+          if (!open && !changeMovePending) setPendingChangeMove(null);
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingChangeMove
+                ? `Move ${pendingChangeMove.files.length} ${
+                    pendingChangeMove.files.length === 1 ? "file" : "files"
+                  } to ${pendingChangeMove.destinationLabel}?`
+                : "Move files?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              This moves the selected uncommitted{" "}
+              {pendingChangeMove?.files.length === 1 ? "change" : "changes"}{" "}
+              into the target workspace and removes{" "}
+              {pendingChangeMove?.files.length === 1 ? "it" : "them"} from the
+              current one.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={changeMovePending}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              disabled={changeMovePending}
+              onClick={(e) => {
+                e.preventDefault();
+                void handleConfirmChangeMove();
+              }}
+            >
+              Move
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <UnifiedWorkspaceDialog
         open={unifiedDialogDefaults !== null}

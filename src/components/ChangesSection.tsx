@@ -40,6 +40,7 @@ export interface ChangesSectionProps {
   onUnstageAll?: () => void;
   isStaged?: boolean;
   workspacePath?: string;
+  onFileDragStart?: (path: string, event: React.DragEvent) => void;
 }
 
 export const ChangesSection = memo<ChangesSectionProps>(
@@ -64,9 +65,14 @@ export const ChangesSection = memo<ChangesSectionProps>(
     onUnstageAll,
     isStaged = false,
     workspacePath,
+    onFileDragStart,
   }) => {
     const hasFiles = files.length > 0;
     const hasSelectedFiles = selectedFiles && selectedFiles.size > 0;
+
+    const handleFileDragStart = (path: string, event: React.DragEvent) => {
+      onFileDragStart?.(path, event);
+    };
 
     return (
       <div
@@ -216,6 +222,11 @@ export const ChangesSection = memo<ChangesSectionProps>(
                 onUnstage={onUnstage}
                 isStaged={isStaged}
                 workspacePath={workspacePath}
+                onFileDragStart={
+                  !readOnly && !isStaged && onFileDragStart
+                    ? handleFileDragStart
+                    : undefined
+                }
               />
             ))}
           </div>
