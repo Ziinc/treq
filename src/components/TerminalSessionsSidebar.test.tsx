@@ -18,6 +18,12 @@ const session = (
   isStreaming: false,
 });
 
+const flushAnimationFrames = (frames: FrameRequestCallback[]) => {
+  for (const frame of frames.splice(0)) {
+    frame(0);
+  }
+};
+
 describe("TerminalSessionsSidebar reorder animation", () => {
   let positions: Record<string, number>;
   let frames: FrameRequestCallback[];
@@ -59,7 +65,7 @@ describe("TerminalSessionsSidebar reorder animation", () => {
       "translateY(-8px)",
     );
 
-    act(() => frames.splice(0).forEach((frame) => frame(0)));
+    act(() => flushAnimationFrames(frames));
 
     expect(getByTestId("terminal-session-item-first").style.transition).toBe(
       "transform 180ms cubic-bezier(0.2, 0, 0, 1)",
@@ -75,11 +81,9 @@ describe("TerminalSessionsSidebar reorder animation", () => {
       </TooltipProvider>,
     );
 
-    expect(
-      getByLabelText("Active changes").compareDocumentPosition(
-        getByText("working"),
-      ) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    expect(getByLabelText("Active changes")).toAppearBefore(
+      getByText("working"),
+    );
   });
 
   it("sorts sessions by their most recent user input instead of output", () => {
