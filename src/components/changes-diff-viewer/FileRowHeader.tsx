@@ -20,6 +20,7 @@ import { FileContextMenu } from "../FileContextMenu";
 import type { useToast } from "../ui/toast";
 import { cn, copyTextToClipboard } from "../../lib/utils";
 import { isBinaryFile, type ParsedFileChange } from "../../lib/git-utils";
+import { isDeletedFileStatus } from "../../lib/conflict-deleted-sides";
 import { useEditorApps } from "../../hooks/useEditorApps";
 
 interface FileRowHeaderProps {
@@ -61,6 +62,9 @@ const FileRowHeader: React.FC<FileRowHeaderProps> = ({
   addToast,
   onAddFileComment,
 }) => {
+  const isDeleted =
+    isDeletedFileStatus(file.workspaceStatus) ||
+    isDeletedFileStatus(file.stagedStatus);
   const editorApps = useEditorApps();
 
   return (
@@ -168,12 +172,20 @@ const FileRowHeader: React.FC<FileRowHeaderProps> = ({
               Renamed
             </span>
           )}
+          {isDeleted && (
+            <span
+              data-testid="deleted-file-badge"
+              className="text-sm px-[8px] py-[2px] rounded bg-red-500/25 text-red-700 dark:text-red-300"
+            >
+              Deleted
+            </span>
+          )}
           {isBinaryFile(filePath) && (
             <span className="text-sm px-[8px] py-[2px] rounded bg-zinc-500/25 text-zinc-700 dark:text-zinc-300">
               Binary
             </span>
           )}
-          {(additions > 0 || deletions > 0) && (
+          {!isDeleted && (additions > 0 || deletions > 0) && (
             <span className="text-sm font-mono flex items-center gap-[4px]">
               <span className="text-emerald-700 dark:text-emerald-300">
                 +{additions}

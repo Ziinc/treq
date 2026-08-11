@@ -34,6 +34,7 @@ interface ConsolidatedTerminalProps {
   autoCommand?: string;
   onSessionError?: (message: string) => void;
   onTerminalOutput?: (output: string) => void;
+  onTerminalInput?: () => void;
   onTerminalIdle?: () => void;
   onClose?: () => void;
   idleTimeoutMs?: number;
@@ -72,6 +73,7 @@ export const ConsolidatedTerminal = forwardRef<
       autoCommand,
       onSessionError,
       onTerminalOutput,
+      onTerminalInput,
       onTerminalIdle,
       onClose,
       idleTimeoutMs = 2000,
@@ -107,6 +109,7 @@ export const ConsolidatedTerminal = forwardRef<
     // Store callbacks in refs to avoid effect re-runs
     const onSessionErrorRef = useRef(onSessionError);
     const onTerminalOutputRef = useRef(onTerminalOutput);
+    const onTerminalInputRef = useRef(onTerminalInput);
     const onTerminalIdleRef = useRef(onTerminalIdle);
 
     // Get font size from settings and scale to text-xs (0.75x)
@@ -126,6 +129,10 @@ export const ConsolidatedTerminal = forwardRef<
     useEffect(() => {
       onTerminalOutputRef.current = onTerminalOutput;
     }, [onTerminalOutput]);
+
+    useEffect(() => {
+      onTerminalInputRef.current = onTerminalInput;
+    }, [onTerminalInput]);
 
     useEffect(() => {
       onTerminalIdleRef.current = onTerminalIdle;
@@ -298,6 +305,7 @@ export const ConsolidatedTerminal = forwardRef<
       // Local xterm data handler
       const localHandleXtermData = (data: string) => {
         if (!isPtyReadyRef.current) return;
+        onTerminalInputRef.current?.();
         ptyWrite(sessionId, data).catch(localHandleError);
       };
 

@@ -417,12 +417,42 @@ pub fn init_local_db(repo_path: &str) -> Result<PathBuf, String> {
             prompt_text TEXT NOT NULL,
             agent TEXT,
             created_at TEXT NOT NULL,
-            FOREIGN KEY (workspace_id) REFERENCES workspaces(id),
-            FOREIGN KEY (session_id) REFERENCES sessions(id)
+            FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+            FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
         )",
       [],
     )
     .map_err(|e| format!("Failed to create prompt_history table: {}", e))?;
+
+  let prompt_history_foreign_keys_without_cascade: i64 = conn
+    .query_row(
+      "SELECT COUNT(*) FROM pragma_foreign_key_list('prompt_history') WHERE on_delete != 'CASCADE'",
+      [],
+      |row| row.get(0),
+    )
+    .map_err(|e| format!("Failed to inspect prompt_history foreign keys: {}", e))?;
+  if prompt_history_foreign_keys_without_cascade > 0 {
+    conn
+      .execute_batch(
+        "CREATE TABLE prompt_history_new (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              workspace_id INTEGER,
+              session_id INTEGER,
+              prompt_text TEXT NOT NULL,
+              agent TEXT,
+              created_at TEXT NOT NULL,
+              FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE,
+              FOREIGN KEY (session_id) REFERENCES sessions(id) ON DELETE CASCADE
+          );
+          INSERT INTO prompt_history_new
+            (id, workspace_id, session_id, prompt_text, agent, created_at)
+            SELECT id, workspace_id, session_id, prompt_text, agent, created_at
+            FROM prompt_history;
+          DROP TABLE prompt_history;
+          ALTER TABLE prompt_history_new RENAME TO prompt_history;",
+      )
+      .map_err(|e| format!("Failed to migrate prompt_history cascade deletes: {}", e))?;
+  }
 
   conn
     .execute(
@@ -2699,6 +2729,46 @@ mod tests {
     assert_eq!(history[1].agent.as_deref(), Some("claude"));
     assert_eq!(history[1].workspace_id, Some(workspace_id));
     assert_eq!(history[1].workspace_label.as_deref(), Some("feature-one"));
+
+    if let Some(initialized) = INITIALIZED_DBS.get() {
+      initialized.lock().unwrap().remove(repo_path);
+    }
+  }
+
+  #[test]
+  fn deletes_workspace_prompt_history_and_sessions() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let repo_path = temp_dir.path().to_str().unwrap();
+
+    let workspace_id = add_workspace(
+      repo_path,
+      "feature-delete".to_string(),
+      format!("{}/.treq/workspaces/feature-delete", repo_path),
+      "feature-delete".to_string(),
+      None,
+      None,
+      None,
+    )
+    .expect("add_workspace should succeed");
+    let session_id = add_session(repo_path, Some(workspace_id), "Delete me".to_string())
+      .expect("add_session should succeed");
+    add_prompt_history(
+      repo_path,
+      Some(workspace_id),
+      Some(session_id),
+      "delete this prompt",
+      Some("codex"),
+    )
+    .expect("add_prompt_history should succeed");
+
+    delete_workspace(repo_path, workspace_id).expect("delete_workspace should cascade");
+
+    assert!(get_prompt_history(repo_path)
+      .expect("get_prompt_history should succeed")
+      .is_empty());
+    assert!(get_sessions(repo_path)
+      .expect("get_sessions should succeed")
+      .is_empty());
 
     if let Some(initialized) = INITIALIZED_DBS.get() {
       initialized.lock().unwrap().remove(repo_path);

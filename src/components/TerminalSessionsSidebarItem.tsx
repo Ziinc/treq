@@ -50,6 +50,12 @@ export const TerminalSessionsSidebarItem: React.FC<
         >
           <Icon className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
           <div className="flex-1 min-w-0 flex items-center gap-1.5">
+            {session.isStreaming && (
+              <Loader2
+                className="w-3 h-3 text-primary animate-spin shrink-0"
+                aria-label="Active changes"
+              />
+            )}
             <span className="truncate max-w-[104px] text-xs font-medium text-foreground">
               {session.name}
             </span>
@@ -58,12 +64,7 @@ export const TerminalSessionsSidebarItem: React.FC<
             </span>
           </div>
           <div className="flex items-center shrink-0 gap-0.5">
-            {session.isStreaming ? (
-              <Loader2
-                className="w-3 h-3 text-primary animate-spin shrink-0"
-                aria-label="Active changes"
-              />
-            ) : isIdle ? (
+            {!session.isStreaming && isIdle ? (
               <Moon
                 className="w-3 h-3 text-muted-foreground shrink-0"
                 aria-label="Idle"

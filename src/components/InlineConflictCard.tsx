@@ -1,5 +1,6 @@
 import {
   type Dispatch,
+  Fragment,
   type SetStateAction,
   useEffect,
   useMemo,
@@ -10,6 +11,7 @@ import type {
   ConflictRegion,
   ConflictStyle,
 } from "../lib/api";
+import { getConflictDeletedSides } from "../lib/conflict-deleted-sides";
 import type { ConflictComment, DiffSearchData } from "./ChangesDiffViewer";
 import { Button } from "./ui/button";
 import { highlightInHtml } from "../lib/text-search";
@@ -118,6 +120,10 @@ export const InlineConflictCard = ({
     [region],
   );
   const hasComment = conflictComments.has(region.id);
+  const deletedSides = useMemo(
+    () => getConflictDeletedSides({ ...region, lines }),
+    [region, lines],
+  );
 
   useEffect(() => {
     if (!registerFileRef) return;
@@ -153,6 +159,14 @@ export const InlineConflictCard = ({
       <div className="p-0">
         <pre className="text-sm font-mono overflow-x-auto bg-muted/30 p-3 rounded whitespace-pre-wrap break-all">
           {lines.map((line, idx) => {
+            if (
+              line.kind === "content" &&
+              ((line.role === "left" && deletedSides.left) ||
+                (line.role === "right" && deletedSides.right))
+            ) {
+              return null;
+            }
+
             const isMarker = line.kind === "marker";
             const bgClass = getConflictLineBackground(line.role);
             const conflictSearchKey = `conflict:${region.id}:${idx}`;
@@ -180,31 +194,55 @@ export const InlineConflictCard = ({
               : null;
 
             const sectionLabel = getSectionLabel(line, region.marker_style);
+            const deletedSideLabel =
+              sectionLabel === "Side #1" && deletedSides.left
+                ? "Side #1"
+                : sectionLabel === "Side #2" && deletedSides.right
+                  ? "Side #2"
+                  : null;
 
             return (
-              <div
-                key={idx}
-                data-search-id={conflictSearchKey}
-                data-conflict-line-role={line.role}
-                className={cn(isMarker ? "text-muted-foreground" : "", bgClass)}
-              >
-                {sectionLabel && (
-                  <span
-                    data-conflict-section-label={sectionLabel}
+              <Fragment key={idx}>
+                <div
+                  data-search-id={conflictSearchKey}
+                  data-conflict-line-role={line.role}
+                  className={cn(
+                    isMarker ? "text-muted-foreground" : "",
+                    bgClass,
+                  )}
+                >
+                  {sectionLabel && (
+                    <span
+                      data-conflict-section-label={sectionLabel}
+                      className={cn(
+                        "mr-2 rounded px-1.5 py-0.5 text-xs font-sans font-medium",
+                        SECTION_LABEL_CLASSES[sectionLabel],
+                      )}
+                    >
+                      {sectionLabel}
+                    </span>
+                  )}
+                  {lineHtml ? (
+                    <span dangerouslySetInnerHTML={{ __html: lineHtml }} />
+                  ) : (
+                    line.raw
+                  )}
+                </div>
+                {deletedSideLabel && (
+                  <div
+                    data-testid="conflict-deleted-side"
+                    data-side={deletedSideLabel}
                     className={cn(
-                      "mr-2 rounded px-1.5 py-0.5 text-xs font-sans font-medium",
-                      SECTION_LABEL_CLASSES[sectionLabel],
+                      "my-1 rounded-md border px-3 py-2 text-sm font-sans",
+                      deletedSideLabel === "Side #1"
+                        ? "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300"
+                        : "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
                     )}
                   >
-                    {sectionLabel}
-                  </span>
+                    {deletedSideLabel} deleted this file
+                  </div>
                 )}
-                {lineHtml ? (
-                  <span dangerouslySetInnerHTML={{ __html: lineHtml }} />
-                ) : (
-                  line.raw
-                )}
-              </div>
+              </Fragment>
             );
           })}
         </pre>

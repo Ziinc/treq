@@ -404,4 +404,48 @@ describe("Review - conflict rendering contract", () => {
     ).not.toBeInTheDocument();
     getHunksSpy.mockRestore();
   });
+
+  it("delete/modify conflict shows a deleted-side card for the absent side", async () => {
+    const { repoPath } = createTestRepo(false);
+    openRepo(repoPath);
+
+    const workspaceId = await createWorkspace(
+      repoPath,
+      "feat/delete-modify-conflict",
+    );
+    const workspace = (await getWorkspaces(repoPath)).find(
+      (w) => w.id === workspaceId,
+    );
+    if (!workspace) throw new Error("Workspace not found");
+    const workspacePath = resolveWorkspacePath(
+      repoPath,
+      workspace.workspace_path,
+    );
+
+    writeWorkspaceFile(workspacePath, "README.md", "workspace side\n");
+    await createCommit(repoPath, workspaceId, "workspace modify");
+    const workspaceChangeId = resolveChangeId(workspacePath, "@-");
+
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    fs.unlinkSync(path.join(repoPath, "README.md"));
+    await createCommit(repoPath, null, "main delete");
+    const mainChangeId = resolveChangeId(repoPath, "@-");
+
+    newCommitWithParents(workspacePath, [workspaceChangeId, mainChangeId]);
+    await ensureWorkspaceIndexed(repoPath, workspaceId, workspacePath);
+
+    render(<Dashboard />);
+    await screen.findByTestId(`workspace-conflict-indicator-${workspaceId}`);
+    await assertStatus(repoPath, workspaceId, {
+      hasConflicts: true,
+      conflictedFiles: ["README.md"],
+    });
+    await navigateToReviewTab(user, "feat/delete-modify-conflict");
+    await clickFileInSection(user, "Conflicts", "README.md");
+
+    await screen.findByText(/^Conflict 1 of 1$/);
+    const deletedCard = await screen.findByTestId("conflict-deleted-side");
+    expect(deletedCard).toHaveTextContent(/deleted this file/);
+  });
 });
