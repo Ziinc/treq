@@ -6,14 +6,15 @@ import path from "node:path";
 import {
 	createTestRepo,
 	findSidebarBranchElement,
+	newCommitWithParents,
 	openRepo,
+	resolveChangeId,
 	resolveWorkspacePath,
 	writeWorkspaceFile,
 } from "../../../test/utils";
 import { render, screen, waitFor, within } from "../../../test/test-utils";
 import { Dashboard } from "../../../src/components/Dashboard";
 import {
-	checkAndRebaseWorkspaces,
 	createCommit,
 	createWorkspace,
 	ensureWorkspaceIndexed,
@@ -66,10 +67,11 @@ it("captures deleted file placeholder in the Review tab", async () => {
 }, 60000);
 
 it("captures delete/modify conflict deleted-side card in the Review tab", async () => {
-	const { repoPath, defaultBranch } = createTestRepo(false);
+	const { repoPath } = createTestRepo(false);
 	openRepo(repoPath);
 
 	const user = userEvent.setup();
+
 	const workspaceId = await createWorkspace(
 		repoPath,
 		"feat/delete-modify-qa",
@@ -83,13 +85,15 @@ it("captures delete/modify conflict deleted-side card in the Review tab", async 
 		workspace.workspace_path,
 	);
 
-	writeWorkspaceFile(workspacePath, "shared.txt", "workspace side\n");
+	writeWorkspaceFile(workspacePath, "README.md", "workspace side\n");
 	await createCommit(repoPath, workspaceId, "workspace modify");
+	const workspaceChangeId = resolveChangeId(workspacePath, "@-");
 
-	fs.unlinkSync(path.join(repoPath, "shared.txt"));
+	fs.unlinkSync(path.join(repoPath, "README.md"));
 	await createCommit(repoPath, null, "main delete");
+	const mainChangeId = resolveChangeId(repoPath, "@-");
 
-	await checkAndRebaseWorkspaces(repoPath, workspaceId, defaultBranch, true);
+	newCommitWithParents(workspacePath, [workspaceChangeId, mainChangeId]);
 	await ensureWorkspaceIndexed(repoPath, workspaceId, workspacePath);
 
 	render(<Dashboard />);
@@ -105,7 +109,7 @@ it("captures delete/modify conflict deleted-side card in the Review tab", async 
 	});
 	const conflictsSection = conflictsToggle.closest("div")?.parentElement;
 	if (!conflictsSection) throw new Error("Conflicts section not found");
-	await user.click(await within(conflictsSection).findByTitle("shared.txt"));
+	await user.click(await within(conflictsSection).findByTitle("README.md"));
 
 	await screen.findByText(/^Conflict 1 of 1$/);
 	await screen.findByTestId("conflict-deleted-side");
@@ -113,7 +117,7 @@ it("captures delete/modify conflict deleted-side card in the Review tab", async 
 	await captureDocument(document, {
 		name: "review-deleted-file-02-conflict-side",
 		expectations: [
-			'The Review diff shows a conflict card headed "Conflict 1 of 1" for shared.txt.',
+			'The Review diff shows a conflict card headed "Conflict 1 of 1" for README.md.',
 			"A coloured deleted-side card states that one side deleted this file.",
 			"The non-deleted side still shows its conflicting content (workspace side and/or base).",
 		],
