@@ -47,28 +47,43 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup Node.js
+        id: setup-node
         uses: actions/setup-node@v4
         with:
           node-version: lts/*
           cache: npm
           cache-dependency-path: package-lock.json
 
+      # Exact-key cache of the compiled addon. Frontend-only PRs restore the
+      # binary built on main when Rust inputs are unchanged.
+      - name: Restore NAPI addon cache
+        id: napi-cache
+        if: matrix.task == 'test:integration'
+        uses: actions/cache@v4
+        with:
+          path: crates/treq-napi/*.node
+          key: napi-${{ runner.os }}-${{ steps.setup-node.outputs.node-version }}-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'src-tauri/Cargo.toml', 'src-tauri/build.rs', 'src-tauri/src/**', 'src-tauri/tests/**', 'crates/treq-napi/Cargo.toml', 'crates/treq-napi/build.rs', 'crates/treq-napi/src/**', 'crates/treq-napi/package.json', 'crates/treq-napi/package-lock.json') }}
+
       - name: Install Rust stable
-        # Unit JS tests do not compile native code.
-        if: matrix.kind != 'js' || matrix.task == 'test:integration'
+        # Unit JS tests never need Rust. Integration skips the toolchain when
+        # the prebuilt .node addon was restored from cache.
+        if: >
+          matrix.kind == 'rust' ||
+          matrix.kind == 'verify' ||
+          (matrix.task == 'test:integration' && steps.napi-cache.outputs.cache-hit != 'true')
         uses: dtolnay/rust-toolchain@v1
         with:
           components: rustfmt
           toolchain: stable
 
-      - name: Install cargo-binstall
-        # Only jobs that install jj via binstall need this.
-        if: matrix.task == 'test:integration' || (matrix.kind == 'rust' && matrix.platform == 'ubuntu-22.04')
-        uses: cargo-bins/cargo-binstall@main
-
       - name: install dependencies (ubuntu only)
-        # WebKit/GTK is needed to link treq/tauri (NAPI addon, cargo check/test).
-        if: matrix.platform == 'ubuntu-22.04' && (matrix.kind != 'js' || matrix.task == 'test:integration')
+        # WebKit/GTK is only needed to *link* treq/tauri (NAPI miss, verify, rust).
+        if: >
+          matrix.platform == 'ubuntu-22.04' && (
+            matrix.kind == 'rust' ||
+            matrix.kind == 'verify' ||
+            (matrix.task == 'test:integration' && steps.napi-cache.outputs.cache-hit != 'true')
+          )
         run: |
           sudo apt-get update
           sudo apt-get install -y git
@@ -81,14 +96,22 @@ jobs:
           brew install git jj gh
           echo "$(brew --prefix)/bin" >> $GITHUB_PATH
 
-      - name: Install jj CLI (ubuntu)
-        # Integration + Rust tests exercise real repos; verify/unit do not.
+      - name: Install jj CLI (ubuntu, binary)
+        # Prefer a release binary so integration cache-hits need no Rust toolchain.
         if: matrix.platform == 'ubuntu-22.04' && (matrix.task == 'test:integration' || matrix.kind == 'rust')
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          cargo binstall --strategies crate-meta-data,compile jj-cli
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          tag=$(curl -fsSL \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/jj-vcs/jj/releases/latest | jq -r .tag_name)
+          asset="jj-${tag}-x86_64-unknown-linux-musl.tar.gz"
+          curl -fsSL \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            -L "https://github.com/jj-vcs/jj/releases/download/${tag}/${asset}" \
+            | sudo tar -xz -C /usr/local/bin jj
+          jj --version
 
       - name: Install gh CLI (ubuntu)
         # Version pin check for rust runners only; JS tests mock GitHub.
@@ -114,12 +137,18 @@ jobs:
         run: npm ci
 
       - uses: Swatinem/rust-cache@v2
-        if: matrix.kind == 'rust' || matrix.task == 'test:integration'
+        if: >
+          matrix.kind == 'rust' ||
+          (matrix.task == 'test:integration' && steps.napi-cache.outputs.cache-hit != 'true')
         with:
           cache-on-failure: true
           workspaces: |
             ./src-tauri -> target
             ./crates/treq-napi -> target
+
+      - name: Build NAPI addon
+        if: matrix.task == 'test:integration' && steps.napi-cache.outputs.cache-hit != 'true'
+        run: npm run build:napi
 
       - name: Run JS task
         if: matrix.kind == 'js' || matrix.kind == 'verify'
@@ -128,6 +157,8 @@ jobs:
             npm run check
             npm run check:format
             npm run lint
+          elif [ "${{ matrix.task }}" = "test:integration" ]; then
+            npm run test:integration:run
           else
             npm run ${{ matrix.task }}
           fi
