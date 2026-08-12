@@ -26,13 +26,10 @@ import { ReviewActionBar } from "./ReviewActionBar";
 import { DiffContentArea } from "./DiffContentArea";
 import { FileSidebar } from "./FileSidebar";
 import { filesEqual } from "./utils";
-<<<<<<< HEAD
 import { HOME_MOVE_ENDPOINT } from "../../lib/change-file-drag";
-=======
 import { stashWorkspaceChanges } from "../../lib/api";
 import { invalidateReviewChangeCount } from "../../lib/review-change-count";
 import { useQueryClient } from "@tanstack/react-query";
->>>>>>> 07d52318 (fix: stash concurrent checkout, wire UI tests and app-qa)
 import type {
   ChangesDiffViewerHandle,
   ChangesDiffViewerProps,
