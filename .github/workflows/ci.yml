@@ -107,10 +107,12 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             https://api.github.com/repos/jj-vcs/jj/releases/latest | jq -r .tag_name)
           asset="jj-${tag}-x86_64-unknown-linux-musl.tar.gz"
+          tmp=$(mktemp -d)
           curl -fsSL \
             -H "Authorization: Bearer ${GITHUB_TOKEN}" \
             -L "https://github.com/jj-vcs/jj/releases/download/${tag}/${asset}" \
-            | sudo tar -xz -C /usr/local/bin
+            | tar -xz -C "$tmp"
+          sudo install -m 755 "$tmp/jj" /usr/local/bin/jj
           jj --version
 
       - name: Install gh CLI (ubuntu)
