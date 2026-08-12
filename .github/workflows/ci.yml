@@ -59,9 +59,9 @@ jobs:
       - name: Restore NAPI addon cache
         id: napi-cache
         if: matrix.task == 'test:integration'
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v4
         with:
-          path: crates/treq-napi/*.node
+          path: crates/treq-napi/treq-napi.linux-x64-gnu.node
           key: napi-${{ runner.os }}-${{ steps.setup-node.outputs.node-version }}-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'src-tauri/Cargo.toml', 'src-tauri/build.rs', 'src-tauri/src/**', 'src-tauri/tests/**', 'crates/treq-napi/Cargo.toml', 'crates/treq-napi/build.rs', 'crates/treq-napi/src/**', 'crates/treq-napi/package.json', 'crates/treq-napi/package-lock.json') }}
 
       - name: Install Rust stable
@@ -150,7 +150,17 @@ jobs:
 
       - name: Build NAPI addon
         if: matrix.task == 'test:integration' && steps.napi-cache.outputs.cache-hit != 'true'
-        run: npm run build:napi
+        run: |
+          npm run build:napi
+          test -f crates/treq-napi/treq-napi.linux-x64-gnu.node
+
+      - name: Save NAPI addon cache
+        if: matrix.task == 'test:integration' && steps.napi-cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: crates/treq-napi/treq-napi.linux-x64-gnu.node
+          key: ${{ steps.napi-cache.outputs.cache-primary-key }}
 
       - name: Run JS task
         if: matrix.kind == 'js' || matrix.kind == 'verify'
