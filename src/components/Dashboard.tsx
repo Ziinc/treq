@@ -46,6 +46,7 @@ import {
   stateFilterForPrState,
 } from "../lib/githubRoutes";
 import { getFullWorkspacePath } from "../lib/utils";
+import type { GitHubIssueAttachment } from "../lib/promptAttachments";
 import {
   buildWorkspaceTree,
   flattenWorkspaceTree,
@@ -123,8 +124,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
     number | null
   >(null);
   const [runPromptRequest, setRunPromptRequest] = useState<{
-    prompt: string;
+    prompt?: string;
     workspaceId: number | null;
+    githubIssue?: GitHubIssueAttachment | null;
   } | null>(null);
   const [showBranchSwitcher, setShowBranchSwitcher] = useState(false);
   const [showFilePicker, setShowFilePicker] = useState(false);
@@ -772,6 +774,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
       setShowPromptHistory(false);
       setPromptHistoryFocusId(null);
       setRunPromptRequest({ prompt, workspaceId });
+      setShowAgentPromptDialog(true);
+    },
+    [],
+  );
+
+  const handleStartPromptFromIssue = useCallback(
+    (issue: GitHubIssueAttachment) => {
+      setRunPromptRequest({
+        workspaceId: null,
+        githubIssue: issue,
+      });
       setShowAgentPromptDialog(true);
     },
     [],
@@ -1432,7 +1445,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
           {/* GitHub Panel */}
           {viewMode === "github" && (
-            <GitHubPanel repoPath={repoPath} onOpenSettings={openSettings} />
+            <GitHubPanel
+              repoPath={repoPath}
+              onOpenSettings={openSettings}
+              onStartPromptFromIssue={handleStartPromptFromIssue}
+            />
           )}
 
           {/* Merge Preview View */}
@@ -1560,6 +1577,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         onSessionCreated={handleSessionCreated}
         initialPrompt={runPromptRequest?.prompt}
         initialWorkspaceId={runPromptRequest?.workspaceId ?? null}
+        initialGitHubIssue={runPromptRequest?.githubIssue ?? null}
       />
 
       <PromptHistoryModal

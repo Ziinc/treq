@@ -8,12 +8,17 @@ vi.mock("./TaskInput", () => ({
   TaskInput: ({
     onSessionCreated,
     initialText,
+    initialGitHubIssue,
   }: {
     onSessionCreated: (value: unknown) => void;
     initialText?: string;
+    initialGitHubIssue?: { number: number; url: string; title: string } | null;
   }) => (
     <div>
       <div data-testid="task-input-initial-text">{initialText ?? ""}</div>
+      <div data-testid="task-input-initial-github-issue">
+        {initialGitHubIssue ? `#${initialGitHubIssue.number}` : ""}
+      </div>
       <button onClick={() => onSessionCreated({ sessionId: 12 })}>
         Shared prompt input
       </button>
@@ -133,5 +138,27 @@ describe("AgentPromptDialog", () => {
     expect(screen.getByTestId("task-input-initial-text")).toHaveTextContent(
       "Some prompt",
     );
+  });
+
+  it("passes an initial GitHub issue chip into TaskInput", () => {
+    render(
+      <AgentPromptDialog
+        open
+        onOpenChange={vi.fn()}
+        repoPath="/repo"
+        defaultBranch="main"
+        workspaces={[workspace]}
+        onSessionCreated={vi.fn()}
+        initialGitHubIssue={{
+          number: 42,
+          url: "https://github.com/acme/treq/issues/42",
+          title: "Fix the login bug",
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByTestId("task-input-initial-github-issue"),
+    ).toHaveTextContent("#42");
   });
 });

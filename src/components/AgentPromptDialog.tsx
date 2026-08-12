@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Command } from "cmdk";
 import { Check, ChevronsUpDown, GitBranch } from "lucide-react";
 import type { Workspace } from "../lib/api";
+import type { GitHubIssueAttachment } from "../lib/promptAttachments";
 import type { SessionCreationInfo } from "../types/sessions";
 import { cn } from "../lib/utils";
 import { TaskInput } from "./TaskInput";
@@ -20,6 +21,8 @@ interface AgentPromptDialogProps {
   initialPrompt?: string;
   /** Pre-select the workspace this prompt originally belonged to, if any. */
   initialWorkspaceId?: number | null;
+  /** Pre-attach a GitHub issue chip when starting a prompt from an issue. */
+  initialGitHubIssue?: GitHubIssueAttachment | null;
 }
 
 export const AgentPromptDialog: React.FC<AgentPromptDialogProps> = ({
@@ -31,6 +34,7 @@ export const AgentPromptDialog: React.FC<AgentPromptDialogProps> = ({
   onSessionCreated,
   initialPrompt,
   initialWorkspaceId = null,
+  initialGitHubIssue = null,
 }) => {
   const [selectedWorkspace, setSelectedWorkspace] = useState<Workspace | null>(
     null,
@@ -148,6 +152,7 @@ export const AgentPromptDialog: React.FC<AgentPromptDialogProps> = ({
           workingDirectory={selectedWorkspace?.workspace_path ?? repoPath}
           onSessionCreated={handleSessionCreated}
           initialText={initialPrompt}
+          initialGitHubIssue={initialGitHubIssue}
         />
       </DialogContent>
     </Dialog>

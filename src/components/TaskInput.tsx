@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
+import { CircleDot, X } from "lucide-react";
 import { FilePicker } from "./FilePicker";
 import { TaskInputMentionDropdown } from "./task-input/TaskInputMentionDropdown";
 import { TaskInputToolbar } from "./task-input/TaskInputToolbar";
@@ -11,6 +12,10 @@ import {
   setRepoSetting,
   type FileSearchResult,
 } from "../lib/api";
+import {
+  formatPromptWithGitHubIssue,
+  type GitHubIssueAttachment,
+} from "../lib/promptAttachments";
 import { useToast } from "./ui/toast";
 import { useDebounce } from "../hooks/useDebounce";
 import { cn } from "../lib/utils";
@@ -26,6 +31,8 @@ interface TaskInputProps {
   focusRequest?: number;
   /** Pre-fill the textarea with this text on mount (e.g. re-running a past prompt). */
   initialText?: string;
+  /** Pre-attach a GitHub issue chip (e.g. starting a prompt from an issue). */
+  initialGitHubIssue?: GitHubIssueAttachment | null;
 }
 
 export const TaskInput: React.FC<TaskInputProps> = ({
@@ -36,8 +43,12 @@ export const TaskInput: React.FC<TaskInputProps> = ({
   onSessionCreated,
   focusRequest,
   initialText,
+  initialGitHubIssue = null,
 }) => {
   const [taskText, setTaskText] = useState(initialText ?? "");
+  const [githubIssue, setGithubIssue] = useState<GitHubIssueAttachment | null>(
+    initialGitHubIssue,
+  );
   const [filePickerOpen, setFilePickerOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [focused, setFocused] = useState(false);
@@ -286,7 +297,11 @@ export const TaskInput: React.FC<TaskInputProps> = ({
   const handleSubmit = useCallback(
     async (mode: "plan" | "acceptEdits") => {
       const trimmed = taskText.trim();
-      if (!trimmed || submitting) return;
+      if ((!trimmed && !githubIssue) || submitting) return;
+
+      const pendingPrompt = githubIssue
+        ? formatPromptWithGitHubIssue(trimmed, githubIssue)
+        : trimmed;
 
       setSubmitting(true);
       try {
@@ -297,7 +312,9 @@ export const TaskInput: React.FC<TaskInputProps> = ({
         }
 
         const sessionName =
-          trimmed.length > 50 ? `${trimmed.slice(0, 47)}...` : trimmed;
+          pendingPrompt.length > 50
+            ? `${pendingPrompt.slice(0, 47)}...`
+            : pendingPrompt;
 
         const dbSessionId = await createSession(
           repoPath,
@@ -313,13 +330,14 @@ export const TaskInput: React.FC<TaskInputProps> = ({
           workspaceId,
           workspacePath,
           repoPath: sessionRepoPath,
-          pendingPrompt: trimmed,
+          pendingPrompt,
           permissionMode: mode,
           agent: selectedAgent,
         });
 
         // Clear input on success
         setTaskText("");
+        setGithubIssue(null);
         setShowSaveAsRepoDefault(false);
       } catch (error) {
         addToast({
@@ -333,6 +351,7 @@ export const TaskInput: React.FC<TaskInputProps> = ({
     },
     [
       taskText,
+      githubIssue,
       submitting,
       repoPath,
       workspaceId,
@@ -389,7 +408,7 @@ export const TaskInput: React.FC<TaskInputProps> = ({
     ],
   );
 
-  const isEmpty = taskText.trim().length === 0;
+  const isEmpty = taskText.trim().length === 0 && !githubIssue;
 
   return (
     <>
@@ -400,6 +419,26 @@ export const TaskInput: React.FC<TaskInputProps> = ({
             focused ? "border-blue-400" : "border-border",
           )}
         >
+          {githubIssue && (
+            <div className="flex flex-wrap items-center gap-1.5 px-3 pt-3 pb-0">
+              <span
+                data-testid="github-issue-chip"
+                className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/50 px-2 py-0.5 text-xs text-foreground"
+                title={githubIssue.title || `Issue #${githubIssue.number}`}
+              >
+                <CircleDot className="h-3 w-3 text-green-600 dark:text-green-400" />
+                <span className="font-medium">#{githubIssue.number}</span>
+                <button
+                  type="button"
+                  aria-label="Remove GitHub issue"
+                  className="ml-0.5 rounded-sm p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  onClick={() => setGithubIssue(null)}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            </div>
+          )}
           <textarea
             ref={textareaRef}
             value={taskText}

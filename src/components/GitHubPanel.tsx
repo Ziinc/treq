@@ -17,6 +17,7 @@ import {
 } from "../hooks/useMergeQueueStatus";
 import { GH_LIST_PAGE_SIZE, ghListIssues, ghListPrs } from "../lib/api";
 import { FEATURES } from "../lib/features";
+import type { GitHubIssueAttachment } from "../lib/promptAttachments";
 import {
   githubDetailPath,
   githubListPath,
@@ -38,6 +39,8 @@ interface GitHubPanelProps {
   repoPath: string;
   /** Opens the settings page, where the merge queue opt-in lives. */
   onOpenSettings?: (tab?: string) => void;
+  /** Open the agent prompt dialog with a GitHub issue chip pre-attached. */
+  onStartPromptFromIssue?: (issue: GitHubIssueAttachment) => void;
 }
 
 const FILTERS: { label: string; value: GitHubStateFilter }[] = [
@@ -49,6 +52,7 @@ const FILTERS: { label: string; value: GitHubStateFilter }[] = [
 export const GitHubPanel: React.FC<GitHubPanelProps> = ({
   repoPath,
   onOpenSettings,
+  onStartPromptFromIssue,
 }) => {
   const { subscription } = useAuth();
   const isPro =
@@ -428,6 +432,7 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
               repoFullName={repoFullName}
               issueNumber={selectedIssue}
               onClose={handleCloseDetail}
+              onStartPrompt={onStartPromptFromIssue}
             />
           )}
           {activeTab === "prs" && selectedPr !== null && (
