@@ -110,7 +110,7 @@ jobs:
           curl -fsSL \
             -H "Authorization: Bearer ${GITHUB_TOKEN}" \
             -L "https://github.com/jj-vcs/jj/releases/download/${tag}/${asset}" \
-            | sudo tar -xz -C /usr/local/bin jj
+            | sudo tar -xz -C /usr/local/bin
           jj --version
 
       - name: Install gh CLI (ubuntu)
