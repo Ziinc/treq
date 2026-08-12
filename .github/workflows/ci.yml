@@ -62,12 +62,13 @@ jobs:
           toolchain: stable
 
       - name: Install cargo-binstall
-        if: matrix.kind != 'js' || matrix.task == 'test:integration'
+        # Only jobs that install jj via binstall need this.
+        if: matrix.task == 'test:integration' || (matrix.kind == 'rust' && matrix.platform == 'ubuntu-22.04')
         uses: cargo-bins/cargo-binstall@main
 
       - name: install dependencies (ubuntu only)
-        # WebKit/GTK is only needed to link treq/tauri for the NAPI addon or Rust builds.
-        if: matrix.platform == 'ubuntu-22.04' && (matrix.kind != 'js' || matrix.task == 'test:integration')
+        # WebKit/GTK is needed to link treq/tauri (NAPI addon, cargo check/test).
+        if: matrix.platform == 'ubuntu-22.04' && matrix.kind != 'js' || matrix.task == 'test:integration'
         run: |
           sudo apt-get update
           sudo apt-get install -y git
@@ -81,8 +82,8 @@ jobs:
           echo "$(brew --prefix)/bin" >> $GITHUB_PATH
 
       - name: Install jj CLI (ubuntu)
-        # Integration tests create real jj repos via NAPI helpers.
-        if: matrix.platform == 'ubuntu-22.04' && (matrix.kind != 'js' || matrix.task == 'test:integration')
+        # Integration + Rust tests exercise real repos; verify/unit do not.
+        if: matrix.platform == 'ubuntu-22.04' && (matrix.task == 'test:integration' || matrix.kind == 'rust')
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
@@ -90,7 +91,8 @@ jobs:
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Install gh CLI (ubuntu)
-        if: matrix.platform == 'ubuntu-22.04' && matrix.kind != 'js'
+        # Version pin check for rust runners only; JS tests mock GitHub.
+        if: matrix.platform == 'ubuntu-22.04' && matrix.kind == 'rust'
         run: |
           (type -p wget >/dev/null || (sudo apt-get update && sudo apt-get install -y wget)) \
           && sudo mkdir -p -m 755 /etc/apt/keyrings \
@@ -102,7 +104,7 @@ jobs:
           && sudo apt-get install -y gh
 
       - name: Verify pinned tool versions
-        if: matrix.kind != 'js' || matrix.task == 'test:integration'
+        if: matrix.task == 'test:integration' || matrix.kind == 'rust'
         run: |
           git --version
           jj --version
