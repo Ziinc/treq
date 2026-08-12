@@ -1,9 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  escapeRegex,
-  findMatches,
-  highlightInHtml,
-} from "./text-search";
+import { escapeRegex, findMatches, highlightInHtml } from "./text-search";
 
 describe("text-search utilities", () => {
   describe("escapeRegex", () => {
