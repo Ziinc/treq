@@ -9,6 +9,7 @@ import {
 } from "../hooks/useMergeQueueStatus";
 import { FEATURES } from "../lib/features";
 import { supabase, WEB_URL } from "../lib/supabase";
+import { CloudUnavailableBanner } from "./CloudUnavailableBanner";
 import { Button } from "./ui/button";
 import { Switch } from "./ui/switch";
 
@@ -141,14 +142,18 @@ export const GitHubIntegrationSettings: React.FC<
     user,
     session,
     loading: authLoading,
+    availability,
     subscription,
     signIn,
+    retryConnection,
   } = useAuth();
   const [repositories, setRepositories] = useState<GitHubRepository[]>([]);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [retrying, setRetrying] = useState(false);
   const isPro =
     subscription?.plan === "pro" && subscription.status === "active";
+  const cloudUnavailable = availability === "unavailable";
 
   const userId = user?.id;
   const isSignedIn = !!user && !!session;
@@ -173,6 +178,15 @@ export const GitHubIntegrationSettings: React.FC<
     // Keyed on user identity, not the auth objects, so an unstable useAuth can't loop this.
   }, [userId, isSignedIn]);
 
+  const handleRetry = async () => {
+    setRetrying(true);
+    try {
+      await retryConnection();
+    } finally {
+      setRetrying(false);
+    }
+  };
+
   if (authLoading) {
     return (
       <div className="flex justify-center py-16">
@@ -187,6 +201,11 @@ export const GitHubIntegrationSettings: React.FC<
   if (!isSignedIn) {
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-4 text-center">
+        {cloudUnavailable && (
+          <div className="w-full max-w-md text-left">
+            <CloudUnavailableBanner onRetry={handleRetry} retrying={retrying} />
+          </div>
+        )}
         <Github className="w-12 h-12 text-muted-foreground" />
         <div>
           <h3 className="text-lg font-semibold">
@@ -210,6 +229,10 @@ export const GitHubIntegrationSettings: React.FC<
 
   return (
     <div className="space-y-10">
+      {cloudUnavailable && (
+        <CloudUnavailableBanner onRetry={handleRetry} retrying={retrying} />
+      )}
+
       {/* One header per integration; settings sit directly beneath it. */}
       <section>
         <div className="flex items-center gap-3 pb-2 border-b border-border">

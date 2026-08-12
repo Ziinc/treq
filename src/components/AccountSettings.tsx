@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
+import { CloudUnavailableBanner } from "./CloudUnavailableBanner";
 import { WEB_URL } from "../lib/supabase";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useAuth } from "../hooks/useAuth";
@@ -16,11 +17,31 @@ import { useState } from "react";
 const isDev = import.meta.env.DEV;
 
 export const AccountSettings: React.FC = () => {
-  const { user, loading, subscription, signIn, signOut, exchangeToken } =
-    useAuth();
+  const {
+    user,
+    loading,
+    availability,
+    subscription,
+    signIn,
+    signOut,
+    exchangeToken,
+    retryConnection,
+  } = useAuth();
   const [callbackUrl, setCallbackUrl] = useState("");
   const [devError, setDevError] = useState<string | null>(null);
   const [devLoading, setDevLoading] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+
+  const cloudUnavailable = availability === "unavailable";
+
+  const handleRetry = async () => {
+    setRetrying(true);
+    try {
+      await retryConnection();
+    } finally {
+      setRetrying(false);
+    }
+  };
 
   const handleDevCallback = async () => {
     setDevError(null);
@@ -37,7 +58,6 @@ export const AccountSettings: React.FC = () => {
         return;
       }
       await exchangeToken(token);
-      setCallbackUrl("");
     } catch (err: unknown) {
       setDevError(err instanceof Error ? err.message : "Token exchange failed");
     } finally {
@@ -56,6 +76,11 @@ export const AccountSettings: React.FC = () => {
   if (!user) {
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-4">
+        {cloudUnavailable && (
+          <div className="w-full max-w-md">
+            <CloudUnavailableBanner onRetry={handleRetry} retrying={retrying} />
+          </div>
+        )}
         <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
           <User className="w-8 h-8 text-muted-foreground" />
         </div>
@@ -111,6 +136,10 @@ export const AccountSettings: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {cloudUnavailable && (
+        <CloudUnavailableBanner onRetry={handleRetry} retrying={retrying} />
+      )}
+
       {/* User Info Card */}
       <div className="border border-border rounded-lg p-4">
         <div className="flex items-center gap-4">

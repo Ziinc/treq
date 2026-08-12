@@ -9,8 +9,10 @@ const auth = vi.hoisted(() => ({
   user: { id: "user-1" } as object | null,
   session: { access_token: "token" } as object | null,
   loading: false,
+  availability: "available" as "checking" | "available" | "unavailable",
   subscription: null as { plan: string; status: string } | null,
   signIn: vi.fn(),
+  retryConnection: vi.fn(async () => {}),
 }));
 const query = vi.hoisted(() => vi.fn());
 
@@ -47,8 +49,10 @@ describe("GitHubIntegrationSettings", () => {
     auth.user = { id: "user-1" };
     auth.session = { access_token: "token" };
     auth.loading = false;
+    auth.availability = "available";
     auth.subscription = null;
     auth.signIn.mockReset();
+    auth.retryConnection.mockReset();
     query.mockReset();
     vi.mocked(openUrl).mockReset();
   });
@@ -114,5 +118,21 @@ describe("GitHubIntegrationSettings", () => {
         "http://localhost:3001/dashboard?tab=integrations",
       ),
     );
+  });
+
+  it("shows the cloud unavailable banner with Retry when offline", async () => {
+    auth.availability = "unavailable";
+    query.mockResolvedValue({ data: repositories, error: null });
+    render(<GitHubIntegrationSettings />);
+
+    expect(await screen.findByTestId("cloud-unavailable-banner")).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: /manage github/i }),
+    ).toBeEnabled();
+
+    await userEvent
+      .setup()
+      .click(screen.getByRole("button", { name: /^retry$/i }));
+    expect(auth.retryConnection).toHaveBeenCalled();
   });
 });

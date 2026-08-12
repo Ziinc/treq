@@ -10,8 +10,10 @@ const auth = vi.hoisted(() => ({
   user: { id: "user-1" } as object | null,
   session: { access_token: "token" } as object | null,
   loading: false,
+  availability: "available" as "checking" | "available" | "unavailable",
   subscription: null as { plan: string; status: string } | null,
   signIn: vi.fn(),
+  retryConnection: vi.fn(async () => {}),
 }));
 
 const remoteInfo = vi.hoisted(() => ({

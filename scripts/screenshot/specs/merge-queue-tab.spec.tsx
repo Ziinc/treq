@@ -41,8 +41,10 @@ vi.mock("../../../src/hooks/useAuth", () => ({
 		user: { id: "user-1" },
 		session: { access_token: "token" },
 		loading: false,
+		availability: "available",
 		subscription: { plan: "pro", status: "active" },
 		signIn: vi.fn(),
+		retryConnection: vi.fn(async () => {}),
 	}),
 }));
 
