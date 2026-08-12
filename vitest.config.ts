@@ -1,18 +1,12 @@
 import { defineConfig } from "vitest/config";
-import react from "@vitejs/plugin-react";
 
+/**
+ * Default vitest entry: runs unit + integration as separate projects.
+ * Prefer `npm run test:unit` / `npm run test:integration` in CI so setup
+ * cost (NAPI build, jj) is only paid where needed.
+ */
 export default defineConfig({
-  plugins: [react()],
   test: {
-    environment: "jsdom",
-    setupFiles: ["./test/setup.integration.ts"],
-    include: [
-      "test/integration/**/*.test.{ts,tsx}",
-      "test/merge-queue/**/*.test.ts",
-      "src/**/*.test.{ts,tsx}",
-    ],
-    globals: true,
-    fileParallelism: false,
-    testTimeout: 15000,
+    projects: ["./vitest.unit.config.ts", "./vitest.integration.config.ts"],
   },
 });

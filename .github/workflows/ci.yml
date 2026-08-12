@@ -13,6 +13,7 @@ on:
       - "Cargo.lock"
       - "package.json"
       - "package-lock.json"
+      - "vitest*.config.ts"
       - ".github/workflows/ci.yml"
 
 jobs:
@@ -25,9 +26,14 @@ jobs:
           - platform: ubuntu-22.04
             kind: verify
             task: verify
+          # Unit tests: mocked Tauri, no NAPI/jj. Parallel file execution.
           - platform: ubuntu-22.04
             kind: js
-            task: test
+            task: test:unit
+          # Integration tests: NAPI + real jj repos. Serial file execution.
+          - platform: ubuntu-22.04
+            kind: js
+            task: test:integration
           - platform: ubuntu-22.04
             kind: rust
             task: test
@@ -48,16 +54,21 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Install Rust stable
+        # Unit JS tests do not compile native code.
+        if: matrix.kind != 'js' || matrix.task == 'test:integration'
         uses: dtolnay/rust-toolchain@v1
         with:
           components: rustfmt
           toolchain: stable
 
       - name: Install cargo-binstall
+        # Only jobs that install jj via binstall need this.
+        if: matrix.task == 'test:integration' || (matrix.kind == 'rust' && matrix.platform == 'ubuntu-22.04')
         uses: cargo-bins/cargo-binstall@main
 
       - name: install dependencies (ubuntu only)
-        if: matrix.platform == 'ubuntu-22.04' # This must match the platform value defined above.
+        # WebKit/GTK is needed to link treq/tauri (NAPI addon, cargo check/test).
+        if: matrix.platform == 'ubuntu-22.04' && (matrix.kind != 'js' || matrix.task == 'test:integration')
         run: |
           sudo apt-get update
           sudo apt-get install -y git
@@ -71,7 +82,8 @@ jobs:
           echo "$(brew --prefix)/bin" >> $GITHUB_PATH
 
       - name: Install jj CLI (ubuntu)
-        if: matrix.platform == 'ubuntu-22.04' # This must match the platform value defined above.
+        # Integration + Rust tests exercise real repos; verify/unit do not.
+        if: matrix.platform == 'ubuntu-22.04' && (matrix.task == 'test:integration' || matrix.kind == 'rust')
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
@@ -79,7 +91,8 @@ jobs:
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Install gh CLI (ubuntu)
-        if: matrix.platform == 'ubuntu-22.04'
+        # Version pin check for rust runners only; JS tests mock GitHub.
+        if: matrix.platform == 'ubuntu-22.04' && matrix.kind == 'rust'
         run: |
           (type -p wget >/dev/null || (sudo apt-get update && sudo apt-get install -y wget)) \
           && sudo mkdir -p -m 755 /etc/apt/keyrings \
@@ -91,19 +104,22 @@ jobs:
           && sudo apt-get install -y gh
 
       - name: Verify pinned tool versions
+        if: matrix.task == 'test:integration' || matrix.kind == 'rust'
         run: |
           git --version
           jj --version
-          gh --version
+          if command -v gh >/dev/null 2>&1; then gh --version; fi
 
       - name: Install dependencies
         run: npm ci
 
       - uses: Swatinem/rust-cache@v2
-        if: matrix.kind == 'rust'
+        if: matrix.kind == 'rust' || matrix.task == 'test:integration'
         with:
           cache-on-failure: true
-          workspaces: "./src-tauri -> target"
+          workspaces: |
+            ./src-tauri -> target
+            ./crates/treq-napi -> target
 
       - name: Run JS task
         if: matrix.kind == 'js' || matrix.kind == 'verify'
