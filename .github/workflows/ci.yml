@@ -18,7 +18,7 @@ on:
 
 jobs:
   ci:
-    timeout-minutes: 10
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -50,19 +50,22 @@ jobs:
         id: setup-node
         uses: actions/setup-node@v4
         with:
-          node-version: lts/*
+          # Pin major so NAPI cache keys stay stable across LTS patch bumps.
+          node-version: "24"
           cache: npm
           cache-dependency-path: package-lock.json
 
       # Exact-key cache of the compiled addon. Frontend-only PRs restore the
-      # binary built on main when Rust inputs are unchanged.
+      # binary built on main when Rust inputs are unchanged. Node is omitted
+      # from the key: N-API (napi8) binaries are ABI-stable across Node majors
+      # we care about; including `lts/*` patch versions busted the cache.
       - name: Restore NAPI addon cache
         id: napi-cache
         if: matrix.task == 'test:integration'
         uses: actions/cache/restore@v4
         with:
           path: crates/treq-napi/treq-napi.linux-x64-gnu.node
-          key: napi-${{ runner.os }}-${{ steps.setup-node.outputs.node-version }}-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'src-tauri/Cargo.toml', 'src-tauri/build.rs', 'src-tauri/src/**', 'src-tauri/tests/**', 'crates/treq-napi/Cargo.toml', 'crates/treq-napi/build.rs', 'crates/treq-napi/src/**', 'crates/treq-napi/package.json', 'crates/treq-napi/package-lock.json') }}
+          key: napi-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'src-tauri/Cargo.toml', 'src-tauri/build.rs', 'src-tauri/src/**', 'src-tauri/tests/**', 'crates/treq-napi/Cargo.toml', 'crates/treq-napi/build.rs', 'crates/treq-napi/src/**', 'crates/treq-napi/package.json', 'crates/treq-napi/package-lock.json') }}
 
       - name: Install Rust stable
         # Unit JS tests never need Rust. Integration skips the toolchain when
