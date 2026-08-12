@@ -68,7 +68,7 @@ jobs:
 
       - name: install dependencies (ubuntu only)
         # WebKit/GTK is needed to link treq/tauri (NAPI addon, cargo check/test).
-        if: matrix.platform == 'ubuntu-22.04' && matrix.kind != 'js' || matrix.task == 'test:integration'
+        if: matrix.platform == 'ubuntu-22.04' && (matrix.kind != 'js' || matrix.task == 'test:integration')
         run: |
           sudo apt-get update
           sudo apt-get install -y git
