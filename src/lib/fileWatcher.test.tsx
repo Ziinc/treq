@@ -12,7 +12,7 @@ describe("File watcher API integration", () => {
   });
 
   it("should call start_file_watcher with workspaceId and workspacePath", async () => {
-    const { startFileWatcher } = await import("../src/lib/api");
+    const { startFileWatcher } = await import("./api");
 
     await startFileWatcher(123, "/path/to/workspace");
 
@@ -23,7 +23,7 @@ describe("File watcher API integration", () => {
   });
 
   it("should call stop_file_watcher with workspaceId and workspacePath", async () => {
-    const { stopFileWatcher } = await import("../src/lib/api");
+    const { stopFileWatcher } = await import("./api");
 
     await stopFileWatcher(123, "/path/to/workspace");
 

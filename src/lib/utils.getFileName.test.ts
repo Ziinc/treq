@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getFileName } from "../src/lib/utils";
+import { getFileName } from "./utils";
 
 describe("getFileName", () => {
   it("extracts filename from path with directories", () => {
