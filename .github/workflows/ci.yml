@@ -30,10 +30,18 @@ jobs:
           - platform: ubuntu-22.04
             kind: js
             task: test:unit
-          # Integration tests: NAPI + real jj repos. Serial file execution.
+          # Integration tests: NAPI + real jj repos. Serial within a shard;
+          # split across runners to cut wall-clock (Vitest --shard).
           - platform: ubuntu-22.04
             kind: js
             task: test:integration
+            shard: 1
+            shards: 2
+          - platform: ubuntu-22.04
+            kind: js
+            task: test:integration
+            shard: 2
+            shards: 2
           - platform: ubuntu-22.04
             kind: rust
             task: test
@@ -41,7 +49,7 @@ jobs:
             kind: rust
             task: test
 
-    name: ${{ matrix.kind }} / ${{ matrix.task }} / ${{ matrix.platform }}
+    name: ${{ matrix.kind }} / ${{ matrix.task }}${{ matrix.shard && format(' ({0}/{1})', matrix.shard, matrix.shards) || '' }} / ${{ matrix.platform }}
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
@@ -128,6 +136,8 @@ jobs:
             npm run check
             npm run check:format
             npm run lint
+          elif [ -n "${{ matrix.shard }}" ]; then
+            npm run ${{ matrix.task }} -- --shard=${{ matrix.shard }}/${{ matrix.shards }}
           else
             npm run ${{ matrix.task }}
           fi
