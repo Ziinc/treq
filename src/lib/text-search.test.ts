@@ -3,7 +3,7 @@ import {
   escapeRegex,
   findMatches,
   highlightInHtml,
-} from "../src/lib/text-search";
+} from "./text-search";
 
 describe("text-search utilities", () => {
   describe("escapeRegex", () => {
