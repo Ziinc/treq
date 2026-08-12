@@ -17,53 +17,6 @@ on:
       - ".github/workflows/ci.yml"
 
 jobs:
-  # Compile the NAPI addon once; integration shards reuse the artifact so they
-  # do not each pay a multi-minute Rust link.
-  build-napi:
-    name: build / napi / ubuntu-22.04
-    runs-on: ubuntu-22.04
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: lts/*
-          cache: npm
-          cache-dependency-path: package-lock.json
-
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@v1
-        with:
-          toolchain: stable
-
-      - name: install WebKit/GTK (napi links treq/tauri)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-
-      - name: Install dependencies
-        run: npm ci
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-          workspaces: |
-            ./src-tauri -> target
-            ./crates/treq-napi -> target
-
-      - name: Build NAPI addon
-        run: npm run build:napi
-
-      - name: Upload NAPI addon
-        uses: actions/upload-artifact@v4
-        with:
-          name: treq-napi-node
-          path: crates/treq-napi/*.node
-          if-no-files-found: error
-          retention-days: 1
-
   ci:
     timeout-minutes: 10
     strategy:
@@ -77,6 +30,23 @@ jobs:
           - platform: ubuntu-22.04
             kind: js
             task: test:unit
+          # Integration: serial within a shard; 3 parallel shards cut wall-clock.
+          # Each shard builds NAPI (rust-cache shared) — avoids needs: serialization.
+          - platform: ubuntu-22.04
+            kind: js
+            task: test:integration
+            shard: 1
+            shards: 3
+          - platform: ubuntu-22.04
+            kind: js
+            task: test:integration
+            shard: 2
+            shards: 3
+          - platform: ubuntu-22.04
+            kind: js
+            task: test:integration
+            shard: 3
+            shards: 3
           - platform: ubuntu-22.04
             kind: rust
             task: test
@@ -84,7 +54,7 @@ jobs:
             kind: rust
             task: test
 
-    name: ${{ matrix.kind }} / ${{ matrix.task }} / ${{ matrix.platform }}
+    name: ${{ matrix.kind }} / ${{ matrix.task }}${{ matrix.shard && format(' ({0}/{1})', matrix.shard, matrix.shards) || '' }} / ${{ matrix.platform }}
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
@@ -97,18 +67,21 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Install Rust stable
-        if: matrix.kind != 'js'
+        # Unit JS tests do not compile native code.
+        if: matrix.kind != 'js' || matrix.task == 'test:integration'
         uses: dtolnay/rust-toolchain@v1
         with:
           components: rustfmt
           toolchain: stable
 
       - name: Install cargo-binstall
-        if: matrix.kind == 'rust' && matrix.platform == 'ubuntu-22.04'
+        # Only jobs that install jj via binstall need this.
+        if: matrix.task == 'test:integration' || (matrix.kind == 'rust' && matrix.platform == 'ubuntu-22.04')
         uses: cargo-bins/cargo-binstall@main
 
       - name: install dependencies (ubuntu only)
-        if: matrix.platform == 'ubuntu-22.04' && matrix.kind != 'js'
+        # WebKit/GTK is needed to link treq/tauri (NAPI addon, cargo check/test).
+        if: matrix.platform == 'ubuntu-22.04' && (matrix.kind != 'js' || matrix.task == 'test:integration')
         run: |
           sudo apt-get update
           sudo apt-get install -y git
@@ -122,7 +95,8 @@ jobs:
           echo "$(brew --prefix)/bin" >> $GITHUB_PATH
 
       - name: Install jj CLI (ubuntu)
-        if: matrix.platform == 'ubuntu-22.04' && matrix.kind == 'rust'
+        # Integration + Rust tests exercise real repos; verify/unit do not.
+        if: matrix.platform == 'ubuntu-22.04' && (matrix.task == 'test:integration' || matrix.kind == 'rust')
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
@@ -130,6 +104,7 @@ jobs:
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
 
       - name: Install gh CLI (ubuntu)
+        # Version pin check for rust runners only; JS tests mock GitHub.
         if: matrix.platform == 'ubuntu-22.04' && matrix.kind == 'rust'
         run: |
           (type -p wget >/dev/null || (sudo apt-get update && sudo apt-get install -y wget)) \
@@ -142,7 +117,7 @@ jobs:
           && sudo apt-get install -y gh
 
       - name: Verify pinned tool versions
-        if: matrix.kind == 'rust'
+        if: matrix.task == 'test:integration' || matrix.kind == 'rust'
         run: |
           git --version
           jj --version
@@ -152,10 +127,12 @@ jobs:
         run: npm ci
 
       - uses: Swatinem/rust-cache@v2
-        if: matrix.kind == 'rust'
+        if: matrix.kind == 'rust' || matrix.task == 'test:integration'
         with:
           cache-on-failure: true
-          workspaces: "./src-tauri -> target"
+          workspaces: |
+            ./src-tauri -> target
+            ./crates/treq-napi -> target
 
       - name: Run JS task
         if: matrix.kind == 'js' || matrix.kind == 'verify'
@@ -164,6 +141,8 @@ jobs:
             npm run check
             npm run check:format
             npm run lint
+          elif [ -n "${{ matrix.shard }}" ]; then
+            npm run ${{ matrix.task }} -- --shard=${{ matrix.shard }}/${{ matrix.shards }}
           else
             npm run ${{ matrix.task }}
           fi
@@ -180,51 +159,3 @@ jobs:
           else
             cargo test --no-fail-fast
           fi
-
-  js-integration:
-    name: js / test:integration (${{ matrix.shard }}/2) / ubuntu-22.04
-    needs: build-napi
-    runs-on: ubuntu-22.04
-    timeout-minutes: 10
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2]
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: lts/*
-          cache: npm
-          cache-dependency-path: package-lock.json
-
-      - name: Install Rust stable
-        # cargo-binstall needs cargo on PATH; no WebKit — addon is prebuilt.
-        uses: dtolnay/rust-toolchain@v1
-        with:
-          toolchain: stable
-
-      - name: Install cargo-binstall
-        uses: cargo-bins/cargo-binstall@main
-
-      - name: Install jj CLI
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: |
-          cargo binstall --strategies crate-meta-data,compile jj-cli
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-          jj --version
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Download NAPI addon
-        uses: actions/download-artifact@v4
-        with:
-          name: treq-napi-node
-          path: crates/treq-napi
-
-      - name: Run integration shard
-        run: npm run test:integration:run -- --shard=${{ matrix.shard }}/2

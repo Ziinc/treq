@@ -50,8 +50,7 @@
     "icons:generate": "node scripts/generate-icons.js && npx @tauri-apps/cli icon assets/logo-white.imageset/logo-white-rounded.svg",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
-    "storybook:screenshot": "npm run build-storybook --silent && node scripts/storybook/screenshot.mjs",
-    "test:integration:run": "DEBUG_PRINT_LIMIT=50 vitest run --config vitest.integration.config.ts"
+    "storybook:screenshot": "npm run build-storybook --silent && node scripts/storybook/screenshot.mjs"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^18.0.1",
