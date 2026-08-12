@@ -12,12 +12,18 @@ import {
   Terminal,
   Trash2,
 } from "lucide-react";
+import { useState } from "react";
 import { useEditorApps } from "../hooks/useEditorApps";
 import type { QueueEntryStatus, Workspace } from "../lib/api";
 import type { PrInfo } from "../lib/api-types";
 import { cn, getFullWorkspacePath } from "../lib/utils";
 import type { FlattenedWorkspaceNode } from "../lib/workspace-tree";
 import { getWorkspaceTitle as getWorkspaceTitleFromUtils } from "../lib/workspace-utils";
+import {
+  getChangeFilesDragData,
+  isChangeFilesDrag,
+  type ChangeFilesMoveRequest,
+} from "../lib/change-file-drag";
 import { Button } from "./ui/button";
 import {
   ContextMenu,
@@ -131,6 +137,7 @@ interface WorkspaceSidebarItemProps {
   prInfo?: PrInfo | null;
   /** Whether the repo has a GitHub remote (gates PR icon coloring). */
   hasRemote?: boolean;
+  onDropChangeFiles?: (request: ChangeFilesMoveRequest) => void;
 }
 
 function prIconStyle(prInfo: PrInfo): { color: string; label: string } {
@@ -196,6 +203,7 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
   queueStatus,
   prInfo = null,
   hasRemote = false,
+  onDropChangeFiles,
 }) => {
   const workspace = node.status.current;
   const isSelected =
@@ -207,6 +215,7 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
   const isConflicted = node.status.has_conflicts;
   const workspaceTitle = getWorkspaceTitleFromUtils(workspace);
   const prStatus = hasRemote && prInfo ? prIconStyle(prInfo) : null;
+  const [isChangeDropTarget, setIsChangeDropTarget] = useState(false);
 
   return (
     <div key={workspace.id}>
@@ -228,7 +237,8 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                         {
                           "bg-primary/20": isSelected,
                           "hover:bg-muted/50": !isSelected,
-                          "bg-primary/10": dragSnapshot.combineTargetFor,
+                          "bg-primary/10":
+                            dragSnapshot.combineTargetFor || isChangeDropTarget,
                           "opacity-50": dragSnapshot.isDragging,
                           "text-destructive": isConflicted,
                         },
@@ -239,6 +249,33 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                           : onWorkspaceClick?.(workspace)
                       }
                       onDoubleClick={(e) => onDoubleClick?.(workspace, e)}
+                      onDragOver={(e) => {
+                        if (
+                          !onDropChangeFiles ||
+                          !isChangeFilesDrag(e.dataTransfer)
+                        )
+                          return;
+                        e.preventDefault();
+                        e.dataTransfer.dropEffect = "move";
+                        setIsChangeDropTarget(true);
+                      }}
+                      onDragLeave={() => setIsChangeDropTarget(false)}
+                      onDrop={(e) => {
+                        setIsChangeDropTarget(false);
+                        if (!onDropChangeFiles) return;
+                        const payload = getChangeFilesDragData(e.dataTransfer);
+                        if (!payload) return;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (payload.sourceBranch === workspace.branch_name)
+                          return;
+                        onDropChangeFiles({
+                          files: payload.files,
+                          sourceBranch: payload.sourceBranch,
+                          destinationBranch: workspace.branch_name,
+                          destinationLabel: workspaceTitle,
+                        });
+                      }}
                     >
                       <GitBranch
                         data-testid={`workspace-pr-icon-${workspace.id}`}

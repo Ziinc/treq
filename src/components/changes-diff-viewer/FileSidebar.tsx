@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import type { JjFileChange } from "../../lib/api";
 import type { ParsedFileChange } from "../../lib/git-utils";
+import { setChangeFilesDragData } from "../../lib/change-file-drag";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -67,6 +68,7 @@ interface FileSidebarProps {
   handleStageAllFiles: () => void;
   fileActionTarget: string | null;
   workspacePath: string;
+  sourceBranch: string;
 }
 
 export function FileSidebar({
@@ -118,8 +120,20 @@ export function FileSidebar({
   handleStageAllFiles,
   fileActionTarget,
   workspacePath,
+  sourceBranch,
 }: FileSidebarProps) {
   const [showDiscardAllDialog, setShowDiscardAllDialog] = useState(false);
+
+  const handleFileDragStart = (path: string, event: React.DragEvent) => {
+    const files =
+      selectedUnstagedFiles.has(path) && selectedUnstagedFiles.size > 0
+        ? Array.from(selectedUnstagedFiles)
+        : [path];
+    setChangeFilesDragData(event.dataTransfer, {
+      files,
+      sourceBranch,
+    });
+  };
 
   return (
     <div className="w-60 border-r border-border bg-sidebar flex flex-col">
@@ -228,6 +242,7 @@ export function FileSidebar({
                   onStage={handleStageFile}
                   onStageAll={handleStageAllFiles}
                   workspacePath={workspacePath}
+                  onFileDragStart={handleFileDragStart}
                 />
               </>
             ) : null}

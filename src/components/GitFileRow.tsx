@@ -21,6 +21,8 @@ export interface GitFileRowProps {
   onUnstage?: (path: string) => void;
   isStaged?: boolean;
   workspacePath?: string;
+  /** Enables HTML5 drag of this file (or the current selection) onto a workspace. */
+  onFileDragStart?: (path: string, event: React.DragEvent) => void;
 }
 
 function formatFileLabel(filePath: string) {
@@ -43,9 +45,11 @@ export const GitFileRow = memo<GitFileRowProps>(
     onUnstage,
     isStaged = false,
     workspacePath,
+    onFileDragStart,
   }) => {
     const label = formatFileLabel(file.path);
     const { status } = file;
+    const canDrag = !readOnly && !!onFileDragStart;
 
     return (
       <FileContextMenu filePath={file.path} workspacePath={workspacePath || ""}>
@@ -56,6 +60,14 @@ export const GitFileRow = memo<GitFileRowProps>(
               ? "bg-blue-500/60 border-blue-600 font-semibold text-white"
               : "border-transparent hover:bg-accent/20",
           )}
+          draggable={canDrag}
+          onDragStart={
+            canDrag
+              ? (e) => {
+                  onFileDragStart(file.path, e);
+                }
+              : undefined
+          }
           onClick={(e) => {
             onFileClick?.(file.path, e);
           }}

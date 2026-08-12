@@ -1,13 +1,6 @@
 import { DragDropContext, Droppable, type DropResult } from "@hello-pangea/dnd";
 import { useQuery } from "@tanstack/react-query";
-import {
-  Archive,
-  GitBranch,
-  Github,
-  Home,
-  Search,
-  Settings,
-} from "lucide-react";
+import { Archive, Github, Search, Settings } from "lucide-react";
 import { memo, useCallback, useMemo, useState } from "react";
 import {
   useGitRemoteInfo,
@@ -25,6 +18,7 @@ import type {
   QueueEntryStatus,
   WorkspaceSidebarStatus,
 } from "../lib/api-types";
+import type { ChangeFilesMoveRequest } from "../lib/change-file-drag";
 import { FEATURES } from "../lib/features";
 import { supabase } from "../lib/supabase";
 import {
@@ -33,16 +27,10 @@ import {
   getDescendants,
   getEntireStack,
 } from "../lib/workspace-tree";
+import { HomeRepoSidebarRow } from "./HomeRepoSidebarRow";
 import { RenameWorkspaceDialog } from "./RenameWorkspaceDialog";
 import { TerminalSessionsSidebar } from "./TerminalSessionsSidebar";
 import { type TerminalSessionSummary } from "./terminal/types";
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
-  ContextMenuTrigger,
-} from "./ui/context-menu";
 import { Kbd, KbdGroup } from "./ui/kbd";
 import {
   Tooltip,
@@ -50,10 +38,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "./ui/tooltip";
-import {
-  PathContextMenuItems,
-  WorkspaceSidebarItem,
-} from "./WorkspaceSidebarItem";
+import { WorkspaceSidebarItem } from "./WorkspaceSidebarItem";
 
 interface WorkspaceSidebarProps {
   repoPath?: string;
@@ -86,6 +71,7 @@ interface WorkspaceSidebarProps {
   onCloseAllTerminalSessions?: () => void;
   onCreateAgentTerminal?: () => void;
   onCreateShellTerminal?: () => void;
+  onDropChangeFiles?: (request: ChangeFilesMoveRequest) => void;
 }
 
 export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
@@ -115,6 +101,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
     onCloseAllTerminalSessions,
     onCreateAgentTerminal,
     onCreateShellTerminal,
+    onDropChangeFiles,
   }) => {
     const {
       data: workspaces = [],
@@ -323,75 +310,16 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
             className="pl-1 pr-2 py-2 space-y-1 min-h-[120px] flex-1 overflow-y-auto select-none"
             onClick={handleContainerClick}
           >
-            <ContextMenu>
-              <Tooltip>
-                <ContextMenuTrigger asChild>
-                  <TooltipTrigger asChild>
-                    <div
-                      data-testid="home-repo-row"
-                      className={`relative flex items-center text-sm tracking-wide px-2 py-1 rounded-md transition-colors cursor-pointer ${
-                        isHomeSelected ? "bg-primary/20" : "hover:bg-muted/50"
-                      }`}
-                      onClick={(e) => {
-                        if (
-                          selectedWorkspaceIds &&
-                          selectedWorkspaceIds.size > 0 &&
-                          onWorkspaceMultiSelect
-                        ) {
-                          onWorkspaceMultiSelect(
-                            null as Parameters<
-                              NonNullable<typeof onWorkspaceMultiSelect>
-                            >[0],
-                            e,
-                          );
-                          return;
-                        }
-                        onWorkspaceClick?.(undefined as unknown as Workspace);
-                      }}
-                    >
-                      <Home
-                        className={`w-3 h-3 mr-1 shrink-0 ${
-                          isHomeSelected
-                            ? "text-primary"
-                            : "text-muted-foreground"
-                        }`}
-                      />
-                      <span
-                        className={`flex-1 min-w-0 truncate font-mono ${
-                          isHomeSelected
-                            ? "text-primary font-medium"
-                            : "text-muted-foreground"
-                        }`}
-                        title={homeRepoDisplayRef || "…"}
-                      >
-                        {homeRepoDisplayRef || "…"}
-                      </span>
-                    </div>
-                  </TooltipTrigger>
-                </ContextMenuTrigger>
-                <TooltipContent side="right" className="font-mono">
-                  <div className="flex items-center gap-1.5">
-                    <GitBranch className="w-3 h-3" />
-                    <span>{homeRepoDisplayRef || "…"}</span>
-                  </div>
-                </TooltipContent>
-              </Tooltip>
-              <ContextMenuContent>
-                {onOpenBranchSwitcher && (
-                  <>
-                    <ContextMenuItem onClick={onOpenBranchSwitcher}>
-                      <GitBranch className="w-4 h-4 mr-2" />
-                      Switch Branch...
-                    </ContextMenuItem>
-                    <ContextMenuSeparator />
-                  </>
-                )}
-                <PathContextMenuItems
-                  relativePath="."
-                  fullPath={repoPath || ""}
-                />
-              </ContextMenuContent>
-            </ContextMenu>
+            <HomeRepoSidebarRow
+              repoPath={repoPath}
+              homeRepoDisplayRef={homeRepoDisplayRef}
+              isHomeSelected={isHomeSelected}
+              selectedWorkspaceIds={selectedWorkspaceIds}
+              onWorkspaceClick={onWorkspaceClick}
+              onWorkspaceMultiSelect={onWorkspaceMultiSelect}
+              onOpenBranchSwitcher={onOpenBranchSwitcher}
+              onDropChangeFiles={onDropChangeFiles}
+            />
 
             {onOpenGitHub && (
               <button
@@ -472,6 +400,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                           ] ?? null
                         }
                         hasRemote={!!remoteInfo}
+                        onDropChangeFiles={onDropChangeFiles}
                       />
                     ))}
                     {droppableProvided.placeholder}
