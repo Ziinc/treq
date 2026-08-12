@@ -50,7 +50,7 @@ function dragAndDrop(sourceEl: HTMLElement, dropTarget: HTMLElement) {
 	fireEvent.dragEnd(sourceEl, { dataTransfer });
 }
 
-it("captures drag-to-workspace confirmation dialog", async () => {
+it("captures drag-to-workspace confirmation and completed move", async () => {
 	const sourceBranch = "feat/drag-src";
 	const destBranch = "feat/drag-dest";
 	const { repoPath } = createTestRepo(false);
@@ -101,21 +101,24 @@ it("captures drag-to-workspace confirmation dialog", async () => {
 		name: "drag-changes-to-workspace-02-confirm",
 		expectations: [
 			'A confirmation dialog titled "Move 1 file to feat/drag-dest?" is open.',
-			'The dialog has Cancel and Move actions.',
-			'The description mentions moving uncommitted changes into the target workspace.',
+			"The dialog has Cancel and Move actions.",
+			"The description mentions moving uncommitted changes into the target workspace.",
 		],
 	});
 
-	await user.click(await screen.findByRole("button", { name: /Cancel/i }));
-	await waitFor(() =>
-		expect(screen.queryByText(/Move 1 file to feat\/drag-dest\?/)).toBeNull(),
-	);
+	await user.click(await screen.findByRole("button", { name: /^Move$/ }));
+
+	await waitFor(() => {
+		expect(screen.queryByText(/Move 1 file to feat\/drag-dest\?/)).toBeNull();
+		expect(screen.queryAllByText("drag-me.txt")).toHaveLength(0);
+	});
 
 	await captureDocument(document, {
-		name: "drag-changes-to-workspace-03-cancelled",
+		name: "drag-changes-to-workspace-03-moved",
 		expectations: [
 			"The confirmation dialog has closed.",
-			'The file "drag-me.txt" is still listed in Changes.',
+			'The Changes list no longer shows "drag-me.txt" (empty or no-changes state).',
+			"The Review tab badge no longer shows a pending change count of 1.",
 		],
 	});
 }, 60000);
