@@ -14,6 +14,7 @@
 import os from "os";
 import path from "path";
 import fs from "fs";
+import { randomUUID } from "crypto";
 import { afterEach, beforeAll, expect, vi } from "vitest";
 
 // Shared DOM polyfills, browser API stubs, Tauri plugin mocks, and hook mocks
@@ -28,10 +29,15 @@ process.env.TREQ_DISABLE_AUTO_REBASE = "1";
 const napi = require("../crates/treq-napi");
 
 // ── Initialize state ─────────────────────────────────────────────────────────
+//
+// App-level DB (`TREQ_APP_DB_PATH`) is process-global inside the native addon.
+// With `pool: "forks"` + fileParallelism, each test file gets its own process
+// and therefore its own app.db. Include pid + uuid so parallel workers never
+// collide on the same path when started in the same millisecond.
 
 const testDbPath = path.join(
   os.tmpdir(),
-  `treq-integration-test-${Date.now()}.db`,
+  `treq-integration-${process.pid}-${randomUUID()}.db`,
 );
 
 beforeAll(() => {
