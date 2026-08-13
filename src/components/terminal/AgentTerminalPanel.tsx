@@ -43,7 +43,8 @@ import { useToast } from "../ui/toast";
 import { shellQuote } from "../../lib/shellQuote";
 import {
   appendAgentPrompt,
-  treqAgentSystemPrompt,
+  buildClaudeSandboxSettings,
+  buildTreqAgentSystemPrompt,
 } from "../../lib/agentCommand";
 import { type ClaudeSessionData } from "./types";
 import { TerminalSendPreviews } from "./TerminalSendPreviews";
@@ -244,19 +245,17 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
       performReset();
     }, [pendingModelReset, handleReset, sessionModel, addToast]);
 
-    // Shared treq CLI documentation injected as system prompt for any agent.
-    // Join with literal \n so shell-quoted single-line args expand correctly
-    // for Claude/Codex; cursor-agent receives real newlines via the prompt.
-    const treqSystemPromptForShell = treqAgentSystemPrompt.replace(
-      /\n/g,
-      "\\n",
-    );
+    const agentPathContext = {
+      workspacePath: sessionData.workspacePath,
+      repoPath: sessionData.repoPath,
+    };
+    const treqSystemPrompt = buildTreqAgentSystemPrompt(agentPathContext);
 
     let autoCommand: string;
 
     if (sessionData.agent === "codex") {
       // Codex CLI: pass system prompt via -c instructions override, then prompt as positional arg
-      autoCommand = `codex -c ${shellQuote(`instructions="${treqSystemPromptForShell}"`)}`;
+      autoCommand = `codex -c ${shellQuote(`instructions="${treqSystemPrompt}"`)}`;
       if (pendingPromptRef.current) {
         autoCommand = appendAgentPrompt(autoCommand, pendingPromptRef.current);
       }
@@ -264,8 +263,8 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
       // cursor-agent: no system-prompt flag; prepend treq instructions into the prompt arg.
       // --plan engages cursor's plan mode; omit when in edit mode.
       const combined = pendingPromptRef.current
-        ? `${treqAgentSystemPrompt}\n\n${pendingPromptRef.current}`
-        : treqAgentSystemPrompt;
+        ? `${treqSystemPrompt} ${pendingPromptRef.current}`
+        : treqSystemPrompt;
       const planFlag = permissionModeRef.current === "plan" ? " --plan" : "";
       autoCommand = appendAgentPrompt(`cursor-agent${planFlag}`, combined);
     } else {
@@ -278,7 +277,11 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
       if (sessionModel) {
         autoCommand += ` --model=${shellQuote(sessionModel)}`;
       }
-      autoCommand += ` --append-system-prompt ${shellQuote(treqSystemPromptForShell)}`;
+      const sandboxSettings = JSON.stringify(
+        buildClaudeSandboxSettings(agentPathContext),
+      );
+      autoCommand += ` --settings ${shellQuote(sandboxSettings)}`;
+      autoCommand += ` --append-system-prompt ${shellQuote(treqSystemPrompt)}`;
       if (pendingPromptRef.current) {
         autoCommand += ` -- ${shellQuote(pendingPromptRef.current)}`;
       }

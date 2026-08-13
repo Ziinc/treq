@@ -4,16 +4,57 @@ import { shellQuote } from "./shellQuote";
 export const appendAgentPrompt = (command: string, prompt: string): string =>
   `${command} -- ${shellQuote(prompt)}`;
 
-/**
- * System prompt injected into agent terminal sessions.
- * Allows treq CLI workspace ops (which land under `.treq/workspaces/`)
- * while keeping direct file edits scoped to the working directory.
- */
-export const treqAgentSystemPrompt = [
-  "You have access to the treq CLI for managing workspaces.",
-  "Run `treq --help` to discover the currently available commands before using the CLI.",
-  "You may run treq CLI commands even when they create or manage workspaces outside the current working directory.",
-  "Use `treq send <path>` (or pipe text into `treq send`) to preview images and text in the Treq UI for the user.",
-  "",
-  "IMPORTANT: When editing files directly, you must read, write, edit, and delete only files in the current working directory.",
-].join("\n");
+interface AgentPathContext {
+  workspacePath: string | null;
+  repoPath: string;
+}
+
+/** Build the single-line system prompt injected into agent terminal sessions. */
+export const buildTreqAgentSystemPrompt = ({
+  workspacePath,
+  repoPath,
+}: AgentPathContext): string => {
+  const locationContext = workspacePath
+    ? [
+        "You are operating inside a Treq workspace.",
+        `Your current working directory and direct filesystem scope is ${workspacePath}.`,
+        `The Treq home repository is ${repoPath}.`,
+        "The home repository and sibling workspaces are outside your direct filesystem scope.",
+      ]
+    : [
+        "You are operating in the Treq home repository.",
+        `Your current working directory and direct filesystem scope is ${repoPath}.`,
+      ];
+
+  return [
+    ...locationContext,
+    "You may freely read and write files within this directory and its descendants.",
+    "Do not directly read, write, edit, or delete files outside this directory.",
+    "You have access to the treq CLI for managing workspaces.",
+    "Run `treq --help` to discover the currently available commands before using the CLI.",
+    "You may run treq CLI commands even when they create or manage workspaces outside the current working directory.",
+    "Use `treq send <path>` (or pipe text into `treq send`) to preview images and text in the Treq UI for the user.",
+  ].join(" ");
+};
+
+/** Build per-session Claude sandbox settings for the resolved working directory. */
+export const buildClaudeSandboxSettings = ({
+  workspacePath,
+  repoPath,
+}: AgentPathContext) => ({
+  sandbox: {
+    enabled: true,
+    failIfUnavailable: true,
+    allowUnsandboxedCommands: false,
+    filesystem: workspacePath
+      ? {
+          denyRead: [repoPath],
+          allowRead: [workspacePath],
+          allowWrite: [workspacePath],
+        }
+      : {
+          allowRead: [repoPath],
+          allowWrite: [repoPath],
+        },
+  },
+});
