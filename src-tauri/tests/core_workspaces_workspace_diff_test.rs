@@ -292,6 +292,70 @@ fn test_workspace_diff_includes_uncommitted_changes_and_conflicts() {
 }
 
 #[test]
+fn test_workspace_diff_dedupes_committed_files_that_also_have_wc_changes() {
+  let repo = TestRepo::new().unwrap();
+  repo.commit_file("shared.txt", "base\n", "base").unwrap();
+
+  let ws = treq_lib::core::create_workspace(
+    &repo.repo_path,
+    "feat/overlap-committed",
+    None,
+    None,
+    None,
+    None,
+    None,
+  )
+  .unwrap();
+  let workspace_dir = repo.workspaces_dir().join(&ws.workspace_path);
+  let workspace_dir_str = workspace_dir.to_str().unwrap();
+
+  TestRepo::write_workspace_file(workspace_dir_str, "shared.txt", "committed\n").unwrap();
+  TestRepo::write_workspace_file(workspace_dir_str, "committed-only.txt", "only committed\n")
+    .unwrap();
+  treq_lib::core::commit_workspace(&repo.repo_path, ws.id, "commit overlapping base").unwrap();
+
+  TestRepo::write_workspace_file(workspace_dir_str, "shared.txt", "working copy\n").unwrap();
+  TestRepo::write_workspace_file(workspace_dir_str, "uncommitted-only.txt", "only wc\n").unwrap();
+
+  init_test_app_db(&repo, Some("git"));
+  let diff = treq_lib::core::workspace_diff(&repo.repo_path, ws.id).unwrap();
+
+  let committed_paths: Vec<_> = diff
+    .committed_files
+    .iter()
+    .map(|f| f.path.as_str())
+    .collect();
+  let uncommitted_paths: Vec<_> = diff
+    .uncommitted_files
+    .iter()
+    .map(|f| f.path.as_str())
+    .collect();
+
+  assert!(
+    !committed_paths.contains(&"shared.txt"),
+    "dirty overlapping files must not duplicate under committed: {:?}",
+    committed_paths
+  );
+  assert!(
+    committed_paths.contains(&"committed-only.txt"),
+    "clean committed files should remain: {:?}",
+    committed_paths
+  );
+  assert!(
+    !committed_paths.contains(&"uncommitted-only.txt"),
+    "WC-only files must not appear under committed: {:?}",
+    committed_paths
+  );
+  assert!(
+    uncommitted_paths.contains(&"shared.txt"),
+    "overlapping dirty file must appear under uncommitted: {:?}",
+    uncommitted_paths
+  );
+  assert!(uncommitted_paths.contains(&"uncommitted-only.txt"));
+  assert!(!uncommitted_paths.contains(&"committed-only.txt"));
+}
+
+#[test]
 fn test_workspace_diff_does_not_pick_up_target_branch_changes_after_force_rebase() {
   let repo = TestRepo::new().expect("Failed to create test repo");
   let default_branch = repo.default_branch();

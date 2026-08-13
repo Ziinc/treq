@@ -2531,6 +2531,10 @@ fn workspace_diff_with_conflict_style(
     .map_err(|e| format!("Failed to get conflicted workspace files: {}", e))?;
   let conflicted_paths: std::collections::HashSet<String> =
     conflicted_files.iter().cloned().collect();
+  // Drop clean overlap with the working copy so WC-only edits (bookmark at @)
+  // are not duplicated under Committed + Changes. Conflicted paths stay in
+  // committed_files — rebase conflicts live in committed hunks. Review's Show
+  // toggle keeps those dirty/conflicted committed rows visible when off.
   diff.committed_files.retain(|file| {
     !uncommitted_paths.contains(&file.path) || conflicted_paths.contains(&file.path)
   });

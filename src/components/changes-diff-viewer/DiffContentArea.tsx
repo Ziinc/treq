@@ -23,6 +23,7 @@ import type {
   PendingComment,
 } from "./types";
 import type { useToast } from "../ui/toast";
+import { filterVisibleCommittedFiles } from "./utils";
 
 interface DiffContentAreaProps {
   // search
@@ -204,6 +205,22 @@ export function DiffContentArea({
   getFileCommentsForFile,
   diffContainerRef,
 }: DiffContentAreaProps) {
+  const alwaysVisibleCommittedPaths = useMemo(() => {
+    const paths = new Set<string>(actualConflictedFiles);
+    for (const file of files) paths.add(file.path);
+    return paths;
+  }, [actualConflictedFiles, files]);
+
+  const visibleCommittedFiles = useMemo(
+    () =>
+      filterVisibleCommittedFiles(
+        committedFiles,
+        showCommittedChanges ?? false,
+        alwaysVisibleCommittedPaths,
+      ),
+    [committedFiles, showCommittedChanges, alwaysVisibleCommittedPaths],
+  );
+
   const hunkLinesProps = useMemo(
     () => ({
       conflictedFilePaths: new Set(actualConflictedFiles),
@@ -330,12 +347,7 @@ export function DiffContentArea({
           <Loader2 className="w-6 h-6 animate-spin" />
           <span className="ml-2">Loading diffs...</span>
         </div>
-      ) : files.length === 0 &&
-        (showCommittedChanges
-          ? committedFiles.length === 0
-          : committedFiles.every(
-              (file) => !actualConflictedFiles.includes(file.path),
-            )) ? (
+      ) : files.length === 0 && visibleCommittedFiles.length === 0 ? (
         <div className="h-full flex flex-col items-center justify-center text-muted-foreground">
           <CheckCircle2 className="w-12 h-12 mb-3 text-muted-foreground/40" />
           <p className="text-sm">No changes to review</p>
@@ -415,64 +427,58 @@ export function DiffContentArea({
                     saveEditComment={saveEditComment}
                   />
                 ))}
-                {committedFiles
-                  .filter(
-                    (file) =>
-                      showCommittedChanges ||
-                      actualConflictedFiles.includes(file.path),
-                  )
-                  .map((file) => (
-                    <FileRowComponent
-                      key={`committed-${file.path}`}
-                      file={
-                        {
-                          ...file,
-                          stagedStatus: "",
-                          workspaceStatus: file.status,
-                          isUntracked: false,
-                        } as ParsedFileChange
-                      }
-                      allFileHunks={allFileHunks}
-                      overrideFileHunks={committedFileHunks}
-                      collapsedFiles={collapsedFiles}
-                      viewedFiles={viewedFiles}
-                      expandedLargeDiffs={expandedLargeDiffs}
-                      diffFontSize={diffFontSize}
-                      readOnly={true}
-                      isCommitted={true}
-                      fileActionTarget={null}
-                      selectedUnstagedFiles={new Set()}
-                      actualConflictedFiles={actualConflictedFiles}
-                      workspacePath={workspacePath}
-                      toggleFileCollapse={toggleFileCollapse}
-                      toggleLargeDiff={toggleLargeDiff}
-                      handleMarkFileViewed={handleMarkFileViewed}
-                      handleUnmarkFileViewed={handleUnmarkFileViewed}
-                      handleDiscardFiles={handleDiscardFiles}
-                      handleContextMenu={handleContextMenu}
-                      renderHunkLines={renderHunkLines}
-                      addToast={addToast}
-                      getOutdatedCommentsForFile={getOutdatedCommentsForFile}
-                      getFileCommentsForFile={getFileCommentsForFile}
-                      deleteComment={deleteComment}
-                      getThreadsForLine={getThreadsForLine}
-                      getUnplacedThreadsForFile={getUnplacedThreadsForFile}
-                      collapsedThreadIds={collapsedThreadIds}
-                      toggleThreadCollapse={toggleThreadCollapse}
-                      expandedOutdatedGroups={expandedOutdatedGroups}
-                      toggleOutdatedGroup={toggleOutdatedGroup}
-                      showCommentInput={showCommentInput}
-                      pendingComment={pendingComment}
-                      editingCommentId={editingCommentId}
-                      setPendingComment={setPendingComment}
-                      setShowCommentInput={setShowCommentInput}
-                      addComment={addComment}
-                      cancelComment={cancelComment}
-                      startEditComment={startEditComment}
-                      cancelEditComment={cancelEditComment}
-                      saveEditComment={saveEditComment}
-                    />
-                  ))}
+                {visibleCommittedFiles.map((file) => (
+                  <FileRowComponent
+                    key={`committed-${file.path}`}
+                    file={
+                      {
+                        ...file,
+                        stagedStatus: "",
+                        workspaceStatus: file.status,
+                        isUntracked: false,
+                      } as ParsedFileChange
+                    }
+                    allFileHunks={allFileHunks}
+                    overrideFileHunks={committedFileHunks}
+                    collapsedFiles={collapsedFiles}
+                    viewedFiles={viewedFiles}
+                    expandedLargeDiffs={expandedLargeDiffs}
+                    diffFontSize={diffFontSize}
+                    readOnly={true}
+                    isCommitted={true}
+                    fileActionTarget={null}
+                    selectedUnstagedFiles={new Set()}
+                    actualConflictedFiles={actualConflictedFiles}
+                    workspacePath={workspacePath}
+                    toggleFileCollapse={toggleFileCollapse}
+                    toggleLargeDiff={toggleLargeDiff}
+                    handleMarkFileViewed={handleMarkFileViewed}
+                    handleUnmarkFileViewed={handleUnmarkFileViewed}
+                    handleDiscardFiles={handleDiscardFiles}
+                    handleContextMenu={handleContextMenu}
+                    renderHunkLines={renderHunkLines}
+                    addToast={addToast}
+                    getOutdatedCommentsForFile={getOutdatedCommentsForFile}
+                    getFileCommentsForFile={getFileCommentsForFile}
+                    deleteComment={deleteComment}
+                    getThreadsForLine={getThreadsForLine}
+                    getUnplacedThreadsForFile={getUnplacedThreadsForFile}
+                    collapsedThreadIds={collapsedThreadIds}
+                    toggleThreadCollapse={toggleThreadCollapse}
+                    expandedOutdatedGroups={expandedOutdatedGroups}
+                    toggleOutdatedGroup={toggleOutdatedGroup}
+                    showCommentInput={showCommentInput}
+                    pendingComment={pendingComment}
+                    editingCommentId={editingCommentId}
+                    setPendingComment={setPendingComment}
+                    setShowCommentInput={setShowCommentInput}
+                    addComment={addComment}
+                    cancelComment={cancelComment}
+                    startEditComment={startEditComment}
+                    cancelEditComment={cancelEditComment}
+                    saveEditComment={saveEditComment}
+                  />
+                ))}
               </div>
             </div>
           );

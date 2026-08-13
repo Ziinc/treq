@@ -95,6 +95,29 @@ export const filesEqual = (
   return true;
 };
 
+/**
+ * Committed Show toggle: only committed-only (no WC changes, not conflicted)
+ * files may hide. Dirty or conflicted committed paths stay visible.
+ */
+export function shouldShowCommittedFile(
+  path: string,
+  showCommittedChanges: boolean,
+  alwaysVisiblePaths: ReadonlySet<string>,
+): boolean {
+  return showCommittedChanges || alwaysVisiblePaths.has(path);
+}
+
+export function filterVisibleCommittedFiles<T extends { path: string }>(
+  committedFiles: T[],
+  showCommittedChanges: boolean,
+  alwaysVisiblePaths: ReadonlySet<string>,
+): T[] {
+  if (showCommittedChanges) return committedFiles;
+  return committedFiles.filter((file) =>
+    shouldShowCommittedFile(file.path, false, alwaysVisiblePaths),
+  );
+}
+
 export const parseCachedHunks = (raw: string): JjDiffHunk[] | null => {
   try {
     const parsed = JSON.parse(raw);

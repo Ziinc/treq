@@ -265,6 +265,12 @@ export function FileSidebar({
                 workspacePath={workspacePath}
                 showCommittedChanges={showCommittedChanges ?? false}
                 onToggleShowCommitted={onToggleShowCommitted}
+                alwaysVisiblePaths={
+                  new Set([
+                    ...files.map((file) => file.path),
+                    ...actualConflictedFiles,
+                  ])
+                }
               />
             )}
           </>

@@ -139,14 +139,18 @@ export function useFileLoading({
         }
         setCommittedFiles(committed);
 
-        // When Committed is hidden, still keep conflicted committed hunks —
-        // rebase conflicts live in committed hunks, not dirty WC changes.
+        // When Committed is hidden, still keep dirty + conflicted committed hunks.
+        const alwaysVisibleCommitted = new Set([
+          ...uncommittedPaths,
+          ...conflictedHint,
+        ]);
         setCommittedFileHunks(
           new Map(
             (diff.hunks_by_file ?? [])
               .filter(
                 (fileDiff) =>
-                  showCommittedChanges || conflictedHint.has(fileDiff.path),
+                  showCommittedChanges ||
+                  alwaysVisibleCommitted.has(fileDiff.path),
               )
               .map((fileDiff) => [
                 fileDiff.path,
