@@ -1,0 +1,13 @@
+#!/sbin/openrc-run
+# PostgREST (single-tenant data API).
+
+name="postgrest"
+description="PostgREST REST API for Postgres"
+command="/usr/local/bin/run-postgrest.sh"
+pidfile="/run/${RC_SVCNAME}.pid"
+supervisor=supervise-daemon
+respawn_delay=2
+
+depend() {
+  after local
+}
