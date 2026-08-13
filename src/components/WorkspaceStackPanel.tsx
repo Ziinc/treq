@@ -14,6 +14,7 @@ import {
   type StackedWorkspaceEntry,
 } from "../lib/workspace-tree";
 import { getWorkspaceDisplayTitle } from "../lib/workspace-utils";
+import { LocDiffMarker } from "./LocDiffMarker";
 import {
   Tooltip,
   TooltipContent,
@@ -171,63 +172,6 @@ export const WorkspaceStackPanel = memo<WorkspaceStackPanelProps>(
   },
 );
 
-// Half-width of each side of the bar (insertions grow left from the axis,
-// deletions grow right), a la Gerrit's change list.
-const DIFF_BAR_HALF_WIDTH_PX = 14;
-
-function DiffBar({
-  diffStats,
-  maxChange,
-}: {
-  diffStats: WorkspaceDiffStats;
-  maxChange: number;
-}) {
-  const { insertions, deletions } = diffStats;
-  if (insertions === 0 && deletions === 0) return null;
-
-  const insertionWidth =
-    maxChange === 0 || insertions === 0
-      ? 0
-      : Math.max(
-          1,
-          Math.round((insertions / maxChange) * DIFF_BAR_HALF_WIDTH_PX),
-        );
-  const deletionWidth =
-    maxChange === 0 || deletions === 0
-      ? 0
-      : Math.max(
-          1,
-          Math.round((deletions / maxChange) * DIFF_BAR_HALF_WIDTH_PX),
-        );
-
-  return (
-    <div
-      className="flex h-1.5 flex-shrink-0 items-center"
-      title={`+${insertions} -${deletions}`}
-    >
-      <div
-        className="flex h-full justify-end"
-        style={{ width: DIFF_BAR_HALF_WIDTH_PX }}
-      >
-        <div
-          className="h-full bg-green-600 dark:bg-green-400"
-          style={{ width: insertionWidth }}
-        />
-      </div>
-      <div className="w-px h-full bg-border" aria-hidden="true" />
-      <div
-        className="flex h-full justify-start"
-        style={{ width: DIFF_BAR_HALF_WIDTH_PX }}
-      >
-        <div
-          className="h-full bg-red-600 dark:bg-red-400"
-          style={{ width: deletionWidth }}
-        />
-      </div>
-    </div>
-  );
-}
-
 interface StackItemProps {
   entry: StackedWorkspaceEntry;
   diffStats: WorkspaceDiffStats;
@@ -280,15 +224,11 @@ function StackItem({ entry, diffStats, maxChange, onSelect }: StackItemProps) {
               </Tooltip>
             </TooltipProvider>
             {hasStats && (
-              <div className="ml-auto flex items-center gap-1.5">
-                <span className="text-xs font-mono text-green-600 dark:text-green-400">
-                  +{diffStats.insertions}
-                </span>
-                <DiffBar diffStats={diffStats} maxChange={maxChange} />
-                <span className="text-xs font-mono text-red-600 dark:text-red-400">
-                  -{diffStats.deletions}
-                </span>
-              </div>
+              <LocDiffMarker
+                className="ml-auto"
+                diffStats={diffStats}
+                maxChange={maxChange}
+              />
             )}
           </div>
         </div>

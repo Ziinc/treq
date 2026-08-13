@@ -71,6 +71,7 @@ import {
 import { reviewChangeCountQueryKey } from "../lib/review-change-count";
 import { getReviewTabPill, reviewTabPillClassName } from "../lib/reviewTabPill";
 import { cn, getFullWorkspacePath, resolveReadmeImageSrc } from "../lib/utils";
+import { sumWorkspaceLocFromLog } from "../lib/workspace-stack";
 import type { SessionCreationInfo } from "../types/sessions";
 import {
   ChangesDiffViewer,
@@ -81,6 +82,7 @@ import { CommitDiffViewer } from "./CommitDiffViewer";
 import { CreatePrButtonGroup } from "./CreatePrButtonGroup";
 import { FileBrowser } from "./FileBrowser";
 import { LinearCommitHistory } from "./LinearCommitHistory";
+import { LocDiffMarker } from "./LocDiffMarker";
 import { MarkdownContent } from "./MarkdownContent";
 import {
   type BranchListItem,
@@ -224,12 +226,6 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
     const [syncStatus, setSyncStatus] = useState<{
       ahead: number;
       behind: number;
-    } | null>(null);
-
-    // Aggregate diff stats (insertions/deletions across all commits)
-    const [diffStats] = useState<{
-      insertions: number;
-      deletions: number;
     } | null>(null);
 
     // Target branch and conflicts state
@@ -415,6 +411,19 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
         );
         return countUniqueReviewChangePaths(files);
       },
+    });
+
+    // Workspace LOC (committed + working copy) for the Gerrit-style marker
+    // on the tab row. Shares the stack panel's query key for cache reuse.
+    const { data: workspaceLocStats } = useQuery({
+      queryKey: [
+        "workspace-commits",
+        effectiveRepoPath,
+        workspace?.id ?? null,
+      ],
+      enabled: Boolean(effectiveRepoPath) && workspace?.id !== undefined,
+      queryFn: () => listCommits(effectiveRepoPath, workspace!.id),
+      select: sumWorkspaceLocFromLog,
     });
 
     const reviewTabPill = useMemo(() => {
@@ -1142,32 +1151,8 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
                 <span>{rebasing ? "Rebasing..." : "Refreshing..."}</span>
               </div>
             )}
-            {diffStats && (
-              <div className="flex items-center gap-1.5 text-xs font-mono">
-                <span className="text-green-600 dark:text-green-400">
-                  +{diffStats.insertions}
-                </span>
-                <span className="text-red-600 dark:text-red-400">
-                  -{diffStats.deletions}
-                </span>
-                <div className="flex items-center gap-0.5">
-                  {Array.from({ length: 5 }, (_, i) => {
-                    const ratio =
-                      diffStats.insertions /
-                      (diffStats.insertions + diffStats.deletions);
-                    const isGreen = i < Math.round(ratio * 5);
-                    return (
-                      <div
-                        key={i}
-                        className={cn(
-                          "w-2 h-2 rounded-sm",
-                          isGreen ? "bg-green-600" : "bg-red-600",
-                        )}
-                      />
-                    );
-                  })}
-                </div>
-              </div>
+            {workspaceLocStats && (
+              <LocDiffMarker diffStats={workspaceLocStats} />
             )}
           </div>
         </div>
