@@ -5,7 +5,6 @@ import { createTestRepo, openRepo } from "../utils";
 import { render, screen, waitFor, within } from "../test-utils";
 import { Dashboard } from "../../src/components/Dashboard";
 
-/** Home view autofocuses the commit textarea; plain-key shortcuts ignore inputs. */
 async function leaveTextFields(
   user: ReturnType<typeof userEvent.setup>,
 ): Promise<void> {
