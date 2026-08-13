@@ -376,8 +376,8 @@ fn list_statuses_preserves_slash_branch_and_auto_resolves_conflicted_bookmark() 
     .expect("Failed to write local diverge");
   treq_lib::core::commit_workspace(&repo.repo_path, ws.id, "local diverge")
     .expect("Failed to commit local diverge");
-  let local_change = treq_lib::jj::jj_get_change_id(&workspace_path, "@-")
-    .expect("local change id before conflict");
+  let local_change =
+    treq_lib::jj::jj_get_change_id(&workspace_path, "@-").expect("local change id before conflict");
 
   repo
     .remote_commit_on_branch(branch, "remote.txt", "remote", "remote diverge")

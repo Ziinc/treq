@@ -866,8 +866,12 @@ pub fn list_workspace_statuses(repo_path: &str) -> Result<Vec<WorkspaceSidebarSt
     }
   }
 
-  let discovered = jj::discover_workspaces_with_conflicts(repo_path)
-    .map_err(|e| format!("Failed to rediscover workspaces after bookmark resolve: {}", e))?;
+  let discovered = jj::discover_workspaces_with_conflicts(repo_path).map_err(|e| {
+    format!(
+      "Failed to rediscover workspaces after bookmark resolve: {}",
+      e
+    )
+  })?;
   let refreshed_at = chrono::Utc::now().to_rfc3339();
   let conflict_by_path: HashMap<String, bool> = discovered
     .iter()
