@@ -136,6 +136,8 @@ export interface FileRowComponentProps {
   expandedLargeDiffs: Set<string>;
   diffFontSize: number;
   readOnly: boolean;
+  /** True when this row renders a committed-only Review-tab change. */
+  isCommitted?: boolean;
   fileActionTarget: string | null;
   selectedUnstagedFiles: Set<string>;
   actualConflictedFiles: string[];

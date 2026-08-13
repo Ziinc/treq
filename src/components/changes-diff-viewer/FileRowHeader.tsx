@@ -32,6 +32,8 @@ interface FileRowHeaderProps {
   additions: number;
   deletions: number;
   readOnly: boolean;
+  /** True when this row is a committed-only Review-tab change. */
+  isCommitted?: boolean;
   fileActionTarget: string | null;
   selectedUnstagedFiles: Set<string>;
   workspacePath: string;
@@ -52,6 +54,7 @@ const FileRowHeader: React.FC<FileRowHeaderProps> = ({
   additions,
   deletions,
   readOnly,
+  isCommitted = false,
   fileActionTarget,
   selectedUnstagedFiles,
   workspacePath,
@@ -124,6 +127,14 @@ const FileRowHeader: React.FC<FileRowHeaderProps> = ({
             >
               <Copy className="w-4 h-4" />
             </button>
+            {isCommitted && (
+              <span
+                data-testid="committed-file-label"
+                className="text-sm flex-shrink-0 px-[8px] py-[2px] rounded bg-sky-500/20 text-sky-700 dark:text-sky-300"
+              >
+                Committed
+              </span>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-[8px]">
