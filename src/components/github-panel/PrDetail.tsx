@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  GitBranchPlus,
+  GitBranch,
   ListChecks,
   Loader2,
   MessageSquare,
+  Plus,
   X,
 } from "lucide-react";
 import { CiStatusButton } from "../CiStatusIndicator";
@@ -32,6 +33,24 @@ import {
   OpenInWebButton,
   StateChip,
 } from "./shared";
+
+/** Sidebar-matching branch glyph (GitBranch flipped on Y). */
+function WorkspaceBranchIcon({ className }: { className?: string }) {
+  return <GitBranch className={`-scale-y-100 ${className ?? ""}`} />;
+}
+
+/** Branch glyph with a small plus badge at the bottom-right. */
+function CreateWorkspaceIcon({ className }: { className?: string }) {
+  return (
+    <span className={`relative inline-flex ${className ?? ""}`} aria-hidden>
+      <WorkspaceBranchIcon className="w-4 h-4" />
+      <Plus
+        className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5"
+        strokeWidth={3}
+      />
+    </span>
+  );
+}
 
 export function PrDetailPanel({
   repoPath,
@@ -178,8 +197,10 @@ export function PrDetailPanel({
                 >
                   {openOrCreateWorkspace.isPending ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : existingWorkspace ? (
+                    <WorkspaceBranchIcon className="w-4 h-4" />
                   ) : (
-                    <GitBranchPlus className="w-4 h-4" />
+                    <CreateWorkspaceIcon />
                   )}
                   {existingWorkspace ? "Open Workspace" : "Create Workspace"}
                 </Button>

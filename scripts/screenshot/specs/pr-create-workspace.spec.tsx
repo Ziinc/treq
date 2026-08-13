@@ -83,9 +83,9 @@ it("creates a workspace from the GitHub PR detail page", async () => {
   await captureDocument(document, {
     name: "pr-create-workspace-01-before",
     expectations: [
-      'PR detail header shows a primary "Create Workspace" button beside "Open in Web".',
+      'Primary "Create Workspace" button shows a branch icon with a small plus badge at its bottom-right, beside "Open in Web".',
       'Branch line reads "feature-remote →" followed by the repo default branch.',
-      'No workspace exists yet for the PR head — button label is Create, not Open.',
+      "Button label is Create Workspace (not Open) because no workspace exists yet.",
     ],
   });
 
@@ -105,7 +105,7 @@ it("creates a workspace from the GitHub PR detail page", async () => {
   await captureDocument(document, {
     name: "pr-create-workspace-02-after",
     expectations: [
-      'After create, the same header button now reads "Open Workspace" (outline style).',
+      'Header button now reads "Open Workspace" (outline) with a plain branch icon matching the sidebar (no plus badge).',
       'A success toast reports that a workspace was created for feature-remote.',
       "PR title Ship remote feature remains visible in the detail panel.",
     ],
