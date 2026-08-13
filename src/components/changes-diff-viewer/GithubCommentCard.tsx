@@ -42,7 +42,7 @@ function AuthorAvatar({
   sizeClass = "w-8 h-8",
 }: {
   login: string;
-  avatarUrl: string | null;
+  avatarUrl: string | null | undefined;
   sizeClass?: string;
 }) {
   if (avatarUrl) {
@@ -93,7 +93,7 @@ export function GithubCommentCard({
   onToggleCollapse,
   onQuote,
 }: GithubCommentCardProps) {
-  const firstComment = thread.comments[0];
+  const [firstComment] = thread.comments;
 
   return (
     <div className="rounded-md border border-sky-500/30 bg-sky-500/5 overflow-hidden">

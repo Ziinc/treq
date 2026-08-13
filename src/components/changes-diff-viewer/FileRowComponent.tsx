@@ -232,9 +232,7 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
                         key={thread.id}
                         thread={thread}
                         collapsed={collapsedThreadIds.has(thread.id)}
-                        onToggleCollapse={() =>
-                          toggleThreadCollapse(thread.id)
-                        }
+                        onToggleCollapse={() => toggleThreadCollapse(thread.id)}
                         onQuote={(quote) => {
                           setPendingComment(
                             buildQuotedPendingComment(

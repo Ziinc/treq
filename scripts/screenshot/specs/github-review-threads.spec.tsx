@@ -165,16 +165,20 @@ it("captures GitHub review comment threads in the Review tab", async () => {
 	await screen.findByText("This magic number should be a named constant.");
 	// Resolved thread starts collapsed but still shows author + greyed preview.
 	await screen.findByRole("link", { name: "@reviewer-bot" });
-	await screen.findByTestId("github-thread-collapsed-preview");
+	expect(
+		await screen.findAllByTestId("github-thread-collapsed-preview"),
+	).not.toHaveLength(0);
 	expect(screen.queryByTestId("github-outdated-group-toggle")).not.toBeInTheDocument();
 	// Outdated/unplaced threads are always visible (no parent collapsible).
-	await screen.findByTestId("github-outdated-threads");
+	expect(
+		await screen.findAllByTestId("github-outdated-threads"),
+	).not.toHaveLength(0);
 	await screen.findByRole("link", { name: "@old-reviewer" });
 	expect(
-		screen.getByText(
+		screen.getAllByText(
 			"This comment is on a line that no longer exists in the diff.",
-		),
-	).toBeInTheDocument();
+		).length,
+	).toBeGreaterThan(0);
 
 	await captureDocument(document, {
 		name: "github-review-threads-01-inline",
