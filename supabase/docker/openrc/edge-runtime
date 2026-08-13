@@ -1,0 +1,13 @@
+#!/sbin/openrc-run
+# Supabase Edge Runtime (Deno) for Edge Functions.
+
+name="edge-runtime"
+description="Supabase Edge Runtime"
+command="/usr/local/bin/run-edge-runtime.sh"
+pidfile="/run/${RC_SVCNAME}.pid"
+supervisor=supervise-daemon
+respawn_delay=2
+
+depend() {
+  after local
+}

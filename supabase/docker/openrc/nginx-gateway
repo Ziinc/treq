@@ -1,0 +1,14 @@
+#!/sbin/openrc-run
+# nginx gateway for /rest/v1 and /functions/v1.
+
+name="nginx-gateway"
+description="nginx API gateway"
+command="/usr/local/bin/run-nginx.sh"
+pidfile="/run/${RC_SVCNAME}.pid"
+supervisor=supervise-daemon
+respawn_delay=2
+
+depend() {
+  after postgrest edge-runtime
+  use postgrest edge-runtime
+}

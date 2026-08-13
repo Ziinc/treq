@@ -1,86 +1,151 @@
 # syntax=docker/dockerfile:1.7
 #
-# Fat API image (Alpine): PostgREST + Edge Runtime + nginx
-# Single-tenant self-hosted mode — no GoTrue / user auth.
-# Postgres is external — see docker-compose.yml (supabase/postgres sidecar).
+# Fat API image (Alpine): PostgREST + Edge Runtime + nginx, supervised by OpenRC.
+# Single-tenant self-hosted — no GoTrue. No Python, no Node.js at runtime.
+# Postgres is external (compose sidecar).
 #
-# Build (from repo root; context is supabase/):
+# Build (context = supabase/):
 #   docker build -f supabase/docker/Dockerfile -t treq-supabase:local supabase
-#
-# Run (compose brings up DB + this image):
-#   docker compose -f supabase/docker/docker-compose.yml up --build
 
 ARG ALPINE_IMAGE=alpine:3.23
 ARG POSTGREST_IMAGE=postgrest/postgrest:v14.12
 ARG EDGE_RUNTIME_IMAGE=supabase/edge-runtime:v1.74.0
+ARG NODE_IMAGE=node:22-alpine
+
+# -----------------------------------------------------------------------------
+# Vendor @supabase/supabase-js → single ESM file (Node discarded after this).
+# -----------------------------------------------------------------------------
+FROM ${NODE_IMAGE} AS vendor
+
+WORKDIR /build
+RUN npm init -y >/dev/null 2>&1 \
+  && npm install --no-fund --no-audit @supabase/supabase-js@2.95.3 esbuild@0.25 \
+  && printf '%s\n' "export { createClient, SupabaseClient } from '@supabase/supabase-js';" > entry.ts \
+  && ./node_modules/.bin/esbuild entry.ts \
+       --bundle \
+       --format=esm \
+       --platform=browser \
+       --target=es2022 \
+       --minify \
+       --outfile=/supabase-js.mjs \
+  && test -s /supabase-js.mjs
 
 FROM ${POSTGREST_IMAGE} AS postgrest
 FROM ${EDGE_RUNTIME_IMAGE} AS edge
 
-# ── Base ─────────────────────────────────────────────────────────────────────
+# -----------------------------------------------------------------------------
+# Strip + UPX -9 pack edge-runtime. Tools stay in this stage only.
+# -9 is strong compression without the multi-hour --ultra-brute search.
+# -----------------------------------------------------------------------------
+FROM alpine:3.23 AS edge-pack
+
+RUN apk add --no-cache binutils upx
+
+# Minimal glibc loader/libs so we can smoke-exec the packed binary on musl.
+RUN mkdir -p /lib64 /lib/x86_64-linux-gnu
+COPY --from=edge /lib64/ld-linux-x86-64.so.2 /lib64/ld-linux-x86-64.so.2
+COPY --from=edge /lib/x86_64-linux-gnu/libc.so.6 /lib/x86_64-linux-gnu/
+COPY --from=edge /lib/x86_64-linux-gnu/libm.so.6 /lib/x86_64-linux-gnu/
+COPY --from=edge /lib/x86_64-linux-gnu/libgcc_s.so.1 /lib/x86_64-linux-gnu/
+COPY --from=edge /usr/local/bin/edge-runtime /edge-runtime
+
+RUN set -eux; \
+  strip --strip-unneeded /edge-runtime; \
+  upx -9 /edge-runtime; \
+  upx -t /edge-runtime; \
+  /edge-runtime --version; \
+  ls -lh /edge-runtime
+
+# -----------------------------------------------------------------------------
+# Runtime
+# -----------------------------------------------------------------------------
 FROM ${ALPINE_IMAGE}
 
-# ── System packages ──────────────────────────────────────────────────────────
 RUN apk add --no-cache \
       bash \
       curl \
       nginx \
-      supervisor \
-      postgresql17-client
+      openrc \
+      postgresql17-client \
+      tini
 
-# ── PostgREST (static binary) ────────────────────────────────────────────────
+# OpenRC in Docker (no real init / cgroup hierarchy).
+RUN mkdir -p /run/openrc /etc/runlevels/default \
+  && touch /run/openrc/softlevel \
+  && printf '%s\n' \
+       'rc_sys="docker"' \
+       'rc_env_allow="*"' \
+       'rc_provide="loopback net"' \
+       >> /etc/rc.conf
+
+# PostgREST (static)
 COPY --from=postgrest /bin/postgrest /usr/local/bin/postgrest
 
-# ── Edge Runtime (glibc) + minimal glibc loader/libs on musl Alpine ──────────
+# Edge Runtime is glibc — ship stripped/UPX'd binary + minimal loader/libs.
 RUN mkdir -p /lib64 /lib/x86_64-linux-gnu
-COPY --from=edge /usr/local/bin/edge-runtime /usr/local/bin/edge-runtime
+COPY --from=edge-pack /edge-runtime /usr/local/bin/edge-runtime
 COPY --from=edge /lib64/ld-linux-x86-64.so.2 /lib64/ld-linux-x86-64.so.2
 COPY --from=edge /lib/x86_64-linux-gnu/libc.so.6 /lib/x86_64-linux-gnu/
 COPY --from=edge /lib/x86_64-linux-gnu/libm.so.6 /lib/x86_64-linux-gnu/
 COPY --from=edge /lib/x86_64-linux-gnu/libgcc_s.so.1 /lib/x86_64-linux-gnu/
 
-# ── Treq application layer (build context = supabase/) ───────────────────────
+# Treq application layer (build context = supabase/)
 COPY migrations /opt/treq/migrations
 COPY seed.sql /opt/treq/seed.sql
 COPY functions /home/deno/functions
 COPY docker/edge-main /home/deno/functions/main
 COPY docker/db /opt/treq/db
 COPY docker/nginx.conf /etc/nginx/nginx.conf
-COPY docker/supervisord.conf /etc/supervisord.conf
 COPY docker/entrypoint.sh /opt/treq/bin/entrypoint.sh
 COPY docker/apply-treq-migrations.sh /opt/treq/bin/apply-treq-migrations.sh
 COPY docker/merge-queue-cron.sh /opt/treq/bin/merge-queue-cron.sh
 
-# Vendor supabase-js so Edge Functions boot without registry egress.
-RUN apk add --no-cache nodejs npm \
-  && printf '%s\n' \
-       '{"name":"treq-edge-functions","private":true,"dependencies":{"@supabase/supabase-js":"2.95.3"}}' \
-       > /home/deno/functions/package.json \
-  && printf '%s\n' \
-       '{"nodeModulesDir":"manual","imports":{"@supabase/supabase-js":"./node_modules/@supabase/supabase-js/dist/index.mjs","https://esm.sh/@supabase/supabase-js@2":"./node_modules/@supabase/supabase-js/dist/index.mjs"}}' \
-       > /home/deno/functions/deno.json \
-  && npm install --omit=dev --prefix /home/deno/functions \
-  && apk del npm \
-  && find /home/deno/functions -name '.env' -delete 2>/dev/null || true \
+# Offline supabase-js: esbuild bundle + import map (no node_modules / no Node).
+COPY --from=vendor /supabase-js.mjs /home/deno/functions/_vendor/supabase-js.mjs
+COPY docker/deno.json /home/deno/functions/deno.json
+
+# OpenRC services + wrappers (source /etc/treq/env)
+COPY docker/openrc/postgrest /etc/init.d/postgrest
+COPY docker/openrc/edge-runtime /etc/init.d/edge-runtime
+COPY docker/openrc/nginx-gateway /etc/init.d/nginx-gateway
+COPY docker/openrc/merge-queue-cron /etc/init.d/merge-queue-cron
+COPY docker/openrc/run-postgrest.sh /usr/local/bin/run-postgrest.sh
+COPY docker/openrc/run-edge-runtime.sh /usr/local/bin/run-edge-runtime.sh
+COPY docker/openrc/run-nginx.sh /usr/local/bin/run-nginx.sh
+COPY docker/openrc/run-merge-queue-cron.sh /usr/local/bin/run-merge-queue-cron.sh
+
+RUN find /home/deno/functions -name '.env' -delete 2>/dev/null || true \
   && chmod +x \
       /opt/treq/bin/entrypoint.sh \
       /opt/treq/bin/apply-treq-migrations.sh \
       /opt/treq/bin/merge-queue-cron.sh \
       /usr/local/bin/postgrest \
       /usr/local/bin/edge-runtime \
-  && mkdir -p /var/log/nginx /var/lib/nginx /run/nginx /tmp
+      /etc/init.d/postgrest \
+      /etc/init.d/edge-runtime \
+      /etc/init.d/nginx-gateway \
+      /etc/init.d/merge-queue-cron \
+      /usr/local/bin/run-postgrest.sh \
+      /usr/local/bin/run-edge-runtime.sh \
+      /usr/local/bin/run-nginx.sh \
+      /usr/local/bin/run-merge-queue-cron.sh \
+  && rc-update add postgrest default \
+  && rc-update add edge-runtime default \
+  && rc-update add nginx-gateway default \
+  && rc-update add merge-queue-cron default \
+  && mkdir -p /var/log/nginx /var/lib/nginx /run/nginx /tmp /root/.cache/deno
 
-# Single-tenant defaults: no gateway JWT checks on Edge Functions.
 ENV POSTGRES_DB=postgres \
     POSTGRES_USER=supabase_admin \
     PGHOST=db \
     PGPORT=5432 \
     JWT_EXP=3600 \
-    VERIFY_JWT=false
+    VERIFY_JWT=false \
+    DENO_DIR=/root/.cache/deno
 
 EXPOSE 8000
 
 HEALTHCHECK --interval=10s --timeout=5s --start-period=45s --retries=12 \
   CMD curl -sf http://127.0.0.1:8000/health && curl -sf http://127.0.0.1:3000/ || exit 1
 
-ENTRYPOINT ["/opt/treq/bin/entrypoint.sh"]
+ENTRYPOINT ["/sbin/tini", "--", "/opt/treq/bin/entrypoint.sh"]

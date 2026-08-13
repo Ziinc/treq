@@ -10,11 +10,13 @@ self-hosted treq. **No GoTrue** — there is no `/auth/v1` user login surface.
 | nginx | Kong-compatible public gateway (`:8000`) |
 | merge-queue cron | Nudges worker (60s) + reconciler (10m) |
 
+Process supervision is **OpenRC** (`supervise-daemon`). Runtime image has no
+Python, no Node.js, and no supervisord. `@supabase/supabase-js` is esbuild-
+bundled in a build stage and remapped offline via `deno.json`. `edge-runtime`
+is stripped and UPX-packed (`upx -9`) in a discarded build stage.
+
 Postgres is a compose sidecar (`supabase/postgres`). Use `SERVICE_ROLE_KEY` as
 the API credential (bypasses RLS); there are no end-user sessions.
-
-Dockerfile layers: `alpine:3.23` → system packages → PostgREST → Edge Runtime →
-treq migrations/functions → vendored supabase-js.
 
 ## Quick start
 
