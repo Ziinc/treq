@@ -79,6 +79,9 @@ jobs:
           components: rustfmt
           toolchain: stable
 
+      # Cold apt install of WebKit/GTK is ~30–60s per job; restore from Actions
+      # cache on subsequent runs. execute_install_scripts is required so dpkg
+      # postinst (ldconfig, alternatives) still runs on restore.
       - name: install dependencies (ubuntu only)
         # WebKit/GTK is only needed to *link* treq/tauri (NAPI miss, verify, rust).
         if: >
@@ -87,10 +90,11 @@ jobs:
             matrix.kind == 'verify' ||
             (matrix.task == 'test:integration' && steps.napi-cache.outputs.cache-hit != 'true')
           )
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y git
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+        uses: awalsh128/cache-apt-pkgs-action@v1.6.1
+        with:
+          packages: libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          version: webkit-4.1-1
+          execute_install_scripts: true
 
       - name: Install git, jj, and gh CLI (macOS)
         if: matrix.platform == 'macos-latest'
