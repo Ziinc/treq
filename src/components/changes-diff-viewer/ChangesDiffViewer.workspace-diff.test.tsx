@@ -70,8 +70,12 @@ describe("ChangesDiffViewer workspace diff contract", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("committed.ts")).toBeInTheDocument();
+      // Conflicted committed paths surface in Conflicts and Committed.
+      expect(screen.getAllByText("committed.ts").length).toBeGreaterThanOrEqual(
+        2,
+      );
     });
+    expect(screen.getByRole("button", { name: "Conflicts" })).toBeTruthy();
     expect(
       screen.getAllByText(
         (_, element) => element?.textContent?.includes("added = true") ?? false,
