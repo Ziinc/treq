@@ -79,6 +79,9 @@ jobs:
           components: rustfmt
           toolchain: stable
 
+      # Cold apt install of WebKit/GTK is ~30–60s per job; restore from Actions
+      # cache on subsequent runs. execute_install_scripts is required so dpkg
+      # postinst (ldconfig, alternatives) still runs on restore.
       - name: install dependencies (ubuntu only)
         # WebKit/GTK is only needed to *link* treq/tauri (NAPI miss, verify, rust).
         if: >
@@ -87,21 +90,17 @@ jobs:
             matrix.kind == 'verify' ||
             (matrix.task == 'test:integration' && steps.napi-cache.outputs.cache-hit != 'true')
           )
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y git
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+        uses: awalsh128/cache-apt-pkgs-action@v1.6.1
+        with:
+          packages: libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          version: webkit-4.1-1
+          execute_install_scripts: true
 
-      - name: Install git, jj, and gh CLI (macOS)
-        if: matrix.platform == 'macos-latest'
-        run: |
-          brew update
-          brew install git jj gh
-          echo "$(brew --prefix)/bin" >> $GITHUB_PATH
-
-      - name: Install jj CLI (ubuntu, binary)
-        # Prefer a release binary so integration cache-hits need no Rust toolchain.
-        if: matrix.platform == 'ubuntu-22.04' && (matrix.task == 'test:integration' || matrix.kind == 'rust')
+      # Runners already ship git + gh. Only jj needs installing; cache the
+      # release binary (macOS brew of git/jj/gh was ~40s every run).
+      - name: Resolve jj release tag
+        id: jj
+        if: matrix.task == 'test:integration' || matrix.kind == 'rust'
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
@@ -109,34 +108,66 @@ jobs:
             -H "Authorization: Bearer ${GITHUB_TOKEN}" \
             -H "Accept: application/vnd.github+json" \
             https://api.github.com/repos/jj-vcs/jj/releases/latest | jq -r .tag_name)
-          asset="jj-${tag}-x86_64-unknown-linux-musl.tar.gz"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+      - name: Restore jj CLI cache
+        id: jj-cache
+        if: matrix.task == 'test:integration' || matrix.kind == 'rust'
+        uses: actions/cache/restore@v4
+        with:
+          path: .ci-bin/jj
+          key: jj-${{ runner.os }}-${{ runner.arch }}-${{ steps.jj.outputs.tag }}
+
+      - name: Install jj CLI
+        if: >
+          (matrix.task == 'test:integration' || matrix.kind == 'rust') &&
+          steps.jj-cache.outputs.cache-hit != 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          JJ_TAG: ${{ steps.jj.outputs.tag }}
+        run: |
+          set -euo pipefail
+          mkdir -p .ci-bin
+          case "${{ runner.os }}-${{ runner.arch }}" in
+            Linux-X64)   target=x86_64-unknown-linux-musl ;;
+            macOS-ARM64) target=aarch64-apple-darwin ;;
+            macOS-X64)   target=x86_64-apple-darwin ;;
+            *)
+              echo "unsupported runner: ${{ runner.os }}-${{ runner.arch }}"
+              exit 1
+              ;;
+          esac
+          asset="jj-${JJ_TAG}-${target}.tar.gz"
           tmp=$(mktemp -d)
           curl -fsSL \
             -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-            -L "https://github.com/jj-vcs/jj/releases/download/${tag}/${asset}" \
+            -L "https://github.com/jj-vcs/jj/releases/download/${JJ_TAG}/${asset}" \
             | tar -xz -C "$tmp"
-          sudo install -m 755 "$tmp/jj" /usr/local/bin/jj
-          jj --version
+          # tarball may nest the binary; find it
+          jj_bin=$(find "$tmp" -type f -name jj | head -n 1)
+          test -n "$jj_bin"
+          install -m 755 "$jj_bin" .ci-bin/jj
 
-      - name: Install gh CLI (ubuntu)
-        # Version pin check for rust runners only; JS tests mock GitHub.
-        if: matrix.platform == 'ubuntu-22.04' && matrix.kind == 'rust'
-        run: |
-          (type -p wget >/dev/null || (sudo apt-get update && sudo apt-get install -y wget)) \
-          && sudo mkdir -p -m 755 /etc/apt/keyrings \
-          && out=$(mktemp) && wget -nv -O$out https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-          && cat $out | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null \
-          && sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
-          && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
-          && sudo apt-get update \
-          && sudo apt-get install -y gh
+      - name: Save jj CLI cache
+        if: >
+          (matrix.task == 'test:integration' || matrix.kind == 'rust') &&
+          steps.jj-cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: .ci-bin/jj
+          key: ${{ steps.jj-cache.outputs.cache-primary-key }}
 
-      - name: Verify pinned tool versions
+      - name: Add jj to PATH
+        if: matrix.task == 'test:integration' || matrix.kind == 'rust'
+        run: echo "$GITHUB_WORKSPACE/.ci-bin" >> "$GITHUB_PATH"
+
+      - name: Verify tool versions
         if: matrix.task == 'test:integration' || matrix.kind == 'rust'
         run: |
           git --version
           jj --version
-          if command -v gh >/dev/null 2>&1; then gh --version; fi
+          gh --version
 
       - name: Install dependencies
         run: npm ci
