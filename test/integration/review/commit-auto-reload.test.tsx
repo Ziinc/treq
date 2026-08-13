@@ -89,14 +89,22 @@ describe("Review tab - auto-reload after commit", () => {
     const { repoPath, workspace } = await setupWorkspaceWithChange(branchName);
     await openReviewTab(user, branchName);
 
-    await screen.findByText(REVIEW_FILE);
+    await waitFor(() => {
+      expect(screen.getAllByText(REVIEW_FILE).length).toBeGreaterThan(0);
+    });
     await addSingleReviewComment(user, "Please tighten this change");
 
     await user.type(screen.getByPlaceholderText("Message"), commitMessage);
     await user.click(screen.getByRole("button", { name: /^commit$/i }));
 
     await waitFor(async () => {
-      const log = await listCommits(repoPath, workspace.id, false, undefined, 30);
+      const log = await listCommits(
+        repoPath,
+        workspace.id,
+        false,
+        undefined,
+        30,
+      );
       expect(
         log.commits.some((commit) => commit.description === commitMessage),
       ).toBe(true);
@@ -106,8 +114,11 @@ describe("Review tab - auto-reload after commit", () => {
       expect(
         screen.queryByText(/changed since you started reviewing/i),
       ).toBeNull();
+      expect(screen.queryByRole("button", { name: /^reload$/i })).toBeNull();
+      expect(screen.getByTestId("committed-file-label")).toBeInTheDocument();
+      expect(
+        screen.getByTestId("file-row-commit-reload.txt"),
+      ).toBeInTheDocument();
     });
-
-    expect(screen.queryByRole("button", { name: /^reload$/i })).toBeNull();
   });
 });
