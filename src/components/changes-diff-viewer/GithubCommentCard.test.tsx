@@ -179,7 +179,8 @@ describe("GithubCommentCard", () => {
       el.textContent?.includes("Resolved"),
     );
     const previewIndex = headerRow.findIndex(
-      (el) => el.getAttribute("data-testid") === "github-thread-collapsed-preview",
+      (el) =>
+        el.getAttribute("data-testid") === "github-thread-collapsed-preview",
     );
     expect(resolvedIndex).toBeGreaterThanOrEqual(0);
     expect(previewIndex).toBeGreaterThan(resolvedIndex);
