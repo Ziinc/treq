@@ -1538,6 +1538,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
               repoPath={repoPath}
               onOpenSettings={openSettings}
               onStartPromptFromIssue={handleStartPromptFromIssue}
+              onOpenWorkspace={async (workspaceId) => {
+                await queryClient.invalidateQueries({
+                  queryKey: ["workspaces", repoPath],
+                });
+                const updatedWorkspaces = await queryClient.fetchQuery({
+                  queryKey: ["workspaces", repoPath],
+                  queryFn: () => getWorkspaces(repoPath),
+                });
+                const workspace = updatedWorkspaces.find(
+                  (w) => w.id === workspaceId,
+                );
+                if (workspace) {
+                  handleSelectWorkspace(workspace);
+                }
+              }}
             />
           )}
 

@@ -334,6 +334,85 @@ pub fn create_workspace(
   )
 }
 
+/// Open an existing workspace for a pull-request head branch, or create one.
+///
+/// Fetches remotes first so the PR head tip is visible, then creates a workspace
+/// from that remote tip (when present) and sets `base_branch` as the rebase target.
+/// If a workspace for `head_branch` already exists, returns it unchanged.
+///
+/// Returns `(workspace, created)` where `created` is false when an existing
+/// workspace was reused.
+pub fn open_or_create_workspace_from_pr(
+  repo_path: &str,
+  head_branch: &str,
+  base_branch: &str,
+  title: Option<&str>,
+  description: Option<&str>,
+) -> Result<(local_db::Workspace, bool), String> {
+  let head_branch = head_branch.trim();
+  let base_branch = base_branch.trim();
+  if head_branch.is_empty() {
+    return Err("PR head branch is required".to_string());
+  }
+  if base_branch.is_empty() {
+    return Err("PR base branch is required".to_string());
+  }
+
+  if let Some(existing) = local_db::get_workspace_by_branch(repo_path, head_branch)
+    .map_err(|e| format!("Failed to check existing workspace: {e}"))?
+  {
+    return Ok((existing, false));
+  }
+
+  // Ensure remote bookmarks (including the PR head) are imported before create.
+  let _ = jj::jj_git_fetch(repo_path);
+
+  let remote_ref = format!("{head_branch}@origin");
+  let branch_status = jj::check_branch_exists(repo_path, head_branch)
+    .map_err(|e| format!("Failed to check PR head branch '{head_branch}': {e}"))?;
+  if !branch_status.local_exists && !branch_status.remote_exists {
+    return Err(format!(
+      "PR head branch '{head_branch}' was not found locally or on the remote"
+    ));
+  }
+
+  let source_branch = if branch_status.remote_exists {
+    Some(remote_ref.as_str())
+  } else {
+    None
+  };
+
+  let workspace = create_workspace(
+    repo_path,
+    head_branch,
+    description.map(|s| s.to_string()),
+    None,
+    source_branch,
+    None,
+    None,
+  )?;
+
+  // create_workspace may default the target to the repo default branch; retarget
+  // onto the PR base so stacked rebases follow the PR's merge base.
+  apply_workspace_target_branch(repo_path, workspace.id, base_branch)?;
+
+  if let Some(title) = title.map(str::trim).filter(|s| !s.is_empty()) {
+    local_db::update_workspace_title(repo_path, workspace.id, title)
+      .map_err(|e| format!("Failed to set workspace title: {e}"))?;
+  }
+
+  let updated = local_db::get_workspace_by_id(repo_path, workspace.id)
+    .map_err(|e| format!("Failed to reload workspace after PR create: {e}"))?
+    .ok_or_else(|| {
+      format!(
+        "Workspace not found in database after PR create: {}",
+        workspace.id
+      )
+    })?;
+
+  Ok((updated, true))
+}
+
 /// Creates a workspace and optionally symlinks heavy directories from the home repo.
 ///
 /// `symlinked_dirs` are paths relative to the repo root (e.g. `node_modules`). Each

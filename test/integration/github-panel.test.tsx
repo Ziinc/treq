@@ -30,6 +30,8 @@ const api = vi.hoisted(() => ({
   ghCreateIssueComment: vi.fn(),
   ghViewPr: vi.fn(),
   ghSetPrDraft: vi.fn(),
+  getWorkspaces: vi.fn(),
+  openOrCreateWorkspaceFromPr: vi.fn(),
 }));
 
 const supabaseRpc = vi.hoisted(() => vi.fn());
@@ -67,6 +69,8 @@ vi.mock("../../src/lib/api", async (importOriginal) => {
     ghCreateIssueComment: api.ghCreateIssueComment,
     ghViewPr: api.ghViewPr,
     ghSetPrDraft: api.ghSetPrDraft,
+    getWorkspaces: api.getWorkspaces,
+    openOrCreateWorkspaceFromPr: api.openOrCreateWorkspaceFromPr,
   };
 });
 vi.mock("../../src/lib/supabase", async (importOriginal) => {
@@ -130,6 +134,8 @@ describe("GitHubPanel", () => {
     api.ghListIssues.mockResolvedValue({ items: [], hasMore: false });
     api.ghListPrs.mockResolvedValue({ items: [], hasMore: false });
     api.ghCreateIssueComment.mockReset();
+    api.getWorkspaces.mockResolvedValue([]);
+    api.openOrCreateWorkspaceFromPr.mockReset();
     supabaseRpc.mockReset();
     supabaseRpc.mockResolvedValue({ data: [], error: null });
     user = userEvent.setup();
@@ -506,6 +512,8 @@ describe("PrDetailPanel draft toggle", () => {
   beforeEach(() => {
     user = userEvent.setup();
     api.ghSetPrDraft.mockReset().mockResolvedValue(undefined);
+    api.getWorkspaces.mockResolvedValue([]);
+    api.openOrCreateWorkspaceFromPr.mockReset();
   });
 
   it("marks a draft PR ready for review", async () => {
@@ -515,6 +523,7 @@ describe("PrDetailPanel draft toggle", () => {
 
     render(
       <PrDetailPanel
+        repoPath="/tmp/repo"
         repoFullName="acme/treq"
         prNumber={42}
         onClose={() => {}}
@@ -540,6 +549,7 @@ describe("PrDetailPanel draft toggle", () => {
 
     render(
       <PrDetailPanel
+        repoPath="/tmp/repo"
         repoFullName="acme/treq"
         prNumber={42}
         onClose={() => {}}

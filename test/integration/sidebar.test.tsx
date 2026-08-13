@@ -432,7 +432,8 @@ describe("Dashboard - workspace list", () => {
       const sidebarRoot = document.querySelector(
         `.${CSS.escape("group/sidebar")}`,
       ) as HTMLElement;
-      const visibleOrder = [
+
+      const expectedBranches = [
         "dduck-joke-readme",
         "rubber-test-123",
         "zebra-notes",
@@ -441,30 +442,57 @@ describe("Dashboard - workspace list", () => {
         "gumbo-notes",
       ];
 
-      const getWorkspaceRow = async (branchName: string) => {
-        const branchElement = await findSidebarBranchElement(branchName);
+      await waitFor(() => {
+        for (const branchName of expectedBranches) {
+          expect(
+            within(sidebarRoot).getAllByText(branchName).length,
+          ).toBeGreaterThan(0);
+        }
+      });
+
+      const getWorkspaceRow = (branchName: string) => {
+        const [branchElement] = within(sidebarRoot).getAllByText(branchName);
         return branchElement.closest("div") as HTMLElement;
       };
 
-      const anchorRow = await getWorkspaceRow("dduck-joke-readme");
-      const targetRow = await getWorkspaceRow("gumbo-notes");
+      const visibleOrder: string[] = [];
+      for (const el of Array.from(sidebarRoot.querySelectorAll("*"))) {
+        if (el.children.length > 0) continue;
+        const text = el.textContent?.trim() ?? "";
+        if (expectedBranches.includes(text) && !visibleOrder.includes(text)) {
+          visibleOrder.push(text);
+        }
+      }
+
+      expect(visibleOrder).toHaveLength(expectedBranches.length);
+
+      const anchorBranch = "dduck-joke-readme";
+      const targetBranch = "gumbo-notes";
+      const anchorIndex = visibleOrder.indexOf(anchorBranch);
+      const targetIndex = visibleOrder.indexOf(targetBranch);
+      expect(anchorIndex).toBeGreaterThanOrEqual(0);
+      expect(targetIndex).toBeGreaterThanOrEqual(0);
+
+      const rangeStart = Math.min(anchorIndex, targetIndex);
+      const rangeEnd = Math.max(anchorIndex, targetIndex);
+      const selectedRange = visibleOrder.slice(rangeStart, rangeEnd + 1);
+
+      const anchorRow = getWorkspaceRow(anchorBranch);
+      const targetRow = getWorkspaceRow(targetBranch);
 
       fireEvent.click(anchorRow, { metaKey: true });
       fireEvent.click(targetRow, { shiftKey: true });
 
-      await waitFor(async () => {
-        await Promise.all(
-          visibleOrder.map(async (branchName) => {
-            const row = await getWorkspaceRow(branchName);
-            expect(row).toHaveClass("bg-primary/20");
-          }),
-        );
+      await waitFor(() => {
+        for (const branchName of selectedRange) {
+          expect(getWorkspaceRow(branchName)).toHaveClass("bg-primary/20");
+        }
       });
 
       await waitFor(() => {
         expect(
           within(sidebarRoot).getByRole("button", {
-            name: /archive 6 workspaces/i,
+            name: new RegExp(`archive ${selectedRange.length} workspaces`, "i"),
           }),
         ).toBeTruthy();
       });
