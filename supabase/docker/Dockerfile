@@ -34,13 +34,14 @@ FROM ${POSTGREST_IMAGE} AS postgrest
 FROM ${EDGE_RUNTIME_IMAGE} AS edge
 
 # -----------------------------------------------------------------------------
-# Strip edge-runtime (~30MB symtab/debug). Tools stay in this stage only.
+# Strip + UPX -9 pack edge-runtime. Tools stay in this stage only.
+# -9 is strong compression without the multi-hour --ultra-brute search.
 # -----------------------------------------------------------------------------
 FROM alpine:3.23 AS edge-pack
 
-RUN apk add --no-cache binutils
+RUN apk add --no-cache binutils upx
 
-# Minimal glibc loader/libs so we can smoke-exec the stripped binary on musl.
+# Minimal glibc loader/libs so we can smoke-exec the packed binary on musl.
 RUN mkdir -p /lib64 /lib/x86_64-linux-gnu
 COPY --from=edge /lib64/ld-linux-x86-64.so.2 /lib64/ld-linux-x86-64.so.2
 COPY --from=edge /lib/x86_64-linux-gnu/libc.so.6 /lib/x86_64-linux-gnu/
@@ -50,6 +51,8 @@ COPY --from=edge /usr/local/bin/edge-runtime /edge-runtime
 
 RUN set -eux; \
   strip --strip-unneeded /edge-runtime; \
+  upx -9 /edge-runtime; \
+  upx -t /edge-runtime; \
   /edge-runtime --version; \
   ls -lh /edge-runtime
 
@@ -78,7 +81,7 @@ RUN mkdir -p /run/openrc /etc/runlevels/default \
 # PostgREST (static)
 COPY --from=postgrest /bin/postgrest /usr/local/bin/postgrest
 
-# Edge Runtime is glibc — ship stripped binary + minimal loader/libs.
+# Edge Runtime is glibc — ship stripped/UPX'd binary + minimal loader/libs.
 RUN mkdir -p /lib64 /lib/x86_64-linux-gnu
 COPY --from=edge-pack /edge-runtime /usr/local/bin/edge-runtime
 COPY --from=edge /lib64/ld-linux-x86-64.so.2 /lib64/ld-linux-x86-64.so.2

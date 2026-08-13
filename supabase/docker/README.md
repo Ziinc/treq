@@ -13,7 +13,7 @@ self-hosted treq. **No GoTrue** — there is no `/auth/v1` user login surface.
 Process supervision is **OpenRC** (`supervise-daemon`). Runtime image has no
 Python, no Node.js, and no supervisord. `@supabase/supabase-js` is esbuild-
 bundled in a build stage and remapped offline via `deno.json`. `edge-runtime`
-is stripped (`strip --strip-unneeded`) in a discarded build stage.
+is stripped and UPX-packed (`upx -9`) in a discarded build stage.
 
 Postgres is a compose sidecar (`supabase/postgres`). Use `SERVICE_ROLE_KEY` as
 the API credential (bypasses RLS); there are no end-user sessions.
