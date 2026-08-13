@@ -249,8 +249,6 @@ describe("Review - conflict rendering contract", () => {
       "feat/wc-resolve-clears-ui",
     );
 
-    // Capture Tauri event listeners so we can simulate the file watcher after
-    // writing the resolved content (jsdom has no real watcher).
     const { listen } = await import("@tauri-apps/api/event");
     type FilesChangedHandler = (event: {
       payload: { workspace_id: number; changed_paths: string[] };
@@ -287,8 +285,6 @@ describe("Review - conflict rendering contract", () => {
         fixture.repoPath,
         fixture.workspaceId,
       );
-      // Backend clears as soon as the snapshotted WC is rewritten — UI must
-      // follow once the file-watcher event refreshes status + diff.
       expect(status.has_conflicts).toBe(false);
       expect(status.conflicted_files).toEqual([]);
     });
