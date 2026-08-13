@@ -27,6 +27,9 @@ import { DiffContentArea } from "./DiffContentArea";
 import { FileSidebar } from "./FileSidebar";
 import { filesEqual } from "./utils";
 import { HOME_MOVE_ENDPOINT } from "../../lib/change-file-drag";
+import { stashWorkspaceChanges } from "../../lib/api";
+import { invalidateReviewChangeCount } from "../../lib/review-change-count";
+import { useQueryClient } from "@tanstack/react-query";
 import type {
   ChangesDiffViewerHandle,
   ChangesDiffViewerProps,
@@ -59,6 +62,7 @@ export const ChangesDiffViewer = memo(
       ref,
     ) => {
       const { addToast } = useToast();
+      const queryClient = useQueryClient();
       const { fontSize: diffFontSize } = useDiffSettings();
 
       const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
@@ -430,6 +434,41 @@ export const ChangesDiffViewer = memo(
         addToast,
       });
 
+      const handleStashAll = useCallback(async () => {
+        if (readOnly || !repoPath) return;
+        try {
+          const entry = await stashWorkspaceChanges(
+            repoPath,
+            workspaceId ?? null,
+          );
+          addToast({
+            description: `Stashed ${entry.files_changed.length} file${entry.files_changed.length === 1 ? "" : "s"} (${entry.short_commit_id})`,
+            title: "Changes stashed",
+            type: "success",
+          });
+          await invalidateCache();
+          await loadChangedFiles();
+          await invalidateReviewChangeCount(queryClient, repoPath, workspaceId);
+          await queryClient.invalidateQueries({
+            queryKey: ["stashes", repoPath],
+          });
+        } catch (error) {
+          addToast({
+            description: error instanceof Error ? error.message : String(error),
+            title: "Stash Failed",
+            type: "error",
+          });
+        }
+      }, [
+        readOnly,
+        repoPath,
+        workspaceId,
+        addToast,
+        invalidateCache,
+        loadChangedFiles,
+        queryClient,
+      ]);
+
       const hasConflicts = actualConflictedFiles.length > 0;
       const totalComments = comments.length + conflictComments.size;
       const showActionBar = hasConflicts || comments.length > 0;
@@ -485,6 +524,7 @@ export const ChangesDiffViewer = memo(
             handleFileSelect={handleFileSelect}
             onMoveFilesToNewWorkspace={onMoveFilesToNewWorkspace}
             handleDiscardAll={handleDiscardAll}
+            handleStashAll={handleStashAll}
             handleDiscardFiles={handleDiscardFiles}
             setSelectedUnstagedFiles={setSelectedUnstagedFiles}
             handleSelectAllUnstaged={handleSelectAllUnstaged}

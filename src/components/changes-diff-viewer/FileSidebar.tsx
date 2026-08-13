@@ -61,6 +61,7 @@ interface FileSidebarProps {
   handleFileSelect: (path: string, event: React.MouseEvent) => void;
   onMoveFilesToNewWorkspace: ((files: string[]) => void) | undefined;
   handleDiscardAll: () => void;
+  handleStashAll: () => void;
   handleDiscardFiles: (path: string) => void;
   setSelectedUnstagedFiles: React.Dispatch<React.SetStateAction<Set<string>>>;
   handleSelectAllUnstaged: () => void;
@@ -113,6 +114,7 @@ export function FileSidebar({
   handleFileSelect,
   onMoveFilesToNewWorkspace,
   handleDiscardAll,
+  handleStashAll,
   handleDiscardFiles,
   setSelectedUnstagedFiles,
   handleSelectAllUnstaged,
@@ -236,6 +238,7 @@ export function FileSidebar({
                     );
                   }}
                   onDiscardAll={() => setShowDiscardAllDialog(true)}
+                  onStashAll={handleStashAll}
                   onDiscard={handleDiscardFiles}
                   onDeselectAll={() => setSelectedUnstagedFiles(new Set())}
                   onSelectAll={handleSelectAllUnstaged}

@@ -840,6 +840,56 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
       serde_json::to_value(entry).map_err(|e| e.to_string())
     }
 
+    "stash_workspace_changes" => {
+      let repo_path = get_str(&args, "repoPath")?;
+      let workspace_id: Option<i64> = opt_i64(&args, "workspaceId");
+      let entry = treq_lib::core::stash_workspace_changes(&repo_path, workspace_id)?;
+      serde_json::to_value(entry).map_err(|e| e.to_string())
+    }
+
+    "stash_commit" => {
+      let repo_path = get_str(&args, "repoPath")?;
+      let workspace_id: Option<i64> = opt_i64(&args, "workspaceId");
+      let change_id = get_str(&args, "changeId")?;
+      let entry = treq_lib::core::stash_commit(&repo_path, workspace_id, &change_id)?;
+      serde_json::to_value(entry).map_err(|e| e.to_string())
+    }
+
+    "list_stashes" => {
+      let repo_path = get_str(&args, "repoPath")?;
+      let entries = treq_lib::core::list_stashes(&repo_path)?;
+      serde_json::to_value(entries).map_err(|e| e.to_string())
+    }
+
+    "delete_stash" => {
+      let repo_path = get_str(&args, "repoPath")?;
+      let stash_id: i64 = get_i64(&args, "stashId")?;
+      treq_lib::core::delete_stash(&repo_path, stash_id)?;
+      Ok(Value::Null)
+    }
+
+    "apply_stash" => {
+      let repo_path = get_str(&args, "repoPath")?;
+      let stash_id: i64 = get_i64(&args, "stashId")?;
+      let target_branch = get_str(&args, "targetBranch")?;
+      treq_lib::core::apply_stash(&repo_path, stash_id, &target_branch)?;
+      Ok(Value::Null)
+    }
+
+    "get_stash_diff" => {
+      let repo_path = get_str(&args, "repoPath")?;
+      let stash_id: i64 = get_i64(&args, "stashId")?;
+      let result = treq_lib::core::get_stash_diff(&repo_path, stash_id)?;
+      serde_json::to_value(result).map_err(|e| e.to_string())
+    }
+
+    "export_stash_git_patch" => {
+      let repo_path = get_str(&args, "repoPath")?;
+      let stash_id: i64 = get_i64(&args, "stashId")?;
+      let patch = treq_lib::core::export_stash_git_patch(&repo_path, stash_id)?;
+      Ok(Value::String(patch))
+    }
+
     // ── File view tracking ────────────────────────────────────────────
     "mark_file_viewed" => {
       let workspace_path = get_str(&args, "workspacePath")?;

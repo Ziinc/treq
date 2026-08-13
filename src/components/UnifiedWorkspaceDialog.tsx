@@ -45,6 +45,17 @@ export interface WorkspaceDialogDefaults {
   branchName?: string;
   /** Which right-panel tab to show by default */
   activeTab?: "commits" | "changes";
+  /**
+   * When set, create then copy this immutable stash onto the new workspace
+   * (stash remains intact). The stash commit is shown as selected for mv.
+   */
+  applyStashId?: number;
+  /** Display metadata for the locked stash commit in the commits panel. */
+  applyStashCommit?: {
+    hash: string;
+    message: string;
+    timestamp: string;
+  };
 }
 
 export interface UnifiedWorkspaceDialogProps {
@@ -118,7 +129,9 @@ export const UnifiedWorkspaceDialog: React.FC<UnifiedWorkspaceDialogProps> = ({
   const isHomeRepo = defaults.sourceWorkspace === null;
   const hasSourceWorkspace = defaults.sourceWorkspace !== undefined;
   const sourceWorkspace = defaults.sourceWorkspace ?? null;
-  const showRightPanel = hasSourceWorkspace || isHomeRepo;
+  const { applyStashId, applyStashCommit = null } = defaults;
+  const showRightPanel =
+    hasSourceWorkspace || isHomeRepo || applyStashId != null;
   const commitsAhead = workspaceStatus?.commits_ahead_of_target ?? [];
 
   const branchStatus: "new" | "local" | "remote" | "checking" | null =
@@ -273,6 +286,9 @@ export const UnifiedWorkspaceDialog: React.FC<UnifiedWorkspaceDialogProps> = ({
   // ── submitLabel ──────────────────────────────────────────────────────────
   const submitLabel = (() => {
     if (loading) return "Creating...";
+    if (applyStashId != null) {
+      return "Create & apply stash";
+    }
     if (moveToExisting) {
       const count =
         activeRightTab === "commits"
@@ -390,6 +406,7 @@ export const UnifiedWorkspaceDialog: React.FC<UnifiedWorkspaceDialogProps> = ({
     selectedFilePaths,
     targetWorkspaceId,
     canSubmit,
+    applyStashId: applyStashId ?? null,
     setLoading,
     setError,
     onSuccess,
@@ -494,6 +511,7 @@ export const UnifiedWorkspaceDialog: React.FC<UnifiedWorkspaceDialogProps> = ({
               onClearHunks={() => setSelectedHunks(new Set())}
               getFileSelectionState={getFileSelectionState}
               hunkKey={hunkKey}
+              lockedStashCommit={applyStashCommit}
             />
           )}
         </div>

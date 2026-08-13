@@ -2,6 +2,7 @@ import {
   type BranchStatus,
   type Workspace,
   type WorkspaceMoveRequest,
+  applyStash,
   createWorkspace,
   getWorkspaces,
   moveWorkspaceChanges,
@@ -33,6 +34,8 @@ export interface UseWorkspaceDialogSubmitParams {
   selectedFilePaths: string[];
   targetWorkspaceId: number | null;
   canSubmit: boolean;
+  /** When set, create the workspace then copy this stash onto it. */
+  applyStashId?: number | null;
   setLoading: (v: boolean) => void;
   setError: (v: string) => void;
   onSuccess: (workspaceId: number) => void;
@@ -63,6 +66,7 @@ export function useWorkspaceDialogSubmit(
     selectedFilePaths,
     targetWorkspaceId,
     canSubmit,
+    applyStashId = null,
     setLoading,
     setError,
     onSuccess,
@@ -78,6 +82,50 @@ export function useWorkspaceDialogSubmit(
     setError("");
 
     try {
+      // Apply immutable stash onto a newly created workspace (copy, not move).
+      if (applyStashId != null) {
+        const stackOnBranch =
+          sourceWorkspace != null
+            ? position === "before"
+              ? (sourceWorkspace.target_branch ?? "main")
+              : sourceWorkspace.branch_name
+            : (targetBranch ?? undefined);
+        const metadata = JSON.stringify({
+          title: title.trim() || undefined,
+          description: description.trim() || undefined,
+        });
+        const newWorkspaceId = await createWorkspace(
+          repoPath,
+          branchName,
+          stackOnBranch,
+          metadata,
+        );
+        await applyStash(repoPath, applyStashId, branchName);
+        if (position === "before" && sourceWorkspace) {
+          const updatedWorkspaces = await getWorkspaces(repoPath);
+          const sourceWs = updatedWorkspaces.find(
+            (w) => w.id === sourceWorkspace.id,
+          );
+          if (sourceWs) {
+            const fullPath = getFullWorkspacePath(sourceWs);
+            await setWorkspaceTargetBranch(
+              repoPath,
+              fullPath,
+              sourceWorkspace.id,
+              branchName,
+            );
+          }
+        }
+        addToast({
+          title: "Workspace created",
+          description: `Applied stash onto ${branchName}`,
+          type: "success",
+        });
+        onSuccess(newWorkspaceId);
+        onOpenChange(false);
+        return;
+      }
+
       if (moveToExisting && targetWorkspaceId !== null && sourceWorkspace) {
         const targetWs = allWorkspaces.find((w) => w.id === targetWorkspaceId);
         if (!targetWs) {

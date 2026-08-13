@@ -136,6 +136,8 @@ interface ShowWorkspaceProps {
     commit: import("../lib/api").JjLogCommit,
     workspace: Workspace | null,
   ) => void;
+  /** Called after a commit is stashed from the Commits tab */
+  onCommitStashed?: () => void;
   /** Called when user wants to move files to a new workspace */
   onMoveFilesToNewWorkspace?: (
     files: string[],
@@ -166,6 +168,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
     onViewPrInApp,
     onMoveCommitToNewWorkspace,
     onMoveCommitToExistingWorkspace,
+    onCommitStashed,
     onMoveFilesToNewWorkspace,
     onActiveTabChange,
     availableBranches = [],
@@ -1340,6 +1343,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
               scrollToCommitId={scrollToCommitId}
               onScrollComplete={() => setScrollToCommitId(null)}
               onCommitAbandoned={() => {}}
+              onCommitStashed={onCommitStashed}
               onCreateAgentWithComment={handleCreateAgentWithComment}
               onMoveCommitToNewWorkspace={
                 onMoveCommitToNewWorkspace

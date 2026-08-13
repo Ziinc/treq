@@ -113,6 +113,23 @@ pub struct PromptHistoryEntry {
   pub workspace_label: Option<String>,
 }
 
+/// An immutable stashed change set (local gist of file changes).
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct StashEntry {
+  pub id: i64,
+  pub workspace_id: Option<i64>,
+  /// Workspace title/branch at stash time (or "Home repo").
+  pub workspace_label: String,
+  pub commit_id: String,
+  pub change_id: String,
+  pub short_commit_id: String,
+  pub bookmark_name: String,
+  pub created_at: String,
+  pub additions: u32,
+  pub deletions: u32,
+  pub files_changed: Vec<String>,
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CachedCommitDiffStat {
   pub commit_id: String,
@@ -467,6 +484,33 @@ pub fn init_local_db(repo_path: &str) -> Result<PathBuf, String> {
       [],
     )
     .map_err(|e| format!("Failed to create prompt_history created_at index: {}", e))?;
+
+  conn
+    .execute(
+      "CREATE TABLE IF NOT EXISTS stashes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            workspace_id INTEGER,
+            workspace_label TEXT NOT NULL,
+            commit_id TEXT NOT NULL,
+            change_id TEXT NOT NULL,
+            short_commit_id TEXT NOT NULL,
+            bookmark_name TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            additions INTEGER NOT NULL DEFAULT 0,
+            deletions INTEGER NOT NULL DEFAULT 0,
+            files_changed TEXT NOT NULL DEFAULT '[]',
+            FOREIGN KEY (workspace_id) REFERENCES workspaces(id)
+        )",
+      [],
+    )
+    .map_err(|e| format!("Failed to create stashes table: {}", e))?;
+
+  conn
+    .execute(
+      "CREATE INDEX IF NOT EXISTS idx_stashes_created_at ON stashes(created_at)",
+      [],
+    )
+    .map_err(|e| format!("Failed to create stashes created_at index: {}", e))?;
 
   // Migration: rename pending_reviews columns from old schema to new schema.
   let has_old_columns: Result<i64, _> = conn.query_row(
@@ -1512,6 +1556,127 @@ pub fn get_prompt_history(repo_path: &str) -> Result<Vec<PromptHistoryEntry>, St
   entries
     .collect::<Result<Vec<_>, _>>()
     .map_err(|e| e.to_string())
+}
+
+/// Persist a newly created stash entry.
+pub fn add_stash(
+  repo_path: &str,
+  workspace_id: Option<i64>,
+  workspace_label: &str,
+  commit_id: &str,
+  change_id: &str,
+  short_commit_id: &str,
+  bookmark_name: &str,
+  additions: u32,
+  deletions: u32,
+  files_changed: &[String],
+) -> Result<StashEntry, String> {
+  let conn = get_connection(repo_path)?;
+  let created_at = Utc::now().to_rfc3339();
+  let files_json = serde_json::to_string(files_changed)
+    .map_err(|e| format!("Failed to serialize stash files: {}", e))?;
+
+  conn
+    .execute(
+      "INSERT INTO stashes (
+            workspace_id, workspace_label, commit_id, change_id, short_commit_id,
+            bookmark_name, created_at, additions, deletions, files_changed
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+      params![
+        workspace_id,
+        workspace_label,
+        commit_id,
+        change_id,
+        short_commit_id,
+        bookmark_name,
+        created_at,
+        additions,
+        deletions,
+        files_json,
+      ],
+    )
+    .map_err(|e| format!("Failed to insert stash: {}", e))?;
+
+  let id = conn.last_insert_rowid();
+  Ok(StashEntry {
+    id,
+    workspace_id,
+    workspace_label: workspace_label.to_string(),
+    commit_id: commit_id.to_string(),
+    change_id: change_id.to_string(),
+    short_commit_id: short_commit_id.to_string(),
+    bookmark_name: bookmark_name.to_string(),
+    created_at,
+    additions,
+    deletions,
+    files_changed: files_changed.to_vec(),
+  })
+}
+
+fn stash_from_row(row: &Row<'_>) -> rusqlite::Result<StashEntry> {
+  let files_json: String = row.get(10)?;
+  let files_changed: Vec<String> = serde_json::from_str(&files_json).unwrap_or_default();
+  Ok(StashEntry {
+    id: row.get(0)?,
+    workspace_id: row.get(1)?,
+    workspace_label: row.get(2)?,
+    commit_id: row.get(3)?,
+    change_id: row.get(4)?,
+    short_commit_id: row.get(5)?,
+    bookmark_name: row.get(6)?,
+    created_at: row.get(7)?,
+    additions: row.get::<_, i64>(8)? as u32,
+    deletions: row.get::<_, i64>(9)? as u32,
+    files_changed,
+  })
+}
+
+const STASH_SELECT: &str = "SELECT id, workspace_id, workspace_label, commit_id, change_id,
+        short_commit_id, bookmark_name, created_at, additions, deletions, files_changed
+     FROM stashes";
+
+/// List all stashes for a repository, most recent first.
+pub fn get_stashes(repo_path: &str) -> Result<Vec<StashEntry>, String> {
+  let conn = get_connection(repo_path)?;
+  let sql = format!("{} ORDER BY created_at DESC, id DESC", STASH_SELECT);
+  let mut stmt = conn
+    .prepare(&sql)
+    .map_err(|e| format!("Failed to prepare stash query: {}", e))?;
+  let entries = stmt
+    .query_map([], stash_from_row)
+    .map_err(|e| format!("Failed to query stashes: {}", e))?;
+  entries
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(|e| e.to_string())
+}
+
+/// Look up a single stash by id.
+pub fn get_stash_by_id(repo_path: &str, stash_id: i64) -> Result<Option<StashEntry>, String> {
+  let conn = get_connection(repo_path)?;
+  let sql = format!("{} WHERE id = ?1", STASH_SELECT);
+  let mut stmt = conn
+    .prepare(&sql)
+    .map_err(|e| format!("Failed to prepare stash lookup: {}", e))?;
+  let mut rows = stmt
+    .query_map([stash_id], stash_from_row)
+    .map_err(|e| format!("Failed to query stash: {}", e))?;
+  match rows.next() {
+    Some(Ok(entry)) => Ok(Some(entry)),
+    Some(Err(e)) => Err(e.to_string()),
+    None => Ok(None),
+  }
+}
+
+/// Delete a stash row by id.
+pub fn delete_stash(repo_path: &str, stash_id: i64) -> Result<(), String> {
+  let conn = get_connection(repo_path)?;
+  let changed = conn
+    .execute("DELETE FROM stashes WHERE id = ?1", [stash_id])
+    .map_err(|e| format!("Failed to delete stash: {}", e))?;
+  if changed == 0 {
+    return Err(format!("Stash not found: {}", stash_id));
+  }
+  Ok(())
 }
 
 /// Get the earliest prompt sent for a given workspace (its "starting prompt").

@@ -18,6 +18,7 @@ import {
   GitBranch,
   History,
   Home,
+  Archive,
   Maximize2,
   Plus,
   Settings,
@@ -52,6 +53,7 @@ interface CommandPaletteProps {
   onStartAgentTerminal?: () => void;
   onCreateShellTerminal?: () => void;
   onOpenPromptHistory?: () => void;
+  onOpenStash?: () => void;
   hasSelectedWorkspace: boolean;
 
   // Branch Switcher
@@ -92,6 +94,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   onStartAgentTerminal,
   onCreateShellTerminal,
   onOpenPromptHistory,
+  onOpenStash,
   hasSelectedWorkspace,
   showBranchSwitcher,
   onBranchSwitcherChange,
@@ -219,6 +222,17 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       });
     }
 
+    if (repoPath && onOpenStash) {
+      result.push({
+        id: "open-stash",
+        type: "action",
+        label: "View Stashed Changes",
+        description: "Browse and apply immutable stashed change sets",
+        icon: <Archive className="w-4 h-4" />,
+        onSelect: onOpenStash,
+      });
+    }
+
     if (hasSelectedWorkspace) {
       if (onToggleTerminal) {
         result.push({
@@ -298,6 +312,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
     onStartAgentTerminal,
     onCreateShellTerminal,
     onOpenPromptHistory,
+    onOpenStash,
     repoPath,
     hasSelectedWorkspace,
     onCommandPaletteChange,

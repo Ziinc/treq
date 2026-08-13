@@ -91,6 +91,21 @@ export interface PromptHistoryEntry {
   workspace_label: string | null;
 }
 
+/** Immutable stashed change set (local gist of file changes). */
+export interface StashEntry {
+  id: number;
+  workspace_id: number | null;
+  workspace_label: string;
+  commit_id: string;
+  change_id: string;
+  short_commit_id: string;
+  bookmark_name: string;
+  created_at: string;
+  additions: number;
+  deletions: number;
+  files_changed: string[];
+}
+
 export interface JjDiffHunk {
   id: string;
   header: string;

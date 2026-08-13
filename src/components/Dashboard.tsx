@@ -74,6 +74,7 @@ import { GitHubPanel } from "./GitHubPanel";
 import { MergePreviewPage } from "./MergePreviewPage";
 import { Onboarding } from "./Onboarding";
 import { PromptHistoryModal } from "./PromptHistoryModal";
+import { StashModal } from "./StashModal";
 import { SettingsPage } from "./SettingsPage";
 import { ShowWorkspace } from "./ShowWorkspace";
 import type { BranchListItem } from "./TargetBranchSelector";
@@ -146,6 +147,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [promptHistoryFocusId, setPromptHistoryFocusId] = useState<
     number | null
   >(null);
+  const [showStashModal, setShowStashModal] = useState(false);
   const [runPromptRequest, setRunPromptRequest] = useState<{
     prompt?: string;
     workspaceId: number | null;
@@ -1429,6 +1431,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     });
                     // Note: dialog will open in "move to existing" mode via defaults
                   }}
+                  onCommitStashed={() => setShowStashModal(true)}
                   onMoveFilesToNewWorkspace={(files, workspace) => {
                     setUnifiedDialogDefaults({
                       targetBranch: workspace?.branch_name,
@@ -1676,6 +1679,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           setPromptHistoryFocusId(null);
           setShowPromptHistory(true);
         }}
+        onOpenStash={() => setShowStashModal(true)}
         onCreateShellTerminal={() =>
           terminalPaneRef.current?.createShellSession()
         }
@@ -1712,6 +1716,41 @@ export const Dashboard: React.FC<DashboardProps> = ({
         repoPath={repoPath}
         initialSelectedId={promptHistoryFocusId}
         onRunPrompt={handleRunPrompt}
+      />
+
+      <StashModal
+        open={showStashModal}
+        onOpenChange={setShowStashModal}
+        repoPath={repoPath}
+        workspaces={visibleWorkspaces}
+        onApplied={() => {
+          void queryClient.invalidateQueries({
+            queryKey: ["workspace-changed-files"],
+          });
+          void queryClient.invalidateQueries({
+            queryKey: ["workspace-diff"],
+          });
+        }}
+        onApplyToNewWorkspace={(entry) => {
+          setShowStashModal(false);
+          const source =
+            entry.workspace_id != null
+              ? (workspaces.find((w) => w.id === entry.workspace_id) ?? null)
+              : null;
+          setUnifiedDialogDefaults({
+            sourceWorkspace: source,
+            targetBranch: source?.branch_name,
+            applyStashId: entry.id,
+            applyStashCommit: {
+              hash: entry.short_commit_id,
+              message: `Stash from ${entry.workspace_label}`,
+              timestamp: entry.created_at,
+            },
+            preSelectedCommits: [entry.short_commit_id],
+            activeTab: "commits",
+            description: `Apply stash ${entry.short_commit_id} (${entry.files_changed.length} files, +${entry.additions}/-${entry.deletions})`,
+          });
+        }}
       />
 
       <WorkspacePicker

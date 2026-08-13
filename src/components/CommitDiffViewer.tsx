@@ -3,6 +3,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ask } from "@tauri-apps/plugin-dialog";
 import {
+  Archive,
   ArrowRightLeft,
   ChevronRight,
   FileText,
@@ -29,6 +30,7 @@ import {
   type JjLogCommit,
   type JjRevisionDiff,
   listCommits,
+  stashCommit,
 } from "../lib/api";
 import { getLanguageFromPath, highlightCode } from "../lib/syntax-highlight";
 import {
@@ -62,6 +64,8 @@ interface CommitDiffViewerProps {
   onScrollComplete?: () => void;
   onCommitMoved?: () => void;
   onCommitAbandoned?: () => void;
+  /** Called after a commit is stashed (e.g. open the stash browser). */
+  onCommitStashed?: () => void;
   onCreateAgentWithComment?: (
     filePath: string,
     startLine: number,
@@ -157,6 +161,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
     scrollToCommitId,
     onScrollComplete,
     onCommitAbandoned,
+    onCommitStashed,
     onCreateAgentWithComment,
     onMoveCommitToNewWorkspace,
     onMoveCommitToExistingWorkspace,
@@ -425,6 +430,60 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
       [repoPath, workspaceId, onCommitAbandoned, addToast],
     );
 
+    const handleStashCommit = useCallback(
+      async (commit: JjLogCommit) => {
+        if (!repoPath) return;
+
+        try {
+          const entry = await stashCommit(
+            repoPath,
+            workspaceId,
+            commit.change_id,
+          );
+          setRemovingCommitIds((prev) => new Set(prev).add(commit.commit_id));
+          onCommitStashed?.();
+
+          window.setTimeout(() => {
+            setRemovedCommitIds((prev) => new Set(prev).add(commit.commit_id));
+            setRemovingCommitIds((prev) => {
+              const next = new Set(prev);
+              next.delete(commit.commit_id);
+              return next;
+            });
+            onCommitAbandoned?.();
+          }, REMOVE_ANIMATION_MS);
+
+          void queryClient.invalidateQueries({
+            queryKey: ["stashes", repoPath],
+          });
+          void queryClient.invalidateQueries({
+            queryKey: ["commit-diff-viewer-commits", repoPath, workspaceId],
+          });
+
+          addToast({
+            title: "Commit stashed",
+            description: `Parked ${entry.short_commit_id} — apply it onto another workspace from Stashed Changes`,
+            type: "success",
+          });
+        } catch (err) {
+          const errorMsg = err instanceof Error ? err.message : String(err);
+          addToast({
+            title: "Failed to stash commit",
+            description: errorMsg,
+            type: "error",
+          });
+        }
+      },
+      [
+        repoPath,
+        workspaceId,
+        onCommitAbandoned,
+        onCommitStashed,
+        addToast,
+        queryClient,
+      ],
+    );
+
     // Scroll to commit when scrollToCommitId changes
     useEffect(() => {
       if (!scrollToCommitId || loading) return;
@@ -632,6 +691,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
                       onMoveToNew={handleMoveToNew}
                       onMoveToExisting={handleMoveToExisting}
                       onAbandon={handleAbandon}
+                      onStash={handleStashCommit}
                       onEditDescription={() => {}}
                       onCreateAgentWithComment={onCreateAgentWithComment}
                       onLoadDeferredFileDiff={(filePath) =>
@@ -699,6 +759,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
                           onMoveToNew={handleMoveToNew}
                           onMoveToExisting={handleMoveToExisting}
                           onAbandon={handleAbandon}
+                          onStash={handleStashCommit}
                           onEditDescription={handleEditDescription}
                           onCreateAgentWithComment={onCreateAgentWithComment}
                           onLoadDeferredFileDiff={(filePath) =>
@@ -792,6 +853,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
                               onMoveToNew={() => {}}
                               onMoveToExisting={() => {}}
                               onAbandon={() => {}}
+                              onStash={() => {}}
                               onEditDescription={() => {}}
                               onCreateAgentWithComment={
                                 onCreateAgentWithComment
@@ -890,6 +952,7 @@ interface CommitWithDiffProps {
   onMoveToNew: (commit: JjLogCommit) => void;
   onMoveToExisting: (commit: JjLogCommit) => void;
   onAbandon: (commit: JjLogCommit) => void;
+  onStash: (commit: JjLogCommit) => void;
   onEditDescription: (commit: JjLogCommit) => void;
   onViewTentativeChanges?: () => void;
   onDeleteTentativeChanges?: () => void;
@@ -916,6 +979,7 @@ function CommitWithDiff({
   onMoveToNew,
   onMoveToExisting,
   onAbandon,
+  onStash,
   onEditDescription,
   onViewTentativeChanges,
   onDeleteTentativeChanges,
@@ -1086,6 +1150,17 @@ function CommitWithDiff({
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => onStash(commit)}
+                  disabled={isRemoving}
+                  data-testid="stash-commit-button"
+                >
+                  <Archive className="w-4 h-4" />
+                  Stash commit
+                </Button>
                 <Button
                   variant="outline"
                   size="sm"
