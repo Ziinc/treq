@@ -184,8 +184,8 @@ it("captures GitHub review comment threads in the Review tab", async () => {
 		name: "github-review-threads-01-inline",
 		expectations: [
 			'A blue-accented card is inline in the example.ts diff, expanded to show @octocat\'s comment "This magic number should be a named constant." with a larger avatar, a linked username, a sans-serif comment body, a small GitHub icon on the comment itself (not on the thread header), and a date without a year.',
-			'A second, collapsed GitHub thread card shows a small avatar, linked @reviewer-bot username, a gray "Resolved" badge, and a greyed truncated preview of "Looks good now, thanks!" — not just a badge and comment count.',
-			'Above the diff hunk, an outdated/unplaced GitHub thread card is visible without any parent "N outdated comments" collapsible banner; it shows @old-reviewer and a greyed preview of the outdated comment body.',
+			'A second, collapsed GitHub thread card shows a small avatar, linked @reviewer-bot username, a gray "Resolved" badge, then a greyed truncated preview of "Looks good now, thanks!" on the same row after Resolved.',
+			'Above the diff hunk, an outdated/unplaced GitHub thread card is visible without any parent "N outdated comments" collapsible banner; it shows @old-reviewer, Resolved, and a greyed preview of the outdated comment body on one row.',
 		],
 	});
 

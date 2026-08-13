@@ -169,8 +169,20 @@ describe("GithubCommentCard", () => {
     expect(preview).toHaveTextContent(
       "First line of feedback that should remain visible.",
     );
-    expect(preview.className).toMatch(/line-clamp/);
+    expect(preview.className).toMatch(/truncate|line-clamp/);
     expect(preview.className).toMatch(/text-muted-foreground/);
+    // Preview sits on the same header row, after the Resolved badge.
+    const headerRow = Array.from(toggle.childNodes).filter(
+      (node) => node.nodeType === Node.ELEMENT_NODE,
+    ) as Element[];
+    const resolvedIndex = headerRow.findIndex((el) =>
+      el.textContent?.includes("Resolved"),
+    );
+    const previewIndex = headerRow.findIndex(
+      (el) => el.getAttribute("data-testid") === "github-thread-collapsed-preview",
+    );
+    expect(resolvedIndex).toBeGreaterThanOrEqual(0);
+    expect(previewIndex).toBeGreaterThan(resolvedIndex);
     expect(screen.queryByTestId("github-comment-card")).not.toBeInTheDocument();
   });
 

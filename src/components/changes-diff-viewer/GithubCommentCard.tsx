@@ -98,49 +98,47 @@ export function GithubCommentCard({
   return (
     <div className="rounded-md border border-sky-500/30 bg-sky-500/5 overflow-hidden">
       <button
-        className="w-full flex flex-col gap-1.5 px-3 py-1.5 text-left hover:bg-sky-500/10 font-sans"
+        className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-sky-500/10 font-sans min-w-0"
         onClick={onToggleCollapse}
         data-testid="github-thread-toggle"
       >
-        <div className="flex items-center gap-2 min-w-0">
-          {collapsed ? (
-            <ChevronRight className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-          ) : (
-            <ChevronDown className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-          )}
-          {collapsed && firstComment && (
-            <>
-              <AuthorAvatar
-                login={firstComment.author.login}
-                avatarUrl={firstComment.author.avatar_url}
-                sizeClass="w-5 h-5"
-              />
-              <AuthorProfileLink
-                login={firstComment.author.login}
-                className="text-xs font-medium font-sans hover:underline text-foreground truncate"
-              />
-            </>
-          )}
-          {thread.is_resolved && (
-            <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted text-muted-foreground text-[10px] font-medium flex-shrink-0">
-              <CheckCircle2 className="w-3 h-3" />
-              Resolved
-            </span>
-          )}
-          {!collapsed && (
-            <span className="text-xs text-muted-foreground">
-              {thread.comments.length} comment
-              {thread.comments.length !== 1 ? "s" : ""}
-            </span>
-          )}
-        </div>
+        {collapsed ? (
+          <ChevronRight className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+        ) : (
+          <ChevronDown className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+        )}
         {collapsed && firstComment && (
-          <p
-            className="pl-5 text-xs text-muted-foreground/70 line-clamp-2 whitespace-pre-wrap font-sans"
+          <>
+            <AuthorAvatar
+              login={firstComment.author.login}
+              avatarUrl={firstComment.author.avatar_url}
+              sizeClass="w-5 h-5"
+            />
+            <AuthorProfileLink
+              login={firstComment.author.login}
+              className="text-xs font-medium font-sans hover:underline text-foreground flex-shrink-0"
+            />
+          </>
+        )}
+        {thread.is_resolved && (
+          <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted text-muted-foreground text-[10px] font-medium flex-shrink-0">
+            <CheckCircle2 className="w-3 h-3" />
+            Resolved
+          </span>
+        )}
+        {collapsed && firstComment && (
+          <span
+            className="text-xs text-muted-foreground/70 truncate min-w-0 font-sans"
             data-testid="github-thread-collapsed-preview"
           >
-            {firstComment.body}
-          </p>
+            {firstComment.body.replace(/\s+/g, " ").trim()}
+          </span>
+        )}
+        {!collapsed && (
+          <span className="text-xs text-muted-foreground">
+            {thread.comments.length} comment
+            {thread.comments.length !== 1 ? "s" : ""}
+          </span>
         )}
       </button>
       {!collapsed && (
