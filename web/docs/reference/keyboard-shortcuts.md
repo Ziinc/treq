@@ -8,6 +8,8 @@ _Reference for Treq's keyboard shortcuts._
 
 Most shortcuts act on the current [workspace](/docs/concepts/workspaces) or [terminal session](/docs/concepts/terminal-sessions).
 
+Press `?` anywhere outside an input or the terminal to open the in-app keyboard shortcut reference.
+
 ## Global Shortcuts
 
 | Shortcut      | Action                   |
@@ -16,6 +18,7 @@ Most shortcuts act on the current [workspace](/docs/concepts/workspaces) or [ter
 | `Cmd+Shift+N` | Create stacked workspace |
 | `Cmd+K`       | Command Palette          |
 | `Cmd+P`       | File Search              |
+| `?`           | Show keyboard shortcuts  |
 | `Escape`      | Close dialog             |
 
 ## Terminal
@@ -26,11 +29,13 @@ Most shortcuts act on the current [workspace](/docs/concepts/workspaces) or [ter
 | `Cmd+Ctrl+J` | Maximize/restore terminal     |
 | `Cmd+]`      | New agent terminal            |
 | `Cmd+\`      | New shell terminal            |
+| `Cmd+W`      | Close selected terminal       |
 | `Cmd+C`      | Copy selection (or interrupt) |
 | `Cmd+V`      | Paste                         |
 
-## File Browser
+## Files & Diff
 
-| Shortcut | Action         |
-| -------- | -------------- |
-| `Cmd+F`  | Search in file |
+| Shortcut | Action                   |
+| -------- | ------------------------ |
+| `Cmd+F`  | Search in file or diff   |
+| `Cmd+A`  | Select all changed files |

@@ -71,6 +71,7 @@ import { CommandPalette } from "./CommandPalette";
 import { AgentPromptDialog } from "./AgentPromptDialog";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { GitHubPanel } from "./GitHubPanel";
+import { KeyboardShortcutsModal } from "./KeyboardShortcutsModal";
 import { MergePreviewPage } from "./MergePreviewPage";
 import { Onboarding } from "./Onboarding";
 import { PromptHistoryModal } from "./PromptHistoryModal";
@@ -155,6 +156,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   } | null>(null);
   const [showBranchSwitcher, setShowBranchSwitcher] = useState(false);
   const [showFilePicker, setShowFilePicker] = useState(false);
+  const [showKeyboardShortcuts, setShowKeyboardShortcuts] = useState(false);
   const [showWorkspacePicker, setShowWorkspacePicker] = useState(false);
   const [showWorkspaceDeletion, setShowWorkspaceDeletion] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
@@ -326,10 +328,22 @@ export const Dashboard: React.FC<DashboardProps> = ({
     setShowFilePicker(true);
   });
 
+  // "?": show keyboard shortcut reference (Shift+/ on US keyboards)
+  useKeyboardShortcut(
+    "?",
+    false,
+    () => {
+      setShowKeyboardShortcuts((open) => !open);
+    },
+    [],
+    { ignoreShift: true },
+  );
+
   useKeyboardShortcut("Escape", false, () => {
     if (unifiedDialogDefaults) setUnifiedDialogDefaults(null);
     if (showCommandPalette) setShowCommandPalette(false);
     if (showFilePicker) setShowFilePicker(false);
+    setShowKeyboardShortcuts(false);
   });
 
   // Initialize repo from URL param (set by backend on startup, or by "Open in New Window")
@@ -1731,6 +1745,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
         repoPath={repoPath}
         initialSelectedId={promptHistoryFocusId}
         onRunPrompt={handleRunPrompt}
+      />
+
+      <KeyboardShortcutsModal
+        open={showKeyboardShortcuts}
+        onOpenChange={setShowKeyboardShortcuts}
       />
 
       <StashModal

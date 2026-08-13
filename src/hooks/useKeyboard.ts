@@ -15,6 +15,8 @@ export function useKeyboardShortcut(
   deps: unknown[] = [],
   options?: {
     shift?: boolean;
+    /** Skip shiftKey require/reject checks (needed for "?" across browsers/tests). */
+    ignoreShift?: boolean;
     option?: boolean;
     requireBothCmdAndCtrl?: boolean;
   },
@@ -51,6 +53,7 @@ export function useKeyboardShortcut(
 
       const isModifierPressed = event.ctrlKey || event.metaKey;
       const shiftRequired = options?.shift ?? false;
+      const ignoreShift = options?.ignoreShift ?? false;
       const optionRequired = options?.option ?? false;
       const requireBothCmdAndCtrl = options?.requireBothCmdAndCtrl ?? false;
 
@@ -59,7 +62,10 @@ export function useKeyboardShortcut(
         if (requireBothCmdAndCtrl) {
           if (!event.metaKey || !event.ctrlKey) return;
           // When requireBothCmdAndCtrl, also check shift and alt are not pressed unless required
-          if (!shiftRequired && event.shiftKey) return;
+          if (!ignoreShift) {
+            if (!shiftRequired && event.shiftKey) return;
+            if (shiftRequired && !event.shiftKey) return;
+          }
           if (!optionRequired && event.altKey) return;
         } else {
           if (ctrlOrCmd && !isModifierPressed) return;
@@ -69,8 +75,10 @@ export function useKeyboardShortcut(
           if (ctrlOrCmd && event.metaKey && event.ctrlKey) return;
 
           // Check shift key requirements
-          if (shiftRequired && !event.shiftKey) return;
-          if (!shiftRequired && event.shiftKey) return;
+          if (!ignoreShift) {
+            if (shiftRequired && !event.shiftKey) return;
+            if (!shiftRequired && event.shiftKey) return;
+          }
           // Check option/alt key requirements
           if (optionRequired && !event.altKey) return;
           if (!optionRequired && event.altKey) return;
@@ -87,6 +95,7 @@ export function useKeyboardShortcut(
     key,
     ctrlOrCmd,
     options?.shift,
+    options?.ignoreShift,
     options?.option,
     options?.requireBothCmdAndCtrl,
     ...deps,
