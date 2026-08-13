@@ -819,10 +819,59 @@ pub fn sync_workspaces(repo_path: &str) -> Result<(), String> {
 }
 
 /// Lists the minimal workspace status needed by the sidebar.
-/// This path is intentionally read-only and subprocess-free.
+///
+/// Discovers jj workspaces, heals conflicted bookmarks losslessly onto a linear
+/// tip (rebase local-only commits onto `@origin`), then persists identity fields
+/// for the sidebar.
 pub fn list_workspace_statuses(repo_path: &str) -> Result<Vec<WorkspaceSidebarStatus>, String> {
   let discovered = jj::discover_workspaces_with_conflicts(repo_path)
     .map_err(|e| format!("Failed to discover workspaces from jj: {}", e))?;
+
+  // Conflicted bookmarks break tip/PR revsets (`Revision '…' doesn't exist` /
+  // ambiguous). Resolve them automatically with linear, lossless history before
+  // the sidebar reads identity or conflict state.
+  for workspace in &discovered {
+    let workspace_dir = Path::new(repo_path)
+      .join(".treq")
+      .join("workspaces")
+      .join(&workspace.workspace_path);
+    let Some(workspace_dir_str) = workspace_dir.to_str() else {
+      continue;
+    };
+    if !jj::jj_is_bookmark_conflicted(workspace_dir_str, &workspace.branch_name) {
+      continue;
+    }
+    let remote_ref = format!("{}@origin", workspace.branch_name);
+    match jj::jj_resolve_bookmark_conflict_losslessly(
+      workspace_dir_str,
+      &workspace.branch_name,
+      &remote_ref,
+    ) {
+      Ok(resolution) => {
+        log::info!(
+          "Auto-resolved conflicted bookmark '{}' for workspace '{}': preserved {} local change(s)",
+          workspace.branch_name,
+          workspace.workspace_name,
+          resolution.preserved_change_ids.len()
+        );
+      }
+      Err(err) => {
+        log::warn!(
+          "Failed to auto-resolve conflicted bookmark '{}' for workspace '{}': {}",
+          workspace.branch_name,
+          workspace.workspace_name,
+          err
+        );
+      }
+    }
+  }
+
+  let discovered = jj::discover_workspaces_with_conflicts(repo_path).map_err(|e| {
+    format!(
+      "Failed to rediscover workspaces after bookmark resolve: {}",
+      e
+    )
+  })?;
   let refreshed_at = chrono::Utc::now().to_rfc3339();
   let conflict_by_path: HashMap<String, bool> = discovered
     .iter()
