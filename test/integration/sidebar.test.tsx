@@ -496,10 +496,7 @@ describe("Dashboard - workspace list", () => {
       await waitFor(() => {
         expect(
           within(sidebarRoot).getByRole("button", {
-            name: new RegExp(
-              `archive ${selectedRange.length} workspaces`,
-              "i",
-            ),
+            name: new RegExp(`archive ${selectedRange.length} workspaces`, "i"),
           }),
         ).toBeTruthy();
       });
