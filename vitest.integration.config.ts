@@ -1,15 +1,17 @@
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
+import os from "node:os";
 
 /**
  * NAPI-backed integration tests: real Rust dispatch, real jj repos.
  *
- * File parallelism uses forks (not threads): each file gets its own process,
- * so `napi.initState` / `TREQ_APP_DB_PATH` (the shared app.db) stay isolated.
- * Per-repo `local.db` already lives under each createTestRepo temp dir.
- *
- * Do not switch this pool to `threads` — the native addon keeps process-global
- * OnceLock state that is not safe across concurrent files in one process.
+ * Isolation model:
+ * - Per-repo `local.db` lives under each `createTestRepo` temp dir — safe to
+ *   run files in parallel.
+ * - App-level DB (`TREQ_APP_DB_PATH` / napi `OnceLock`) is process-global, so
+ *   we use `pool: "forks"` (not threads): each file gets its own process and
+ *   its own app.db. Settings / default-agent tests that touch app.db are fine
+ *   under forks; they must not share a process with other files.
  */
 export default defineConfig({
   plugins: [react()],
@@ -19,13 +21,10 @@ export default defineConfig({
     setupFiles: ["./test/setup.integration.ts"],
     include: ["test/integration/**/*.test.{ts,tsx}"],
     globals: true,
-    // Forks (not threads): each file gets its own process so the native
-    // addon's OnceLock app.db (`TREQ_APP_DB_PATH` from initState) is isolated.
-    // Per-repo local.db already lives under each createTestRepo temp dir.
     pool: "forks",
     fileParallelism: true,
-    // Cap workers — each fork loads the ~500MB NAPI addon; too many thrash.
-    maxWorkers: 2,
+    // Each fork loads the large NAPI addon; keep this modest to avoid RAM thrash.
+    maxWorkers: Math.min(4, os.cpus().length),
     testTimeout: 30000,
     hookTimeout: 60000,
   },
