@@ -34,9 +34,9 @@ import {
   StateChip,
 } from "./shared";
 
-/** Sidebar-matching branch glyph (GitBranch flipped on Y). */
+/** Branch glyph (Lucide GitBranch, upright — not the sidebar's Y-flipped form). */
 function WorkspaceBranchIcon({ className }: { className?: string }) {
-  return <GitBranch className={`-scale-y-100 ${className ?? ""}`} />;
+  return <GitBranch className={className} />;
 }
 
 /** Branch glyph with a small plus badge at the bottom-right. */
