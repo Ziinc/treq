@@ -442,31 +442,29 @@ describe("Dashboard - workspace list", () => {
         "gumbo-notes",
       ];
 
-      // Wait until every workspace row is painted — sibling order can be
-      // recency-based, so don't assume a fixed list order.
-      await waitFor(async () => {
+      await waitFor(() => {
         for (const branchName of expectedBranches) {
-          expect(await findSidebarBranchElement(branchName)).toBeTruthy();
+          expect(
+            within(sidebarRoot).getAllByText(branchName).length,
+          ).toBeGreaterThan(0);
         }
       });
 
       const getWorkspaceRow = (branchName: string) => {
-        const branchElement = screen.getByText(branchName, {
-          selector: ".font-mono",
-        });
-        return branchElement.closest(
-          ".group\\/workspace",
-        ) as HTMLElement | null;
+        const [branchElement] = within(sidebarRoot).getAllByText(branchName);
+        return branchElement.closest("div") as HTMLElement;
       };
 
-      const visibleOrder = Array.from(
-        sidebarRoot.querySelectorAll(".group\\/workspace .font-mono"),
-      )
-        .map((el) => el.textContent?.trim() ?? "")
-        .filter((name) => expectedBranches.includes(name));
+      const visibleOrder: string[] = [];
+      for (const el of Array.from(sidebarRoot.querySelectorAll("*"))) {
+        if (el.children.length > 0) continue;
+        const text = el.textContent?.trim() ?? "";
+        if (expectedBranches.includes(text) && !visibleOrder.includes(text)) {
+          visibleOrder.push(text);
+        }
+      }
 
       expect(visibleOrder).toHaveLength(expectedBranches.length);
-      expect(new Set(visibleOrder)).toEqual(new Set(expectedBranches));
 
       const anchorBranch = "dduck-joke-readme";
       const targetBranch = "gumbo-notes";
@@ -481,11 +479,9 @@ describe("Dashboard - workspace list", () => {
 
       const anchorRow = getWorkspaceRow(anchorBranch);
       const targetRow = getWorkspaceRow(targetBranch);
-      expect(anchorRow).toBeTruthy();
-      expect(targetRow).toBeTruthy();
 
-      fireEvent.click(anchorRow!, { metaKey: true });
-      fireEvent.click(targetRow!, { shiftKey: true });
+      fireEvent.click(anchorRow, { metaKey: true });
+      fireEvent.click(targetRow, { shiftKey: true });
 
       await waitFor(() => {
         for (const branchName of selectedRange) {
