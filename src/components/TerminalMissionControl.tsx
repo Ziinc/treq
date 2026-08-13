@@ -1,4 +1,13 @@
-import { Bot, GitBranch, Home, Loader2, Moon, MousePointer2, Sparkles, Terminal } from "lucide-react";
+import {
+  Bot,
+  GitBranch,
+  Home,
+  Loader2,
+  Moon,
+  MousePointer2,
+  Sparkles,
+  Terminal,
+} from "lucide-react";
 import { useMemo } from "react";
 import { buildMissionControlGroups } from "./terminal-mission-control/buildMissionControlGroups";
 import {
@@ -22,7 +31,10 @@ function getSessionIcon(session: TerminalSessionSummary) {
   return Bot;
 }
 
-function sessionStatusLabel(session: TerminalSessionSummary, now: number): string {
+function sessionStatusLabel(
+  session: TerminalSessionSummary,
+  now: number,
+): string {
   if (session.isStreaming) return "Streaming";
   if (now - session.lastActivityAt >= TERMINAL_IDLE_THRESHOLD_MS) return "Idle";
   return "Active";
@@ -34,10 +46,7 @@ export const TerminalMissionControl: React.FC<TerminalMissionControlProps> = ({
   onClose,
   onFocus,
 }) => {
-  const groups = useMemo(
-    () => buildMissionControlGroups(sessions),
-    [sessions],
-  );
+  const groups = useMemo(() => buildMissionControlGroups(sessions), [sessions]);
   const now = Date.now();
 
   if (!open) return null;
@@ -151,7 +160,9 @@ export const TerminalMissionControl: React.FC<TerminalMissionControlProps> = ({
                                 ? `${session.agent ?? "agent"} session`
                                 : "shell session"}
                             </div>
-                            <div className="mt-3 text-foreground/80">{status}</div>
+                            <div className="mt-3 text-foreground/80">
+                              {status}
+                            </div>
                           </div>
                           <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                             <span className="font-mono truncate">

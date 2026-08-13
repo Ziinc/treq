@@ -6,7 +6,8 @@ import type { TerminalSessionSummary } from "./terminal/types";
 import { TooltipProvider } from "./ui/tooltip";
 
 const session = (
-  overrides: Partial<TerminalSessionSummary> & Pick<TerminalSessionSummary, "id">,
+  overrides: Partial<TerminalSessionSummary> &
+    Pick<TerminalSessionSummary, "id">,
 ): TerminalSessionSummary => ({
   kind: "shell",
   name: overrides.id,
@@ -68,9 +69,9 @@ describe("TerminalMissionControl", () => {
     );
 
     expect(screen.getByTestId("terminal-mission-control")).toBeTruthy();
-    expect(screen.getByTestId("mission-control-grid-feat/thing").className).toContain(
-      "grid-cols-2",
-    );
+    expect(
+      screen.getByTestId("mission-control-grid-feat/thing").className,
+    ).toContain("grid-cols-2");
     expect(
       screen.getByTestId("mission-control-group-feat/thing"),
     ).toHaveTextContent("feat/thing");

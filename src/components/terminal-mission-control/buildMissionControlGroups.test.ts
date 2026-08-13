@@ -3,7 +3,8 @@ import type { TerminalSessionSummary } from "../terminal/types";
 import { buildMissionControlGroups } from "./buildMissionControlGroups";
 
 const session = (
-  overrides: Partial<TerminalSessionSummary> & Pick<TerminalSessionSummary, "id">,
+  overrides: Partial<TerminalSessionSummary> &
+    Pick<TerminalSessionSummary, "id">,
 ): TerminalSessionSummary => ({
   kind: "shell",
   name: overrides.id,
