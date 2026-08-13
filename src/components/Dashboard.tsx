@@ -7,6 +7,7 @@ import { ask } from "@tauri-apps/plugin-dialog";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
+import { useThreeFingerSwipe } from "../hooks/useThreeFingerSwipe";
 import { useWorkspaceHierarchy } from "../hooks/useWorkspaceHierarchy";
 import {
   type AgentDeepLinkRequest,
@@ -77,6 +78,7 @@ import { PromptHistoryModal } from "./PromptHistoryModal";
 import { StashModal } from "./StashModal";
 import { SettingsPage } from "./SettingsPage";
 import { ShowWorkspace } from "./ShowWorkspace";
+import { TerminalMissionControl } from "./TerminalMissionControl";
 import type { BranchListItem } from "./TargetBranchSelector";
 import type {
   ClaudeSessionData,
@@ -142,6 +144,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
   );
   const [mergeWorkspace, setMergeWorkspace] = useState<Workspace | null>(null);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [showTerminalMissionControl, setShowTerminalMissionControl] =
+    useState(false);
   const [showAgentPromptDialog, setShowAgentPromptDialog] = useState(false);
   const [showPromptHistory, setShowPromptHistory] = useState(false);
   const [promptHistoryFocusId, setPromptHistoryFocusId] = useState<
@@ -326,10 +330,29 @@ export const Dashboard: React.FC<DashboardProps> = ({
     setShowFilePicker(true);
   });
 
-  useKeyboardShortcut("Escape", false, () => {
-    if (unifiedDialogDefaults) setUnifiedDialogDefaults(null);
-    if (showCommandPalette) setShowCommandPalette(false);
-    if (showFilePicker) setShowFilePicker(false);
+  useKeyboardShortcut(
+    "Escape",
+    false,
+    () => {
+      if (showTerminalMissionControl) {
+        setShowTerminalMissionControl(false);
+        return;
+      }
+      if (unifiedDialogDefaults) setUnifiedDialogDefaults(null);
+      if (showCommandPalette) setShowCommandPalette(false);
+      if (showFilePicker) setShowFilePicker(false);
+    },
+    [
+      showTerminalMissionControl,
+      unifiedDialogDefaults,
+      showCommandPalette,
+      showFilePicker,
+    ],
+  );
+
+  useThreeFingerSwipe({
+    onSwipeUp: () => setShowTerminalMissionControl(true),
+    onSwipeDown: () => setShowTerminalMissionControl(false),
   });
 
   // Initialize repo from URL param (set by backend on startup, or by "Open in New Window")
@@ -1658,6 +1681,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
             handleOpenSession(newWorkspace);
           }
         }}
+      />
+
+      <TerminalMissionControl
+        open={showTerminalMissionControl}
+        sessions={terminalSessionSummaries}
+        onClose={() => setShowTerminalMissionControl(false)}
+        onFocus={handleFocusTerminalSession}
       />
 
       <CommandPalette
