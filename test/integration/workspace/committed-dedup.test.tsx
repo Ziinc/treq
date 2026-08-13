@@ -91,9 +91,7 @@ describe("ShowWorkspace - committed diff dedupe integration", () => {
       expect(screen.queryByTitle("committed-only.txt")).not.toBeInTheDocument();
       expect(screen.queryByText("committed only")).not.toBeInTheDocument();
       expect(screen.getByTitle("uncommitted-only.txt")).toBeInTheDocument();
-      expect(screen.getAllByText("shared.txt").length).toBeGreaterThanOrEqual(
-        2,
-      );
+      expect(screen.getByTitle("shared.txt")).toBeInTheDocument();
     });
 
     expect(screen.getAllByText("shared v2").length).toBeGreaterThanOrEqual(1);

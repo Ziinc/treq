@@ -54,9 +54,7 @@ it("keeps dirty committed files visible after hiding Committed Show", async () =
 	await screen.findByRole("tab", { name: /^Review/, selected: true });
 
 	await waitFor(() => {
-		expect(screen.getAllByText("shared.txt").length).toBeGreaterThanOrEqual(
-			2,
-		);
+		expect(screen.getByTitle("shared.txt")).toBeInTheDocument();
 		expect(screen.getByTitle("committed-only.txt")).toBeInTheDocument();
 		expect(screen.getByTitle("uncommitted-only.txt")).toBeInTheDocument();
 	});
@@ -64,9 +62,9 @@ it("keeps dirty committed files visible after hiding Committed Show", async () =
 	await captureDocument(document, {
 		name: "review-committed-dirty-toggle-01-show-on",
 		expectations: [
-			"Review shows shared.txt under both Changes and Committed.",
-			"committed-only.txt is listed under Committed; uncommitted-only.txt under Changes.",
-			"The Committed section Show control is on (eye icon).",
+			"shared.txt and uncommitted-only.txt are listed under Changes.",
+			"committed-only.txt is listed under Committed with Show on (eye icon).",
+			"The Review diff pane shows hunks for the dirty and committed files.",
 		],
 	});
 
@@ -74,9 +72,7 @@ it("keeps dirty committed files visible after hiding Committed Show", async () =
 
 	await waitFor(() => {
 		expect(screen.queryByTitle("committed-only.txt")).not.toBeInTheDocument();
-		expect(screen.getAllByText("shared.txt").length).toBeGreaterThanOrEqual(
-			2,
-		);
+		expect(screen.getByTitle("shared.txt")).toBeInTheDocument();
 		expect(screen.getByTitle("uncommitted-only.txt")).toBeInTheDocument();
 	});
 
@@ -84,7 +80,7 @@ it("keeps dirty committed files visible after hiding Committed Show", async () =
 		name: "review-committed-dirty-toggle-02-show-off",
 		expectations: [
 			"After hiding Committed, committed-only.txt is gone from the sidebar.",
-			"shared.txt remains visible in both Changes and Committed.",
+			"shared.txt remains listed under Changes (dirty overlapping file).",
 			"uncommitted-only.txt remains listed under Changes.",
 		],
 	});

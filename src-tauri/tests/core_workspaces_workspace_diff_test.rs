@@ -292,7 +292,7 @@ fn test_workspace_diff_includes_uncommitted_changes_and_conflicts() {
 }
 
 #[test]
-fn test_workspace_diff_keeps_committed_files_that_also_have_wc_changes() {
+fn test_workspace_diff_dedupes_committed_files_that_also_have_wc_changes() {
   let repo = TestRepo::new().unwrap();
   repo.commit_file("shared.txt", "base\n", "base").unwrap();
 
@@ -332,8 +332,8 @@ fn test_workspace_diff_keeps_committed_files_that_also_have_wc_changes() {
     .collect();
 
   assert!(
-    committed_paths.contains(&"shared.txt"),
-    "committed section must keep files that also have WC changes: {:?}",
+    !committed_paths.contains(&"shared.txt"),
+    "dirty overlapping files must not duplicate under committed: {:?}",
     committed_paths
   );
   assert!(
@@ -348,7 +348,7 @@ fn test_workspace_diff_keeps_committed_files_that_also_have_wc_changes() {
   );
   assert!(
     uncommitted_paths.contains(&"shared.txt"),
-    "overlapping dirty file must also appear under uncommitted: {:?}",
+    "overlapping dirty file must appear under uncommitted: {:?}",
     uncommitted_paths
   );
   assert!(uncommitted_paths.contains(&"uncommitted-only.txt"));
