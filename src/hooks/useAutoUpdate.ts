@@ -2,17 +2,17 @@ import { ask } from "@tauri-apps/plugin-dialog";
 import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useRef } from "react";
 import {
-	type AppUpdateCheckResult,
-	checkForAppUpdate,
-	installAppUpdate,
+  type AppUpdateCheckResult,
+  checkForAppUpdate,
+  installAppUpdate,
 } from "../lib/api";
 import { useToast } from "../components/ui/toast";
 
 type UseAutoUpdateOptions = {
-	/** When false, skip the automatic startup check (manual menu still works). */
-	autoCheck?: boolean;
-	/** When false, do not subscribe to the Help → Check for Updates menu event. */
-	listenMenu?: boolean;
+  /** When false, skip the automatic startup check (manual menu still works). */
+  autoCheck?: boolean;
+  /** When false, do not subscribe to the Help → Check for Updates menu event. */
+  listenMenu?: boolean;
 };
 
 /**
@@ -20,136 +20,136 @@ type UseAutoUpdateOptions = {
  * and installs the GitHub `.app.tar.gz` artifact on confirm.
  */
 export function useAutoUpdate(options: UseAutoUpdateOptions = {}) {
-	const { autoCheck = true, listenMenu = true } = options;
-	const { addToast } = useToast();
-	const checkingRef = useRef(false);
-	const promptedVersionRef = useRef<string | null>(null);
+  const { autoCheck = true, listenMenu = true } = options;
+  const { addToast } = useToast();
+  const checkingRef = useRef(false);
+  const promptedVersionRef = useRef<string | null>(null);
 
-	const promptInstall = useCallback(
-		async (result: AppUpdateCheckResult) => {
-			if (!result.available || !result.downloadUrl || !result.latestVersion) {
-				return;
-			}
-			const latest = result.latestVersion;
-			if (promptedVersionRef.current === latest) {
-				return;
-			}
-			promptedVersionRef.current = latest;
+  const promptInstall = useCallback(
+    async (result: AppUpdateCheckResult) => {
+      if (!result.available || !result.downloadUrl || !result.latestVersion) {
+        return;
+      }
+      const latest = result.latestVersion;
+      if (promptedVersionRef.current === latest) {
+        return;
+      }
+      promptedVersionRef.current = latest;
 
-			addToast({
-				type: "info",
-				title: `Update available: v${latest}`,
-				description: `You're on v${result.currentVersion}. Install the latest release?`,
-				action: {
-					label: "Install and restart",
-					onClick: () => {
-						void (async () => {
-							const confirmed = await ask(
-								`Download and install treq v${latest}? The app will restart when finished.`,
-								{
-									title: "Install update",
-									kind: "info",
-									okLabel: "Install",
-									cancelLabel: "Later",
-								},
-							);
-							if (!confirmed) {
-								return;
-							}
-							addToast({
-								type: "info",
-								title: "Installing update…",
-								description: `Downloading treq v${latest}`,
-							});
-							try {
-								await installAppUpdate(result.downloadUrl!);
-							} catch (error) {
-								addToast({
-									type: "error",
-									title: "Update failed",
-									description:
-										error instanceof Error ? error.message : String(error),
-								});
-							}
-						})();
-					},
-				},
-			});
-		},
-		[addToast],
-	);
+      addToast({
+        type: "info",
+        title: `Update available: v${latest}`,
+        description: `You're on v${result.currentVersion}. Install the latest release?`,
+        action: {
+          label: "Install and restart",
+          onClick: () => {
+            void (async () => {
+              const confirmed = await ask(
+                `Download and install treq v${latest}? The app will restart when finished.`,
+                {
+                  title: "Install update",
+                  kind: "info",
+                  okLabel: "Install",
+                  cancelLabel: "Later",
+                },
+              );
+              if (!confirmed) {
+                return;
+              }
+              addToast({
+                type: "info",
+                title: "Installing update…",
+                description: `Downloading treq v${latest}`,
+              });
+              try {
+                await installAppUpdate(result.downloadUrl!);
+              } catch (error) {
+                addToast({
+                  type: "error",
+                  title: "Update failed",
+                  description:
+                    error instanceof Error ? error.message : String(error),
+                });
+              }
+            })();
+          },
+        },
+      });
+    },
+    [addToast],
+  );
 
-	const runCheck = useCallback(
-		async (opts?: { manual?: boolean }) => {
-			if (checkingRef.current) {
-				return;
-			}
-			checkingRef.current = true;
-			try {
-				const result = await checkForAppUpdate();
-				if (!result.supported) {
-					if (opts?.manual) {
-						addToast({
-							type: "info",
-							title: "Auto-update unavailable",
-							description: "Automatic updates are currently supported on macOS only.",
-						});
-					}
-					return;
-				}
-				if (!result.available) {
-					if (opts?.manual) {
-						addToast({
-							type: "success",
-							title: "You're up to date",
-							description: `treq v${result.currentVersion} is the latest release.`,
-						});
-					}
-					return;
-				}
-				await promptInstall(result);
-			} catch (error) {
-				if (opts?.manual) {
-					addToast({
-						type: "error",
-						title: "Update check failed",
-						description:
-							error instanceof Error ? error.message : String(error),
-					});
-				}
-			} finally {
-				// Ref mutex: reset after the awaited check completes. Not React state.
-				// eslint-disable-next-line require-atomic-updates -- intentional gate unlock
-				checkingRef.current = false;
-			}
-		},
-		[addToast, promptInstall],
-	);
+  const runCheck = useCallback(
+    async (opts?: { manual?: boolean }) => {
+      if (checkingRef.current) {
+        return;
+      }
+      checkingRef.current = true;
+      try {
+        const result = await checkForAppUpdate();
+        if (!result.supported) {
+          if (opts?.manual) {
+            addToast({
+              type: "info",
+              title: "Auto-update unavailable",
+              description:
+                "Automatic updates are currently supported on macOS only.",
+            });
+          }
+          return;
+        }
+        if (!result.available) {
+          if (opts?.manual) {
+            addToast({
+              type: "success",
+              title: "You're up to date",
+              description: `treq v${result.currentVersion} is the latest release.`,
+            });
+          }
+          return;
+        }
+        await promptInstall(result);
+      } catch (error) {
+        if (opts?.manual) {
+          addToast({
+            type: "error",
+            title: "Update check failed",
+            description: error instanceof Error ? error.message : String(error),
+          });
+        }
+      } finally {
+        // Ref mutex: reset after the awaited check completes. Not React state.
+        // eslint-disable-next-line require-atomic-updates -- intentional gate unlock
+        checkingRef.current = false;
+      }
+    },
+    [addToast, promptInstall],
+  );
 
-	useEffect(() => {
-		if (!autoCheck) {
-			return;
-		}
-		const timer = window.setTimeout(() => {
-			void runCheck();
-		}, 2500);
-		return () => window.clearTimeout(timer);
-	}, [autoCheck, runCheck]);
+  useEffect(() => {
+    if (!autoCheck) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      void runCheck();
+    }, 2500);
+    return () => window.clearTimeout(timer);
+  }, [autoCheck, runCheck]);
 
-	useEffect(() => {
-		if (!listenMenu) {
-			return;
-		}
-		let unlisten: (() => void) | undefined;
-		void listen("menu-check-for-updates", () => {
-			void runCheck({ manual: true });
-		}).then((fn) => {
-			unlisten = fn;
-		});
-		return () => {
-			unlisten?.();
-		};
-	}, [listenMenu, runCheck]);
+  useEffect(() => {
+    if (!listenMenu) {
+      return;
+    }
+    let unlisten: (() => void) | undefined;
+    void listen("menu-check-for-updates", () => {
+      void runCheck({ manual: true });
+    }).then((fn) => {
+      unlisten = fn;
+    });
+    return () => {
+      unlisten?.();
+    };
+  }, [listenMenu, runCheck]);
 
-	return { checkForUpdate: () => runCheck({ manual: true }) };
+  return { checkForUpdate: () => runCheck({ manual: true }) };
 }
