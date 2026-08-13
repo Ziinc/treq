@@ -1814,6 +1814,19 @@ fn branch_name_for_workspace_commit(
     return (name.clone(), false);
   }
 
+  // After a commit the WC tip is an empty commit above the bookmark. A later
+  // divergent fetch conflicted-bookmarks the parent tip — not the WC — so the
+  // lookups above miss. Prefer any matching bookmark (including conflicted)
+  // over inventing a dashed workspace-name fallback that breaks PR / tip
+  // revsets (`Revision 'feat-…' doesn't exist`).
+  if let Some((name, target)) = repo
+    .view()
+    .local_bookmarks()
+    .find(|(name, _)| bookmark_matches_workspace(name.as_str()))
+  {
+    return (name.as_str().to_string(), target.has_conflict());
+  }
+
   (workspace_name.to_string(), false)
 }
 

@@ -342,11 +342,8 @@ fn test_workspace_list_statuses_does_not_cross_assign_sibling_branch_name_when_e
   )
   .expect("Failed to create logging workspace");
 
-  TestRepo::run_jj(
-    &repo.repo_path,
-    &["bookmark", "delete", "treq/feat-logging"],
-  )
-  .expect("Failed to delete logging bookmark");
+  treq_lib::jj::jj_delete_bookmark(&repo.repo_path, "treq/feat-logging")
+    .expect("Failed to delete logging bookmark");
 
   let statuses = treq_lib::core::list_workspace_statuses(&repo.repo_path)
     .expect("Failed to list workspace statuses");
@@ -358,6 +355,87 @@ fn test_workspace_list_statuses_does_not_cross_assign_sibling_branch_name_when_e
   assert_eq!(checks.workspace_name, "treq-feat-checks");
   assert_eq!(logging.workspace_name, "treq-feat-logging");
   assert_ne!(logging_status.current.branch_name, "treq/feat-checks");
+}
+
+/// Regression: after a local commit, WC sits on an empty tip above the bookmark.
+/// A divergent fetch then conflicted-bookmarks the parent — not the WC tip.
+/// Discovery must keep the slash bookmark name (`feat/…`), not overwrite DB
+/// `branch_name` with the dashed jj workspace name (`feat-…`), or GitHub PR
+/// lookup and tip revsets fail with "Revision `feat-…` doesn't exist".
+/// Status refresh also auto-resolves the conflict losslessly onto a linear tip.
+#[test]
+fn list_statuses_preserves_slash_branch_and_auto_resolves_conflicted_bookmark() {
+  let repo = TestRepo::with_remote().expect("Failed to create test repo with remote");
+  let branch = "claude/focused-fermat-ZdeFU";
+  let ws = repo
+    .setup_workspace_with_pushed_commit(branch, "local.txt", "local")
+    .expect("Failed to create pushed workspace");
+  let workspace_path = repo.workspace_full_path(&ws);
+
+  TestRepo::write_workspace_file(&workspace_path, "local2.txt", "local2")
+    .expect("Failed to write local diverge");
+  treq_lib::core::commit_workspace(&repo.repo_path, ws.id, "local diverge")
+    .expect("Failed to commit local diverge");
+  let local_change = treq_lib::jj::jj_get_change_id(&workspace_path, "@-")
+    .expect("local change id before conflict");
+
+  repo
+    .remote_commit_on_branch(branch, "remote.txt", "remote", "remote diverge")
+    .expect("Failed to make remote commit");
+  treq_lib::jj::jj_git_fetch(&repo.repo_path).expect("Failed to fetch");
+
+  assert!(
+    treq_lib::jj::jj_is_bookmark_conflicted(&workspace_path, branch),
+    "bookmark should be conflicted after divergent fetch"
+  );
+  assert_eq!(
+    treq_lib::local_db::get_workspace_by_id(&repo.repo_path, ws.id)
+      .expect("db lookup")
+      .expect("workspace exists")
+      .branch_name,
+    branch,
+    "precondition: DB still has slash branch name before discovery sync"
+  );
+
+  let statuses = treq_lib::core::list_workspace_statuses(&repo.repo_path)
+    .expect("Failed to list workspace statuses");
+  let status = statuses
+    .iter()
+    .find(|s| s.current.id == ws.id)
+    .expect("workspace status should exist");
+
+  assert_eq!(
+    status.current.branch_name, branch,
+    "discovery must not replace slash branch with sanitized workspace name"
+  );
+  assert_ne!(
+    status.current.branch_name, status.current.workspace_name,
+    "branch_name must stay distinct from dashed workspace_name"
+  );
+
+  let persisted = treq_lib::local_db::get_workspace_by_id(&repo.repo_path, ws.id)
+    .expect("db lookup")
+    .expect("workspace exists");
+  assert_eq!(persisted.branch_name, branch);
+
+  assert!(
+    !treq_lib::jj::jj_is_bookmark_conflicted(&workspace_path, branch),
+    "status refresh should auto-resolve conflicted bookmark losslessly"
+  );
+  let reachable = treq_lib::jj::jj_log_revset_commit_ids(
+    &workspace_path,
+    &format!("{} & ::{}", local_change, branch),
+  )
+  .expect("local change must remain reachable after lossless resolve");
+  assert_eq!(
+    reachable.len(),
+    1,
+    "local diverge must survive linear lossless resolve"
+  );
+
+  // Tip revsets must work again (the failure mode that broke Review / PR linking).
+  treq_lib::jj::jj_get_commit_id(&workspace_path, branch)
+    .expect("resolved bookmark tip must be resolvable");
 }
 
 #[test]

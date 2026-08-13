@@ -1044,13 +1044,19 @@ pub fn sync_discovered_workspaces(
     .transaction()
     .map_err(|e| format!("Failed to start discovery transaction: {}", e))?;
   for workspace in discovered {
-    let update_identity = !workspace.has_conflicts;
+    // Prefer a discovered canonical bookmark (e.g. feat/foo) over a prior
+    // sanitized fallback (feat-foo), even while the bookmark is conflicted.
+    // Still refuse to clobber a known canonical name with a sanitized fallback
+    // when discovery is ambiguous (has_conflicts).
+    let discovered_has_canonical_bookmark = workspace.branch_name != workspace.workspace_name;
+    let update_branch_name = discovered_has_canonical_bookmark || !workspace.has_conflicts;
+    let update_workspace_name = !workspace.has_conflicts;
     tx.execute(
             "INSERT INTO workspaces (workspace_name, workspace_path, branch_name, created_at, refreshed_at)
              VALUES (?1, ?2, ?3, ?4, ?5)
              ON CONFLICT(workspace_path) DO UPDATE SET
                  workspace_name = CASE WHEN ?6 THEN excluded.workspace_name ELSE workspaces.workspace_name END,
-                 branch_name = CASE WHEN ?6 THEN excluded.branch_name ELSE workspaces.branch_name END,
+                 branch_name = CASE WHEN ?7 THEN excluded.branch_name ELSE workspaces.branch_name END,
                  refreshed_at = excluded.refreshed_at",
             params![
                 workspace.workspace_name,
@@ -1058,7 +1064,8 @@ pub fn sync_discovered_workspaces(
                 workspace.branch_name,
                 refreshed_at,
                 refreshed_at,
-                update_identity,
+                update_workspace_name,
+                update_branch_name,
             ],
         )
         .map_err(|e| format!("Failed to upsert discovered workspace: {}", e))?;
@@ -1805,6 +1812,38 @@ mod tests {
       .expect("sync discovery");
 
     assert_eq!(workspaces[0].branch_name, "fix/example");
+  }
+
+  #[test]
+  fn conflicted_discovery_recovers_sanitized_branch_name_when_canonical_is_known() {
+    let temp = TempDir::new().expect("tempdir");
+    let repo_path = temp.path().to_str().expect("utf8 path");
+    init_local_db(repo_path).expect("initialize database");
+    add_workspace(
+      repo_path,
+      "fix-example".to_string(),
+      "fix-example".to_string(),
+      "fix-example".to_string(),
+      None,
+      None,
+      None,
+    )
+    .expect("register workspace with corrupted dashed branch_name");
+
+    let discovered = vec![crate::jj::DiscoveredWorkspace {
+      workspace_name: "fix-example".to_string(),
+      workspace_path: "fix-example".to_string(),
+      branch_name: "fix/example".to_string(),
+      has_conflicts: true,
+      last_activity_at: None,
+    }];
+    let workspaces = sync_discovered_workspaces(repo_path, &discovered, "2026-08-08T00:00:00Z")
+      .expect("sync discovery");
+
+    assert_eq!(
+      workspaces[0].branch_name, "fix/example",
+      "canonical slash bookmark from discovery must repair a prior dashed fallback"
+    );
   }
 
   #[test]
