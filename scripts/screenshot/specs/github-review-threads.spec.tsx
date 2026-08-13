@@ -2,10 +2,10 @@
  * Verifies GitHub PR review comment threads rendered inline in the Review
  * tab: read-only, styled distinctly from local comments (larger avatar +
  * linked author + per-comment GitHub icon), resolved threads collapsed by
- * default, threads that no longer map onto a visible diff line grouped into
- * a collapsed "Outdated" banner per file (no GitHub icon on the group), and
- * selecting text inside a comment body surfaces a floating "Quote" button
- * that seeds a normal local draft comment.
+ * default (still showing author + a greyed truncated preview), threads that
+ * no longer map onto a visible diff line always shown above the hunk (no
+ * parent "Outdated" collapsible), and selecting text inside a comment body
+ * surfaces a floating "Quote" button that seeds a normal local draft comment.
  *
  * The GitHub side (remote info / PR lookup / review threads) all shell out
  * to a real `gh` CLI the desktop harness can't reach, so those three API
@@ -114,7 +114,7 @@ const THREADS: GhReviewThread[] = [
 	},
 	{
 		id: "PRRT_outdated",
-		is_resolved: false,
+		is_resolved: true,
 		is_outdated: true,
 		path: "example.ts",
 		line: null,
@@ -163,22 +163,25 @@ it("captures GitHub review comment threads in the Review tab", async () => {
 
 	// Unresolved thread renders inline, expanded, with its comment visible.
 	await screen.findByText("This magic number should be a named constant.");
-	// Resolved thread starts collapsed -- its body text should not be present.
-	expect(screen.queryByText("Looks good now, thanks!")).not.toBeInTheDocument();
-	// The outdated/unplaced thread is grouped into a collapsed banner.
-	await screen.findByTestId("github-outdated-group-toggle");
+	// Resolved thread starts collapsed but still shows author + greyed preview.
+	await screen.findByRole("link", { name: "@reviewer-bot" });
+	await screen.findByTestId("github-thread-collapsed-preview");
+	expect(screen.queryByTestId("github-outdated-group-toggle")).not.toBeInTheDocument();
+	// Outdated/unplaced threads are always visible (no parent collapsible).
+	await screen.findByTestId("github-outdated-threads");
+	await screen.findByRole("link", { name: "@old-reviewer" });
 	expect(
-		screen.queryByText(
+		screen.getByText(
 			"This comment is on a line that no longer exists in the diff.",
 		),
-	).not.toBeInTheDocument();
+	).toBeInTheDocument();
 
 	await captureDocument(document, {
 		name: "github-review-threads-01-inline",
 		expectations: [
 			'A blue-accented card is inline in the example.ts diff, expanded to show @octocat\'s comment "This magic number should be a named constant." with a larger avatar, a linked username, a sans-serif comment body, a small GitHub icon on the comment itself (not on the thread header), and a date without a year.',
-			'A second, collapsed GitHub thread card is visible showing a gray/muted "Resolved" badge and a comment count, but no comment text and no GitHub icon on the collapsed header.',
-			'A collapsed "Outdated" banner sits above the diff hunk, stating one outdated comment not on a visible line, without a GitHub icon on the banner.',
+			'A second, collapsed GitHub thread card shows a small avatar, linked @reviewer-bot username, a gray "Resolved" badge, and a greyed truncated preview of "Looks good now, thanks!" — not just a badge and comment count.',
+			'Above the diff hunk, an outdated/unplaced GitHub thread card is visible without any parent "N outdated comments" collapsible banner; it shows @old-reviewer and a greyed preview of the outdated comment body.',
 		],
 	});
 

@@ -121,8 +121,11 @@ it("places GitHub review threads on committed Review-tab lines", async () => {
 	await user.click(await screen.findByRole("tab", { name: /^Review/i }));
 	await screen.findAllByText("example.ts");
 
-	// Must render inline on the committed line — not the outdated banner.
+	// Must render inline on the committed line — not an unplaced/outdated section.
 	await screen.findByText("This magic number should be a named constant.");
+	expect(
+		screen.queryByTestId("github-outdated-threads"),
+	).not.toBeInTheDocument();
 	expect(
 		screen.queryByTestId("github-outdated-group-toggle"),
 	).not.toBeInTheDocument();
@@ -131,7 +134,7 @@ it("places GitHub review threads on committed Review-tab lines", async () => {
 		name: "github-review-committed-01-inline",
 		expectations: [
 			'A blue-accented GitHub review comment card is inline on the committed example.ts diff, showing @octocat\'s comment "This magic number should be a named constant."',
-			'There is no collapsed "Outdated" banner above the hunk — the comment is placed on the visible line, not grouped as outdated.',
+			"There is no outdated/unplaced threads section above the hunk — the comment is placed on the visible line.",
 		],
 	});
 }, 60000);

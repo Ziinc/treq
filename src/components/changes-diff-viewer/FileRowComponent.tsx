@@ -1,5 +1,5 @@
 import React, { memo, useMemo } from "react";
-import { ChevronDown, ChevronRight, FileText, Loader2, X } from "lucide-react";
+import { FileText, Loader2, X } from "lucide-react";
 import { Button } from "../ui/button";
 import { CommentInput } from "../CommentInput";
 import { FileCommentSection } from "./FileCommentSection";
@@ -64,8 +64,6 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
     getUnplacedThreadsForFile,
     collapsedThreadIds,
     toggleThreadCollapse,
-    expandedOutdatedGroups,
-    toggleOutdatedGroup,
     showCommentInput,
     pendingComment,
     editingCommentId,
@@ -115,7 +113,6 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
 
   const outdatedComments = getOutdatedCommentsForFile(filePath);
   const unplacedGithubThreads = getUnplacedThreadsForFile(filePath);
-  const outdatedGroupExpanded = expandedOutdatedGroups.has(filePath);
 
   return (
     <>
@@ -226,65 +223,48 @@ const FileRowComponent: React.FC<FileRowComponentProps> = memo((props) => {
             ) : (
               <>
                 {unplacedGithubThreads.length > 0 && (
-                  <div className="border-b border-sky-500/40 bg-sky-500/5">
-                    <button
-                      className="w-full flex items-center gap-2 px-4 py-2 text-left hover:bg-sky-500/10"
-                      onClick={() => toggleOutdatedGroup(filePath)}
-                      data-testid="github-outdated-group-toggle"
-                    >
-                      {outdatedGroupExpanded ? (
-                        <ChevronDown className="w-3 h-3 text-muted-foreground flex-shrink-0" />
-                      ) : (
-                        <ChevronRight className="w-3 h-3 text-muted-foreground flex-shrink-0" />
+                  <div
+                    className="border-b border-sky-500/40 bg-sky-500/5 px-4 py-3 space-y-3"
+                    data-testid="github-outdated-threads"
+                  >
+                    {unplacedGithubThreads.map((thread) => (
+                      <GithubCommentCard
+                        key={thread.id}
+                        thread={thread}
+                        collapsed={collapsedThreadIds.has(thread.id)}
+                        onToggleCollapse={() =>
+                          toggleThreadCollapse(thread.id)
+                        }
+                        onQuote={(quote) => {
+                          setPendingComment(
+                            buildQuotedPendingComment(
+                              {
+                                filePath,
+                                hunkId: "",
+                                displayAtLineIndex: -1,
+                                lineNumber: thread.line ?? 0,
+                                lineSide: "new",
+                              },
+                              quote,
+                            ),
+                          );
+                          setShowCommentInput(true);
+                        }}
+                      />
+                    ))}
+                    {showCommentInput &&
+                      pendingComment &&
+                      pendingComment.filePath === filePath &&
+                      pendingComment.hunkId === "" && (
+                        <CommentInput
+                          onSubmit={addComment}
+                          onCancel={cancelComment}
+                          filePath={pendingComment.filePath}
+                          startLine={pendingComment.startLine}
+                          endLine={pendingComment.endLine}
+                          quote={getQuoteProp(pendingComment)}
+                        />
                       )}
-                      <span className="text-xs text-muted-foreground font-sans">
-                        {unplacedGithubThreads.length} outdated comment
-                        {unplacedGithubThreads.length !== 1 ? "s" : ""} (no
-                        longer on a visible line)
-                      </span>
-                    </button>
-                    {outdatedGroupExpanded && (
-                      <div className="px-4 pb-3 space-y-3">
-                        {unplacedGithubThreads.map((thread) => (
-                          <GithubCommentCard
-                            key={thread.id}
-                            thread={thread}
-                            collapsed={collapsedThreadIds.has(thread.id)}
-                            onToggleCollapse={() =>
-                              toggleThreadCollapse(thread.id)
-                            }
-                            onQuote={(quote) => {
-                              setPendingComment(
-                                buildQuotedPendingComment(
-                                  {
-                                    filePath,
-                                    hunkId: "",
-                                    displayAtLineIndex: -1,
-                                    lineNumber: thread.line ?? 0,
-                                    lineSide: "new",
-                                  },
-                                  quote,
-                                ),
-                              );
-                              setShowCommentInput(true);
-                            }}
-                          />
-                        ))}
-                        {showCommentInput &&
-                          pendingComment &&
-                          pendingComment.filePath === filePath &&
-                          pendingComment.hunkId === "" && (
-                            <CommentInput
-                              onSubmit={addComment}
-                              onCancel={cancelComment}
-                              filePath={pendingComment.filePath}
-                              startLine={pendingComment.startLine}
-                              endLine={pendingComment.endLine}
-                              quote={getQuoteProp(pendingComment)}
-                            />
-                          )}
-                      </div>
-                    )}
                   </div>
                 )}
 

@@ -128,4 +128,79 @@ describe("GithubCommentCard", () => {
       ),
     ).toBeInTheDocument();
   });
+
+  it("shows avatar, username, and a greyed truncated first-comment preview when collapsed", () => {
+    const longBody =
+      "First line of feedback that should remain visible.\nSecond line that should also peek through.\nThird line that should be clamped away when collapsed.";
+    render(
+      <GithubCommentCard
+        thread={thread({
+          is_resolved: true,
+          comments: [
+            {
+              id: "PRRC_1",
+              body: longBody,
+              author: {
+                login: "octocat",
+                avatar_url: "https://avatars.githubusercontent.com/u/1?v=4",
+              },
+              created_at: "2026-08-09T10:00:00Z",
+              diff_hunk: "@@ -0,0 +1 @@\n+ const x = 1;",
+              url: "https://github.com/treq-dev/treq/pull/1#discussion_r1",
+            },
+          ],
+        })}
+        collapsed={true}
+        onToggleCollapse={() => {}}
+        onQuote={() => {}}
+      />,
+    );
+
+    const toggle = screen.getByTestId("github-thread-toggle");
+    expect(
+      within(toggle).getByRole("img", { name: "octocat" }),
+    ).toBeInTheDocument();
+    expect(
+      within(toggle).getByRole("link", { name: "@octocat" }),
+    ).toBeInTheDocument();
+    expect(within(toggle).getByText("Resolved")).toBeInTheDocument();
+
+    const preview = screen.getByTestId("github-thread-collapsed-preview");
+    expect(preview).toHaveTextContent(
+      "First line of feedback that should remain visible.",
+    );
+    expect(preview.className).toMatch(/line-clamp/);
+    expect(preview.className).toMatch(/text-muted-foreground/);
+    expect(screen.queryByTestId("github-comment-card")).not.toBeInTheDocument();
+  });
+
+  it("falls back to an initial avatar when the author has no avatar_url while collapsed", () => {
+    render(
+      <GithubCommentCard
+        thread={thread({
+          is_resolved: true,
+          comments: [
+            {
+              id: "PRRC_1",
+              body: "Looks good.",
+              author: { login: "reviewer-bot", avatar_url: null },
+              created_at: "2026-08-09T10:00:00Z",
+              diff_hunk: "@@ -0,0 +1 @@\n+ const x = 1;",
+              url: "https://github.com/treq-dev/treq/pull/1#discussion_r1",
+            },
+          ],
+        })}
+        collapsed={true}
+        onToggleCollapse={() => {}}
+        onQuote={() => {}}
+      />,
+    );
+
+    const toggle = screen.getByTestId("github-thread-toggle");
+    expect(within(toggle).queryByRole("img")).not.toBeInTheDocument();
+    expect(within(toggle).getByText("R")).toBeInTheDocument();
+    expect(
+      within(toggle).getByRole("link", { name: "@reviewer-bot" }),
+    ).toBeInTheDocument();
+  });
 });
