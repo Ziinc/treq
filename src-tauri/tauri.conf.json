@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "treq",
+  "productName": "Treq",
   "version": "0.3.0",
   "identifier": "com.treq",
   "build": {
