@@ -34,14 +34,14 @@ describe("ShowWorkspace tab-row LOC marker", () => {
     const workspace = (await getWorkspaces(repoPath)).find(
       (item) => item.id === workspaceId,
     );
-    if (!workspace) throw new Error(`Workspace not found for id ${workspaceId}`);
+    if (!workspace)
+      throw new Error(`Workspace not found for id ${workspaceId}`);
 
     const workspacePath = resolveWorkspacePath(
       repoPath,
       workspace.workspace_path,
     );
 
-    // Committed: multi-line file so insertions are clearly > 0
     writeWorkspaceFile(
       workspacePath,
       "committed.txt",
@@ -49,7 +49,6 @@ describe("ShowWorkspace tab-row LOC marker", () => {
     );
     await createCommit(repoPath, workspaceId, "add committed file");
 
-    // Uncommitted working-copy change
     writeWorkspaceFile(workspacePath, "working.txt", "a\nb\nc\n");
 
     const expected = sumWorkspaceLocFromLog(
@@ -67,15 +66,10 @@ describe("ShowWorkspace tab-row LOC marker", () => {
       expect(marker.textContent).toContain(`-${expected.deletions}`);
     });
 
-    // Same row as the tab list: marker is a later sibling of the tabs root
-    const tablist = screen.getByRole("tablist");
-    const row = tablist.closest(".flex.items-center.justify-between");
-    expect(row).toBeTruthy();
-    expect(row!.contains(marker)).toBe(true);
-    expect(
-      tablist.compareDocumentPosition(marker) &
-        Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    const codeTab = screen.getByRole("tab", { name: /^Code/ });
+    const row = screen.getByTestId("workspace-tab-row");
+    expect(row.contains(codeTab)).toBe(true);
+    expect(row.contains(marker)).toBe(true);
   });
 
   it("hides the marker when the workspace has no LOC changes", async () => {

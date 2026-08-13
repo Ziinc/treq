@@ -416,11 +416,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
     // Workspace LOC (committed + working copy) for the Gerrit-style marker
     // on the tab row. Shares the stack panel's query key for cache reuse.
     const { data: workspaceLocStats } = useQuery({
-      queryKey: [
-        "workspace-commits",
-        effectiveRepoPath,
-        workspace?.id ?? null,
-      ],
+      queryKey: ["workspace-commits", effectiveRepoPath, workspace?.id ?? null],
       enabled: Boolean(effectiveRepoPath) && workspace?.id !== undefined,
       queryFn: () => listCommits(effectiveRepoPath, workspace!.id),
       select: sumWorkspaceLocFromLog,
@@ -1107,7 +1103,10 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 
     const executionPanel = workingDirectory ? (
       <div className="flex flex-col h-full">
-        <div className="flex-shrink-0 bg-background px-4 py-2 border-b border-border flex items-center justify-between">
+        <div
+          data-testid="workspace-tab-row"
+          className="flex-shrink-0 bg-background px-4 py-2 border-b border-border flex items-center justify-between"
+        >
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList>
               <TabsTrigger

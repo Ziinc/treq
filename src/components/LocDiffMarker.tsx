@@ -48,10 +48,7 @@ export function LocDiffMarker({
       <span className="text-xs font-mono text-green-600 dark:text-green-400">
         +{insertions}
       </span>
-      <div
-        className="flex h-1.5 flex-shrink-0 items-center"
-        aria-hidden="true"
-      >
+      <div className="flex h-1.5 flex-shrink-0 items-center" aria-hidden="true">
         <div
           className="flex h-full justify-end"
           style={{ width: DIFF_BAR_HALF_WIDTH_PX }}
