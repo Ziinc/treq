@@ -17,7 +17,7 @@ import {
   getWorkspaceStatus,
   getWorkspaces,
 } from "../../../src/lib/api";
-import { render, screen, waitFor, within } from "../../test-utils";
+import { render, screen, waitFor, within, act } from "../../test-utils";
 import { Dashboard } from "../../../src/components/Dashboard";
 import userEvent from "@testing-library/user-event";
 import * as api from "../../../src/lib/api";
@@ -242,6 +242,85 @@ describe("Review - conflict rendering contract", () => {
         `[data-testid="workspace-conflict-indicator-${fixture.workspaceId}"]`,
       ),
     ).toBeNull();
+  });
+
+  it("resolving markers in the working copy clears Conflicts UI before commit", async () => {
+    const fixture = await setupUnresolvedConflictState(
+      "feat/wc-resolve-clears-ui",
+    );
+
+    // Capture Tauri event listeners so we can simulate the file watcher after
+    // writing the resolved content (jsdom has no real watcher).
+    const { listen } = await import("@tauri-apps/api/event");
+    type FilesChangedHandler = (event: {
+      payload: { workspace_id: number; changed_paths: string[] };
+    }) => void;
+    const filesChangedHandlers: FilesChangedHandler[] = [];
+    vi.mocked(listen).mockImplementation(((event: string, handler: unknown) => {
+      if (event === "workspace-files-changed") {
+        filesChangedHandlers.push(handler as FilesChangedHandler);
+      }
+      return Promise.resolve(() => {});
+    }) as typeof listen);
+
+    render(<Dashboard />);
+    await screen.findByTestId(
+      `workspace-conflict-indicator-${fixture.workspaceId}`,
+    );
+    await navigateToReviewTab(user, fixture.branchName);
+    await screen.findByRole("button", { name: "Conflicts" });
+    expect(
+      screen.getByRole("button", { name: /Resolve conflicts/i }),
+    ).toBeTruthy();
+
+    const conflictPill = screen.getByTestId("review-change-count");
+    expect(conflictPill.className).toMatch(/destructive/);
+
+    writeWorkspaceFile(
+      fixture.workspacePath,
+      fixture.conflictFile,
+      "resolved content\n",
+    );
+
+    await waitFor(async () => {
+      const status = await getWorkspaceStatus(
+        fixture.repoPath,
+        fixture.workspaceId,
+      );
+      // Backend clears as soon as the snapshotted WC is rewritten — UI must
+      // follow once the file-watcher event refreshes status + diff.
+      expect(status.has_conflicts).toBe(false);
+      expect(status.conflicted_files).toEqual([]);
+    });
+
+    expect(filesChangedHandlers.length).toBeGreaterThan(0);
+    await act(async () => {
+      for (const handler of filesChangedHandlers) {
+        handler({
+          payload: {
+            workspace_id: fixture.workspaceId,
+            changed_paths: [fixture.conflictFile],
+          },
+        });
+      }
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("button", { name: "Conflicts" }),
+      ).not.toBeInTheDocument();
+    });
+    expect(
+      screen.queryByRole("button", { name: /Resolve conflicts/i }),
+    ).not.toBeInTheDocument();
+
+    await waitFor(() => {
+      const pill = screen.getByTestId("review-change-count");
+      expect(pill.className).toMatch(/yellow/);
+      expect(pill.className).not.toMatch(/destructive/);
+    });
+
+    expect(screen.getByText("Changes")).toBeTruthy();
   });
 
   it("unresolved conflict state: Conflicts section is rendered from backend metadata", async () => {

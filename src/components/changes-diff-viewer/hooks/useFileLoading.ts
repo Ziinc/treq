@@ -76,6 +76,12 @@ export function useFileLoading({
   const [committedFileHunks, setCommittedFileHunks] = useState<
     Map<string, FileHunksData>
   >(new Map());
+  // null until the first getWorkspaceDiff resolves — fall back to status hint.
+  // After that, diff.conflicted_files is authoritative for Review Conflicts UI
+  // so marker resolves clear before a stale workspace-status query refetches.
+  const [liveConflictedFiles, setLiveConflictedFiles] = useState<
+    string[] | null
+  >(null);
   const prevFilePathsRef = useRef<string[]>([]);
   // Stabilize against default `[]` / new array identity each render — a changing
   // loadChangedFiles identity would retrigger the showCommittedChanges effect
@@ -111,6 +117,7 @@ export function useFileLoading({
         // Diff is authoritative for live conflict state. The status hint can
         // lag a frame behind resolve+commit; never re-introduce paths a fresh
         // diff reports as resolved.
+        setLiveConflictedFiles(fromDiff);
         const conflictedHint = new Set<string>(fromDiff);
         const uncommittedPaths = new Set(parsed.map((file) => file.path));
 
@@ -172,6 +179,7 @@ export function useFileLoading({
       applyChangedFilesRef.current(parsed);
       setCommittedFiles([]);
       setCommittedFileHunks(new Map());
+      setLiveConflictedFiles([]);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       addToast({ description: message, title: "JJ Error", type: "error" });
@@ -464,6 +472,7 @@ export function useFileLoading({
     committedFiles,
     committedFileHunks,
     setCommittedFiles,
+    liveConflictedFiles,
     invalidateCache,
     refresh,
     loadChangedFiles,

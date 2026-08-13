@@ -541,6 +541,15 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
         "workspace-files-changed",
         (event) => {
           if (event.payload.workspace_id !== workspaceId) return;
+          // WC edits (including conflict-marker resolves) must refresh status so
+          // Review pill tone, Conflicts section props, and Code-tab alerts clear
+          // in the same turn as the refreshed diff.
+          void queryClient.invalidateQueries({
+            queryKey: ["workspace-status", effectiveRepoPath, workspaceId],
+          });
+          void queryClient.invalidateQueries({
+            queryKey: ["workspace-statuses", effectiveRepoPath],
+          });
           void queryClient.invalidateQueries({
             queryKey: reviewChangeCountQueryKey(effectiveRepoPath, workspaceId),
           });

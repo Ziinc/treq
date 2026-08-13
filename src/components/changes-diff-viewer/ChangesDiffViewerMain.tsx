@@ -95,6 +95,7 @@ export const ChangesDiffViewer = memo(
         loadingAllHunks,
         initialLoading,
         committedFiles,
+        liveConflictedFiles,
         invalidateCache,
         loadChangedFiles,
         refreshCommittedChanges,
@@ -113,6 +114,9 @@ export const ChangesDiffViewer = memo(
         isReloadingRef,
         addToast,
       });
+      // Prefer the latest workspace_diff conflict list over the status prop —
+      // status can lag behind a WC marker resolve until files-changed refetches it.
+      const conflictedFilesForUi = liveConflictedFiles ?? conflictedFiles;
       const {
         actualConflictedFiles,
         conflictRegionsByFile,
@@ -121,7 +125,7 @@ export const ChangesDiffViewer = memo(
       } = useConflicts({
         allFileHunks,
         committedFileHunks,
-        conflictedFilesHint: conflictedFiles,
+        conflictedFilesHint: conflictedFilesForUi,
       });
 
       const {
