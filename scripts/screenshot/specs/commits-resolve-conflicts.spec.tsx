@@ -76,7 +76,7 @@ it("captures Resolve conflicts banner on the Commits tab", async () => {
 		expectations: [
 			'A dialog titled "Resolve conflicts…" is open.',
 			"A prompt textarea is visible without helper copy or change-id cards.",
-			"Open in editor, Cancel, and Resolve actions are in the footer.",
+			"Open in editor is not shown; Cancel and Resolve are in the footer.",
 		],
 	});
 });

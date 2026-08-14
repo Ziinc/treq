@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { FolderOpen, Loader2 } from "lucide-react";
-import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
+import { Loader2 } from "lucide-react";
 import {
   buildResolveAgentPrompt,
   createSession,
@@ -9,7 +8,6 @@ import {
   startResolveConflicts,
   type ResolveConflictsSession,
 } from "../lib/api";
-import { useEditorApps } from "../hooks/useEditorApps";
 import type { SessionCreationInfo } from "../types/sessions";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
@@ -38,7 +36,6 @@ export const ResolveConflictsDialog: React.FC<ResolveConflictsDialogProps> = ({
   const [preparing, setPreparing] = useState(false);
   const [session, setSession] = useState<ResolveConflictsSession | null>(null);
   const { addToast } = useToast();
-  const editorApps = useEditorApps();
 
   useEffect(() => {
     if (!open) {
@@ -80,30 +77,6 @@ export const ResolveConflictsDialog: React.FC<ResolveConflictsDialogProps> = ({
     }
     return "Resolve conflicts…";
   }, [changeIds]);
-
-  const openPathInEditor = async (path: string) => {
-    try {
-      if (editorApps.cursor) {
-        await openUrl(`cursor://file/${path}`);
-        return;
-      }
-      if (editorApps.vscode) {
-        await openUrl(`vscode://file/${path}`);
-        return;
-      }
-      if (editorApps.zed) {
-        await openUrl(`zed://file/${path}`);
-        return;
-      }
-      await revealItemInDir(path);
-    } catch (error) {
-      addToast({
-        title: "Could not open folder",
-        description: error instanceof Error ? error.message : String(error),
-        type: "error",
-      });
-    }
-  };
 
   const handleResolve = async () => {
     setSubmitting(true);
@@ -196,46 +169,30 @@ export const ResolveConflictsDialog: React.FC<ResolveConflictsDialogProps> = ({
           data-testid="resolve-conflicts-prompt"
         />
 
-        <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center justify-end gap-2">
           <Button
             type="button"
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            disabled={submitting || preparing || !session?.agent_cwd}
-            onClick={() => {
-              const path = session?.agent_cwd;
-              if (path) void openPathInEditor(path);
-            }}
+            variant="ghost"
+            onClick={() => onOpenChange(false)}
+            disabled={submitting}
           >
-            <FolderOpen className="h-4 w-4" />
-            Open in editor
+            Cancel
           </Button>
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              onClick={() => onOpenChange(false)}
-              disabled={submitting}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              onClick={() => void handleResolve()}
-              disabled={submitting || preparing || !session}
-              data-testid="resolve-conflicts-submit"
-            >
-              {submitting || preparing ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  {preparing ? "Preparing…" : "Starting…"}
-                </>
-              ) : (
-                "Resolve"
-              )}
-            </Button>
-          </div>
+          <Button
+            type="button"
+            onClick={() => void handleResolve()}
+            disabled={submitting || preparing || !session}
+            data-testid="resolve-conflicts-submit"
+          >
+            {submitting || preparing ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                {preparing ? "Preparing…" : "Starting…"}
+              </>
+            ) : (
+              "Resolve"
+            )}
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
