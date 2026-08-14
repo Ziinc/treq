@@ -1048,6 +1048,32 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
       Ok(Value::String(content))
     }
 
+    "write_agent_cli_files" => {
+      let prompt = get_str(&args, "prompt")?;
+      let settings_json = args
+        .get("settingsJson")
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
+      let files = treq_lib::core::write_agent_cli_files(&prompt, settings_json.as_deref())?;
+      serde_json::to_value(files).map_err(|e| e.to_string())
+    }
+
+    "cleanup_agent_cli_files" => {
+      let paths = args
+        .get("paths")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| "Missing or invalid argument: paths".to_string())?
+        .iter()
+        .map(|v| {
+          v.as_str()
+            .map(str::to_string)
+            .ok_or_else(|| "Missing or invalid argument: paths".to_string())
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+      treq_lib::core::cleanup_agent_cli_files(&paths)?;
+      Ok(Value::Null)
+    }
+
     "get_file_modified_at" => {
       let path = get_str(&args, "path")?;
       let modified_at = modified_at_rfc3339(&path);

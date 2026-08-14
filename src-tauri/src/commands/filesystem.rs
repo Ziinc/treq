@@ -25,6 +25,19 @@ pub fn read_file(path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+pub fn write_agent_cli_files(
+  prompt: String,
+  settings_json: Option<String>,
+) -> Result<crate::core::AgentCliFiles, String> {
+  crate::core::write_agent_cli_files(&prompt, settings_json.as_deref())
+}
+
+#[tauri::command]
+pub fn cleanup_agent_cli_files(paths: Vec<String>) -> Result<(), String> {
+  crate::core::cleanup_agent_cli_files(&paths)
+}
+
+#[tauri::command]
 pub fn get_file_modified_at(path: String) -> Result<Option<String>, String> {
   if !std::path::Path::new(&path).exists() {
     return Ok(None);

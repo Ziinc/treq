@@ -96,6 +96,18 @@ export const ptyListen = (
 export const readFile = (path: string): Promise<string> =>
   invoke("read_file", { path });
 
+export const writeAgentCliFiles = (
+  prompt: string,
+  settingsJson?: string | null,
+): Promise<{ promptPath: string; settingsPath?: string }> =>
+  invoke("write_agent_cli_files", {
+    prompt,
+    settingsJson: settingsJson ?? null,
+  });
+
+export const cleanupAgentCliFiles = (paths: string[]): Promise<void> =>
+  invoke("cleanup_agent_cli_files", { paths });
+
 export const getFileModifiedAt = (path: string): Promise<string | null> =>
   invoke("get_file_modified_at", { path });
 

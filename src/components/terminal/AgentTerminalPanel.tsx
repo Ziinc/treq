@@ -23,7 +23,10 @@ import {
   getSessionModel,
   getTreqBinDir,
   ptyClose,
+  readFile,
   setSessionModel,
+  writeAgentCliFiles,
+  cleanupAgentCliFiles,
 } from "../../lib/api";
 import {
   ArrowDownToLine,
@@ -37,11 +40,13 @@ import {
 } from "lucide-react";
 import { ModelSelector } from "../ModelSelector";
 import { useToast } from "../ui/toast";
-import { shellQuote } from "../../lib/shellQuote";
 import {
-  appendAgentPrompt,
+  buildAgentAutoCommand,
   buildClaudeSandboxSettings,
   buildTreqAgentSystemPrompt,
+  claudeLocalSettingsPath,
+  cursorPromptFileContents,
+  mergeClaudeLocalSettings,
 } from "../../lib/agentCommand";
 import { useAgentMessageQueue } from "../../hooks/useAgentMessageQueue";
 import { type ClaudeSessionData } from "./types";
@@ -92,6 +97,8 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
     const [terminalInstanceKey, setTerminalInstanceKey] = useState(0);
     const [pendingModelReset, setPendingModelReset] = useState(false);
     const [treqBinDir, setTreqBinDir] = useState<string | null>(null);
+    const [treqBinDirReady, setTreqBinDirReady] = useState(false);
+    const [autoCommand, setAutoCommand] = useState<string | null>(null);
 
     const terminalId = `claude-${sessionData.sessionId}`;
     const isHidden = collapsed;
@@ -143,7 +150,8 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
       loadModel();
       getTreqBinDir()
         .then(setTreqBinDir)
-        .catch(() => {});
+        .catch(() => {})
+        .finally(() => setTreqBinDirReady(true));
     }, [sessionData.repoPath, sessionData.sessionId]);
 
     // Handle terminal output — agent is busy while streaming process output.
@@ -281,52 +289,88 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
       performReset();
     }, [pendingModelReset, handleReset, sessionModel, addToast]);
 
-    const agentPathContext = {
-      workspacePath: sessionData.workspacePath,
-      repoPath: sessionData.repoPath,
-    };
-    const treqSystemPrompt = buildTreqAgentSystemPrompt(agentPathContext);
+    useEffect(() => {
+      if (!isModelLoaded || !treqBinDirReady) return;
 
-    let autoCommand: string;
+      let cancelled = false;
 
-    if (sessionData.agent === "codex") {
-      // Codex CLI: pass system prompt via -c instructions override, then prompt as positional arg
-      autoCommand = `codex -c ${shellQuote(`instructions="${treqSystemPrompt}"`)}`;
-      if (pendingPromptRef.current) {
-        autoCommand = appendAgentPrompt(autoCommand, pendingPromptRef.current);
-      }
-    } else if (sessionData.agent === "cursor") {
-      // cursor-agent: no system-prompt flag; prepend treq instructions into the prompt arg.
-      // --plan engages cursor's plan mode; omit when in edit mode.
-      const combined = pendingPromptRef.current
-        ? `${treqSystemPrompt} ${pendingPromptRef.current}`
-        : treqSystemPrompt;
-      const planFlag = permissionModeRef.current === "plan" ? " --plan" : "";
-      autoCommand = appendAgentPrompt(`cursor-agent${planFlag}`, combined);
-    } else {
-      // Claude Code: permission mode, model, system prompt, then prompt after --
-      const permissionModeArg =
-        permissionModeRef.current === "plan"
-          ? " --permission-mode plan"
-          : " --permission-mode acceptEdits";
-      autoCommand = `claude${permissionModeArg}`;
-      if (sessionModel) {
-        autoCommand += ` --model=${shellQuote(sessionModel)}`;
-      }
-      const sandboxSettings = JSON.stringify(
-        buildClaudeSandboxSettings(agentPathContext),
-      );
-      autoCommand += ` --settings ${shellQuote(sandboxSettings)}`;
-      autoCommand += ` --append-system-prompt ${shellQuote(treqSystemPrompt)}`;
-      if (pendingPromptRef.current) {
-        autoCommand += ` -- ${shellQuote(pendingPromptRef.current)}`;
-      }
-    }
+      const prepareAutoCommand = async () => {
+        const cwd = sessionData.workspacePath || sessionData.repoPath;
+        const agentPathContext = {
+          workspacePath: sessionData.workspacePath,
+          repoPath: sessionData.repoPath,
+        };
+        const systemPrompt = buildTreqAgentSystemPrompt(agentPathContext);
+        const agent = sessionData.agent ?? "claude";
 
-    // Prepend PATH export so treq CLI is available inside all agent sessions
-    if (treqBinDir) {
-      autoCommand = `export PATH=${shellQuote(treqBinDir)}:$PATH; ${autoCommand}`;
-    }
+        let promptContents = systemPrompt;
+        let settingsJson: string | undefined;
+        if (agent === "cursor") {
+          promptContents = cursorPromptFileContents(
+            systemPrompt,
+            pendingPromptRef.current,
+          );
+        } else if (agent === "claude") {
+          let existing: Record<string, unknown> | null = null;
+          try {
+            const parsed: unknown = JSON.parse(
+              await readFile(claudeLocalSettingsPath(cwd)),
+            );
+            if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+              existing = parsed as Record<string, unknown>;
+            }
+          } catch {
+            existing = null;
+          }
+          settingsJson = JSON.stringify(
+            mergeClaudeLocalSettings(
+              existing,
+              buildClaudeSandboxSettings(agentPathContext),
+            ),
+            null,
+            2,
+          );
+        }
+
+        const files = await writeAgentCliFiles(promptContents, settingsJson);
+        if (cancelled) {
+          await cleanupAgentCliFiles(
+            [files.promptPath, files.settingsPath].filter(
+              (path): path is string => !!path,
+            ),
+          );
+          return;
+        }
+
+        setAutoCommand(
+          buildAgentAutoCommand({
+            agent,
+            permissionMode: permissionModeRef.current,
+            sessionModel,
+            pendingPrompt:
+              agent === "cursor" ? null : pendingPromptRef.current,
+            treqBinDir,
+            files,
+          }),
+        );
+      };
+
+      prepareAutoCommand().catch((error) => {
+        console.error("Failed to prepare agent CLI files:", error);
+      });
+
+      return () => {
+        cancelled = true;
+      };
+    }, [
+      isModelLoaded,
+      treqBinDirReady,
+      sessionData.agent,
+      sessionData.workspacePath,
+      sessionData.repoPath,
+      sessionModel,
+      treqBinDir,
+    ]);
 
     return (
       <div
@@ -483,7 +527,7 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
               />
             )}
 
-            {isModelLoaded ? (
+            {isModelLoaded && autoCommand ? (
               <>
                 <TerminalSendPreviews
                   ptySessionId={sessionData.ptySessionId}
