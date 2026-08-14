@@ -208,6 +208,12 @@ it("captures Mission Control cards with terminal output previews", async () => {
 			<TerminalMissionControl
 				open
 				sessions={sessions}
+				diffStatsByWorkspaceKey={
+					new Map([
+						[BRANCH_B, { insertions: 24, deletions: 7 }],
+						[BRANCH_A, { insertions: 3, deletions: 1 }],
+					])
+				}
 				onClose={() => {}}
 				onFocus={() => {}}
 			/>
@@ -215,19 +221,22 @@ it("captures Mission Control cards with terminal output previews", async () => {
 	);
 
 	expect(await screen.findByTestId("terminal-mission-control")).toBeTruthy();
-	expect(screen.getByTestId("mission-control-preview-shell-feat-b")).toHaveTextContent(
-		"mission-b-output",
-	);
+	expect(
+		screen.getByTestId("mission-control-preview-shell-feat-b"),
+	).toHaveTextContent("mission-b-output");
 	expect(screen.getByLabelText("Streaming")).toBeTruthy();
 	expect(screen.getByLabelText("Idle")).toBeTruthy();
 	expect(screen.getByLabelText("Active")).toBeTruthy();
+	expect(screen.getByTestId("mission-control-close")).toBeTruthy();
+	expect(screen.getByTestId("mission-control-swipe-hint")).toBeTruthy();
+	expect(screen.getAllByTestId("workspace-loc-indicator").length).toBe(2);
 
 	await captureDocument(document, {
 		name: "terminal-mission-control-04-output-previews",
 		expectations: [
-			"Mission Control cards show dark panes with real terminal output text such as echo results and agent log lines.",
-			"Card headers use small status icons only: spinner for streaming, green dot for active, moon for idle — no Active/Idle text labels.",
-			"Terminals remain grouped by workspace in a two-column card grid.",
+			"Mission Control has an X close button top-right and a centered text-sm swipe-down hint pinned at the bottom.",
+			"Workspace group headers show branch name with a right-aligned Gerrit-style +N/-M LOC indicator; cards have no footer under the dark output pane.",
+			"Card headers are icon + session name with status icon on the right; previews show terminal output text.",
 		],
 	});
 }, 30000);

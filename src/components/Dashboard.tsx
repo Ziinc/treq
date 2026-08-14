@@ -1686,6 +1686,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
       <TerminalMissionControl
         open={showTerminalMissionControl}
         sessions={terminalSessionSummaries}
+        repoPath={repoPath}
+        workspaces={workspaces}
         onClose={() => setShowTerminalMissionControl(false)}
         onFocus={handleFocusTerminalSession}
       />
