@@ -1,25 +1,82 @@
 import { describe, expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
 import { render, screen, within } from "@testing-library/react";
-import {
-  AgentMessageQueueButton,
-  AgentMessageQueueComposer,
-} from "./AgentMessageQueue";
+import { AgentMessageQueue } from "./AgentMessageQueue";
 import { createQueuedAgentMessage } from "../../lib/agentMessageQueue";
 
-describe("AgentMessageQueueButton", () => {
-  it("renders nothing when the queue is empty", () => {
-    const { container } = render(
-      <AgentMessageQueueButton
+describe("AgentMessageQueue", () => {
+  it("shows a toolbar queue button when empty and hides the composer until opened", () => {
+    render(
+      <AgentMessageQueue
+        variant="toolbar"
         messages={[]}
+        onEnqueue={vi.fn()}
         onRemove={vi.fn()}
         onUpdate={vi.fn()}
       />,
     );
-    expect(container).toBeEmptyDOMElement();
+
+    expect(screen.getByTestId("agent-message-queue")).toHaveAttribute(
+      "data-variant",
+      "toolbar",
+    );
+    expect(
+      screen.getByTestId("agent-message-queue-button"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("agent-message-queue-composer"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("agent-message-queue-count"),
+    ).not.toBeInTheDocument();
   });
 
-  it("shows the queued count and opens a popover of messages", async () => {
+  it("shows the follow-up input only after clicking the queue button", async () => {
+    const user = userEvent.setup();
+    render(
+      <AgentMessageQueue
+        variant="toolbar"
+        messages={[]}
+        onEnqueue={vi.fn()}
+        onRemove={vi.fn()}
+        onUpdate={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.queryByTestId("agent-message-queue-composer"),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByTestId("agent-message-queue-button"));
+
+    expect(
+      await screen.findByTestId("agent-message-queue-composer"),
+    ).toBeInTheDocument();
+  });
+
+  it("enqueues from the popover composer on Enter", async () => {
+    const user = userEvent.setup();
+    const onEnqueue = vi.fn();
+
+    render(
+      <AgentMessageQueue
+        variant="toolbar"
+        messages={[]}
+        onEnqueue={onEnqueue}
+        onRemove={vi.fn()}
+        onUpdate={vi.fn()}
+        open
+      />,
+    );
+
+    const composer = await screen.findByTestId("agent-message-queue-composer");
+    await user.type(composer, "please also add tests{Enter}");
+
+    expect(onEnqueue).toHaveBeenCalledWith("please also add tests");
+    expect(composer).toHaveValue("");
+  });
+
+  it("pins a count chip and lists messages in the popover", async () => {
     const user = userEvent.setup();
     const messages = [
       createQueuedAgentMessage("first follow-up", "m1", 1),
@@ -27,22 +84,34 @@ describe("AgentMessageQueueButton", () => {
     ];
 
     render(
-      <AgentMessageQueueButton
+      <AgentMessageQueue
+        variant="pinned"
         messages={messages}
+        onEnqueue={vi.fn()}
         onRemove={vi.fn()}
         onUpdate={vi.fn()}
       />,
     );
 
+    expect(screen.getByTestId("agent-message-queue")).toHaveAttribute(
+      "data-variant",
+      "pinned",
+    );
     expect(screen.getByTestId("agent-message-queue-count")).toHaveTextContent(
       "2",
     );
+    expect(
+      screen.queryByTestId("agent-message-queue-composer"),
+    ).not.toBeInTheDocument();
 
     await user.click(screen.getByTestId("agent-message-queue-button"));
 
     const popover = await screen.findByTestId("agent-message-queue-popover");
     expect(within(popover).getByText("first follow-up")).toBeInTheDocument();
     expect(within(popover).getByText("second follow-up")).toBeInTheDocument();
+    expect(
+      within(popover).getByTestId("agent-message-queue-composer"),
+    ).toBeInTheDocument();
   });
 
   it("removes a queued message from the popover", async () => {
@@ -51,14 +120,16 @@ describe("AgentMessageQueueButton", () => {
     const messages = [createQueuedAgentMessage("drop me", "m1", 1)];
 
     render(
-      <AgentMessageQueueButton
+      <AgentMessageQueue
+        variant="pinned"
         messages={messages}
+        onEnqueue={vi.fn()}
         onRemove={onRemove}
         onUpdate={vi.fn()}
+        open
       />,
     );
 
-    await user.click(screen.getByTestId("agent-message-queue-button"));
     await user.click(
       await screen.findByTestId("agent-message-queue-remove-m1"),
     );
@@ -72,14 +143,16 @@ describe("AgentMessageQueueButton", () => {
     const messages = [createQueuedAgentMessage("old text", "m1", 1)];
 
     render(
-      <AgentMessageQueueButton
+      <AgentMessageQueue
+        variant="pinned"
         messages={messages}
+        onEnqueue={vi.fn()}
         onRemove={vi.fn()}
         onUpdate={onUpdate}
+        open
       />,
     );
 
-    await user.click(screen.getByTestId("agent-message-queue-button"));
     await user.click(await screen.findByTestId("agent-message-queue-edit-m1"));
 
     const input = await screen.findByTestId(
@@ -90,33 +163,5 @@ describe("AgentMessageQueueButton", () => {
     await user.click(screen.getByTestId("agent-message-queue-save-m1"));
 
     expect(onUpdate).toHaveBeenCalledWith("m1", "new text");
-  });
-});
-
-describe("AgentMessageQueueComposer", () => {
-  it("enqueues from the composer on Enter", async () => {
-    const user = userEvent.setup();
-    const onEnqueue = vi.fn();
-
-    render(<AgentMessageQueueComposer onEnqueue={onEnqueue} />);
-
-    const composer = screen.getByTestId("agent-message-queue-composer");
-    await user.type(composer, "please also add tests{Enter}");
-
-    expect(onEnqueue).toHaveBeenCalledWith("please also add tests");
-    expect(composer).toHaveValue("");
-  });
-
-  it("queues from the send button", async () => {
-    const user = userEvent.setup();
-    const onEnqueue = vi.fn();
-
-    render(<AgentMessageQueueComposer onEnqueue={onEnqueue} />);
-
-    const composer = screen.getByTestId("agent-message-queue-composer");
-    await user.type(composer, "via send button");
-    await user.click(screen.getByLabelText(/queue message/i));
-
-    expect(onEnqueue).toHaveBeenCalledWith("via send button");
   });
 });

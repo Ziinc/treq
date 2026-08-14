@@ -156,15 +156,29 @@ describe("WorkspaceTerminalPane integration", () => {
       return el as HTMLElement;
     });
 
-    const composer = await within(terminalPanel).findByTestId(
-      "agent-message-queue-composer",
+    expect(
+      within(terminalPanel).getByTestId("agent-message-queue"),
+    ).toHaveAttribute("data-variant", "toolbar");
+    expect(
+      screen.queryByTestId("agent-message-queue-composer"),
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      within(terminalPanel).getByTestId("agent-message-queue-button"),
     );
+    const composer = await screen.findByTestId("agent-message-queue-composer");
     await user.type(composer, "first queued follow-up{Enter}");
-    await user.type(composer, "second queued follow-up{Enter}");
+    await user.type(
+      await screen.findByTestId("agent-message-queue-composer"),
+      "second queued follow-up{Enter}",
+    );
 
     expect(
       await within(terminalPanel).findByTestId("agent-message-queue-count"),
     ).toHaveTextContent("2");
+    expect(
+      within(terminalPanel).getByTestId("agent-message-queue"),
+    ).toHaveAttribute("data-variant", "pinned");
 
     await user.click(
       within(terminalPanel).getByTestId("agent-message-queue-button"),

@@ -45,7 +45,7 @@ import {
 } from "../../lib/agentCommand";
 import { useAgentMessageQueue } from "../../hooks/useAgentMessageQueue";
 import { type ClaudeSessionData } from "./types";
-import { AgentMessageQueueComposer } from "./AgentMessageQueue";
+import { AgentMessageQueue } from "./AgentMessageQueue";
 import { TerminalSearchOverlay } from "./TerminalSearchOverlay";
 import { TerminalSendPreviews } from "./TerminalSendPreviews";
 
@@ -96,6 +96,8 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
     const terminalId = `claude-${sessionData.sessionId}`;
     const isHidden = collapsed;
 
+    const [queuePopoverOpen, setQueuePopoverOpen] = useState(false);
+
     const {
       messages: queuedMessages,
       enqueue: enqueueMessage,
@@ -105,6 +107,15 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
       markIdle,
       clear: clearQueuedMessages,
     } = useAgentMessageQueue({ ptySessionId: sessionData.ptySessionId });
+
+    const handleEnqueueMessage = useCallback(
+      (text: string) => {
+        enqueueMessage(text);
+        // Keep the popover open across the toolbar → pinned remount.
+        setQueuePopoverOpen(true);
+      },
+      [enqueueMessage],
+    );
 
     // Capture pendingPrompt and permissionMode in refs so they survive
     // the race condition where sessions refetch clears pendingClaudeSession
@@ -415,6 +426,18 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
                 <TooltipContent>Search (⌘+F)</TooltipContent>
               </Tooltip>
             </TooltipProvider>
+            {/* Queue — toolbar only while empty; pinned overlay takes over when non-empty */}
+            {queuedMessages.length === 0 && (
+              <AgentMessageQueue
+                variant="toolbar"
+                messages={queuedMessages}
+                onEnqueue={handleEnqueueMessage}
+                onRemove={removeQueuedMessage}
+                onUpdate={updateQueuedMessage}
+                open={queuePopoverOpen}
+                onOpenChange={setQueuePopoverOpen}
+              />
+            )}
             {/* Close button */}
             {onClose && (
               <TooltipProvider>
@@ -443,7 +466,7 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
           </div>
         </div>
 
-        {/* Terminal with search overlay + message queue */}
+        {/* Terminal with search overlay + pinned queue chip */}
         <div
           className="flex flex-1 min-h-0 flex-col overflow-hidden border-r border-border"
           style={{ backgroundColor: "#1e1e1e" }}
@@ -464,6 +487,17 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
             {/* Terminal */}
             {isModelLoaded ? (
               <>
+                {queuedMessages.length > 0 && (
+                  <AgentMessageQueue
+                    variant="pinned"
+                    messages={queuedMessages}
+                    onEnqueue={handleEnqueueMessage}
+                    onRemove={removeQueuedMessage}
+                    onUpdate={updateQueuedMessage}
+                    open={queuePopoverOpen}
+                    onOpenChange={setQueuePopoverOpen}
+                  />
+                )}
                 <TerminalSendPreviews
                   ptySessionId={sessionData.ptySessionId}
                   isActive={!!isActive}
@@ -498,14 +532,6 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
               </div>
             )}
           </div>
-          {isModelLoaded && !collapsed && (
-            <AgentMessageQueueComposer
-              onEnqueue={enqueueMessage}
-              messages={queuedMessages}
-              onRemove={removeQueuedMessage}
-              onUpdate={updateQueuedMessage}
-            />
-          )}
         </div>
       </div>
     );
