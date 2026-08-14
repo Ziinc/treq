@@ -141,6 +141,64 @@ describe("WorkspaceTerminalPane integration", () => {
     await user.click(scrollButton);
   });
 
+  it("queues follow-up messages and shows count with editable popover", async () => {
+    const { workspace } = await setupWorkspace("feat/terminal-message-queue");
+
+    render(<Dashboard />);
+    await user.click(await findSidebarBranchElement(workspace.branch_name));
+    await screen.findByText(/Terminals/i);
+
+    await user.keyboard("{Meta>}]{/Meta}");
+
+    const terminalPanel = await waitFor(() => {
+      const el = document.querySelector('[data-terminal-id^="claude-"]');
+      expect(el).not.toBeNull();
+      return el as HTMLElement;
+    });
+
+    expect(
+      within(terminalPanel).getByTestId("agent-message-queue"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("agent-message-queue-composer"),
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      within(terminalPanel).getByTestId("agent-message-queue-button"),
+    );
+    const composer = await screen.findByTestId("agent-message-queue-composer");
+    await user.type(composer, "first queued follow-up{Enter}");
+    await user.type(
+      await screen.findByTestId("agent-message-queue-composer"),
+      "second queued follow-up{Enter}",
+    );
+
+    expect(
+      await within(terminalPanel).findByTestId("agent-message-queue-count"),
+    ).toHaveTextContent("2");
+    expect(
+      within(terminalPanel).getByTestId("agent-message-queue-button"),
+    ).toBeInTheDocument();
+
+    const dialog = await screen.findByTestId("agent-message-queue-dialog");
+    expect(dialog).toHaveAttribute("data-position", "terminal-center");
+    expect(
+      within(dialog).getByText("first queued follow-up"),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByText("second queued follow-up"),
+    ).toBeInTheDocument();
+
+    const removeButtons = within(dialog).getAllByLabelText(
+      /remove queued message/i,
+    );
+    await user.click(removeButtons[1]);
+
+    expect(
+      await within(terminalPanel).findByTestId("agent-message-queue-count"),
+    ).toHaveTextContent("1");
+  });
+
   it("double-clicking a terminal scrolls it fully into view", async () => {
     const { workspace } = await setupWorkspace("feat/terminal-dblclick-scroll");
 
