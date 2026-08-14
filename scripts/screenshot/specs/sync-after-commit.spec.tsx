@@ -97,14 +97,14 @@ it("captures workspace state before and after syncing a fresh commit", async () 
 	// section and into the "Committed" section.
 	await waitFor(() => {
 		expect(screen.getAllByText("Committed").length).toBeGreaterThan(0);
-		expect(screen.queryByText("Changes")).not.toBeInTheDocument();
+		expect(screen.queryByRole("button", { name: /^Changes$/ })).not.toBeInTheDocument();
 	});
 
 	// Visit the home repo and come back so the workspace-status query refetches
 	// and the header reflects the new ahead-of-remote count.
 	await user.click(await findSidebarBranchElement(defaultBranch));
 	await user.click(await findSidebarBranchElement(BRANCH_NAME));
-	await user.click(await screen.findByRole("tab", { name: "Commits" }));
+	await user.click(await screen.findByRole("tab", { name: /^Commits/ }));
 	await screen.findByText("Commit that must survive sync");
 
 	// The sync control is icon-only; the '↑1' ahead-count text identifies it.
@@ -149,7 +149,7 @@ it("captures workspace state before and after syncing a fresh commit", async () 
 	await screen.findByRole("tab", { name: /^Changes/, selected: true });
 	await waitFor(() => {
 		expect(screen.getAllByText("Committed").length).toBeGreaterThan(0);
-		expect(screen.queryByText("Changes")).not.toBeInTheDocument();
+		expect(screen.queryByRole("button", { name: /^Changes$/ })).not.toBeInTheDocument();
 	});
 
 	await captureDocument(document, {

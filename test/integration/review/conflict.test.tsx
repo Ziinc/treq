@@ -334,7 +334,10 @@ describe("Review - conflict rendering contract", () => {
     });
     await navigateToReviewTab(user, fixture.branchName);
     await screen.findByText("Conflicts");
-    expect(screen.queryByText("Changes")).not.toBeInTheDocument();
+    // Tab is also labeled "Changes"; assert the sidebar section is absent.
+    expect(
+      screen.queryByRole("button", { name: /^Changes$/ }),
+    ).not.toBeInTheDocument();
     await waitFor(() => {
       expect(screen.getAllByText("README.md").length).toBeGreaterThan(0);
     });

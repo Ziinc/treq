@@ -40,7 +40,7 @@ it("stashes a commit from the Commits tab and applies it onto another workspace"
   render(<Dashboard />);
 
   await user.click(await findSidebarBranchElement(sourceBranch));
-  await user.click(await screen.findByRole("tab", { name: "Commits" }));
+  await user.click(await screen.findByRole("tab", { name: /^Commits/ }));
 
   const commitHeadline = await screen.findByText("Park me for stash");
   await user.click(commitHeadline);

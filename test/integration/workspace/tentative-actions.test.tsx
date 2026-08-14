@@ -37,7 +37,7 @@ async function openWorkspaceCommitsTab(
 ) {
   render(<Dashboard />);
   await user.click(await findSidebarBranchElement(branchName));
-  await user.click(await screen.findByRole("tab", { name: "Commits" }));
+  await user.click(await screen.findByRole("tab", { name: /^Commits/ }));
 }
 
 describe("ShowWorkspace - tentative working copy actions", () => {

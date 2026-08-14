@@ -76,7 +76,7 @@ it("captures the Commits tab before and after pushing a workspace to remote", as
 		"Workspace commit 2",
 	);
 
-	await user.click(await screen.findByRole("tab", { name: "Commits" }));
+	await user.click(await screen.findByRole("tab", { name: /^Commits/ }));
 
 	await screen.findByText("Workspace commit 2");
 	await screen.findByText("Workspace commit 1");
