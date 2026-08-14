@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { CircleHelp, ExternalLink, Loader2 } from "lucide-react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   buildResolveAgentPrompt,
   createSession,
@@ -8,10 +9,19 @@ import {
   startResolveConflicts,
   type ResolveConflictsSession,
 } from "../lib/api";
+import { WEB_URL } from "../lib/supabase";
 import type { SessionCreationInfo } from "../types/sessions";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { useToast } from "./ui/toast";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "./ui/tooltip";
+
+const RESOLVE_DOCS_URL = `${WEB_URL}/docs/concepts/commit-management#resolve-commit-conflicts-inplace`;
 
 interface ResolveConflictsDialogProps {
   open: boolean;
@@ -69,13 +79,6 @@ export const ResolveConflictsDialog: React.FC<ResolveConflictsDialogProps> = ({
       cancelled = true;
     };
   }, [open, repoPath, workspaceId, changeIds, addToast]);
-
-  const title = useMemo(() => {
-    if (changeIds && changeIds.length === 1) {
-      return `Resolve change ${changeIds[0].slice(0, 8)}…`;
-    }
-    return "Resolve conflicts…";
-  }, [changeIds]);
 
   const handleResolve = async () => {
     setSubmitting(true);
@@ -155,7 +158,41 @@ export const ResolveConflictsDialog: React.FC<ResolveConflictsDialogProps> = ({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex w-[42vw] max-w-none flex-col gap-y-4">
         <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
+          <DialogTitle className="flex items-center gap-1.5">
+            <span>Resolve commit conflicts inplace</span>
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="Help: resolve commit conflicts inplace"
+                    data-testid="resolve-conflicts-help"
+                    className="inline-flex items-center justify-center rounded-sm text-muted-foreground/70 hover:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  >
+                    <CircleHelp className="h-4 w-4" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent className="max-w-xs font-normal">
+                  <p>
+                    Treq opens short-lived resolve directories for each
+                    conflicted commit and starts an agent there. Resolving
+                    rewrites the commit in place. It does not add a follow-up
+                    resolution commit, and it leaves your product workspace
+                    untouched.
+                  </p>
+                  <button
+                    type="button"
+                    className="mt-1.5 inline-flex items-center gap-1 text-xs text-primary underline-offset-2 hover:underline"
+                    onClick={() => openUrl(RESOLVE_DOCS_URL)}
+                    onPointerDown={(event) => event.preventDefault()}
+                  >
+                    Learn more
+                    <ExternalLink className="h-3 w-3" />
+                  </button>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </DialogTitle>
         </DialogHeader>
 
         <textarea

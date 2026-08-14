@@ -80,6 +80,21 @@ treq agent <branch> <prompt> [-m <edit|plan>]
 - `prompt`: prompt to send to the agent.
 - `-m, --mode`: [permission mode](/docs/concepts/agent-sessions). Use `edit` or `plan`.
 
+### `treq resolve`
+
+Finish inplace conflict resolution for a conflicted commit that already has a resolve directory under `.treq/resolve/<workspace-slug>/`.
+
+```bash
+treq resolve <commit_id> [sides...]
+echo '{"path/to/file": "replacement\n"}' | treq resolve <commit_id>
+```
+
+- `commit_id`: change id or commit id of the conflicted revision.
+- `sides`: optional conflict sides to take. Use `1`, `2`, `base`, or `both`.
+- Non-TTY stdin: JSON object of path to full file content replacements.
+
+When the change is clean, Treq rewrites that commit in place and deletes its resolve directory. See [Resolve commit conflicts inplace](/docs/concepts/commit-management#resolve-commit-conflicts-inplace).
+
 ### `treq send`
 
 Send a file or stdin content to the open Treq window for preview. Images show as square thumbnails in the terminal that ran the command; click a thumbnail to open a modal. Text opens a read-only, selectable preview.

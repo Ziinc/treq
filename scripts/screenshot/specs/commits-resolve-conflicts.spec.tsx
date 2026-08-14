@@ -74,9 +74,9 @@ it("captures Resolve conflicts banner on the Commits tab", async () => {
 	await captureDocument(document, {
 		name: "commits-resolve-conflicts-02-dialog",
 		expectations: [
-			'A dialog titled "Resolve conflicts…" is open.',
-			"A prompt textarea is visible without helper copy or change-id cards.",
-			"Open in editor is not shown; Cancel and Resolve are in the footer.",
+			'A dialog titled "Resolve commit conflicts inplace" is open.',
+			"A help icon sits next to the dialog title.",
+			"A prompt textarea with Cancel and Resolve actions is visible.",
 		],
 	});
 });
