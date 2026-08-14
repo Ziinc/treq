@@ -70,7 +70,7 @@ interface WorkspaceTerminalPaneViewProps {
   ) => void;
   handleCloseClaudeSession: (sessionId: number) => void | Promise<void>;
   onTerminalDoubleClick: (terminalId: string) => void;
-  onTerminalOutput?: (terminalId: string) => void;
+  onTerminalOutput?: (terminalId: string, output: string) => void;
   onTerminalInput?: (terminalId: string) => void;
   onTerminalIdle?: (terminalId: string) => void;
 }
@@ -371,8 +371,8 @@ export const WorkspaceTerminalPaneView: React.FC<
                             onClose={() => handleCloseShell(terminalId)}
                             canClose={true}
                             onSessionError={onSessionError}
-                            onTerminalOutput={() =>
-                              onTerminalOutput?.(terminalId)
+                            onTerminalOutput={(output) =>
+                              onTerminalOutput?.(terminalId, output)
                             }
                             onTerminalInput={() =>
                               onTerminalInput?.(terminalId)
@@ -420,8 +420,8 @@ export const WorkspaceTerminalPaneView: React.FC<
                             handleCloseClaudeSession(terminal.data.sessionId)
                           }
                           onSessionError={onSessionError}
-                          onTerminalOutput={() =>
-                            onTerminalOutput?.(terminalId)
+                          onTerminalOutput={(output) =>
+                            onTerminalOutput?.(terminalId, output)
                           }
                           onTerminalInput={() => onTerminalInput?.(terminalId)}
                           onTerminalIdle={() => onTerminalIdle?.(terminalId)}
