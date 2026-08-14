@@ -208,6 +208,21 @@ describe("TerminalMissionControl", () => {
     expect(onClose).toHaveBeenCalled();
   });
 
+  it("uses a half-opaque blurred backdrop so the app remains visible behind", () => {
+    renderMissionControl(
+      <TerminalMissionControl
+        open
+        sessions={[session({ id: "shell-1" })]}
+        onClose={vi.fn()}
+        onFocus={vi.fn()}
+      />,
+    );
+
+    const backdrop = screen.getByTestId("mission-control-backdrop");
+    expect(backdrop.className).toContain("bg-background/50");
+    expect(backdrop.className).toContain("backdrop-blur-md");
+  });
+
   it("closes when the backdrop is clicked", async () => {
     const user = userEvent.setup();
     const onClose = vi.fn();

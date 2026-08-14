@@ -119,9 +119,9 @@ it("captures Terminal Mission Control open, select, and close", async () => {
 	await captureDocument(document, {
 		name: "terminal-mission-control-02-open",
 		expectations: [
-			"A full-screen Mission Control overlay covers the app with a blurred backdrop and a top-right X close button.",
+			"Mission Control sits over a half-opaque (~50%) blurred backdrop so the workspace UI remains faintly visible behind the cards.",
 			"Each terminal card has a dark preview pane and a small status icon in the header (not Active/Idle text).",
-			"Cards are grouped by workspace in a two-column grid.",
+			"Cards are grouped by workspace in a two-column grid with a top-right X close button.",
 		],
 	});
 
@@ -200,7 +200,18 @@ it("captures Mission Control cards with terminal output previews", async () => {
 	];
 
 	render(
-		<div className="h-screen bg-background text-foreground">
+		<div className="relative h-screen bg-background text-foreground">
+			{/* Distinctive content behind the overlay so translucency is visible in the capture. */}
+			<div className="pointer-events-none absolute inset-0 flex items-center justify-center p-8">
+				<div className="max-w-xl space-y-2 rounded-lg border border-border bg-card p-6 shadow-sm">
+					<p className="text-lg font-semibold">Workspace behind Mission Control</p>
+					<p className="text-sm text-muted-foreground">
+						This panel should remain faintly visible through the half-opaque
+						blurred backdrop.
+					</p>
+					<div className="h-24 rounded-md bg-primary/20" />
+				</div>
+			</div>
 			<TerminalMissionControl
 				open
 				sessions={sessions}
@@ -230,9 +241,9 @@ it("captures Mission Control cards with terminal output previews", async () => {
 	await captureDocument(document, {
 		name: "terminal-mission-control-04-output-previews",
 		expectations: [
-			"Mission Control has an X close button top-right and a centered text-sm swipe-down hint pinned at the bottom; there is no Terminals title or session count.",
-			"Workspace group headers show branch name with a right-aligned Gerrit-style +N/-M LOC indicator; cards have no footer under the dark output pane.",
-			"Card headers are icon + session name with status icon on the right; previews show terminal output text.",
+			"The workspace panel behind Mission Control is faintly visible through a ~50% opacity blurred backdrop.",
+			"Workspace group headers show branch name with LOC; cards show dark output previews with no footer; X and swipe hint are present.",
+			"Card headers are icon + session name with status icon on the right.",
 		],
 	});
 }, 30000);

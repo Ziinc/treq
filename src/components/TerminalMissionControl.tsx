@@ -114,7 +114,7 @@ export const TerminalMissionControl: React.FC<TerminalMissionControlProps> = ({
         type="button"
         aria-label="Close Mission Control backdrop"
         data-testid="mission-control-backdrop"
-        className="absolute inset-0 bg-background/80 backdrop-blur-md transition-opacity animate-in fade-in-0"
+        className="absolute inset-0 bg-background/50 backdrop-blur-md transition-opacity animate-in fade-in-0"
         onClick={onClose}
       />
 
