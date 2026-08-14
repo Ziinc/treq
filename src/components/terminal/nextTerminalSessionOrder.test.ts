@@ -29,7 +29,10 @@ describe("nextTerminalSessionOrder", () => {
     const now = 1_000;
     const initial = nextTerminalSessionOrder(
       createSessionOrderState(),
-      [session("a", { lastUserInputAt: 10 }), session("b", { lastUserInputAt: 20 })],
+      [
+        session("a", { lastUserInputAt: 10 }),
+        session("b", { lastUserInputAt: 20 }),
+      ],
       now,
     );
     expect(initial.order).toEqual(["b", "a"]);

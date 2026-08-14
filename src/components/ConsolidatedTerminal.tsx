@@ -114,9 +114,7 @@ export const ConsolidatedTerminal = forwardRef<
     const onTerminalInputRef = useRef(onTerminalInput);
     const onTerminalIdleRef = useRef(onTerminalIdle);
 
-    // Get font size from settings and scale to text-xs (0.75x)
-    const { fontSize: baseFontSize } = useTerminalSettings();
-    const fontSize = Math.round(baseFontSize * 0.8125);
+    const fontSize = Math.round(useTerminalSettings().fontSize * 0.8125);
 
     // Sync isPtyReady state with ref for use in callbacks
     useEffect(() => {
@@ -252,7 +250,6 @@ export const ConsolidatedTerminal = forwardRef<
         }
       };
 
-      // Local key event handler
       const localHandleKeyEvent = (event: KeyboardEvent): boolean => {
         // Allow global shortcuts to propagate (don't let XTerm consume them)
         // Note: Escape is NOT included - it should always go to the terminal
@@ -305,7 +302,6 @@ export const ConsolidatedTerminal = forwardRef<
         return true;
       };
 
-      // Local xterm data handler
       const localHandleXtermData = (data: string) => {
         if (!isPtyReadyRef.current) return;
         pendingEchoRef.current += data;
@@ -313,23 +309,15 @@ export const ConsolidatedTerminal = forwardRef<
         ptyWrite(sessionId, data).catch(localHandleError);
       };
 
-      // Local PTY output handler
       const localHandlePtyOutput = (chunk: string) => {
         xterm.write(chunk);
         outputRef.current += chunk;
-        const { pendingEcho, processOutput } = consumePtyEcho(
-          pendingEchoRef.current,
-          chunk,
-        );
-        pendingEchoRef.current = pendingEcho;
-        const fromProcess = processOutput.length > 0;
+        const consumed = consumePtyEcho(pendingEchoRef.current, chunk);
+        pendingEchoRef.current = consumed.pendingEcho;
+        const fromProcess = consumed.processOutput.length > 0;
         onTerminalOutputRef.current?.(outputRef.current, fromProcess);
-
         if (!fromProcess) return;
-
-        if (idleTimeoutRef.current) {
-          clearTimeout(idleTimeoutRef.current);
-        }
+        if (idleTimeoutRef.current) clearTimeout(idleTimeoutRef.current);
         idleTimeoutRef.current = setTimeout(() => {
           onTerminalIdleRef.current?.();
         }, idleTimeoutMs);
@@ -338,7 +326,6 @@ export const ConsolidatedTerminal = forwardRef<
       xterm.attachCustomKeyEventHandler(localHandleKeyEvent);
       xterm.onData(localHandleXtermData);
 
-      // Clipboard image paste handler
       const handlePaste = (e: ClipboardEvent) => {
         const items = e.clipboardData?.items;
         if (!items) return;

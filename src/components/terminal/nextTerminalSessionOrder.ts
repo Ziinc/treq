@@ -1,7 +1,4 @@
-import {
-  isTerminalSessionIdle,
-  type TerminalSessionSummary,
-} from "./types";
+import { isTerminalSessionIdle, type TerminalSessionSummary } from "./types";
 
 export interface SessionOrderState {
   order: string[];

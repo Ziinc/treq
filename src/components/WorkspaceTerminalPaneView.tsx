@@ -376,7 +376,11 @@ export const WorkspaceTerminalPaneView: React.FC<
                             canClose={true}
                             onSessionError={onSessionError}
                             onTerminalOutput={(output, fromProcess) =>
-                              onTerminalOutput?.(terminalId, output, fromProcess)
+                              onTerminalOutput?.(
+                                terminalId,
+                                output,
+                                fromProcess,
+                              )
                             }
                             onTerminalInput={() =>
                               onTerminalInput?.(terminalId)
