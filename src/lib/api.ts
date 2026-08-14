@@ -23,6 +23,8 @@ import type {
   PullWorkspaceResult,
   RepoBranch,
   RenameWorkspaceResult,
+  ResolveCommitResult,
+  ResolveConflictsSession,
   SingleRebaseResult,
   Workspace,
   WorkspaceSidebarStatus,
@@ -222,6 +224,37 @@ export const listCommits = (
     includeTargetBranchHistory: includeTargetBranchHistory ?? false,
     targetBranchLimit: targetBranchLimit ?? null,
     limit: limit ?? null,
+  });
+
+export const startResolveConflicts = (
+  repoPath: string,
+  workspaceId: number | null,
+  changeIds?: string[] | null,
+): Promise<ResolveConflictsSession> =>
+  invoke("start_resolve_conflicts", {
+    repoPath,
+    workspaceId,
+    changeIds: changeIds ?? null,
+  });
+
+export const buildResolveAgentPrompt = (
+  userPrompt: string,
+  session: ResolveConflictsSession,
+): Promise<string> =>
+  invoke("build_resolve_agent_prompt", {
+    userPrompt,
+    session,
+  });
+
+export const resolveCommit = (
+  repoPath: string,
+  revision: string,
+  sides: string[],
+): Promise<ResolveCommitResult> =>
+  invoke("resolve_commit", {
+    repoPath,
+    revision,
+    sides,
   });
 
 export const jjSplit = (

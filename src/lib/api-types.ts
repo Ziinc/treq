@@ -175,6 +175,32 @@ export interface JjLogCommit {
   deletions: number;
   /** True when this commit belongs to the target branch but not the current branch */
   on_target_only?: boolean;
+  /** True when this commit's tree still contains unresolved jj conflicts */
+  has_conflicts?: boolean;
+}
+
+export interface ResolveTarget {
+  change_id: string;
+  commit_id: string;
+  description: string;
+  conflicted_files: string[];
+  resolve_path: string;
+  workspace_id: number;
+  workspace_name: string;
+}
+
+export interface ResolveConflictsSession {
+  targets: ResolveTarget[];
+  /** Absolute path the agent should start in (first target). */
+  agent_cwd: string;
+  source_workspace_id: number | null;
+}
+
+export interface ResolveCommitResult {
+  success: boolean;
+  message: string;
+  change_id: string;
+  remaining_conflicts: string[];
 }
 
 export interface JjTentativeWorkingCopy {

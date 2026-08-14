@@ -299,3 +299,38 @@ pub async fn describe_commit(
   );
   result
 }
+
+#[tauri::command]
+pub async fn start_resolve_conflicts(
+  repo_path: String,
+  workspace_id: Option<i64>,
+  change_ids: Option<Vec<String>>,
+) -> Result<core::ResolveConflictsSession, String> {
+  tauri::async_runtime::spawn_blocking(move || {
+    core::start_resolve_conflicts(&repo_path, workspace_id, change_ids)
+  })
+  .await
+  .map_err(|e| format!("Failed to join start_resolve_conflicts task: {}", e))?
+}
+
+#[tauri::command]
+pub fn build_resolve_agent_prompt(
+  user_prompt: String,
+  session: core::ResolveConflictsSession,
+) -> String {
+  core::build_resolve_agent_prompt(&user_prompt, &session)
+}
+
+#[tauri::command]
+pub async fn resolve_commit(
+  repo_path: String,
+  revision: String,
+  sides: Vec<String>,
+) -> Result<core::ResolveCommitResult, String> {
+  tauri::async_runtime::spawn_blocking(move || {
+    let parsed_sides = core::parse_resolve_sides(&sides)?;
+    core::resolve_commit(&repo_path, &revision, &parsed_sides, None)
+  })
+  .await
+  .map_err(|e| format!("Failed to join resolve_commit task: {}", e))?
+}

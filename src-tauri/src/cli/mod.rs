@@ -55,6 +55,7 @@ pub fn handle_cli_command(subcommand: &SubcommandMatches) -> Option<i32> {
     "mv" => workspace_handlers::handle_workspace_move(&subcommand.matches),
     "agent" => workspace_handlers::handle_workspace_agent(&subcommand.matches),
     "commit" => workspace_handlers::handle_workspace_commit(&subcommand.matches),
+    "resolve" => workspace_handlers::handle_resolve(&subcommand.matches),
     "send" => workspace_handlers::handle_send(&subcommand.matches),
     "help" => {
       print_cli_help();
@@ -99,6 +100,7 @@ fn print_cli_help() {
     );
   println!("  treq agent <branch> <prompt> [-m <edit|plan>]");
   println!("  treq commit <workspace_name> -m <message> [--push]");
+  println!("  treq resolve <commit_id> [sides...]");
   println!("  treq send [path|-]");
   println!("  treq help");
 }

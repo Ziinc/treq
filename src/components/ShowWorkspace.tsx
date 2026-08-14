@@ -1330,7 +1330,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
               </div>
             )
           ) : activeTab === "commits" ? (
-            <CommitDiffViewer
+              <CommitDiffViewer
               repoPath={effectiveRepoPath}
               workspaceId={workspace?.id ?? null}
               scrollToCommitId={scrollToCommitId}
@@ -1338,6 +1338,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
               onCommitAbandoned={() => {}}
               onCommitStashed={onCommitStashed}
               onCreateAgentWithComment={handleCreateAgentWithComment}
+              onSessionCreated={onSessionCreated}
               onMoveCommitToNewWorkspace={
                 onMoveCommitToNewWorkspace
                   ? (commit) => onMoveCommitToNewWorkspace(commit, workspace)
