@@ -21,11 +21,11 @@ import {
 } from "../../src/lib/api";
 import { getFullWorkspacePath } from "../../src/lib/utils";
 import {
-  commitRepoFile,
   commitWorkspaceFile,
   createTestRepo,
   openRepo,
   resolveWorkspacePath,
+  writeRepoFile,
   writeWorkspaceFile,
 } from "../../test/utils";
 
@@ -185,19 +185,22 @@ export async function seedReadmeMarketingRepo(): Promise<MarketingFixture> {
   const { repoPath } = createTestRepo(false);
   openRepo(repoPath);
 
-  await commitRepoFile(repoPath, "README.md", README, "docs: describe event-bus");
-  await commitRepoFile(
+  await writeRepoFile(repoPath, "README.md", README, false);
+  await createCommit(repoPath, null, "docs: describe event-bus");
+  await writeRepoFile(
     repoPath,
     "packages/web/src/pages/Home.tsx",
     HOME_MAIN,
-    "feat: add lorem home page",
+    false,
   );
-  await commitRepoFile(
+  await createCommit(repoPath, null, "feat: add lorem home page");
+  await writeRepoFile(
     repoPath,
     "packages/web/src/components/EventFeed.tsx",
     EVENT_FEED,
-    "feat: add event feed stub",
+    false,
   );
+  await createCommit(repoPath, null, "feat: add event feed stub");
 
   for (const branch of SIBLING_BRANCHES) {
     await createWorkspace(repoPath, branch);
@@ -233,6 +236,7 @@ export async function seedReadmeMarketingRepo(): Promise<MarketingFixture> {
     repoPath,
     workspace.workspace_path,
   );
+  writeWorkspaceFile(workspacePath, "README.md", README);
   writeWorkspaceFile(workspacePath, "packages/web/src/lib/client.ts", CLIENT_SRC);
   await createCommit(
     repoPath,

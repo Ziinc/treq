@@ -151,6 +151,7 @@ it("captures the Code Review tab for the README", async () => {
   await captureDocument(document, {
     name: "readme-review",
     deviceScaleFactor: 2,
+    scrollIntoView: '[data-conflict-section-label="Side #1"]',
     publishTo: path.join(README_SCREENSHOTS_DIR, "review.png"),
     expectations: [
       "The Review tab is open on a conflicted packages/web/src/pages/Home.tsx with an inline conflict card (Side #1 / Base / Side #2).",
