@@ -8,7 +8,6 @@ describe("AgentMessageQueue", () => {
   it("shows a toolbar queue button when empty and hides the composer until opened", () => {
     render(
       <AgentMessageQueue
-        variant="toolbar"
         messages={[]}
         onEnqueue={vi.fn()}
         onRemove={vi.fn()}
@@ -16,10 +15,6 @@ describe("AgentMessageQueue", () => {
       />,
     );
 
-    expect(screen.getByTestId("agent-message-queue")).toHaveAttribute(
-      "data-variant",
-      "toolbar",
-    );
     expect(
       screen.getByTestId("agent-message-queue-button"),
     ).toBeInTheDocument();
@@ -35,7 +30,6 @@ describe("AgentMessageQueue", () => {
     const user = userEvent.setup();
     render(
       <AgentMessageQueue
-        variant="toolbar"
         messages={[]}
         onEnqueue={vi.fn()}
         onRemove={vi.fn()}
@@ -60,7 +54,6 @@ describe("AgentMessageQueue", () => {
 
     render(
       <AgentMessageQueue
-        variant="toolbar"
         messages={[]}
         onEnqueue={onEnqueue}
         onRemove={vi.fn()}
@@ -76,7 +69,7 @@ describe("AgentMessageQueue", () => {
     expect(composer).toHaveValue("");
   });
 
-  it("pins a count chip and lists messages in the popover", async () => {
+  it("shows a count badge on the toolbar button and lists messages in the popover", async () => {
     const user = userEvent.setup();
     const messages = [
       createQueuedAgentMessage("first follow-up", "m1", 1),
@@ -85,7 +78,6 @@ describe("AgentMessageQueue", () => {
 
     render(
       <AgentMessageQueue
-        variant="pinned"
         messages={messages}
         onEnqueue={vi.fn()}
         onRemove={vi.fn()}
@@ -93,10 +85,6 @@ describe("AgentMessageQueue", () => {
       />,
     );
 
-    expect(screen.getByTestId("agent-message-queue")).toHaveAttribute(
-      "data-variant",
-      "pinned",
-    );
     expect(screen.getByTestId("agent-message-queue-count")).toHaveTextContent(
       "2",
     );
@@ -122,7 +110,6 @@ describe("AgentMessageQueue", () => {
 
     render(
       <AgentMessageQueue
-        variant="pinned"
         messages={messages}
         onEnqueue={vi.fn()}
         onRemove={onRemove}
@@ -145,7 +132,6 @@ describe("AgentMessageQueue", () => {
 
     render(
       <AgentMessageQueue
-        variant="pinned"
         messages={messages}
         onEnqueue={vi.fn()}
         onRemove={vi.fn()}

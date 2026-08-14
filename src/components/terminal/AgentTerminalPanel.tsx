@@ -45,10 +45,7 @@ import {
 } from "../../lib/agentCommand";
 import { useAgentMessageQueue } from "../../hooks/useAgentMessageQueue";
 import { type ClaudeSessionData } from "./types";
-import {
-  AgentMessageQueue,
-  PinnedAgentMessageQueue,
-} from "./AgentMessageQueue";
+import { AgentMessageQueue } from "./AgentMessageQueue";
 import { TerminalSearchOverlay } from "./TerminalSearchOverlay";
 import { TerminalSendPreviews } from "./TerminalSendPreviews";
 
@@ -114,7 +111,6 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
     const handleEnqueueMessage = useCallback(
       (text: string) => {
         enqueueMessage(text);
-        // Keep the popover open across the toolbar → pinned remount.
         setQueuePopoverOpen(true);
       },
       [enqueueMessage],
@@ -429,18 +425,14 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
                 <TooltipContent>Search (⌘+F)</TooltipContent>
               </Tooltip>
             </TooltipProvider>
-            {/* Queue — toolbar only while empty; pinned overlay takes over when non-empty */}
-            {queuedMessages.length === 0 && (
-              <AgentMessageQueue
-                variant="toolbar"
-                messages={queuedMessages}
-                onEnqueue={handleEnqueueMessage}
-                onRemove={removeQueuedMessage}
-                onUpdate={updateQueuedMessage}
-                open={queuePopoverOpen}
-                onOpenChange={setQueuePopoverOpen}
-              />
-            )}
+            <AgentMessageQueue
+              messages={queuedMessages}
+              onEnqueue={handleEnqueueMessage}
+              onRemove={removeQueuedMessage}
+              onUpdate={updateQueuedMessage}
+              open={queuePopoverOpen}
+              onOpenChange={setQueuePopoverOpen}
+            />
             {/* Close button */}
             {onClose && (
               <TooltipProvider>
@@ -470,19 +462,9 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
         </div>
 
         <div
-          className="flex min-h-0 flex-1 flex-col border-r border-border"
+          className="flex min-h-0 flex-1 flex-col overflow-hidden border-r border-border"
           style={{ backgroundColor: "#1e1e1e" }}
         >
-          {isModelLoaded && queuedMessages.length > 0 && (
-            <PinnedAgentMessageQueue
-              messages={queuedMessages}
-              onEnqueue={handleEnqueueMessage}
-              onRemove={removeQueuedMessage}
-              onUpdate={updateQueuedMessage}
-              open={queuePopoverOpen}
-              onOpenChange={setQueuePopoverOpen}
-            />
-          )}
           <div className="relative min-h-0 flex-1 overflow-hidden">
             {searchVisible && !collapsed && (
               <TerminalSearchOverlay

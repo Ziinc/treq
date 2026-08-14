@@ -158,7 +158,7 @@ describe("WorkspaceTerminalPane integration", () => {
 
     expect(
       within(terminalPanel).getByTestId("agent-message-queue"),
-    ).toHaveAttribute("data-variant", "toolbar");
+    ).toBeInTheDocument();
     expect(
       screen.queryByTestId("agent-message-queue-composer"),
     ).not.toBeInTheDocument();
@@ -177,8 +177,8 @@ describe("WorkspaceTerminalPane integration", () => {
       await within(terminalPanel).findByTestId("agent-message-queue-count"),
     ).toHaveTextContent("2");
     expect(
-      within(terminalPanel).getByTestId("agent-message-queue"),
-    ).toHaveAttribute("data-variant", "pinned");
+      within(terminalPanel).getByTestId("agent-message-queue-button"),
+    ).toBeInTheDocument();
 
     const popover = await screen.findByTestId("agent-message-queue-popover");
     expect(

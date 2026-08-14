@@ -12,33 +12,27 @@ import { Label } from "../ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { Textarea } from "../ui/textarea";
 
-export type AgentMessageQueueVariant = "toolbar" | "pinned";
-
 export interface AgentMessageQueueProps {
   messages: QueuedAgentMessage[];
   onEnqueue: (text: string) => void;
   onRemove: (id: string) => void;
   onUpdate: (id: string, text: string) => void;
-  /** toolbar = header icon when empty; pinned = top-of-terminal chip when non-empty */
-  variant: AgentMessageQueueVariant;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   className?: string;
 }
 
 /**
- * Queue control for agent terminals.
- * - Empty queue: toolbar icon; click opens popover with follow-up input.
- * - Non-empty: pinned count chip at top of terminal; same popover lists
- *   messages (edit/remove) and hosts the follow-up input.
- * The follow-up input is never shown outside the popover.
+ * Queue control for agent terminals — always lives in the agent toolbar.
+ * Click opens a popover with the follow-up input; when non-empty the popover
+ * also lists queued messages (edit/remove). The input is never shown outside
+ * the popover. A count badge appears on the toolbar button while messages wait.
  */
 export function AgentMessageQueue({
   messages,
   onEnqueue,
   onRemove,
   onUpdate,
-  variant,
   open: openProp,
   onOpenChange,
   className,
@@ -95,55 +89,43 @@ export function AgentMessageQueue({
   };
 
   const count = messages.length;
-  const isPinned = variant === "pinned";
   const canSend = draft.trim().length > 0;
-
-  const toolbarButton = (
-    <Button
-      type="button"
-      variant="ghost"
-      size="xs"
-      data-testid="agent-message-queue-button"
-      aria-label="Queue message"
-      title="Queue message"
-      className="bg-transparent text-gray-200 hover:bg-muted/20 hover:text-gray-200"
-    >
-      <ListOrdered className="h-4 w-4" />
-    </Button>
-  );
-
-  const pinnedButton = (
-    <Button
-      type="button"
-      variant="secondary"
-      size="xs"
-      data-testid="agent-message-queue-button"
-      aria-label={`${count} queued message${count === 1 ? "" : "s"}`}
-      className="h-6 gap-1.5 rounded-full px-2.5 text-[11px] font-medium shadow-sm"
-    >
-      <ListOrdered className="h-3 w-3 text-muted-foreground" />
-      <span data-testid="agent-message-queue-count" className="tabular-nums">
-        {count}
-      </span>
-      <span className="text-muted-foreground">queued</span>
-    </Button>
-  );
 
   return (
     <div
       data-testid="agent-message-queue"
-      data-variant={variant}
       className={className}
     >
       <Popover open={open} onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild>
-          {variant === "toolbar" ? toolbarButton : pinnedButton}
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            data-testid="agent-message-queue-button"
+            aria-label={
+              count > 0
+                ? `${count} queued message${count === 1 ? "" : "s"}`
+                : "Queue message"
+            }
+            title="Queue message"
+            className="relative bg-transparent text-gray-200 hover:bg-muted/20 hover:text-gray-200"
+          >
+            <ListOrdered className="h-4 w-4" />
+            {count > 0 && (
+              <span
+                data-testid="agent-message-queue-count"
+                className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-semibold leading-none text-primary-foreground"
+              >
+                {count}
+              </span>
+            )}
+          </Button>
         </PopoverTrigger>
         <PopoverContent
-          align={isPinned ? "center" : "end"}
+          align="end"
           side="top"
           sideOffset={8}
-          // Chip sits near the terminal top; keep the popover above it instead of flipping down.
           avoidCollisions={false}
           className="w-[24rem] space-y-2 rounded-xl p-3"
           data-testid="agent-message-queue-popover"
@@ -194,11 +176,8 @@ export function AgentMessageQueue({
                           </div>
                         </div>
                       ) : (
-                        <div className="flex items-start gap-2.5">
-                          <span className="mt-0.5 w-4 shrink-0 text-[11px] tabular-nums text-muted-foreground">
-                            {index + 1}
-                          </span>
-                          <p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-[13px] leading-relaxed text-foreground">
+                        <div className="flex items-start gap-2">
+                          <p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-sm leading-snug text-foreground">
                             {message.text}
                           </p>
                           <div className="flex shrink-0 items-center gap-0.5">
@@ -239,14 +218,10 @@ export function AgentMessageQueue({
               value={draft}
               onChange={(event) => setDraft(event.target.value)}
               onKeyDown={handleComposerKeyDown}
-              placeholder="Add a follow-up…"
-              aria-label="Queue agent message"
+              placeholder="Add a follow-up..."
               data-testid="agent-message-queue-composer"
-              rows={2}
               className={cn(
-                "max-h-28 min-h-[52px] resize-none border-0 bg-transparent",
-                "px-3 pb-1 pt-2.5 text-[13px] shadow-none",
-                "focus-visible:ring-0 focus-visible:ring-offset-0 caret-primary",
+                "min-h-[72px] resize-none border-0 bg-transparent px-3 py-2.5 text-sm shadow-none focus-visible:ring-0",
               )}
             />
             <div className="flex items-center justify-between gap-2 px-2 pb-2 pt-0.5">
@@ -267,19 +242,6 @@ export function AgentMessageQueue({
           </Card>
         </PopoverContent>
       </Popover>
-    </div>
-  );
-}
-
-/** Pinned chip overlay above the terminal scroll area (avoids clipping upward popovers). */
-export function PinnedAgentMessageQueue(
-  props: Omit<AgentMessageQueueProps, "variant">,
-) {
-  return (
-    <div className="relative z-20 flex h-0 justify-center overflow-visible">
-      <div className="absolute top-2">
-        <AgentMessageQueue {...props} variant="pinned" />
-      </div>
     </div>
   );
 }

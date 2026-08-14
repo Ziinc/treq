@@ -1,6 +1,6 @@
 /**
- * Captures agent-terminal message queue: toolbar button when empty,
- * pinned count chip when queued, and popover with follow-up input.
+ * Captures agent-terminal message queue: toolbar button (with count badge
+ * when non-empty) and popover with follow-up input.
  */
 
 import * as React from "react";
@@ -66,7 +66,7 @@ it("captures agent terminal message queue button and popover", async () => {
   );
   expect(
     within(terminalPanel).getByTestId("agent-message-queue"),
-  ).toHaveAttribute("data-variant", "toolbar");
+  ).toBeInTheDocument();
   expect(
     screen.queryByTestId("agent-message-queue-composer"),
   ).not.toBeInTheDocument();
@@ -79,7 +79,6 @@ it("captures agent terminal message queue button and popover", async () => {
     ],
   });
 
-  // Toolbar trigger near the agent header controls (right side).
   stubQueueTriggerRect(queueButton, {
     top: 470,
     left: 900,
@@ -111,10 +110,9 @@ it("captures agent terminal message queue button and popover", async () => {
     await within(terminalPanel).findByTestId("agent-message-queue-count"),
   ).toHaveTextContent("2");
   expect(
-    within(terminalPanel).getByTestId("agent-message-queue"),
-  ).toHaveAttribute("data-variant", "pinned");
+    within(terminalPanel).getByTestId("agent-message-queue-button"),
+  ).toBeInTheDocument();
 
-  // Close then reopen so the pinned chip is visible without the popover overlay.
   await user.click(
     within(terminalPanel).getByTestId("agent-message-queue-button"),
   );
@@ -125,24 +123,23 @@ it("captures agent terminal message queue button and popover", async () => {
   });
 
   await captureDocument(document, {
-    name: "agent-message-queue-03-pinned",
+    name: "agent-message-queue-03-toolbar-badge",
     expectations: [
-      "A pinned 2 queued chip sits at the top of the terminal body.",
-      "The Queue icon is no longer in the agent toolbar while messages are queued.",
+      "The Queue icon stays in the agent toolbar with a 2 count badge.",
+      "No floating chip appears over the terminal body.",
     ],
   });
 
-  const pinnedButton = within(terminalPanel).getByTestId(
+  const toolbarQueueButton = within(terminalPanel).getByTestId(
     "agent-message-queue-button",
   );
-  // Pinned chip is centered near the top of the terminal body.
-  stubQueueTriggerRect(pinnedButton, {
-    top: 510,
-    left: 620,
-    width: 96,
-    height: 24,
+  stubQueueTriggerRect(toolbarQueueButton, {
+    top: 470,
+    left: 900,
+    width: 28,
+    height: 28,
   });
-  await user.click(pinnedButton);
+  await user.click(toolbarQueueButton);
   const popover = await screen.findByTestId("agent-message-queue-popover");
   expect(popover).toHaveAttribute("data-side", "top");
   expect(
@@ -152,7 +149,7 @@ it("captures agent terminal message queue button and popover", async () => {
   await captureDocument(document, {
     name: "agent-message-queue-04-popover",
     expectations: [
-      "The popover opens above the pinned 2 queued chip.",
+      "The popover opens above the toolbar Queue button.",
       "Queued messages and the follow-up input are listed inside the popover.",
     ],
   });
