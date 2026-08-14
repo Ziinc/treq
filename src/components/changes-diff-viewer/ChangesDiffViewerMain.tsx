@@ -141,7 +141,6 @@ export const ChangesDiffViewer = memo(
         setCollapsedFiles,
         collapsedSections,
         expandedLargeDiffs,
-        setExpandedLargeDiffs,
         largeChangesetExpanded,
         setLargeChangesetExpanded,
         unstagedFiles,
@@ -498,10 +497,6 @@ export const ChangesDiffViewer = memo(
             toggleSectionCollapse={toggleSectionCollapse}
             activeFilePath={activeFilePath}
             setActiveFilePath={setActiveFilePath}
-            setLargeChangesetExpanded={setLargeChangesetExpanded}
-            setCollapsedFiles={setCollapsedFiles}
-            setExpandedLargeDiffs={setExpandedLargeDiffs}
-            conflictFileRefs={conflictFileRefs}
             showCommittedChanges={showCommittedChanges}
             onToggleShowCommitted={
               onShowCommittedChangesChange
