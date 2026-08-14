@@ -42,7 +42,7 @@ interface UseFileActionsParams {
   diffLineSelection: DiffLineSelection | null;
   setContextMenuPosition: (pos: { x: number; y: number } | null) => void;
   invalidateCache: () => Promise<void>;
-  loadChangedFiles: () => Promise<void>;
+  loadChangedFiles: (forceApply?: boolean) => Promise<void>;
   refreshCommittedChanges: () => void;
   setCommittedSectionCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
   addToast: ReturnType<typeof useToast>["addToast"];
@@ -329,7 +329,9 @@ export function useFileActions({
           }),
           invalidateReviewChangeCount(queryClient, repoPath, workspaceId),
         ]);
-        await Promise.all([loadChangedFiles(), refreshCommittedChanges()]);
+        // Force-apply so an in-progress review refreshes instead of parking
+        // the post-commit file list behind the stale-files banner.
+        await Promise.all([loadChangedFiles(true), refreshCommittedChanges()]);
         return true;
       } catch (error) {
         addToast({

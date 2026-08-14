@@ -104,100 +104,115 @@ export function useFileLoading({
     cachedChanges.refresh();
   }, [cachedChanges]);
 
-  const loadChangedFiles = useCallback(async () => {
-    setRefreshing(true);
-    onRefreshingChange?.(true);
-    try {
-      if (repoPath && workspaceId !== undefined) {
-        const diff = await getWorkspaceDiff(repoPath, workspaceId);
-        const parsed = parseJjChangedFiles(diff.uncommitted_files ?? []);
-        applyChangedFilesRef.current(parsed);
-
-        const fromDiff = diff.conflicted_files ?? [];
-        // Diff is authoritative for live conflict state. The status hint can
-        // lag a frame behind resolve+commit; never re-introduce paths a fresh
-        // diff reports as resolved.
-        setLiveConflictedFiles(fromDiff);
-        const conflictedHint = new Set<string>(fromDiff);
-        const uncommittedPaths = new Set(parsed.map((file) => file.path));
-
-        // Keep the full committed file list so the Committed section header
-        // (and its Show toggle) stay available while committed diffs are hidden.
-        // Conflicted paths that aren't already in the committed list are still
-        // appended — rebase conflicts live in committed hunks.
-        let committed = [...(diff.committed_files ?? [])];
-        for (const path of conflictedHint) {
-          if (
-            uncommittedPaths.has(path) ||
-            committed.some((file) => file.path === path)
-          ) {
-            continue;
-          }
-          committed = [
-            ...committed,
-            {
-              path,
-              status: "C",
-              previous_path: null,
-              changed_line_count: 0,
-              diff_deferred: false,
-            },
-          ];
-        }
-        setCommittedFiles(committed);
-
-        // When Committed is hidden, still keep dirty + conflicted committed hunks.
-        const alwaysVisibleCommitted = new Set([
-          ...uncommittedPaths,
-          ...conflictedHint,
-        ]);
-        setCommittedFileHunks(
-          new Map(
-            (diff.hunks_by_file ?? [])
-              .filter(
-                (fileDiff) =>
-                  showCommittedChanges ||
-                  alwaysVisibleCommitted.has(fileDiff.path),
-              )
-              .map((fileDiff) => [
-                fileDiff.path,
-                {
-                  filePath: fileDiff.path,
-                  hunks: fileDiff.hunks,
-                  isLoading: false,
-                },
-              ]),
-          ),
-        );
-        return;
+  const loadChangedFiles = useCallback(
+    async (forceApply = false) => {
+      setRefreshing(true);
+      onRefreshingChange?.(true);
+      // User-initiated refreshes (e.g. commit) must apply through review-mode
+      // freeze so the Review panel updates instead of showing the stale banner.
+      if (forceApply) {
+        isReloadingRef.current = true;
       }
-      const jjFiles = await getWorkspaceChangedFiles(
-        repoPath ?? "",
-        workspaceId ?? null,
-      );
-      const parsed = parseJjChangedFiles(jjFiles);
-      applyChangedFilesRef.current(parsed);
-      setCommittedFiles([]);
-      setCommittedFileHunks(new Map());
-      setLiveConflictedFiles([]);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      addToast({ description: message, title: "JJ Error", type: "error" });
-    } finally {
-      setInitialLoading(false);
-      setRefreshing(false);
-      onRefreshingChange?.(false);
-    }
-  }, [
-    workspacePath,
-    repoPath,
-    workspaceId,
-    showCommittedChanges,
-    conflictedFilesKey,
-    applyChangedFilesRef,
-    addToast,
-    onRefreshingChange,
-  ]);
+      try {
+        if (repoPath && workspaceId !== undefined) {
+          const diff = await getWorkspaceDiff(repoPath, workspaceId);
+          const parsed = parseJjChangedFiles(diff.uncommitted_files ?? []);
+          applyChangedFilesRef.current(parsed, forceApply);
+
+          const fromDiff = diff.conflicted_files ?? [];
+          // Diff is authoritative for live conflict state. The status hint can
+          // lag a frame behind resolve+commit; never re-introduce paths a fresh
+          // diff reports as resolved.
+          setLiveConflictedFiles(fromDiff);
+          const conflictedHint = new Set<string>(fromDiff);
+          const uncommittedPaths = new Set(parsed.map((file) => file.path));
+
+          // Keep the full committed file list so the Committed section header
+          // (and its Show toggle) stay available while committed diffs are hidden.
+          // Conflicted paths that aren't already in the committed list are still
+          // appended — rebase conflicts live in committed hunks.
+          let committed = [...(diff.committed_files ?? [])];
+          for (const path of conflictedHint) {
+            if (
+              uncommittedPaths.has(path) ||
+              committed.some((file) => file.path === path)
+            ) {
+              continue;
+            }
+            committed = [
+              ...committed,
+              {
+                path,
+                status: "C",
+                previous_path: null,
+                changed_line_count: 0,
+                diff_deferred: false,
+              },
+            ];
+          }
+          setCommittedFiles(committed);
+
+          // When Committed is hidden, still keep dirty + conflicted committed hunks.
+          const alwaysVisibleCommitted = new Set([
+            ...uncommittedPaths,
+            ...conflictedHint,
+          ]);
+          setCommittedFileHunks(
+            new Map(
+              (diff.hunks_by_file ?? [])
+                .filter(
+                  (fileDiff) =>
+                    showCommittedChanges ||
+                    alwaysVisibleCommitted.has(fileDiff.path),
+                )
+                .map((fileDiff) => [
+                  fileDiff.path,
+                  {
+                    filePath: fileDiff.path,
+                    hunks: fileDiff.hunks,
+                    isLoading: false,
+                  },
+                ]),
+            ),
+          );
+          return;
+        }
+        const jjFiles = await getWorkspaceChangedFiles(
+          repoPath ?? "",
+          workspaceId ?? null,
+        );
+        const parsed = parseJjChangedFiles(jjFiles);
+        applyChangedFilesRef.current(parsed, forceApply);
+        setCommittedFiles([]);
+        setCommittedFileHunks(new Map());
+        setLiveConflictedFiles([]);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        addToast({ description: message, title: "JJ Error", type: "error" });
+      } finally {
+        setInitialLoading(false);
+        setRefreshing(false);
+        onRefreshingChange?.(false);
+        if (forceApply) {
+          // Keep the flag long enough for the files→hunks effect to apply.
+          setTimeout(() => {
+            isReloadingRef.current = false;
+          }, 100);
+        }
+      }
+    },
+    [
+      workspacePath,
+      repoPath,
+      workspaceId,
+      showCommittedChanges,
+      conflictedFilesKey,
+      applyChangedFilesRef,
+      isReloadingRef,
+      addToast,
+      onRefreshingChange,
+    ],
+  );
 
   useEffect(() => {
     loadChangedFiles();
@@ -456,8 +471,10 @@ export function useFileLoading({
       setLargeChangesetExpandedRef.current(false);
     } else if (files.length === 0 && prevFilePathsRef.current.length > 0) {
       prevFilePathsRef.current = [];
+      // Only clear uncommitted hunks. Committed Review-tab hunks are owned by
+      // loadChangedFiles and must survive an empty working-copy file list
+      // (e.g. right after committing every change while reviewing).
       setAllFileHunks(new Map());
-      setCommittedFileHunks(new Map());
       setLargeChangesetExpandedRef.current(false);
     }
   }, [files, loadAllFileHunks, setLargeChangesetExpandedRef]);
