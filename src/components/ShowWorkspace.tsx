@@ -22,6 +22,7 @@ import {
   Info,
   Layers2,
   Loader2,
+  CalendarClock,
   MoreVertical,
   RefreshCw,
   Search,
@@ -116,6 +117,7 @@ import {
 } from "./ui/tooltip";
 import { ViewPrButton } from "./ViewPrButton";
 import { WorkspaceBookmarkConflictModal } from "./WorkspaceBookmarkConflictModal";
+import { ScheduleWorkspaceDialog } from "./ScheduleWorkspaceDialog";
 import { WorkspaceStackPanel } from "./WorkspaceStackPanel";
 
 interface ShowWorkspaceProps {
@@ -255,6 +257,11 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
     const [bookmarkConflict, setBookmarkConflict] =
       useState<WorkspaceBookmarkConflict | null>(null);
     const [conflictModalOpen, setConflictModalOpen] = useState(false);
+    const [scheduleDialog, setScheduleDialog] = useState<{
+      mode: "workspace" | "stack";
+      workspaceIds: number[];
+      currentHiddenUntil?: string | null;
+    } | null>(null);
     const [detailsOpen, setDetailsOpen] = useState(false);
     const [resolvingBookmarkConflict, setResolvingBookmarkConflict] =
       useState(false);
@@ -1300,6 +1307,13 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
                         workspace={workspace}
                         defaultBranch={defaultTargetBranch}
                         onSelectWorkspace={onNavigateToWorkspace}
+                        onScheduleStack={(stackWorkspaces) =>
+                          setScheduleDialog({
+                            mode: "stack",
+                            workspaceIds: stackWorkspaces.map((ws) => ws.id),
+                            currentHiddenUntil: stackWorkspaces[0]?.hidden_until,
+                          })
+                        }
                       />
                     )}
                     {/* File Search Input */}
@@ -1590,11 +1604,37 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
                                 conflictCount === 1 ? "" : "s"
                               } detected`
                             : `Create stacked workspace from ${branchTitle}`}
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                )}
-                {!workspace && (
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                    {workspace && (
+                      <TooltipProvider delayDuration={200}>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                setScheduleDialog({
+                                  mode: "workspace",
+                                  workspaceIds: [workspace.id],
+                                  currentHiddenUntil: workspace.hidden_until,
+                                })
+                              }
+                              data-testid="schedule-workspace-button"
+                            >
+                              <CalendarClock className="w-4 h-4" />
+                              Schedule
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            Hide this workspace in the sidebar until a chosen time
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    )}
+                    {!workspace && (
                   <>
                     <button
                       type="button"
@@ -2108,6 +2148,18 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
           onResolve={handleResolveBookmarkConflict}
           resolving={resolvingBookmarkConflict}
         />
+        {workspace && (
+          <ScheduleWorkspaceDialog
+            open={!!scheduleDialog}
+            onOpenChange={(open) => {
+              if (!open) setScheduleDialog(null);
+            }}
+            repoPath={effectiveRepoPath}
+            workspaceIds={scheduleDialog?.workspaceIds ?? [workspace.id]}
+            currentHiddenUntil={scheduleDialog?.currentHiddenUntil}
+            mode={scheduleDialog?.mode ?? "workspace"}
+          />
+        )}
       </>
     );
   },

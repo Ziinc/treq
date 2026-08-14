@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Workspace } from "./api-types";
-import { getWorkspaceDisplayTitle } from "./workspace-utils";
+import { getWorkspaceDisplayTitle, isWorkspaceHidden } from "./workspace-utils";
 
 function makeWorkspace(overrides: Partial<Workspace> = {}): Workspace {
   return {
@@ -42,5 +42,29 @@ describe("getWorkspaceDisplayTitle", () => {
       branch_name: "docs/ai",
     });
     expect(getWorkspaceDisplayTitle(workspace)).toBe("docs/ai");
+  });
+});
+
+describe("isWorkspaceHidden", () => {
+  const now = Date.parse("2026-08-14T12:00:00.000Z");
+
+  it("is hidden when hidden_until is in the future", () => {
+    expect(
+      isWorkspaceHidden(
+        { hidden_until: "2026-08-15T09:00:00.000Z" },
+        now,
+      ),
+    ).toBe(true);
+  });
+
+  it("is visible when hidden_until has passed or is missing", () => {
+    expect(
+      isWorkspaceHidden(
+        { hidden_until: "2026-08-14T11:00:00.000Z" },
+        now,
+      ),
+    ).toBe(false);
+    expect(isWorkspaceHidden({}, now)).toBe(false);
+    expect(isWorkspaceHidden({ hidden_until: null }, now)).toBe(false);
   });
 });

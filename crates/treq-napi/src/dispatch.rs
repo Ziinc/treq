@@ -492,6 +492,29 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
       serde_json::to_value(workspace).map_err(|e| e.to_string())
     }
 
+    "schedule_workspaces" => {
+      let repo_path = get_str(&args, "repoPath")?;
+      let workspace_ids = args
+        .get("workspaceIds")
+        .and_then(|v| v.as_array())
+        .ok_or_else(|| "Missing or invalid argument: workspaceIds".to_string())?
+        .iter()
+        .map(|v| {
+          v.as_i64()
+            .or_else(|| v.as_u64().map(|n| n as i64))
+            .ok_or_else(|| "Invalid workspace id".to_string())
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+      let hidden_until = match args.get("hiddenUntil") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(s)) => Some(s.clone()),
+        _ => return Err("Invalid argument: hiddenUntil".to_string()),
+      };
+      let workspaces =
+        treq_lib::core::schedule_workspaces(&repo_path, &workspace_ids, hidden_until.as_deref())?;
+      serde_json::to_value(workspaces).map_err(|e| e.to_string())
+    }
+
     "get_repo_current_branch" => {
       let repo_path = get_str(&args, "repoPath")?;
       let branch = treq_lib::core::get_repo_current_branch(&repo_path)?;

@@ -3,6 +3,7 @@ import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
   AlertTriangle,
   Copy,
+  EyeOff,
   FolderOpen,
   GitBranch,
   Layers2,
@@ -18,7 +19,7 @@ import type { QueueEntryStatus, Workspace } from "../lib/api";
 import type { PrInfo } from "../lib/api-types";
 import { cn, getFullWorkspacePath } from "../lib/utils";
 import type { FlattenedWorkspaceNode } from "../lib/workspace-tree";
-import { getWorkspaceTitle as getWorkspaceTitleFromUtils } from "../lib/workspace-utils";
+import { getWorkspaceTitle as getWorkspaceTitleFromUtils, isWorkspaceHidden } from "../lib/workspace-utils";
 import {
   getChangeFilesDragData,
   isChangeFilesDrag,
@@ -213,6 +214,7 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
     paddingLeft: `${16 + (node.depth - 1) * 6}px`,
   };
   const isConflicted = node.status.has_conflicts;
+  const isHidden = isWorkspaceHidden(workspace);
   const workspaceTitle = getWorkspaceTitleFromUtils(workspace);
   const prStatus = hasRemote && prInfo ? prIconStyle(prInfo) : null;
   const [isChangeDropTarget, setIsChangeDropTarget] = useState(false);
@@ -240,6 +242,7 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                           "bg-primary/10":
                             dragSnapshot.combineTargetFor || isChangeDropTarget,
                           "opacity-50": dragSnapshot.isDragging,
+                          "opacity-60": isHidden && !dragSnapshot.isDragging,
                           "text-destructive": isConflicted,
                         },
                       )}
@@ -297,6 +300,12 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                       >
                         {workspaceTitle}
                       </span>
+                      {isHidden && (
+                        <EyeOff
+                          className="w-3 h-3 text-muted-foreground shrink-0 mr-1"
+                          aria-label="Scheduled hidden"
+                        />
+                      )}
                       {isConflicted && (
                         <AlertTriangle
                           data-testid={`workspace-conflict-indicator-${workspace.id}`}
