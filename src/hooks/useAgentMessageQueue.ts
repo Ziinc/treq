@@ -83,10 +83,13 @@ export function useAgentMessageQueue({
         messagesRef.current = next;
         return next;
       });
-      setIsBusy(false);
+      // Intentional: restore idle so the user can retry / next idle pulse retries.
+      // eslint-disable-next-line require-atomic-updates -- sole writer of isBusyRef during flush
       isBusyRef.current = false;
+      setIsBusy(false);
       console.error("Failed to send queued agent message:", error);
     } finally {
+      // eslint-disable-next-line require-atomic-updates -- sole writer of flushingRef during flush
       flushingRef.current = false;
     }
   }, []);

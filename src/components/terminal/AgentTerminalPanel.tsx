@@ -28,8 +28,6 @@ import {
 import {
   ArrowDownToLine,
   Bot,
-  ChevronDown,
-  ChevronUp,
   Loader2,
   MousePointer2,
   RotateCw,
@@ -38,7 +36,6 @@ import {
   X,
 } from "lucide-react";
 import { ModelSelector } from "../ModelSelector";
-import { Input } from "../ui/input";
 import { useToast } from "../ui/toast";
 import { shellQuote } from "../../lib/shellQuote";
 import {
@@ -52,6 +49,7 @@ import {
   AgentMessageQueueButton,
   AgentMessageQueueComposer,
 } from "./AgentMessageQueue";
+import { TerminalSearchOverlay } from "./TerminalSearchOverlay";
 import { TerminalSendPreviews } from "./TerminalSendPreviews";
 
 export interface AgentTerminalPanelProps {
@@ -223,7 +221,13 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
           setIsResetting(false);
         }
       },
-      [sessionData.ptySessionId, sessionData.agent, addToast, clearQueuedMessages, markBusy],
+      [
+        sessionData.ptySessionId,
+        sessionData.agent,
+        addToast,
+        clearQueuedMessages,
+        markBusy,
+      ],
     );
 
     // Model change handler
@@ -448,68 +452,16 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
           style={{ backgroundColor: "#1e1e1e" }}
         >
           <div className="relative min-h-0 flex-1 overflow-hidden">
-            {/* Search overlay */}
             {searchVisible && !collapsed && (
-              <div className="absolute top-2 right-2 z-30 bg-background border border-border rounded-md shadow-lg p-0.5 flex items-center gap-0.5">
-                <Input
-                  ref={searchInputRef}
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Find"
-                  onKeyDown={handleSearchKeyDown}
-                  className="h-6 w-48 text-sm !outline-none !ring-0"
-                />
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        className="h-5 w-5 rounded-sm p-0 bg-background text-muted-foreground hover:text-foreground"
-                        onClick={() => runSearch("previous")}
-                        disabled={!searchQuery.trim()}
-                        aria-label="Find previous"
-                      >
-                        <ChevronUp className="w-4 h-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Previous (Shift+Enter)</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        className="h-5 w-5 rounded-sm p-0 bg-background text-muted-foreground hover:text-foreground"
-                        onClick={() => runSearch("next")}
-                        disabled={!searchQuery.trim()}
-                        aria-label="Find next"
-                      >
-                        <ChevronDown className="w-4 h-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Next (Enter)</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        className="h-5 w-5 rounded-sm p-0 bg-background text-muted-foreground hover:text-foreground"
-                        onClick={closeSearchPanel}
-                        aria-label="Close search"
-                      >
-                        <X className="w-4 h-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Close (Esc)</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
+              <TerminalSearchOverlay
+                searchInputRef={searchInputRef}
+                searchQuery={searchQuery}
+                onSearchQueryChange={setSearchQuery}
+                onSearchKeyDown={handleSearchKeyDown}
+                onFindPrevious={() => runSearch("previous")}
+                onFindNext={() => runSearch("next")}
+                onClose={closeSearchPanel}
+              />
             )}
 
             {/* Terminal */}
