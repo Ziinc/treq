@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ExternalLink, FolderOpen, Loader2 } from "lucide-react";
+import { FolderOpen, Loader2 } from "lucide-react";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
   buildResolveAgentPrompt,
@@ -8,7 +8,6 @@ import {
   getSetting,
   startResolveConflicts,
   type ResolveConflictsSession,
-  type ResolveTarget,
 } from "../lib/api";
 import { useEditorApps } from "../hooks/useEditorApps";
 import type { SessionCreationInfo } from "../types/sessions";
@@ -188,16 +187,6 @@ export const ResolveConflictsDialog: React.FC<ResolveConflictsDialogProps> = ({
           <DialogTitle>{title}</DialogTitle>
         </DialogHeader>
 
-        <p className="text-sm text-muted-foreground">
-          Treq prepares{" "}
-          <code className="text-xs">.treq/resolve/&lt;workspace&gt;/&lt;change-id&gt;/</code>{" "}
-          sandboxes (edit mode, no extra resolution commit). The agent starts in
-          the workspace resolve root. Tell it how to resolve. It can edit markers
-          or run{" "}
-          <code className="text-xs">treq resolve &lt;change-id&gt; …</code>. Work
-          is done when no change-id directories remain.
-        </p>
-
         <textarea
           className="min-h-[120px] w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
           placeholder="e.g. Prefer the workspace-side changes in README, keep both imports in lib.rs…"
@@ -206,13 +195,6 @@ export const ResolveConflictsDialog: React.FC<ResolveConflictsDialogProps> = ({
           disabled={submitting}
           data-testid="resolve-conflicts-prompt"
         />
-
-        {session && session.targets.length > 0 && (
-          <ResolveTargetList
-            targets={session.targets}
-            onOpen={openPathInEditor}
-          />
-        )}
 
         <div className="flex items-center justify-between gap-2">
           <Button
@@ -259,42 +241,3 @@ export const ResolveConflictsDialog: React.FC<ResolveConflictsDialogProps> = ({
     </Dialog>
   );
 };
-
-function ResolveTargetList({
-  targets,
-  onOpen,
-}: {
-  targets: ResolveTarget[];
-  onOpen: (path: string) => void;
-}) {
-  return (
-    <ul className="max-h-40 space-y-2 overflow-auto rounded-md border border-border p-2 text-xs">
-      {targets.map((target) => (
-        <li
-          key={target.change_id}
-          className="flex items-start justify-between gap-2"
-        >
-          <div className="min-w-0">
-            <p className="font-mono truncate">{target.change_id}</p>
-            <p className="text-muted-foreground truncate">
-              {target.description}
-            </p>
-            <p className="text-muted-foreground truncate">
-              {target.resolve_path}
-            </p>
-          </div>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="shrink-0 gap-1"
-            onClick={() => onOpen(target.resolve_path)}
-          >
-            <ExternalLink className="h-3.5 w-3.5" />
-            Open
-          </Button>
-        </li>
-      ))}
-    </ul>
-  );
-}
