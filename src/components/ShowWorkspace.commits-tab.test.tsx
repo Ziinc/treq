@@ -208,7 +208,6 @@ describe("ShowWorkspace Commits tab label", () => {
   it("hides the count pill on the home repo", async () => {
     vi.mocked(api.getWorkspaceStatus).mockResolvedValue(
       status({
-        current: null,
         commits_ahead_of_target: [],
       }),
     );
@@ -235,7 +234,6 @@ describe("ShowWorkspace Commits tab label", () => {
   it("shows a conflict warning icon on the home Commits tab when home has conflicts", async () => {
     vi.mocked(api.getWorkspaceStatus).mockResolvedValue(
       status({
-        current: null,
         has_conflicts: true,
         conflicted_files: ["home.txt"],
         commits_ahead_of_target: [],
