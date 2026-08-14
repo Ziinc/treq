@@ -34,7 +34,7 @@ it("captures the terminal sessions sidebar", async () => {
 	await captureDocument(document, {
 		name: "terminal-sessions-sidebar-01-empty",
 		expectations: [
-			"The bottom of the left sidebar has a 'SESSIONS' section header with 4 small icon buttons to its right (bot, terminal, moon, trash icons).",
+			"The bottom of the left sidebar has a 'SESSIONS' section header with 4 small icon buttons to its right (Claude brand, terminal, moon, trash icons).",
 			"The 'Close idle terminals' and 'Close all terminals' icon buttons look disabled/dimmed since there are no terminals yet, and no terminal list items are shown below the header.",
 		],
 	});
@@ -69,7 +69,7 @@ it("captures the terminal sessions sidebar", async () => {
 	await captureDocument(document, {
 		name: "terminal-sessions-sidebar-02-two-terminals",
 		expectations: [
-			"The sidebar's terminal list shows two rows: one with a terminal icon labeled 'Shell', one with a bot icon labeled 'Claude' (or similar agent name), each followed by the branch name 'feat/terminal-sidebar-demo' (possibly truncated).",
+			"The sidebar's terminal list shows two rows: one with a terminal icon labeled 'Shell', one with the Claude brand icon labeled 'Claude' (or similar agent name), each followed by the branch name 'feat/terminal-sidebar-demo' (possibly truncated).",
 			"The 'Close idle terminals' and 'Close all terminals' icon buttons no longer look disabled.",
 			"Below the sidebar, the terminal pane at the bottom of the main content area is expanded and shows both a shell terminal panel and an agent terminal panel side by side.",
 		],

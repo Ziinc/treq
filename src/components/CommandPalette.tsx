@@ -6,12 +6,12 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import { BranchSwitcher } from "./BranchSwitcher";
 import { WorkspaceDeletion } from "./WorkspaceDeletion";
 import { FilePicker } from "./FilePicker";
+import { ClaudeIcon } from "./icons/AgentIcons";
 import { CmdkFooter } from "./ui/cmdk-footer";
 import { Workspace } from "../lib/api";
 import { usePrInfoViaGh } from "../hooks/useMergeQueueStatus";
 import {
   AppWindow,
-  Bot,
   ChevronsUpDown,
   ExternalLink,
   FileSearch,
@@ -195,7 +195,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         type: "action",
         label: "Start a new agent session with a prompt",
         description: "Write a prompt and choose its workspace",
-        icon: <Bot className="w-4 h-4" />,
+        icon: <ClaudeIcon className="w-4 h-4" />,
         onSelect: onStartAgentWithPrompt,
       });
     }
@@ -206,7 +206,7 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
         type: "action",
         label: "Start a new agent terminal",
         description: "Start the default agent immediately",
-        icon: <Bot className="w-4 h-4" />,
+        icon: <ClaudeIcon className="w-4 h-4" />,
         onSelect: onStartAgentTerminal,
       });
     }

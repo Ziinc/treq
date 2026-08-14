@@ -3,7 +3,7 @@
  * Review popover) respects the repo-level default_agent setting.  Before this
  * fix, a review was always sent to a Claude terminal even when the repo had
  * codex set as its default agent.  After the fix, clicking "Plan" should open
- * a Codex terminal (Sparkles icon) instead of a Claude terminal (Bot icon).
+ * a Codex terminal (Codex brand icon) instead of a Claude terminal.
  */
 
 import * as React from "react";
@@ -111,7 +111,7 @@ it("send review to terminal opens a codex terminal when repo default_agent=codex
 		expectations: [
 			'The terminal pane at the bottom is open.',
 			'A session tab labelled "Code Review" is visible in the terminal pane.',
-			'The "Code Review" tab has a Sparkles (✨) icon — the codex agent icon — not a Bot icon (which would indicate the claude agent was launched instead).',
+			'The "Code Review" tab has the Codex brand icon (OpenAI knot mark, data-agent-icon="codex") — not the Claude brand icon.',
 		],
 	});
 }, 60000);

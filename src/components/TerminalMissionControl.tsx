@@ -1,18 +1,9 @@
-import {
-  Bot,
-  GitBranch,
-  Home,
-  Loader2,
-  Moon,
-  MousePointer2,
-  Sparkles,
-  Terminal,
-  X,
-} from "lucide-react";
+import { GitBranch, Home, Loader2, Moon, Terminal, X } from "lucide-react";
 import { useMemo } from "react";
 import type { Workspace } from "../lib/api";
 import { cn } from "../lib/utils";
 import type { WorkspaceDiffStats } from "../lib/workspace-stack";
+import { agentIconComponent } from "./icons/AgentIcons";
 import { buildMissionControlGroups } from "./terminal-mission-control/buildMissionControlGroups";
 import { useMissionControlDiffStats } from "./terminal-mission-control/useMissionControlDiffStats";
 import {
@@ -36,9 +27,7 @@ interface TerminalMissionControlProps {
 
 function getSessionIcon(session: TerminalSessionSummary) {
   if (session.kind === "shell") return Terminal;
-  if (session.agent === "codex") return Sparkles;
-  if (session.agent === "cursor") return MousePointer2;
-  return Bot;
+  return agentIconComponent(session.agent);
 }
 
 type SessionStatus = "streaming" | "idle" | "active";
