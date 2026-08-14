@@ -12,7 +12,9 @@ function file(path: string): ParsedFileChange {
 }
 
 function clickEvent(
-  overrides: Partial<Pick<React.MouseEvent, "metaKey" | "ctrlKey" | "shiftKey">> = {},
+  overrides: Partial<
+    Pick<React.MouseEvent, "metaKey" | "ctrlKey" | "shiftKey">
+  > = {},
 ): React.MouseEvent {
   return {
     metaKey: false,

@@ -141,7 +141,6 @@ export const ChangesDiffViewer = memo(
         setCollapsedFiles,
         collapsedSections,
         expandedLargeDiffs,
-        setExpandedLargeDiffs,
         largeChangesetExpanded,
         setLargeChangesetExpanded,
         unstagedFiles,
