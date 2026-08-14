@@ -146,7 +146,7 @@ export function AgentMessageQueue({
           </PopoverTrigger>
           <PopoverContent
             align={isPinned ? "center" : "end"}
-            side="bottom"
+            side="top"
             sideOffset={8}
             className="w-[24rem] space-y-2 rounded-xl p-3"
             data-testid="agent-message-queue-popover"

@@ -43,10 +43,54 @@ export const PopoverContent = React.forwardRef<
   HTMLDivElement,
   React.HTMLAttributes<HTMLDivElement> & {
     align?: string;
+    side?: "top" | "right" | "bottom" | "left";
     sideOffset?: number;
   }
->(({ className, align: _a, sideOffset: _s, ...props }, ref) => {
-  const { open } = React.useContext(PopoverContext);
-  if (!open) return null;
-  return <div ref={ref} data-state="open" className={className} {...props} />;
-});
+>(
+  (
+    { className, align = "center", side = "bottom", sideOffset = 4, ...props },
+    ref,
+  ) => {
+    const { open } = React.useContext(PopoverContext);
+    if (!open) return null;
+
+    const alignStyles: React.CSSProperties =
+      align === "start"
+        ? { left: 0 }
+        : align === "end"
+          ? { right: 0 }
+          : { left: "50%", transform: "translateX(-50%)" };
+
+    const sideStyles: React.CSSProperties =
+      side === "top"
+        ? {
+            bottom: "100%",
+            marginBottom: sideOffset,
+            ...(align === "center"
+              ? { left: "50%", transform: "translateX(-50%)" }
+              : alignStyles),
+          }
+        : side === "left"
+          ? { right: "100%", marginRight: sideOffset, top: 0 }
+          : side === "right"
+            ? { left: "100%", marginLeft: sideOffset, top: 0 }
+            : {
+                top: "100%",
+                marginTop: sideOffset,
+                ...(align === "center"
+                  ? { left: "50%", transform: "translateX(-50%)" }
+                  : alignStyles),
+              };
+
+    return (
+      <div
+        ref={ref}
+        data-state="open"
+        data-side={side}
+        className={className}
+        style={{ position: "absolute", zIndex: 50, ...sideStyles }}
+        {...props}
+      />
+    );
+  },
+);

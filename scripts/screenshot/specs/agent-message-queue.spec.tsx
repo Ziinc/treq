@@ -112,8 +112,8 @@ it("captures agent terminal message queue button and popover", async () => {
   await captureDocument(document, {
     name: "agent-message-queue-04-popover",
     expectations: [
-      "The popover lists queued messages with edit and remove actions.",
-      "The follow-up input remains inside the popover below the message list.",
+      "The popover opens above the pinned 2 queued chip.",
+      "Queued messages and the follow-up input are listed inside the popover.",
     ],
   });
 }, 60000);
