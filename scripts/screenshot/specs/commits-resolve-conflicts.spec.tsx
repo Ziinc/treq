@@ -68,7 +68,7 @@ it("captures Resolve conflicts banner on the Commits tab", async () => {
 	await user.click(screen.getByTestId("resolve-conflicts-button"));
 	await screen.findByTestId("resolve-conflicts-prompt");
 	// Resolve workspaces are prepared when the dialog opens.
-	await screen.findByText(/Resolve directories|treq resolve|_resolve-/i, {}, {
+	await screen.findByText(/Resolve directories|treq resolve|\.treq\/resolve/i, {}, {
 		timeout: 10000,
 	}).catch(() => null);
 

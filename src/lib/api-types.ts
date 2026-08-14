@@ -191,9 +191,10 @@ export interface ResolveTarget {
 
 export interface ResolveConflictsSession {
   targets: ResolveTarget[];
-  /** Absolute path the agent should start in (first target). */
+  /** Absolute path the agent should start in: `.treq/resolve/<workspace-slug>/`. */
   agent_cwd: string;
   source_workspace_id: number | null;
+  workspace_slug: string;
 }
 
 export interface ResolveCommitResult {

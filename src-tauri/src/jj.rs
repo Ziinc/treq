@@ -1586,10 +1586,13 @@ pub fn create_workspace(
 /// Create a short-lived resolve workspace checked out in *edit* mode on a
 /// conflicted commit (so `@` *is* that commit). No bookmark is created.
 ///
+/// Layout: `{repo}/.treq/resolve/{workspace_slug}/{change_id}/`
+///
 /// Returns `(jj_workspace_name, absolute_workspace_path)`.
 pub fn create_resolve_workspace(
   repo_path: &str,
   revision: &str,
+  workspace_slug: &str,
 ) -> Result<(String, String), JjError> {
   if !is_jj_workspace(repo_path) {
     return Err(JjError::NotGitRepository);
@@ -1609,17 +1612,27 @@ pub fn create_resolve_workspace(
   let conflict_paths: Vec<String> = collect_conflict_paths_from_tree(&target_commit.tree());
   drop(loaded_home);
 
-  let workspace_name = format!("_resolve-{short_change}");
-  let sanitized_name = sanitize_workspace_name(&workspace_name);
+  let slug = sanitize_workspace_name(workspace_slug);
+  let slug = if slug.is_empty() {
+    "home".to_string()
+  } else {
+    slug
+  };
+  // jj workspace names must stay unique and discoverable as resolve sandboxes.
+  let mut jj_name = sanitize_workspace_name(&format!("_resolve-{slug}-{short_change}"));
+  if jj_name.len() > 80 {
+    jj_name = format!("_resolve-{short_change}");
+  }
   let workspace_dir = Path::new(repo_path)
     .join(".treq")
-    .join("workspaces")
-    .join(&sanitized_name);
+    .join("resolve")
+    .join(&slug)
+    .join(short_change);
 
   if workspace_dir.exists() && workspace_dir.join(".jj").exists() {
     // Reuse an existing resolve workspace for this change.
     let full = workspace_dir.to_string_lossy().to_string();
-    return Ok((sanitized_name, full));
+    return Ok((jj_name, full));
   }
 
   if workspace_dir.join(".jj").exists() {
@@ -1645,7 +1658,7 @@ pub fn create_resolve_workspace(
   let parent_repo = block_on(parent_workspace.repo_loader().load_at_head())
     .map_err(|e| JjError::GitWorkspaceError(format!("Failed to load repo: {}", e)))?;
 
-  let new_ws_name: WorkspaceNameBuf = sanitized_name.clone().into();
+  let new_ws_name: WorkspaceNameBuf = jj_name.clone().into();
   let wc_factory = default_working_copy_factory();
   let (mut new_workspace, new_repo) = block_on(Workspace::init_workspace_with_existing_repo(
     &workspace_dir,
@@ -1700,10 +1713,7 @@ pub fn create_resolve_workspace(
     |e| JjError::GitWorkspaceError(format!("Failed to checkout resolve workspace: {}", e)),
   )?;
 
-  Ok((
-    sanitized_name,
-    workspace_dir.to_string_lossy().to_string(),
-  ))
+  Ok((jj_name, workspace_dir.to_string_lossy().to_string()))
 }
 
 /// Snapshot the resolve working copy (rewriting the edited conflicted commit in place).

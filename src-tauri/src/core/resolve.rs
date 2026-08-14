@@ -1,5 +1,6 @@
 use std::collections::HashMap;
-use std::path::Path;
+use std::fs;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -57,6 +58,7 @@ struct ResolveWorkspaceMeta {
   change_id: String,
   commit_id: String,
   source_workspace_id: Option<i64>,
+  workspace_slug: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -73,9 +75,10 @@ pub struct ResolveTarget {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ResolveConflictsSession {
   pub targets: Vec<ResolveTarget>,
-  /// Absolute path the agent should start in (first target).
+  /// Absolute path the agent should start in: `.treq/resolve/<workspace-slug>/`.
   pub agent_cwd: String,
   pub source_workspace_id: Option<i64>,
+  pub workspace_slug: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -89,6 +92,7 @@ pub struct ResolveCommitResult {
 pub fn is_resolve_workspace(workspace: &local_db::Workspace) -> bool {
   if workspace.workspace_name.starts_with("_resolve-")
     || workspace.branch_name.starts_with("treq/resolve/")
+    || workspace.workspace_path.starts_with("resolve/")
   {
     return true;
   }
@@ -97,6 +101,47 @@ pub fn is_resolve_workspace(workspace: &local_db::Workspace) -> bool {
     .as_deref()
     .and_then(|raw| serde_json::from_str::<ResolveWorkspaceMeta>(raw).ok())
     .is_some_and(|meta| meta.kind == RESOLVE_METADATA_KIND)
+}
+
+fn resolve_workspace_slug(repo_path: &str, workspace_id: Option<i64>) -> String {
+  if let Some(id) = workspace_id {
+    if let Ok(Some(ws)) = local_db::get_workspace_by_id(repo_path, id) {
+      let slug = jj::sanitize_workspace_name(&ws.workspace_path);
+      if !slug.is_empty() {
+        return slug;
+      }
+      let from_branch = jj::sanitize_workspace_name(&ws.branch_name);
+      if !from_branch.is_empty() {
+        return from_branch;
+      }
+    }
+  }
+  "home".to_string()
+}
+
+fn resolve_root_path(repo_path: &str, workspace_slug: &str) -> PathBuf {
+  Path::new(repo_path)
+    .join(".treq")
+    .join("resolve")
+    .join(workspace_slug)
+}
+
+fn abs_path_for_resolve_db_workspace(repo_path: &str, workspace: &local_db::Workspace) -> String {
+  // New layout stores `resolve/<slug>/<change_id>` relative to `.treq/`.
+  if workspace.workspace_path.starts_with("resolve/") {
+    return Path::new(repo_path)
+      .join(".treq")
+      .join(&workspace.workspace_path)
+      .to_string_lossy()
+      .to_string();
+  }
+  // Legacy: `_resolve-*` under `.treq/workspaces/`.
+  Path::new(repo_path)
+    .join(".treq")
+    .join("workspaces")
+    .join(&workspace.workspace_path)
+    .to_string_lossy()
+    .to_string()
 }
 
 fn find_existing_resolve_for_change(
@@ -124,18 +169,61 @@ fn conflicted_files_or_empty(path: &str) -> Vec<String> {
   jj::get_conflicted_files(path, None).unwrap_or_else(|_| Vec::new())
 }
 
+fn resolve_instruction_body(workspace_slug: &str) -> String {
+  format!(
+    r#"# Resolve conflicts for `{slug}`
+
+You are in a Treq resolve root: `.treq/resolve/{slug}/`.
+
+Each subdirectory is one conflicted change id. The product workspace is untouched.
+
+## What to do
+
+1. Open a change-id directory and fix conflict markers in the files there.
+2. Or run `treq resolve <change-id> [1|2|base|both]`.
+3. Or pipe JSON path→content replacements: `echo '{{"file": "..."}}' | treq resolve <change-id>`.
+
+`treq resolve` rewrites that commit in place. It does not create a follow-up "remove markers" commit.
+
+## When you are done
+
+When a change is fully resolved, Treq deletes that change-id directory.
+Your work is complete when no change-id directories remain under this resolve root.
+"#,
+    slug = workspace_slug
+  )
+}
+
+fn write_resolve_instruction_files(agent_cwd: &Path, workspace_slug: &str) -> Result<(), String> {
+  fs::create_dir_all(agent_cwd).map_err(|e| {
+    format!(
+      "Failed to create resolve root {}: {}",
+      agent_cwd.display(),
+      e
+    )
+  })?;
+  let body = resolve_instruction_body(workspace_slug);
+  for name in ["AGENTS.md", "CLAUDE.md", "README.md"] {
+    let path = agent_cwd.join(name);
+    fs::write(&path, &body).map_err(|e| {
+      format!(
+        "Failed to write {}: {}",
+        path.display(),
+        e
+      )
+    })?;
+  }
+  Ok(())
+}
+
 fn build_resolve_target(
   repo_path: &str,
   source_workspace_id: Option<i64>,
+  workspace_slug: &str,
   commit: &jj::JjLogCommit,
 ) -> Result<ResolveTarget, String> {
   if let Some(existing) = find_existing_resolve_for_change(repo_path, &commit.change_id)? {
-    let resolve_path = Path::new(repo_path)
-      .join(".treq")
-      .join("workspaces")
-      .join(&existing.workspace_path)
-      .to_string_lossy()
-      .to_string();
+    let resolve_path = abs_path_for_resolve_db_workspace(repo_path, &existing);
     let conflicted_files = conflicted_files_or_empty(&resolve_path);
     return Ok(ResolveTarget {
       change_id: commit.change_id.clone(),
@@ -149,7 +237,8 @@ fn build_resolve_target(
   }
 
   let (workspace_name, resolve_path) =
-    jj::create_resolve_workspace(repo_path, &commit.change_id).map_err(|e| e.to_string())?;
+    jj::create_resolve_workspace(repo_path, &commit.change_id, workspace_slug)
+      .map_err(|e| e.to_string())?;
   let conflicted_files = conflicted_files_or_empty(&resolve_path);
 
   let meta = ResolveWorkspaceMeta {
@@ -157,13 +246,16 @@ fn build_resolve_target(
     change_id: commit.change_id.clone(),
     commit_id: commit.commit_id.clone(),
     source_workspace_id,
+    workspace_slug: workspace_slug.to_string(),
   };
   let metadata = serde_json::to_string(&meta).unwrap_or_default();
   let branch_name = format!("treq/resolve/{}", commit.change_id);
+  // Directory leaf uses the same short change id as the commit log.
+  let db_path = format!("resolve/{}/{}", workspace_slug, commit.change_id);
   let workspace_id = local_db::add_workspace(
     repo_path,
     workspace_name.clone(),
-    workspace_name.clone(),
+    db_path,
     branch_name,
     Some(format!("Resolve {}", commit.change_id)),
     None,
@@ -213,20 +305,25 @@ pub fn start_resolve_conflicts(
     return Err("No conflicted commits found to resolve".to_string());
   }
 
+  let workspace_slug = resolve_workspace_slug(repo_path, workspace_id);
+  let agent_cwd_path = resolve_root_path(repo_path, &workspace_slug);
+  write_resolve_instruction_files(&agent_cwd_path, &workspace_slug)?;
+
   let mut targets = Vec::new();
   for commit in &conflicted {
-    targets.push(build_resolve_target(repo_path, workspace_id, commit)?);
+    targets.push(build_resolve_target(
+      repo_path,
+      workspace_id,
+      &workspace_slug,
+      commit,
+    )?);
   }
-
-  let agent_cwd = targets
-    .first()
-    .map(|t| t.resolve_path.clone())
-    .unwrap_or_else(|| repo_path.to_string());
 
   Ok(ResolveConflictsSession {
     targets,
-    agent_cwd,
+    agent_cwd: agent_cwd_path.to_string_lossy().to_string(),
     source_workspace_id: workspace_id,
+    workspace_slug,
   })
 }
 
@@ -251,12 +348,7 @@ fn find_resolve_target_by_revision(
       || meta.commit_id.starts_with(revision)
       || revision.starts_with(&meta.commit_id)
     {
-      let path = Path::new(repo_path)
-        .join(".treq")
-        .join("workspaces")
-        .join(&workspace.workspace_path)
-        .to_string_lossy()
-        .to_string();
+      let path = abs_path_for_resolve_db_workspace(repo_path, &workspace);
       return Ok((workspace, path));
     }
   }
@@ -267,20 +359,28 @@ fn find_resolve_target_by_revision(
   ))
 }
 
+fn remaining_change_dirs(agent_cwd: &Path) -> Vec<PathBuf> {
+  let Ok(entries) = fs::read_dir(agent_cwd) else {
+    return Vec::new();
+  };
+  entries
+    .filter_map(|entry| entry.ok())
+    .map(|entry| entry.path())
+    .filter(|path| path.is_dir() && path.join(".jj").exists())
+    .collect()
+}
+
 fn cleanup_resolve_workspace(
   repo_path: &str,
   workspace: &local_db::Workspace,
 ) -> Result<(), String> {
-  let full_path = Path::new(repo_path)
-    .join(".treq")
-    .join("workspaces")
-    .join(&workspace.workspace_path);
-  let full_path_str = full_path.to_string_lossy().to_string();
+  let full_path_str = abs_path_for_resolve_db_workspace(repo_path, workspace);
+  let full_path = Path::new(&full_path_str);
 
   // Detach `@` from the resolved change onto a disposable empty child before
   // forgetting the resolve workspace. Otherwise `remove_wc_commit` can hide the
   // rewritten change when it was the resolve WC tip.
-  if Path::new(&full_path_str).exists() {
+  if full_path.exists() {
     let _ = jj::jj_detach_resolve_workspace_wc(&full_path_str);
   }
 
@@ -288,6 +388,26 @@ fn cleanup_resolve_workspace(
   if workspace.id >= 0 {
     let _ = local_db::delete_workspace(repo_path, workspace.id);
   }
+
+  // Prefer slug from metadata; fall back to parent of the change-id dir.
+  let slug = workspace
+    .metadata
+    .as_deref()
+    .and_then(|raw| serde_json::from_str::<ResolveWorkspaceMeta>(raw).ok())
+    .map(|meta| meta.workspace_slug)
+    .unwrap_or_else(|| {
+      full_path
+        .parent()
+        .and_then(|p| p.file_name())
+        .and_then(|n| n.to_str())
+        .unwrap_or("home")
+        .to_string()
+    });
+  let agent_cwd = resolve_root_path(repo_path, &slug);
+  if remaining_change_dirs(&agent_cwd).is_empty() {
+    let _ = fs::remove_dir_all(&agent_cwd);
+  }
+
   Ok(())
 }
 
@@ -333,7 +453,7 @@ pub fn resolve_commit(
   Ok(ResolveCommitResult {
     success: true,
     message: format!(
-      "Resolved change '{}' in place and cleaned up resolve workspace",
+      "Resolved change '{}' in place and removed its resolve directory",
       revision
     ),
     change_id: revision.to_string(),
@@ -347,19 +467,29 @@ pub fn build_resolve_agent_prompt(user_prompt: &str, session: &ResolveConflictsS
   out.push_str(
     "You are resolving jj conflicts for one or more commits without creating a new resolution commit.\n",
   );
+  out.push_str(&format!(
+    "Your working directory is the resolve root: {}\n",
+    session.agent_cwd
+  ));
   out.push_str(
-    "Each directory below is a short-lived Treq resolve workspace checked out in edit mode on a conflicted change.\n",
+    "Read AGENTS.md / CLAUDE.md / README.md in that directory for the workflow.\n",
   );
   out.push_str(
-    "Edit the conflict markers in those directories, or run `treq resolve <change-id> [1|2|base|both]`.\n",
+    "Each subdirectory is a short-lived edit-mode sandbox for one conflicted change.\n",
+  );
+  out.push_str(
+    "Edit the conflict markers there, or run `treq resolve <change-id> [1|2|base|both]`.\n",
   );
   out.push_str(
     "You can also pipe a JSON object of path→content replacements: `echo '{\"file\": \"...\"}' | treq resolve <change-id>`.\n",
   );
   out.push_str(
-    "When a change is fully resolved, `treq resolve` rewrites that commit in place and deletes its resolve workspace.\n\n",
+    "When a change is fully resolved, `treq resolve` deletes that change-id directory.\n",
   );
-  out.push_str("Resolve directories:\n");
+  out.push_str(
+    "Your work is complete when no change-id directories remain under the resolve root.\n\n",
+  );
+  out.push_str("Change directories to resolve:\n");
   for target in &session.targets {
     out.push_str(&format!(
       "- change {} ({}) → {}\n  files: {}\n  description: {}\n",

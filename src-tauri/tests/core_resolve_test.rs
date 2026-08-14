@@ -108,15 +108,41 @@ fn start_resolve_creates_edit_mode_workspace_without_touching_product_wc() {
     Path::new(&target.resolve_path).join("conflict.txt").exists(),
     "conflict.txt should be materialized in resolve workspace"
   );
-  assert!(
-    target.resolve_path.contains("_resolve-")
-      || Path::new(&target.resolve_path)
-        .file_name()
-        .and_then(|n| n.to_str())
-        .is_some_and(|n| n.starts_with("_resolve-")),
-    "resolve path should use _resolve- prefix: {}",
-    target.resolve_path
+
+  let slug = jj::sanitize_workspace_name(&workspace.workspace_path);
+  let expected_prefix = Path::new(&repo.repo_path)
+    .join(".treq")
+    .join("resolve")
+    .join(&slug);
+  assert_eq!(
+    session.agent_cwd,
+    expected_prefix.to_string_lossy().to_string(),
+    "agent should start in .treq/resolve/<workspace-slug>"
   );
+  assert!(
+    target.resolve_path.starts_with(&session.agent_cwd),
+    "change-id sandbox should live under agent_cwd: {} vs {}",
+    target.resolve_path,
+    session.agent_cwd
+  );
+  assert_eq!(
+    Path::new(&target.resolve_path)
+      .file_name()
+      .and_then(|n| n.to_str()),
+    Some(target.change_id.as_str()),
+    "leaf dir should be the change id"
+  );
+
+  for name in ["AGENTS.md", "CLAUDE.md", "README.md"] {
+    let path = Path::new(&session.agent_cwd).join(name);
+    assert!(path.exists(), "missing instruction file {}", name);
+    let body = fs::read_to_string(&path).expect("read instruction file");
+    assert!(
+      body.contains("treq resolve"),
+      "{} should document treq resolve",
+      name
+    );
+  }
 
   // Product WC dirty file must still exist and not be cleared.
   let unrelated = Path::new(&product_path).join("unrelated.txt");
@@ -177,7 +203,11 @@ fn treq_resolve_side_two_clears_conflict_and_cleans_up_without_extra_commit() {
   assert!(result.success, "{}", result.message);
   assert!(
     !Path::new(&resolve_path).exists(),
-    "resolve workspace should be cleaned up after success"
+    "change-id resolve directory should be removed after success"
+  );
+  assert!(
+    !Path::new(&session.agent_cwd).exists(),
+    "slug resolve root should be removed once no change-id dirs remain"
   );
 
   let after = core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)

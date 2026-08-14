@@ -143,15 +143,19 @@ export const ResolveConflictsDialog: React.FC<ResolveConflictsDialogProps> = ({
 
       const dbSessionId = await createSession(
         repoPath,
-        primary.workspace_id,
+        // Bind the agent session to the product workspace when available so
+        // sidebar/session UI stays on the user's stack, not a hidden resolve WC.
+        resolveSession.source_workspace_id ?? primary.workspace_id,
         sessionName,
       );
 
       onSessionCreated({
         sessionId: dbSessionId,
         sessionName,
-        workspaceId: primary.workspace_id,
-        workspacePath: primary.resolve_path,
+        workspaceId:
+          resolveSession.source_workspace_id ?? primary.workspace_id,
+        // Agent cwd is the resolve slug root; change-id dirs live under it.
+        workspacePath: resolveSession.agent_cwd,
         repoPath,
         pendingPrompt: fullPrompt,
         permissionMode: "acceptEdits",
@@ -185,11 +189,13 @@ export const ResolveConflictsDialog: React.FC<ResolveConflictsDialogProps> = ({
         </DialogHeader>
 
         <p className="text-sm text-muted-foreground">
-          Treq will create a short-lived resolve workspace for each conflicted
-          commit (edit mode — no extra resolution commit). Tell the agent how
-          you want the conflicts resolved. It can edit markers in those
-          directories or run{" "}
-          <code className="text-xs">treq resolve &lt;change-id&gt; …</code>.
+          Treq prepares{" "}
+          <code className="text-xs">.treq/resolve/&lt;workspace&gt;/&lt;change-id&gt;/</code>{" "}
+          sandboxes (edit mode, no extra resolution commit). The agent starts in
+          the workspace resolve root. Tell it how to resolve. It can edit markers
+          or run{" "}
+          <code className="text-xs">treq resolve &lt;change-id&gt; …</code>. Work
+          is done when no change-id directories remain.
         </p>
 
         <textarea
@@ -214,9 +220,9 @@ export const ResolveConflictsDialog: React.FC<ResolveConflictsDialogProps> = ({
             variant="outline"
             size="sm"
             className="gap-1.5"
-            disabled={submitting || preparing || !session?.targets[0]}
+            disabled={submitting || preparing || !session?.agent_cwd}
             onClick={() => {
-              const path = session?.targets[0]?.resolve_path;
+              const path = session?.agent_cwd;
               if (path) void openPathInEditor(path);
             }}
           >
