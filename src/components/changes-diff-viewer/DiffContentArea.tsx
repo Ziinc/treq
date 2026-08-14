@@ -102,8 +102,6 @@ interface DiffContentAreaProps {
   getUnplacedThreadsForFile: (filePath: string) => GhReviewThread[];
   collapsedThreadIds: Set<string>;
   toggleThreadCollapse: (threadId: string) => void;
-  expandedOutdatedGroups: Set<string>;
-  toggleOutdatedGroup: (filePath: string) => void;
   // file row props
   collapsedFiles: Set<string>;
   viewedFiles: Map<string, { viewedAt: string; contentHash: string }>;
@@ -185,8 +183,6 @@ export function DiffContentArea({
   getUnplacedThreadsForFile,
   collapsedThreadIds,
   toggleThreadCollapse,
-  expandedOutdatedGroups,
-  toggleOutdatedGroup,
   collapsedFiles,
   viewedFiles,
   expandedLargeDiffs,
@@ -413,8 +409,6 @@ export function DiffContentArea({
                     getUnplacedThreadsForFile={getUnplacedThreadsForFile}
                     collapsedThreadIds={collapsedThreadIds}
                     toggleThreadCollapse={toggleThreadCollapse}
-                    expandedOutdatedGroups={expandedOutdatedGroups}
-                    toggleOutdatedGroup={toggleOutdatedGroup}
                     showCommentInput={showCommentInput}
                     pendingComment={pendingComment}
                     editingCommentId={editingCommentId}
@@ -465,8 +459,6 @@ export function DiffContentArea({
                     getUnplacedThreadsForFile={getUnplacedThreadsForFile}
                     collapsedThreadIds={collapsedThreadIds}
                     toggleThreadCollapse={toggleThreadCollapse}
-                    expandedOutdatedGroups={expandedOutdatedGroups}
-                    toggleOutdatedGroup={toggleOutdatedGroup}
                     showCommentInput={showCommentInput}
                     pendingComment={pendingComment}
                     editingCommentId={editingCommentId}

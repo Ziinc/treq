@@ -36,6 +36,56 @@ export function formatGithubCommentDate(iso: string): string {
   });
 }
 
+function AuthorAvatar({
+  login,
+  avatarUrl,
+  sizeClass = "w-8 h-8",
+}: {
+  login: string;
+  avatarUrl: string | null | undefined;
+  sizeClass?: string;
+}) {
+  if (avatarUrl) {
+    return (
+      <img
+        src={avatarUrl}
+        alt={login}
+        className={`${sizeClass} rounded-full flex-shrink-0`}
+      />
+    );
+  }
+  return (
+    <div
+      className={`${sizeClass} rounded-full bg-muted flex items-center justify-center text-xs font-medium text-muted-foreground flex-shrink-0`}
+    >
+      {login.slice(0, 1).toUpperCase()}
+    </div>
+  );
+}
+
+function AuthorProfileLink({
+  login,
+  className,
+}: {
+  login: string;
+  className?: string;
+}) {
+  const profileUrl = `https://github.com/${login}`;
+  return (
+    <a
+      href={profileUrl}
+      className={className}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        void openUrl(profileUrl);
+      }}
+    >
+      @{login}
+    </a>
+  );
+}
+
 /** Read-only GitHub PR review comment thread, rendered inline in the diff. */
 export function GithubCommentCard({
   thread,
@@ -43,10 +93,12 @@ export function GithubCommentCard({
   onToggleCollapse,
   onQuote,
 }: GithubCommentCardProps) {
+  const [firstComment] = thread.comments;
+
   return (
     <div className="rounded-md border border-sky-500/30 bg-sky-500/5 overflow-hidden">
       <button
-        className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-sky-500/10 font-sans"
+        className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-sky-500/10 font-sans min-w-0"
         onClick={onToggleCollapse}
         data-testid="github-thread-toggle"
       >
@@ -55,16 +107,39 @@ export function GithubCommentCard({
         ) : (
           <ChevronDown className="w-3 h-3 text-muted-foreground flex-shrink-0" />
         )}
+        {collapsed && firstComment && (
+          <>
+            <AuthorAvatar
+              login={firstComment.author.login}
+              avatarUrl={firstComment.author.avatar_url}
+              sizeClass="w-5 h-5"
+            />
+            <AuthorProfileLink
+              login={firstComment.author.login}
+              className="text-xs font-medium font-sans hover:underline text-foreground flex-shrink-0"
+            />
+          </>
+        )}
         {thread.is_resolved && (
-          <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted text-muted-foreground text-[10px] font-medium">
+          <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-muted text-muted-foreground text-[10px] font-medium flex-shrink-0">
             <CheckCircle2 className="w-3 h-3" />
             Resolved
           </span>
         )}
-        <span className="text-xs text-muted-foreground">
-          {thread.comments.length} comment
-          {thread.comments.length !== 1 ? "s" : ""}
-        </span>
+        {collapsed && firstComment && (
+          <span
+            className="text-xs text-muted-foreground/70 truncate min-w-0 font-sans"
+            data-testid="github-thread-collapsed-preview"
+          >
+            {firstComment.body.replace(/\s+/g, " ").trim()}
+          </span>
+        )}
+        {!collapsed && (
+          <span className="text-xs text-muted-foreground">
+            {thread.comments.length} comment
+            {thread.comments.length !== 1 ? "s" : ""}
+          </span>
+        )}
       </button>
       {!collapsed && (
         <div className="px-3 pb-3 space-y-2">
@@ -89,7 +164,6 @@ function GithubCommentBody({
   onQuote: (quote: GithubQuote) => void;
 }) {
   const bodyRef = useRef<HTMLDivElement>(null);
-  const profileUrl = `https://github.com/${comment.author.login}`;
 
   const quoteComment = (text: string) =>
     onQuote({
@@ -105,28 +179,14 @@ function GithubCommentBody({
       data-testid="github-comment-card"
     >
       <div className="flex items-center gap-2 mb-1.5">
-        {comment.author.avatar_url ? (
-          <img
-            src={comment.author.avatar_url}
-            alt={comment.author.login}
-            className="w-8 h-8 rounded-full flex-shrink-0"
-          />
-        ) : (
-          <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-xs font-medium text-muted-foreground flex-shrink-0">
-            {comment.author.login.slice(0, 1).toUpperCase()}
-          </div>
-        )}
-        <a
-          href={profileUrl}
+        <AuthorAvatar
+          login={comment.author.login}
+          avatarUrl={comment.author.avatar_url}
+        />
+        <AuthorProfileLink
+          login={comment.author.login}
           className="text-xs font-medium font-sans hover:underline text-foreground"
-          onClick={(event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            void openUrl(profileUrl);
-          }}
-        >
-          @{comment.author.login}
-        </a>
+        />
         <span className="text-xs text-muted-foreground font-sans">
           {formatGithubCommentDate(comment.created_at)}
         </span>

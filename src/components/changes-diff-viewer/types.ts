@@ -161,8 +161,6 @@ export interface FileRowComponentProps {
   getUnplacedThreadsForFile: (filePath: string) => GhReviewThread[];
   collapsedThreadIds: Set<string>;
   toggleThreadCollapse: (threadId: string) => void;
-  expandedOutdatedGroups: Set<string>;
-  toggleOutdatedGroup: (filePath: string) => void;
   showCommentInput: boolean;
   pendingComment: PendingComment | null;
   editingCommentId: string | null;

@@ -250,8 +250,6 @@ export const ChangesDiffViewer = memo(
         getUnplacedThreadsForFile,
         collapsedThreadIds,
         toggleThreadCollapse,
-        expandedOutdatedGroups,
-        toggleOutdatedGroup,
       } = useGithubReviewThreads({
         repoPath,
         branchName,
@@ -618,8 +616,6 @@ export const ChangesDiffViewer = memo(
               getUnplacedThreadsForFile={getUnplacedThreadsForFile}
               collapsedThreadIds={collapsedThreadIds}
               toggleThreadCollapse={toggleThreadCollapse}
-              expandedOutdatedGroups={expandedOutdatedGroups}
-              toggleOutdatedGroup={toggleOutdatedGroup}
               collapsedFiles={collapsedFiles}
               viewedFiles={viewedFiles}
               expandedLargeDiffs={expandedLargeDiffs}

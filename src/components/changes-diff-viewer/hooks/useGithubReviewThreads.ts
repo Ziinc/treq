@@ -103,27 +103,11 @@ export function useGithubReviewThreads({
     });
   }, []);
 
-  // Unplaced/outdated groups are collapsed by default, per-file.
-  const [expandedOutdatedGroups, setExpandedOutdatedGroups] = useState<
-    Set<string>
-  >(new Set());
-
-  const toggleOutdatedGroup = useCallback((filePath: string) => {
-    setExpandedOutdatedGroups((prev) => {
-      const next = new Set(prev);
-      if (next.has(filePath)) next.delete(filePath);
-      else next.add(filePath);
-      return next;
-    });
-  }, []);
-
   return {
     threads,
     getThreadsForLine,
     getUnplacedThreadsForFile,
     collapsedThreadIds,
     toggleThreadCollapse,
-    expandedOutdatedGroups,
-    toggleOutdatedGroup,
   };
 }
