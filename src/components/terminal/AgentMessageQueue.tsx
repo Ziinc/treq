@@ -92,10 +92,7 @@ export function AgentMessageQueue({
   const canSend = draft.trim().length > 0;
 
   return (
-    <div
-      data-testid="agent-message-queue"
-      className={className}
-    >
+    <div data-testid="agent-message-queue" className={className}>
       <Popover open={open} onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild>
           <Button
