@@ -510,7 +510,6 @@ describe("Dashboard - workspace list", () => {
       render(<Dashboard />);
 
       const homeRepoElement = await screen.findByTestId("home-repo-row");
-      expect(homeRepoElement).not.toHaveClass("bg-primary/20");
       expect(
         within(homeRepoElement).getByRole("button", { name: "Start agent" }),
       ).toBeTruthy();
@@ -524,12 +523,30 @@ describe("Dashboard - workspace list", () => {
       ).toBeTruthy();
     });
 
-    it("always shows agent, shell, and stack buttons on workspace rows", async () => {
+    it("keeps home and workspace action buttons visible when unselected", async () => {
       render(<Dashboard />);
 
-      const alphaRow = (await screen.findByText("feat/alpha")).closest(
-        "div",
-      ) as HTMLElement;
+      const homeRepoElement = await screen.findByTestId("home-repo-row");
+      const alphaLabel = await findSidebarBranchElement("feat/alpha");
+      const alphaRow = alphaLabel.closest("div") as HTMLElement;
+      await user.click(alphaLabel);
+
+      expect(alphaRow).toHaveClass("bg-primary/20");
+      expect(homeRepoElement).not.toHaveClass("bg-primary/20");
+      expect(
+        within(homeRepoElement).getByRole("button", { name: "Start agent" }),
+      ).toBeTruthy();
+      expect(
+        within(homeRepoElement).getByRole("button", { name: "Open shell" }),
+      ).toBeTruthy();
+      expect(
+        within(homeRepoElement).getByRole("button", {
+          name: "Stack a workspace",
+        }),
+      ).toBeTruthy();
+
+      await user.click(homeRepoElement);
+      expect(homeRepoElement).toHaveClass("bg-primary/20");
       expect(alphaRow).not.toHaveClass("bg-primary/20");
       expect(
         within(alphaRow).getByRole("button", { name: "Start agent" }),
