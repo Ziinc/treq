@@ -316,7 +316,7 @@ describe("Review - conflict rendering contract", () => {
       expect(pill.className).not.toMatch(/destructive/);
     });
 
-    expect(screen.getByText("Changes")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^Changes$/ })).toBeTruthy();
   });
 
   it("unresolved conflict state: Conflicts section is rendered from backend metadata", async () => {
