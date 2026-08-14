@@ -63,24 +63,12 @@ export const PopoverContent = React.forwardRef<
 
     const sideStyles: React.CSSProperties =
       side === "top"
-        ? {
-            bottom: "100%",
-            marginBottom: sideOffset,
-            ...(align === "center"
-              ? { left: "50%", transform: "translateX(-50%)" }
-              : alignStyles),
-          }
+        ? { bottom: "100%", marginBottom: sideOffset, ...alignStyles }
         : side === "left"
           ? { right: "100%", marginRight: sideOffset, top: 0 }
           : side === "right"
             ? { left: "100%", marginLeft: sideOffset, top: 0 }
-            : {
-                top: "100%",
-                marginTop: sideOffset,
-                ...(align === "center"
-                  ? { left: "50%", transform: "translateX(-50%)" }
-                  : alignStyles),
-              };
+            : { top: "100%", marginTop: sideOffset, ...alignStyles };
 
     return (
       <div

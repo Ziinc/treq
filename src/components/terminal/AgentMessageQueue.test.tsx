@@ -107,6 +107,7 @@ describe("AgentMessageQueue", () => {
     await user.click(screen.getByTestId("agent-message-queue-button"));
 
     const popover = await screen.findByTestId("agent-message-queue-popover");
+    expect(popover).toHaveAttribute("data-side", "top");
     expect(within(popover).getByText("first follow-up")).toBeInTheDocument();
     expect(within(popover).getByText("second follow-up")).toBeInTheDocument();
     expect(

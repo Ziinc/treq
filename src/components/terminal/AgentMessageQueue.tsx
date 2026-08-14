@@ -133,143 +133,152 @@ export function AgentMessageQueue({
     <div
       data-testid="agent-message-queue"
       data-variant={variant}
-      className={cn(
-        isPinned &&
-          "pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-center pt-2.5",
-        className,
-      )}
+      className={className}
     >
-      <div className={cn(isPinned && "pointer-events-auto")}>
-        <Popover open={open} onOpenChange={handleOpenChange}>
-          <PopoverTrigger asChild>
-            {variant === "toolbar" ? toolbarButton : pinnedButton}
-          </PopoverTrigger>
-          <PopoverContent
-            align={isPinned ? "center" : "end"}
-            side="top"
-            sideOffset={8}
-            className="w-[24rem] space-y-2 rounded-xl p-3"
-            data-testid="agent-message-queue-popover"
-          >
-            <Label className="px-0.5 text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
-              {count === 0 ? "Queue a follow-up" : "Queued messages"}
-            </Label>
+      <Popover open={open} onOpenChange={handleOpenChange}>
+        <PopoverTrigger asChild>
+          {variant === "toolbar" ? toolbarButton : pinnedButton}
+        </PopoverTrigger>
+        <PopoverContent
+          align={isPinned ? "center" : "end"}
+          side="top"
+          sideOffset={8}
+          // Chip sits near the terminal top; keep the popover above it instead of flipping down.
+          avoidCollisions={false}
+          className="w-[24rem] space-y-2 rounded-xl p-3"
+          data-testid="agent-message-queue-popover"
+        >
+          <Label className="px-0.5 text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+            {count === 0 ? "Queue a follow-up" : "Queued messages"}
+          </Label>
 
-            {count > 0 && (
-              <ul className="flex max-h-56 flex-col gap-1.5 overflow-y-auto">
-                {messages.map((message, index) => {
-                  const isEditing = editingId === message.id;
-                  return (
-                    <li key={message.id}>
-                      <Card
-                        data-testid={`agent-message-queue-item-${message.id}`}
-                        className="border-border/60 bg-muted/40 p-2.5 shadow-none"
-                      >
-                        {isEditing ? (
-                          <div className="flex flex-col gap-2">
-                            <Textarea
-                              value={editDraft}
-                              onChange={(event) =>
-                                setEditDraft(event.target.value)
-                              }
-                              data-testid={`agent-message-queue-edit-input-${message.id}`}
-                              className="min-h-[72px] resize-y text-sm"
-                              autoFocus
-                            />
-                            <div className="flex justify-end gap-1.5">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="xs"
-                                onClick={cancelEdit}
-                              >
-                                Cancel
-                              </Button>
-                              <Button
-                                type="button"
-                                size="xs"
-                                data-testid={`agent-message-queue-save-${message.id}`}
-                                onClick={commitEdit}
-                                disabled={!editDraft.trim()}
-                              >
-                                Save
-                              </Button>
-                            </div>
+          {count > 0 && (
+            <ul className="flex max-h-56 flex-col gap-1.5 overflow-y-auto">
+              {messages.map((message, index) => {
+                const isEditing = editingId === message.id;
+                return (
+                  <li key={message.id}>
+                    <Card
+                      data-testid={`agent-message-queue-item-${message.id}`}
+                      className="border-border/60 bg-muted/40 p-2.5 shadow-none"
+                    >
+                      {isEditing ? (
+                        <div className="flex flex-col gap-2">
+                          <Textarea
+                            value={editDraft}
+                            onChange={(event) =>
+                              setEditDraft(event.target.value)
+                            }
+                            data-testid={`agent-message-queue-edit-input-${message.id}`}
+                            className="min-h-[72px] resize-y text-sm"
+                            autoFocus
+                          />
+                          <div className="flex justify-end gap-1.5">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="xs"
+                              onClick={cancelEdit}
+                            >
+                              Cancel
+                            </Button>
+                            <Button
+                              type="button"
+                              size="xs"
+                              data-testid={`agent-message-queue-save-${message.id}`}
+                              onClick={commitEdit}
+                              disabled={!editDraft.trim()}
+                            >
+                              Save
+                            </Button>
                           </div>
-                        ) : (
-                          <div className="flex items-start gap-2.5">
-                            <span className="mt-0.5 w-4 shrink-0 text-[11px] tabular-nums text-muted-foreground">
-                              {index + 1}
-                            </span>
-                            <p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-[13px] leading-relaxed text-foreground">
-                              {message.text}
-                            </p>
-                            <div className="flex shrink-0 items-center gap-0.5">
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon-xs"
-                                aria-label={`Edit queued message ${index + 1}`}
-                                data-testid={`agent-message-queue-edit-${message.id}`}
-                                className="text-muted-foreground"
-                                onClick={() => startEdit(message)}
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon-xs"
-                                aria-label={`Remove queued message ${index + 1}`}
-                                data-testid={`agent-message-queue-remove-${message.id}`}
-                                className="text-muted-foreground hover:text-destructive"
-                                onClick={() => onRemove(message.id)}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-start gap-2.5">
+                          <span className="mt-0.5 w-4 shrink-0 text-[11px] tabular-nums text-muted-foreground">
+                            {index + 1}
+                          </span>
+                          <p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-[13px] leading-relaxed text-foreground">
+                            {message.text}
+                          </p>
+                          <div className="flex shrink-0 items-center gap-0.5">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-xs"
+                              aria-label={`Edit queued message ${index + 1}`}
+                              data-testid={`agent-message-queue-edit-${message.id}`}
+                              className="text-muted-foreground"
+                              onClick={() => startEdit(message)}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon-xs"
+                              aria-label={`Remove queued message ${index + 1}`}
+                              data-testid={`agent-message-queue-remove-${message.id}`}
+                              className="text-muted-foreground hover:text-destructive"
+                              onClick={() => onRemove(message.id)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
                           </div>
-                        )}
-                      </Card>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
+                        </div>
+                      )}
+                    </Card>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
 
-            <Card className="gap-0 overflow-hidden border-input p-0 shadow-none focus-within:border-primary focus-within:ring-1 focus-within:ring-ring">
-              <Textarea
-                value={draft}
-                onChange={(event) => setDraft(event.target.value)}
-                onKeyDown={handleComposerKeyDown}
-                placeholder="Add a follow-up…"
-                aria-label="Queue agent message"
-                data-testid="agent-message-queue-composer"
-                rows={2}
-                className={cn(
-                  "max-h-28 min-h-[52px] resize-none border-0 bg-transparent",
-                  "px-3 pb-1 pt-2.5 text-[13px] shadow-none",
-                  "focus-visible:ring-0 focus-visible:ring-offset-0 caret-primary",
-                )}
-              />
-              <div className="flex items-center justify-between gap-2 px-2 pb-2 pt-0.5">
-                <span className="px-1 text-[10px] text-muted-foreground">
-                  Enter to queue · sends when idle
-                </span>
-                <Button
-                  type="button"
-                  size="icon-xs"
-                  aria-label="Add to queue"
-                  disabled={!canSend}
-                  onClick={submitDraft}
-                  className="h-7 w-7 rounded-full"
-                >
-                  <ArrowUp className="h-3.5 w-3.5" strokeWidth={2.5} />
-                </Button>
-              </div>
-            </Card>
-          </PopoverContent>
-        </Popover>
+          <Card className="gap-0 overflow-hidden border-input p-0 shadow-none focus-within:border-primary focus-within:ring-1 focus-within:ring-ring">
+            <Textarea
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              onKeyDown={handleComposerKeyDown}
+              placeholder="Add a follow-up…"
+              aria-label="Queue agent message"
+              data-testid="agent-message-queue-composer"
+              rows={2}
+              className={cn(
+                "max-h-28 min-h-[52px] resize-none border-0 bg-transparent",
+                "px-3 pb-1 pt-2.5 text-[13px] shadow-none",
+                "focus-visible:ring-0 focus-visible:ring-offset-0 caret-primary",
+              )}
+            />
+            <div className="flex items-center justify-between gap-2 px-2 pb-2 pt-0.5">
+              <span className="px-1 text-[10px] text-muted-foreground">
+                Enter to queue · sends when idle
+              </span>
+              <Button
+                type="button"
+                size="icon-xs"
+                aria-label="Add to queue"
+                disabled={!canSend}
+                onClick={submitDraft}
+                className="h-7 w-7 rounded-full"
+              >
+                <ArrowUp className="h-3.5 w-3.5" strokeWidth={2.5} />
+              </Button>
+            </div>
+          </Card>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
+
+/** Pinned chip overlay above the terminal scroll area (avoids clipping upward popovers). */
+export function PinnedAgentMessageQueue(
+  props: Omit<AgentMessageQueueProps, "variant">,
+) {
+  return (
+    <div className="relative z-20 flex h-0 justify-center overflow-visible">
+      <div className="absolute top-2">
+        <AgentMessageQueue {...props} variant="pinned" />
       </div>
     </div>
   );

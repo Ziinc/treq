@@ -45,7 +45,10 @@ import {
 } from "../../lib/agentCommand";
 import { useAgentMessageQueue } from "../../hooks/useAgentMessageQueue";
 import { type ClaudeSessionData } from "./types";
-import { AgentMessageQueue } from "./AgentMessageQueue";
+import {
+  AgentMessageQueue,
+  PinnedAgentMessageQueue,
+} from "./AgentMessageQueue";
 import { TerminalSearchOverlay } from "./TerminalSearchOverlay";
 import { TerminalSendPreviews } from "./TerminalSendPreviews";
 
@@ -466,11 +469,20 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
           </div>
         </div>
 
-        {/* Terminal with search overlay + pinned queue chip */}
         <div
-          className="flex flex-1 min-h-0 flex-col overflow-hidden border-r border-border"
+          className="flex min-h-0 flex-1 flex-col border-r border-border"
           style={{ backgroundColor: "#1e1e1e" }}
         >
+          {isModelLoaded && queuedMessages.length > 0 && (
+            <PinnedAgentMessageQueue
+              messages={queuedMessages}
+              onEnqueue={handleEnqueueMessage}
+              onRemove={removeQueuedMessage}
+              onUpdate={updateQueuedMessage}
+              open={queuePopoverOpen}
+              onOpenChange={setQueuePopoverOpen}
+            />
+          )}
           <div className="relative min-h-0 flex-1 overflow-hidden">
             {searchVisible && !collapsed && (
               <TerminalSearchOverlay
@@ -484,20 +496,8 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
               />
             )}
 
-            {/* Terminal */}
             {isModelLoaded ? (
               <>
-                {queuedMessages.length > 0 && (
-                  <AgentMessageQueue
-                    variant="pinned"
-                    messages={queuedMessages}
-                    onEnqueue={handleEnqueueMessage}
-                    onRemove={removeQueuedMessage}
-                    onUpdate={updateQueuedMessage}
-                    open={queuePopoverOpen}
-                    onOpenChange={setQueuePopoverOpen}
-                  />
-                )}
                 <TerminalSendPreviews
                   ptySessionId={sessionData.ptySessionId}
                   isActive={!!isActive}
@@ -527,7 +527,7 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
                 />
               </>
             ) : (
-              <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
+              <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
                 Loading...
               </div>
             )}
