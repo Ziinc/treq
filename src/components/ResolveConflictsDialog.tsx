@@ -36,6 +36,7 @@ export const ResolveConflictsDialog: React.FC<ResolveConflictsDialogProps> = ({
 }) => {
   const [prompt, setPrompt] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [preparing, setPreparing] = useState(false);
   const [session, setSession] = useState<ResolveConflictsSession | null>(null);
   const { addToast } = useToast();
   const editorApps = useEditorApps();
@@ -45,8 +46,34 @@ export const ResolveConflictsDialog: React.FC<ResolveConflictsDialogProps> = ({
       setPrompt("");
       setSession(null);
       setSubmitting(false);
+      setPreparing(false);
+      return;
     }
-  }, [open]);
+
+    let cancelled = false;
+    setPreparing(true);
+    startResolveConflicts(repoPath, workspaceId, changeIds)
+      .then((resolveSession) => {
+        if (!cancelled) setSession(resolveSession);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          addToast({
+            title: "Failed to prepare resolve workspaces",
+            description:
+              error instanceof Error ? error.message : String(error),
+            type: "error",
+          });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setPreparing(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, repoPath, workspaceId, changeIds, addToast]);
 
   const title = useMemo(() => {
     if (changeIds && changeIds.length === 1) {
@@ -82,11 +109,9 @@ export const ResolveConflictsDialog: React.FC<ResolveConflictsDialogProps> = ({
   const handleResolve = async () => {
     setSubmitting(true);
     try {
-      const resolveSession = await startResolveConflicts(
-        repoPath,
-        workspaceId,
-        changeIds,
-      );
+      const resolveSession =
+        session ??
+        (await startResolveConflicts(repoPath, workspaceId, changeIds));
       setSession(resolveSession);
 
       const fullPrompt = await buildResolveAgentPrompt(
@@ -189,7 +214,7 @@ export const ResolveConflictsDialog: React.FC<ResolveConflictsDialogProps> = ({
             variant="outline"
             size="sm"
             className="gap-1.5"
-            disabled={submitting || !session?.targets[0]}
+            disabled={submitting || preparing || !session?.targets[0]}
             onClick={() => {
               const path = session?.targets[0]?.resolve_path;
               if (path) void openPathInEditor(path);
@@ -210,13 +235,13 @@ export const ResolveConflictsDialog: React.FC<ResolveConflictsDialogProps> = ({
             <Button
               type="button"
               onClick={() => void handleResolve()}
-              disabled={submitting}
+              disabled={submitting || preparing || !session}
               data-testid="resolve-conflicts-submit"
             >
-              {submitting ? (
+              {submitting || preparing ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Starting…
+                  {preparing ? "Preparing…" : "Starting…"}
                 </>
               ) : (
                 "Resolve"

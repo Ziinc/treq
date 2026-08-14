@@ -67,13 +67,18 @@ it("captures Resolve conflicts banner on the Commits tab", async () => {
 
 	await user.click(screen.getByTestId("resolve-conflicts-button"));
 	await screen.findByTestId("resolve-conflicts-prompt");
+	// Resolve workspaces are prepared when the dialog opens.
+	await screen.findByText(/Resolve directories|treq resolve|_resolve-/i, {}, {
+		timeout: 10000,
+	}).catch(() => null);
 
 	await captureDocument(document, {
 		name: "commits-resolve-conflicts-02-dialog",
 		expectations: [
 			'A dialog titled "Resolve conflicts…" is open.',
 			"A prompt textarea is visible for agent instructions.",
-			'A primary Resolve button is visible in the dialog footer.',
+			"Open in editor and Resolve actions are visible in the dialog footer.",
+			"Prepared resolve directory details are listed when ready.",
 		],
 	});
 });
