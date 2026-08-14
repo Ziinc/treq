@@ -70,6 +70,10 @@ import {
 } from "../lib/git-utils";
 import { reviewChangeCountQueryKey } from "../lib/review-change-count";
 import { getReviewTabPill, reviewTabPillClassName } from "../lib/reviewTabPill";
+import {
+  commitsTabCountClassName,
+  getCommitsTabLabel,
+} from "../lib/commitsTabLabel";
 import { cn, getFullWorkspacePath, resolveReadmeImageSrc } from "../lib/utils";
 import { sumWorkspaceLocFromLog } from "../lib/workspace-stack";
 import type { SessionCreationInfo } from "../types/sessions";
@@ -444,6 +448,24 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
       workspaceStatusData?.has_changes,
       workspaceStatusData?.commits_ahead_of_target?.length,
       hasWorkspaceCommits,
+    ]);
+
+    const commitsTabLabel = useMemo(() => {
+      const isHomeRepo = !workspace;
+      const commitCount =
+        workspaceStatusData?.commits_ahead_of_target?.length ?? 0;
+      const hasConflict =
+        conflictCount > 0 || Boolean(workspaceStatusData?.has_conflicts);
+      return getCommitsTabLabel({
+        isHomeRepo,
+        commitCount,
+        hasConflict,
+      });
+    }, [
+      workspace,
+      workspaceStatusData?.commits_ahead_of_target?.length,
+      workspaceStatusData?.has_conflicts,
+      conflictCount,
     ]);
 
     const { data: overviewData, isPending: overviewPending } = useQuery({
@@ -1131,6 +1153,24 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
               >
                 <GitCommitHorizontal className="w-4 h-4" />
                 <span>Commits</span>
+                {commitsTabLabel?.kind === "count" && (
+                  <span
+                    data-testid="commits-tab-count"
+                    className={cn(
+                      "rounded-full px-2 py-0.5 text-xs font-medium transition-colors",
+                      commitsTabCountClassName(commitsTabLabel.tone),
+                    )}
+                  >
+                    {commitsTabLabel.count}
+                  </span>
+                )}
+                {commitsTabLabel?.kind === "home-conflict" && (
+                  <AlertTriangle
+                    data-testid="commits-tab-conflict-icon"
+                    className="h-3.5 w-3.5 text-destructive"
+                    aria-label="Conflicts in home repository"
+                  />
+                )}
               </TabsTrigger>
               <TabsTrigger
                 value="changes"
