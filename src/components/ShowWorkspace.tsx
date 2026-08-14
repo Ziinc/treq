@@ -89,6 +89,7 @@ import {
   TargetBranchSelector,
 } from "./TargetBranchSelector";
 import { TaskInput } from "./TaskInput";
+import { SubmodulesPanel } from "./SubmodulesPanel";
 import { Button } from "./ui/button";
 import {
   DropdownMenu,
@@ -1233,6 +1234,12 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
                       focusRequest={taskInputFocusRequest}
                       onSessionCreated={onSessionCreated}
                     />
+                    {effectiveRepoPath && (
+                      <SubmodulesPanel
+                        repoPath={effectiveRepoPath}
+                        workspaceId={workspace?.id ?? null}
+                      />
+                    )}
                     {/* Stack — shown for any workspace in a multi-workspace
 										    stack, including the root (whose target is the default
 										    branch, not another workspace). The panel returns null

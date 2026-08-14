@@ -8,6 +8,7 @@ import type {
   GhPullRequest,
   GhReviewThread,
   GitRemoteInfo,
+  GitSubmodule,
   PrCiStatus,
   HomeRebaseDryRunResult,
   JjBranch,
@@ -131,6 +132,19 @@ export const getWorkspaceChangedFiles = (
   workspaceId: number | null,
 ): Promise<JjFileChange[]> =>
   invoke("get_workspace_changed_files", { repoPath, workspaceId });
+
+export const listGitSubmodules = (
+  repoPath: string,
+  workspaceId: number | null,
+): Promise<GitSubmodule[]> =>
+  invoke("list_git_submodules", { repoPath, workspaceId });
+
+export const updateGitSubmodules = (
+  repoPath: string,
+  workspaceId: number | null,
+  path?: string | null,
+): Promise<GitSubmodule[]> =>
+  invoke("update_git_submodules", { repoPath, workspaceId, path: path ?? null });
 
 export const lsWorkspace = (
   repoPath: string,

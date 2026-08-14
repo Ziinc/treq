@@ -3,6 +3,7 @@ pub mod changes;
 pub mod commits;
 pub mod repo;
 pub mod stash;
+pub mod submodules;
 pub mod workspaces;
 pub use app::*;
 pub use changes::*;
@@ -10,6 +11,7 @@ pub use commits::*;
 pub use repo::*;
 pub use stash::*;
 use std::path::{Path, PathBuf};
+pub use submodules::*;
 pub use workspaces::*;
 
 pub const DEFAULT_CONFLICT_MARKER_STYLE: &str = "git";

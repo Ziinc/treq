@@ -525,6 +525,22 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
       serde_json::to_value(files).map_err(|e| e.to_string())
     }
 
+    "list_git_submodules" => {
+      let repo_path = get_str(&args, "repoPath")?;
+      let workspace_id: Option<i64> = opt_i64(&args, "workspaceId");
+      let submodules = treq_lib::core::list_submodules(&repo_path, workspace_id)?;
+      serde_json::to_value(submodules).map_err(|e| e.to_string())
+    }
+
+    "update_git_submodules" => {
+      let repo_path = get_str(&args, "repoPath")?;
+      let workspace_id: Option<i64> = opt_i64(&args, "workspaceId");
+      let path = args.get("path").and_then(|v| v.as_str()).map(String::from);
+      let submodules =
+        treq_lib::core::update_submodules(&repo_path, workspace_id, path.as_deref())?;
+      serde_json::to_value(submodules).map_err(|e| e.to_string())
+    }
+
     "ls_workspace" => {
       let repo_path = get_str(&args, "repoPath")?;
       let workspace_id: Option<i64> = opt_i64(&args, "workspaceId");

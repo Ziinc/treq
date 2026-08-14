@@ -36,6 +36,31 @@ pub async fn get_workspace_changed_files(
 }
 
 #[tauri::command]
+pub async fn list_git_submodules(
+  repo_path: String,
+  workspace_id: Option<i64>,
+) -> Result<Vec<crate::core::GitSubmodule>, String> {
+  tauri::async_runtime::spawn_blocking(move || {
+    crate::core::list_submodules(&repo_path, workspace_id)
+  })
+  .await
+  .map_err(|e| format!("Failed to join list_git_submodules task: {}", e))?
+}
+
+#[tauri::command]
+pub async fn update_git_submodules(
+  repo_path: String,
+  workspace_id: Option<i64>,
+  path: Option<String>,
+) -> Result<Vec<crate::core::GitSubmodule>, String> {
+  tauri::async_runtime::spawn_blocking(move || {
+    crate::core::update_submodules(&repo_path, workspace_id, path.as_deref())
+  })
+  .await
+  .map_err(|e| format!("Failed to join update_git_submodules task: {}", e))?
+}
+
+#[tauri::command]
 pub async fn get_workspaces(repo_path: String) -> Result<Vec<Workspace>, String> {
   tauri::async_runtime::spawn_blocking(move || crate::core::list_workspaces(&repo_path))
     .await

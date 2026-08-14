@@ -3679,6 +3679,13 @@ pub fn derive_repo_path_from_workspace(workspace_path: &str) -> Option<String> {
   None
 }
 
+/// Hex id of the workspace working-copy commit, if the workspace can be loaded.
+pub fn jj_working_copy_commit_hex(workspace_path: &str) -> Option<String> {
+  let loaded = load_workspace_repo(workspace_path).ok()?;
+  let commit = get_workspace_wc_commit(&loaded).ok().flatten()?;
+  Some(commit.id().hex())
+}
+
 /// Commit with message and create new working copy using jj-lib (no subprocess)
 ///
 /// Home-repo caveat: `jj workspace add` uses `check_out(.., root_commit())`. Later edits can leave
