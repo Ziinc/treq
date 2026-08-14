@@ -64,6 +64,9 @@ interface WorkspaceSidebarProps {
   onSelectStack?: (workspaceIds: Set<number>) => void;
   onStartAgent?: (workspace: Workspace) => void;
   onStartShell?: (workspace: Workspace) => void;
+  onStartHomeAgent?: () => void;
+  onStartHomeShell?: () => void;
+  onStackHome?: () => void;
   terminalSessions?: TerminalSessionSummary[];
   onFocusTerminalSession?: (id: string) => void;
   onCloseTerminalSession?: (id: string) => void;
@@ -94,6 +97,9 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
     onSelectStack,
     onStartAgent,
     onStartShell,
+    onStartHomeAgent,
+    onStartHomeShell,
+    onStackHome,
     terminalSessions,
     onFocusTerminalSession,
     onCloseTerminalSession,
@@ -319,6 +325,9 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
               onWorkspaceMultiSelect={onWorkspaceMultiSelect}
               onOpenBranchSwitcher={onOpenBranchSwitcher}
               onDropChangeFiles={onDropChangeFiles}
+              onStartAgent={onStartHomeAgent}
+              onStartShell={onStartHomeShell}
+              onStack={onStackHome}
             />
 
             {onOpenGitHub && (
