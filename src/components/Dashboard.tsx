@@ -1329,9 +1329,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         ptySessionId: `session-${session.id}`,
         workspacePath:
           pending?.workspacePath ??
-          (sessionWorkspace
-            ? getFullWorkspacePath(sessionWorkspace)
-            : null),
+          (sessionWorkspace ? getFullWorkspacePath(sessionWorkspace) : null),
         repoPath: sessionWorkspace?.repo_path ?? repoPath,
         workspaceName: sessionWorkspace?.branch_name ?? null,
         ...(pending && {

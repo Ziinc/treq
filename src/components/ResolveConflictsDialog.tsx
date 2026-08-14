@@ -56,8 +56,7 @@ export const ResolveConflictsDialog: React.FC<ResolveConflictsDialogProps> = ({
         if (!cancelled) {
           addToast({
             title: "Failed to prepare resolve workspaces",
-            description:
-              error instanceof Error ? error.message : String(error),
+            description: error instanceof Error ? error.message : String(error),
             type: "error",
           });
         }
@@ -124,8 +123,7 @@ export const ResolveConflictsDialog: React.FC<ResolveConflictsDialogProps> = ({
       onSessionCreated({
         sessionId: dbSessionId,
         sessionName,
-        workspaceId:
-          resolveSession.source_workspace_id ?? primary.workspace_id,
+        workspaceId: resolveSession.source_workspace_id ?? primary.workspace_id,
         // Agent cwd is the resolve slug root; change-id dirs live under it.
         workspacePath: resolveSession.agent_cwd,
         repoPath,
