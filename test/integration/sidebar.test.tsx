@@ -510,6 +510,7 @@ describe("Dashboard - workspace list", () => {
       render(<Dashboard />);
 
       const homeRepoElement = await screen.findByTestId("home-repo-row");
+      expect(homeRepoElement).not.toHaveClass("bg-primary/20");
       expect(
         within(homeRepoElement).getByRole("button", { name: "Start agent" }),
       ).toBeTruthy();
@@ -520,6 +521,24 @@ describe("Dashboard - workspace list", () => {
         within(homeRepoElement).getByRole("button", {
           name: "Stack a workspace",
         }),
+      ).toBeTruthy();
+    });
+
+    it("always shows agent, shell, and stack buttons on workspace rows", async () => {
+      render(<Dashboard />);
+
+      const alphaRow = (await screen.findByText("feat/alpha")).closest(
+        "div",
+      ) as HTMLElement;
+      expect(alphaRow).not.toHaveClass("bg-primary/20");
+      expect(
+        within(alphaRow).getByRole("button", { name: "Start agent" }),
+      ).toBeTruthy();
+      expect(
+        within(alphaRow).getByRole("button", { name: "Open shell" }),
+      ).toBeTruthy();
+      expect(
+        within(alphaRow).getByRole("button", { name: "Stack a workspace" }),
       ).toBeTruthy();
     });
 

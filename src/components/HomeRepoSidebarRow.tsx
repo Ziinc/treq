@@ -57,7 +57,7 @@ export function HomeRepoSidebarRow({
             <div
               data-testid="home-repo-row"
               className={cn(
-                "group/home relative flex items-center text-sm tracking-wide px-2 py-1 rounded-md transition-colors cursor-pointer",
+                "relative flex items-center text-sm tracking-wide px-2 py-1 rounded-md transition-colors cursor-pointer",
                 isHomeSelected ? "bg-primary/20" : "hover:bg-muted/50",
               )}
               onClick={(e) => {
@@ -108,79 +108,57 @@ export function HomeRepoSidebarRow({
                 {homeRepoDisplayRef || "…"}
               </span>
               <div className="flex items-center gap-1 shrink-0 mr-1">
-                <span
-                  className={cn(
-                    "group-hover/home:opacity-100 transition-opacity",
-                    {
-                      "opacity-100": isHomeSelected,
-                      "opacity-0": !isHomeSelected,
-                    },
-                  )}
-                >
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        size="icon-xs"
-                        variant="ghost"
-                        className="text-foreground"
-                        aria-label="Start agent"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onStartAgent?.();
-                        }}
-                      >
-                        <Bot className="w-4 h-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">Start agent</TooltipContent>
-                  </Tooltip>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        size="icon-xs"
-                        variant="ghost"
-                        className="text-foreground"
-                        aria-label="Open shell"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onStartShell?.();
-                        }}
-                      >
-                        <Terminal className="w-4 h-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">Open shell</TooltipContent>
-                  </Tooltip>
-                </span>
-                <span
-                  className={cn(
-                    "group-hover/home:opacity-100 transition-opacity",
-                    {
-                      "opacity-100": isHomeSelected,
-                      "opacity-0": !isHomeSelected,
-                    },
-                  )}
-                >
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        size="icon-xs"
-                        variant="ghost"
-                        className="text-foreground"
-                        aria-label="Stack a workspace"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onStack?.();
-                        }}
-                      >
-                        <Layers2 className="w-4 h-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">
-                      Stack workspace
-                    </TooltipContent>
-                  </Tooltip>
-                </span>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="icon-xs"
+                      variant="ghost"
+                      className="text-foreground"
+                      aria-label="Start agent"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onStartAgent?.();
+                      }}
+                    >
+                      <Bot className="w-4 h-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Start agent</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="icon-xs"
+                      variant="ghost"
+                      className="text-foreground"
+                      aria-label="Open shell"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onStartShell?.();
+                      }}
+                    >
+                      <Terminal className="w-4 h-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Open shell</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="icon-xs"
+                      variant="ghost"
+                      className="text-foreground"
+                      aria-label="Stack a workspace"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onStack?.();
+                      }}
+                    >
+                      <Layers2 className="w-4 h-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Stack workspace</TooltipContent>
+                </Tooltip>
               </div>
             </div>
           </TooltipTrigger>

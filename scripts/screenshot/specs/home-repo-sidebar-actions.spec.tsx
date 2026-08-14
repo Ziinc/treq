@@ -7,59 +7,70 @@ import { Dashboard } from "../../../src/components/Dashboard";
 import { createWorkspace } from "../../../src/lib/api";
 import { captureDocument } from "../capture";
 
-it("captures home repo sidebar agent/shell/stack buttons", async () => {
-  const { repoPath } = createTestRepo(false);
-  openRepo(repoPath);
+it("captures always-visible home and workspace sidebar action buttons", async () => {
+	const { repoPath } = createTestRepo(false);
+	openRepo(repoPath);
 
-  await createWorkspace(repoPath, "feat/sibling");
+	await createWorkspace(repoPath, "feat/sibling");
 
-  const user = userEvent.setup();
-  render(<Dashboard />);
+	const user = userEvent.setup();
+	render(<Dashboard />);
 
-  const homeRepoElement = await screen.findByTestId("home-repo-row");
-  await screen.findByText("feat/sibling");
+	const homeRepoElement = await screen.findByTestId("home-repo-row");
+	const siblingRow = (await screen.findByText("feat/sibling")).closest(
+		"div",
+	) as HTMLElement;
+	expect(siblingRow).toBeTruthy();
 
-  // Select home so the action buttons are fully opaque (same as workspace rows).
-  await user.click(homeRepoElement);
-  expect(homeRepoElement).toHaveClass("bg-primary/20");
-  expect(
-    within(homeRepoElement).getByRole("button", { name: "Start agent" }),
-  ).toBeTruthy();
-  expect(
-    within(homeRepoElement).getByRole("button", { name: "Open shell" }),
-  ).toBeTruthy();
-  expect(
-    within(homeRepoElement).getByRole("button", {
-      name: "Stack a workspace",
-    }),
-  ).toBeTruthy();
+	// Do not select either row — buttons must be visible without hover/selection.
+	expect(homeRepoElement).not.toHaveClass("bg-primary/20");
+	expect(
+		within(homeRepoElement).getByRole("button", { name: "Start agent" }),
+	).toBeTruthy();
+	expect(
+		within(homeRepoElement).getByRole("button", { name: "Open shell" }),
+	).toBeTruthy();
+	expect(
+		within(homeRepoElement).getByRole("button", {
+			name: "Stack a workspace",
+		}),
+	).toBeTruthy();
+	expect(
+		within(siblingRow).getByRole("button", { name: "Start agent" }),
+	).toBeTruthy();
+	expect(
+		within(siblingRow).getByRole("button", { name: "Open shell" }),
+	).toBeTruthy();
+	expect(
+		within(siblingRow).getByRole("button", { name: "Stack a workspace" }),
+	).toBeTruthy();
 
-  await captureDocument(document, {
-    name: "home-repo-sidebar-actions-01-selected",
-    expectations: [
-      "The top sidebar home-repo row is highlighted and shows three small icon buttons on the right (bot/agent, terminal/shell, layers/stack).",
-      "A workspace named feat/sibling appears under the Workspaces heading below the home row.",
-      "The home row still shows the home icon and the default branch name on the left.",
-    ],
-  });
+	await captureDocument(document, {
+		name: "home-repo-sidebar-actions-01-always-visible",
+		expectations: [
+			"The home-repo sidebar row shows three icon buttons on the right (agent, shell, stack) even though the row is not highlighted/selected.",
+			"The feat/sibling workspace row also shows the same three icon buttons without being selected.",
+			"Github sits between the home row and the Workspaces list.",
+		],
+	});
 
-  await user.click(
-    within(homeRepoElement).getByRole("button", {
-      name: "Stack a workspace",
-    }),
-  );
-  expect(await screen.findByText("Stack a new Workspace")).toBeVisible();
-  expect(
-    screen.getByText(
-      "Create a new workspace from the current branch. Optionally move file changes.",
-    ),
-  ).toBeVisible();
+	await user.click(
+		within(homeRepoElement).getByRole("button", {
+			name: "Stack a workspace",
+		}),
+	);
+	expect(await screen.findByText("Stack a new Workspace")).toBeVisible();
+	expect(
+		screen.getByText(
+			"Create a new workspace from the current branch. Optionally move file changes.",
+		),
+	).toBeVisible();
 
-  await captureDocument(document, {
-    name: "home-repo-sidebar-actions-02-stack-dialog",
-    expectations: [
-      "A modal titled 'Stack a new Workspace' is open over the dashboard.",
-      "The dialog description says it creates a workspace from the current branch.",
-    ],
-  });
+	await captureDocument(document, {
+		name: "home-repo-sidebar-actions-02-stack-dialog",
+		expectations: [
+			"A modal titled 'Stack a new Workspace' is open over the dashboard.",
+			"The dialog description says it creates a workspace from the current branch.",
+		],
+	});
 }, 60000);
