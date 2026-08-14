@@ -22,6 +22,7 @@ import {
   ptyWrite,
   ptyWriteSuppressEcho,
 } from "../lib/api";
+import { consumePtyEcho } from "./terminal/consumePtyEcho";
 import { useTerminalSettings } from "../hooks/useTerminalSettings";
 import { cn } from "../lib/utils";
 import { Loader2 } from "lucide-react";
@@ -33,7 +34,7 @@ interface ConsolidatedTerminalProps {
   shell?: string;
   autoCommand?: string;
   onSessionError?: (message: string) => void;
-  onTerminalOutput?: (output: string) => void;
+  onTerminalOutput?: (output: string, fromProcess?: boolean) => void;
   onTerminalInput?: () => void;
   onTerminalIdle?: () => void;
   onClose?: () => void;
@@ -94,6 +95,7 @@ export const ConsolidatedTerminal = forwardRef<
     const webglContextLossDisposeRef = useRef<IDisposable | null>(null);
     const unlistenRef = useRef<(() => void) | null>(null);
     const outputRef = useRef("");
+    const pendingEchoRef = useRef("");
     const idleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [isPtyReady, setIsPtyReady] = useState(false);
     const isPtyReadyRef = useRef(isPtyReady);
@@ -141,6 +143,7 @@ export const ConsolidatedTerminal = forwardRef<
     // Reset output and error when session changes
     useEffect(() => {
       outputRef.current = "";
+      pendingEchoRef.current = "";
       autoCommandSentRef.current = false;
       setTerminalError(null);
     }, [sessionId, instanceKey]);
@@ -305,6 +308,7 @@ export const ConsolidatedTerminal = forwardRef<
       // Local xterm data handler
       const localHandleXtermData = (data: string) => {
         if (!isPtyReadyRef.current) return;
+        pendingEchoRef.current += data;
         onTerminalInputRef.current?.();
         ptyWrite(sessionId, data).catch(localHandleError);
       };
@@ -313,7 +317,15 @@ export const ConsolidatedTerminal = forwardRef<
       const localHandlePtyOutput = (chunk: string) => {
         xterm.write(chunk);
         outputRef.current += chunk;
-        onTerminalOutputRef.current?.(outputRef.current);
+        const { pendingEcho, processOutput } = consumePtyEcho(
+          pendingEchoRef.current,
+          chunk,
+        );
+        pendingEchoRef.current = pendingEcho;
+        const fromProcess = processOutput.length > 0;
+        onTerminalOutputRef.current?.(outputRef.current, fromProcess);
+
+        if (!fromProcess) return;
 
         if (idleTimeoutRef.current) {
           clearTimeout(idleTimeoutRef.current);

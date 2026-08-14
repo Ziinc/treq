@@ -36,4 +36,47 @@ describe("useTerminalSessionSummaries preview output", () => {
     expect(latest[0].previewOutput).not.toContain("\x1b");
     expect(latest[0].isStreaming).toBe(true);
   });
+
+  it("does not refresh lastActivityAt when output is local echo of user input", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const onTerminalsChange = vi.fn();
+    const allTerminals: TerminalEntry[] = [
+      { type: "shell", data: { id: "shell-1", workingDirectory: "/tmp/ws" } },
+    ];
+
+    const { result } = renderHook(() =>
+      useTerminalSessionSummaries({
+        allTerminals,
+        onTerminalsChange,
+      }),
+    );
+
+    act(() => {
+      result.current.handleTerminalInput("shell-1");
+    });
+    const afterInput = onTerminalsChange.mock.calls.at(-1)?.[0] as Array<{
+      lastActivityAt: number;
+      lastUserInputAt: number;
+      isStreaming: boolean;
+    }>;
+    const activityAt = afterInput[0].lastActivityAt;
+
+    vi.setSystemTime(1_500);
+    act(() => {
+      result.current.handleTerminalOutput("shell-1", "ls", false);
+    });
+
+    const afterEcho = onTerminalsChange.mock.calls.at(-1)?.[0] as Array<{
+      lastActivityAt: number;
+      lastUserInputAt: number;
+      isStreaming: boolean;
+      previewOutput: string;
+    }>;
+    expect(afterEcho[0].lastActivityAt).toBe(activityAt);
+    expect(afterEcho[0].isStreaming).toBe(false);
+    expect(afterEcho[0].lastUserInputAt).toBeGreaterThan(0);
+
+    vi.useRealTimers();
+  });
 });

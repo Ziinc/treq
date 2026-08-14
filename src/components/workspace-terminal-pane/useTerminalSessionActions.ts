@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 import { ptyClose } from "../../lib/api";
 import {
-  TERMINAL_IDLE_THRESHOLD_MS,
+  isTerminalSessionIdle,
   type ClaudeSessionData,
   type TerminalSessionSummary,
 } from "../terminal/types";
@@ -96,7 +96,7 @@ export function useTerminalSessionActions({
   const handleCloseIdleTerminals = useCallback(() => {
     const now = Date.now();
     for (const summary of terminalSummariesRef.current) {
-      if (now - summary.lastActivityAt >= TERMINAL_IDLE_THRESHOLD_MS) {
+      if (isTerminalSessionIdle(summary, now)) {
         handleCloseTerminalById(summary.id);
       }
     }

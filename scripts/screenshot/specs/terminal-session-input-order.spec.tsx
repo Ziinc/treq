@@ -53,6 +53,20 @@ function SessionOrderFixture() {
           />
         </TooltipProvider>
       </div>
+      <button
+        type="button"
+        onClick={() =>
+          setSessions((current) =>
+            current.map((session) =>
+              session.id === "claude"
+                ? { ...session, lastActivityAt: Date.now() - 120_000 }
+                : session,
+            ),
+          )
+        }
+      >
+        Mark Claude idle
+      </button>
     </div>
   );
 }
@@ -90,6 +104,25 @@ it("captures terminal sessions reordering only after user input", async () => {
       "Claude session has moved to the top after receiving the newest user input.",
       "Codex session and Shell remain below it in their prior relative order.",
       "The reordered list has no overlap, clipping, or excessive displacement.",
+    ],
+  });
+
+  await user.click(screen.getByRole("button", { name: "Mark Claude idle" }));
+  await waitFor(() => {
+    expect(
+      Array.from(list.children).map((item) =>
+        item.getAttribute("data-flip-id"),
+      ),
+    ).toEqual(["codex", "shell", "claude"]);
+  });
+
+  await captureDocument(document, {
+    name: "terminal-session-input-order-03-after-idle",
+    clipSelector: "#qa-terminal-sidebar",
+    expectations: [
+      "Claude session has moved below the still-active Codex and Shell sessions after going idle.",
+      "Codex session remains first and Shell remains second.",
+      "Claude session shows an idle indicator and the list has no overlap.",
     ],
   });
 }, 60_000);

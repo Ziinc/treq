@@ -8,7 +8,7 @@ import {
   X,
 } from "lucide-react";
 import {
-  TERMINAL_IDLE_THRESHOLD_MS,
+  isTerminalSessionIdle,
   type TerminalSessionSummary,
 } from "./terminal/types";
 import { Button } from "./ui/button";
@@ -32,9 +32,7 @@ export const TerminalSessionsSidebarItem: React.FC<
   TerminalSessionsSidebarItemProps
 > = ({ session, now, onFocus, onClose }) => {
   const Icon = getSessionIcon(session);
-  const isIdle =
-    !session.isStreaming &&
-    now - session.lastActivityAt >= TERMINAL_IDLE_THRESHOLD_MS;
+  const isIdle = isTerminalSessionIdle(session, now);
   const branchLabel = session.isMainRepo
     ? session.branchName || "main"
     : session.branchName || "unknown";
