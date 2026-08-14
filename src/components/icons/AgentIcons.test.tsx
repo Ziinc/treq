@@ -14,9 +14,7 @@ describe("AgentIcons", () => {
     const { container: codex } = render(<CodexIcon className="w-4 h-4" />);
     const { container: cursor } = render(<CursorIcon className="w-4 h-4" />);
 
-    expect(
-      claude.querySelector('[data-agent-icon="claude"]'),
-    ).toBeTruthy();
+    expect(claude.querySelector('[data-agent-icon="claude"]')).toBeTruthy();
     expect(codex.querySelector('[data-agent-icon="codex"]')).toBeTruthy();
     expect(cursor.querySelector('[data-agent-icon="cursor"]')).toBeTruthy();
   });

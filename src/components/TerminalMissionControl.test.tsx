@@ -154,19 +154,19 @@ describe("TerminalMissionControl", () => {
     );
 
     expect(
-      screen.getByTestId("mission-control-card-claude-1").querySelector(
-        '[data-agent-icon="claude"]',
-      ),
+      screen
+        .getByTestId("mission-control-card-claude-1")
+        .querySelector('[data-agent-icon="claude"]'),
     ).toBeTruthy();
     expect(
-      screen.getByTestId("mission-control-card-codex-1").querySelector(
-        '[data-agent-icon="codex"]',
-      ),
+      screen
+        .getByTestId("mission-control-card-codex-1")
+        .querySelector('[data-agent-icon="codex"]'),
     ).toBeTruthy();
     expect(
-      screen.getByTestId("mission-control-card-cursor-1").querySelector(
-        '[data-agent-icon="cursor"]',
-      ),
+      screen
+        .getByTestId("mission-control-card-cursor-1")
+        .querySelector('[data-agent-icon="cursor"]'),
     ).toBeTruthy();
   });
 
