@@ -16,6 +16,7 @@ const session = (
   lastActivityAt: 0,
   lastUserInputAt: 0,
   isStreaming: false,
+  previewOutput: "",
   ...overrides,
 });
 
@@ -78,6 +79,40 @@ describe("TerminalMissionControl", () => {
     expect(screen.getByText("Review agent")).toBeTruthy();
     expect(screen.getByTestId("mission-control-card-shell-feat")).toBeTruthy();
     expect(screen.getByTestId("mission-control-card-shell-main")).toBeTruthy();
+  });
+
+  it("shows terminal output in the card preview and status as an icon", () => {
+    render(
+      <TooltipProvider>
+        <TerminalMissionControl
+          open
+          sessions={[
+            session({
+              id: "shell-1",
+              name: "Shell",
+              previewOutput: "$ echo hi\nhi",
+              lastActivityAt: Date.now(),
+            }),
+            session({
+              id: "shell-idle",
+              name: "Idle shell",
+              previewOutput: "waiting",
+              lastActivityAt: Date.now() - 120_000,
+            }),
+          ]}
+          onClose={vi.fn()}
+          onFocus={vi.fn()}
+        />
+      </TooltipProvider>,
+    );
+
+    expect(
+      screen.getByTestId("mission-control-preview-shell-1"),
+    ).toHaveTextContent("$ echo hi hi");
+    expect(screen.getByLabelText("Active")).toBeTruthy();
+    expect(screen.getByLabelText("Idle")).toBeTruthy();
+    expect(screen.queryByText("Active")).toBeNull();
+    expect(screen.queryByText("Idle")).toBeNull();
   });
 
   it("focuses a terminal and closes when a card is selected", async () => {

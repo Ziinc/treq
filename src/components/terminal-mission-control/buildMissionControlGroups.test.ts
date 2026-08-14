@@ -13,6 +13,7 @@ const session = (
   lastActivityAt: 0,
   lastUserInputAt: 0,
   isStreaming: false,
+  previewOutput: "",
   ...overrides,
 });
 

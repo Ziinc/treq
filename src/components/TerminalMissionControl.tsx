@@ -31,13 +31,35 @@ function getSessionIcon(session: TerminalSessionSummary) {
   return Bot;
 }
 
-function sessionStatusLabel(
+type SessionStatus = "streaming" | "idle" | "active";
+
+function sessionStatus(
   session: TerminalSessionSummary,
   now: number,
-): string {
-  if (session.isStreaming) return "Streaming";
-  if (now - session.lastActivityAt >= TERMINAL_IDLE_THRESHOLD_MS) return "Idle";
-  return "Active";
+): SessionStatus {
+  if (session.isStreaming) return "streaming";
+  if (now - session.lastActivityAt >= TERMINAL_IDLE_THRESHOLD_MS) return "idle";
+  return "active";
+}
+
+function SessionStatusIcon({ status }: { status: SessionStatus }) {
+  if (status === "streaming") {
+    return (
+      <Loader2
+        className="h-3 w-3 animate-spin text-primary"
+        aria-label="Streaming"
+      />
+    );
+  }
+  if (status === "idle") {
+    return <Moon className="h-3 w-3 text-muted-foreground" aria-label="Idle" />;
+  }
+  return (
+    <span
+      className="inline-block h-2 w-2 rounded-full bg-emerald-500"
+      aria-label="Active"
+    />
+  );
 }
 
 export const TerminalMissionControl: React.FC<TerminalMissionControlProps> = ({
@@ -111,8 +133,7 @@ export const TerminalMissionControl: React.FC<TerminalMissionControlProps> = ({
                 >
                   {group.terminals.map((session) => {
                     const Icon = getSessionIcon(session);
-                    const status = sessionStatusLabel(session, now);
-                    const isIdle = status === "Idle";
+                    const status = sessionStatus(session, now);
                     return (
                       <Card
                         key={session.id}
@@ -141,34 +162,33 @@ export const TerminalMissionControl: React.FC<TerminalMissionControlProps> = ({
                           <CardTitle className="truncate text-sm font-medium">
                             {session.name}
                           </CardTitle>
-                          <div className="ml-auto flex items-center gap-1.5 text-muted-foreground">
-                            {session.isStreaming ? (
-                              <Loader2
-                                className="h-3 w-3 animate-spin text-primary"
-                                aria-label="Streaming"
-                              />
-                            ) : null}
-                            {isIdle ? (
-                              <Moon className="h-3 w-3" aria-label="Idle" />
-                            ) : null}
+                          <div className="ml-auto flex items-center">
+                            <SessionStatusIcon status={status} />
                           </div>
                         </CardHeader>
-                        <CardContent className="space-y-3 px-4 py-4">
-                          <div className="h-20 rounded-md border border-border/40 bg-background/80 px-3 py-2 font-mono text-[11px] leading-relaxed text-muted-foreground">
-                            <div className="opacity-70">
-                              {session.kind === "agent"
-                                ? `${session.agent ?? "agent"} session`
-                                : "shell session"}
-                            </div>
-                            <div className="mt-3 text-foreground/80">
-                              {status}
-                            </div>
+                        <CardContent className="p-0">
+                          <div
+                            data-testid={`mission-control-preview-${session.id}`}
+                            className={cn(
+                              "h-28 overflow-hidden px-3 py-2",
+                              "bg-[#0c0c0c] text-zinc-300",
+                              "flex flex-col justify-end",
+                            )}
+                          >
+                            {session.previewOutput ? (
+                              <pre className="font-mono text-[11px] leading-relaxed whitespace-pre-wrap break-words m-0">
+                                {session.previewOutput}
+                              </pre>
+                            ) : (
+                              <span className="font-mono text-[11px] text-zinc-500">
+                                No output yet
+                              </span>
+                            )}
                           </div>
-                          <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                            <span className="font-mono truncate">
+                          <div className="border-t border-border/40 px-4 py-2 text-[11px] text-muted-foreground">
+                            <span className="font-mono truncate block">
                               {group.workspaceName}
                             </span>
-                            <span>{status}</span>
                           </div>
                         </CardContent>
                       </Card>

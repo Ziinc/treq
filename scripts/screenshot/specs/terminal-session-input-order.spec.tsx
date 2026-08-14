@@ -22,6 +22,7 @@ const makeSession = (
   lastActivityAt: Date.now(),
   lastUserInputAt,
   isStreaming: false,
+  previewOutput: "",
 });
 
 function SessionOrderFixture() {

@@ -12,9 +12,10 @@ import {
 	findSidebarBranchElement,
 	openRepo,
 } from "../../../test/utils";
-import { createWorkspace } from "../../../src/lib/api";
+import { createWorkspace, ptyWrite } from "../../../src/lib/api";
 import { render, screen, waitFor } from "../../../test/test-utils";
 import { Dashboard } from "../../../src/components/Dashboard";
+import { TerminalMissionControl } from "../../../src/components/TerminalMissionControl";
 import { captureDocument } from "../capture";
 
 const BRANCH_A = "feat/mission-control-a";
@@ -96,6 +97,15 @@ it("captures Terminal Mission Control open, select, and close", async () => {
 		).toBeGreaterThanOrEqual(3);
 	});
 
+	const shellIds = [
+		...document.querySelectorAll<HTMLElement>('[data-terminal-id^="shell-"]'),
+	].map((el) => el.getAttribute("data-terminal-id")!);
+
+	await ptyWrite(shellIds[0], "echo mission-a-output\r");
+	if (shellIds[1]) {
+		await ptyWrite(shellIds[1], "echo mission-b-output\r");
+	}
+
 	await captureDocument(document, {
 		name: "terminal-mission-control-01-before",
 		expectations: [
@@ -114,8 +124,8 @@ it("captures Terminal Mission Control open, select, and close", async () => {
 		name: "terminal-mission-control-02-open",
 		expectations: [
 			"A full-screen Mission Control overlay titled 'Terminals' covers the app with a blurred backdrop.",
-			"Terminals are shown as cards in workspace sections with two-column grids; at least feat/mission-control-a and feat/mission-control-b section headers are visible.",
-			"Cards show terminal names (Shell / agent) with a small terminal-preview panel and status text.",
+			"Each terminal card has a dark preview pane and a small status icon in the header (not Active/Idle text).",
+			"Cards are grouped by workspace in a two-column grid.",
 		],
 	});
 
@@ -152,3 +162,72 @@ it("captures Terminal Mission Control open, select, and close", async () => {
 		).not.toBeInTheDocument();
 	});
 }, 60000);
+
+it("captures Mission Control cards with terminal output previews", async () => {
+	const now = Date.now();
+	const sessions = [
+		{
+			id: "shell-feat-b",
+			kind: "shell" as const,
+			name: "Shell",
+			branchName: BRANCH_B,
+			isMainRepo: false,
+			lastActivityAt: now,
+			lastUserInputAt: now,
+			isStreaming: true,
+			previewOutput: "$ echo mission-b-output\nmission-b-output",
+		},
+		{
+			id: "claude-1",
+			kind: "agent" as const,
+			name: "Claude 1",
+			branchName: BRANCH_B,
+			isMainRepo: false,
+			agent: "claude" as const,
+			lastActivityAt: now - 5_000,
+			lastUserInputAt: now - 5_000,
+			isStreaming: false,
+			previewOutput:
+				"Reading files…\nProposed fix for the swipe gesture handler.",
+		},
+		{
+			id: "shell-feat-a",
+			kind: "shell" as const,
+			name: "Shell",
+			branchName: BRANCH_A,
+			isMainRepo: false,
+			lastActivityAt: now - 120_000,
+			lastUserInputAt: 0,
+			isStreaming: false,
+			previewOutput: "last login: Thu Aug 13\n$ ",
+		},
+	];
+
+	render(
+		<div className="h-screen bg-background text-foreground">
+			<TerminalMissionControl
+				open
+				sessions={sessions}
+				onClose={() => {}}
+				onFocus={() => {}}
+			/>
+		</div>,
+	);
+
+	expect(await screen.findByTestId("terminal-mission-control")).toBeTruthy();
+	expect(screen.getByTestId("mission-control-preview-shell-feat-b")).toHaveTextContent(
+		"mission-b-output",
+	);
+	expect(screen.getByLabelText("Streaming")).toBeTruthy();
+	expect(screen.getByLabelText("Idle")).toBeTruthy();
+	expect(screen.getByLabelText("Active")).toBeTruthy();
+
+	await captureDocument(document, {
+		name: "terminal-mission-control-04-output-previews",
+		expectations: [
+			"Mission Control cards show dark panes with real terminal output text such as echo results and agent log lines.",
+			"Card headers use small status icons only: spinner for streaming, green dot for active, moon for idle — no Active/Idle text labels.",
+			"Terminals remain grouped by workspace in a two-column card grid.",
+		],
+	});
+}, 30000);
