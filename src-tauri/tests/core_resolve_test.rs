@@ -42,21 +42,22 @@ fn setup_rebase_conflict(repo: &TestRepo) -> treq_lib::local_db::Workspace {
     .expect("write main conflict.txt");
   jj::jj_commit(&repo.repo_path, "main commit").expect("commit main");
 
-  let rebase = jj::jj_rebase_workspace_bookmark_onto(
-    &workspace_path,
-    &workspace.branch_name,
-    default_branch,
-  )
-  .expect("rebase");
-  assert!(rebase.success, "rebase should record conflict: {}", rebase.message);
+  let rebase =
+    jj::jj_rebase_workspace_bookmark_onto(&workspace_path, &workspace.branch_name, default_branch)
+      .expect("rebase");
+  assert!(
+    rebase.success,
+    "rebase should record conflict: {}",
+    rebase.message
+  );
 
   let status = core::workspace_status(&repo.repo_path, Some(workspace.id)).expect("status");
-  assert!(status.partial.has_conflicts, "expected conflicts after rebase");
   assert!(
-    status
-      .conflicted_files
-      .iter()
-      .any(|f| f == "conflict.txt"),
+    status.partial.has_conflicts,
+    "expected conflicts after rebase"
+  );
+  assert!(
+    status.conflicted_files.iter().any(|f| f == "conflict.txt"),
     "expected conflict.txt, got {:?}",
     status.conflicted_files
   );
@@ -99,13 +100,12 @@ fn start_resolve_creates_edit_mode_workspace_without_touching_product_wc() {
   )
   .expect("start_resolve_conflicts");
 
-  assert!(
-    !session.targets.is_empty(),
-    "expected resolve targets"
-  );
+  assert!(!session.targets.is_empty(), "expected resolve targets");
   let target = &session.targets[0];
   assert!(
-    Path::new(&target.resolve_path).join("conflict.txt").exists(),
+    Path::new(&target.resolve_path)
+      .join("conflict.txt")
+      .exists(),
     "conflict.txt should be materialized in resolve workspace"
   );
 
@@ -210,8 +210,8 @@ fn treq_resolve_side_two_clears_conflict_and_cleans_up_without_extra_commit() {
     "slug resolve root should be removed once no change-id dirs remain"
   );
 
-  let after = core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)
-    .expect("list after");
+  let after =
+    core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None).expect("list after");
   eprintln!(
     "after commits: {:?}",
     after
@@ -270,13 +270,8 @@ fn resolve_commit_with_stdin_replacements_rewrites_tree() {
     "conflict.txt".to_string(),
     "fully replaced content\n".to_string(),
   );
-  let result = core::resolve_commit(
-    &repo.repo_path,
-    &conflicted.change_id,
-    &[],
-    Some(files),
-  )
-  .expect("resolve with replacements");
+  let result = core::resolve_commit(&repo.repo_path, &conflicted.change_id, &[], Some(files))
+    .expect("resolve with replacements");
   assert!(result.success, "{}", result.message);
 
   let status = core::workspace_status(&repo.repo_path, Some(workspace.id)).expect("status");

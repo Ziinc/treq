@@ -1670,12 +1670,15 @@ pub fn create_resolve_workspace(
   .map_err(|e| JjError::GitWorkspaceError(format!("Failed to init resolve workspace: {}", e)))?;
 
   // Re-fetch from the new repo's store to keep MergedTree store pointers aligned.
-  let target_commit = new_repo.store().get_commit(&target_commit_id).map_err(|e| {
-    JjError::GitWorkspaceError(format!(
-      "Failed to load conflicted commit in resolve workspace: {}",
-      e
-    ))
-  })?;
+  let target_commit = new_repo
+    .store()
+    .get_commit(&target_commit_id)
+    .map_err(|e| {
+      JjError::GitWorkspaceError(format!(
+        "Failed to load conflicted commit in resolve workspace: {}",
+        e
+      ))
+    })?;
 
   // Sparse-checkout only conflicted paths when possible.
   if !conflict_paths.is_empty() {
@@ -1696,7 +1699,10 @@ pub fn create_resolve_workspace(
   let mut tx = new_repo.start_transaction();
   // Edit the conflicted commit directly — no child WC commit, no bookmark.
   block_on(tx.repo_mut().edit(new_ws_name.clone(), &target_commit)).map_err(|e| {
-    JjError::GitWorkspaceError(format!("Failed to edit conflicted commit in resolve WC: {}", e))
+    JjError::GitWorkspaceError(format!(
+      "Failed to edit conflicted commit in resolve WC: {}",
+      e
+    ))
   })?;
   block_on(tx.repo_mut().rebase_descendants()).map_err(|e| {
     JjError::GitWorkspaceError(format!(
@@ -1837,9 +1843,8 @@ pub fn jj_resolve_conflict_sides(workspace_path: &str, sides: &[u8]) -> Result<(
 
   // Multi-side: materialize markers, pick textual sides, write files, snapshot.
   let marker_style = ConflictMarkerStyle::Git;
-  let merge_options = MergeOptions::from_settings(&loaded.settings).map_err(|e| {
-    JjError::IoError(format!("Failed to load merge options: {}", e))
-  })?;
+  let merge_options = MergeOptions::from_settings(&loaded.settings)
+    .map_err(|e| JjError::IoError(format!("Failed to load merge options: {}", e)))?;
   let labels = ConflictLabels::unlabeled();
   for (path, value_res) in tree.conflicts() {
     let conflict = value_res.map_err(|e| {
@@ -1871,10 +1876,8 @@ pub fn jj_resolve_conflict_sides(workspace_path: &str, sides: &[u8]) -> Result<(
       continue;
     };
     let text = String::from_utf8_lossy(&bytes);
-    let regions = crate::conflict_markers::parse_conflict_markers(
-      &text,
-      path.as_internal_file_string(),
-    );
+    let regions =
+      crate::conflict_markers::parse_conflict_markers(&text, path.as_internal_file_string());
     let resolved_text = if regions.is_empty() {
       text.into_owned()
     } else {

@@ -1158,11 +1158,7 @@ pub fn update_workspace_last_rebased_commit(
   Ok(())
 }
 
-pub fn set_workspace_metadata(
-  repo_path: &str,
-  id: i64,
-  metadata: &str,
-) -> Result<(), String> {
+pub fn set_workspace_metadata(repo_path: &str, id: i64, metadata: &str) -> Result<(), String> {
   let conn = get_connection(repo_path)?;
   conn
     .execute(

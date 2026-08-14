@@ -205,13 +205,7 @@ fn write_resolve_instruction_files(agent_cwd: &Path, workspace_slug: &str) -> Re
   let body = resolve_instruction_body(workspace_slug);
   for name in ["AGENTS.md", "CLAUDE.md", "README.md"] {
     let path = agent_cwd.join(name);
-    fs::write(&path, &body).map_err(|e| {
-      format!(
-        "Failed to write {}: {}",
-        path.display(),
-        e
-      )
-    })?;
+    fs::write(&path, &body).map_err(|e| format!("Failed to write {}: {}", path.display(), e))?;
   }
   Ok(())
 }
@@ -471,12 +465,8 @@ pub fn build_resolve_agent_prompt(user_prompt: &str, session: &ResolveConflictsS
     "Your working directory is the resolve root: {}\n",
     session.agent_cwd
   ));
-  out.push_str(
-    "Read AGENTS.md / CLAUDE.md / README.md in that directory for the workflow.\n",
-  );
-  out.push_str(
-    "Each subdirectory is a short-lived edit-mode sandbox for one conflicted change.\n",
-  );
+  out.push_str("Read AGENTS.md / CLAUDE.md / README.md in that directory for the workflow.\n");
+  out.push_str("Each subdirectory is a short-lived edit-mode sandbox for one conflicted change.\n");
   out.push_str(
     "Edit the conflict markers there, or run `treq resolve <change-id> [1|2|base|both]`.\n",
   );

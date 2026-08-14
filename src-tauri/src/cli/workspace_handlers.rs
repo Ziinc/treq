@@ -530,10 +530,7 @@ pub(super) fn handle_resolve(matches: &Matches) -> bool {
   let mut replacements: Option<HashMap<String, String>> = None;
   if !std::io::stdin().is_terminal() {
     let mut stdin_body = String::new();
-    if std::io::stdin()
-      .read_to_string(&mut stdin_body)
-      .is_ok()
-    {
+    if std::io::stdin().read_to_string(&mut stdin_body).is_ok() {
       let trimmed = stdin_body.trim();
       if !trimmed.is_empty() {
         match serde_json::from_str::<HashMap<String, String>>(trimmed) {
