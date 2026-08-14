@@ -67,18 +67,15 @@ it("captures Resolve conflicts banner on the Commits tab", async () => {
 
 	await user.click(screen.getByTestId("resolve-conflicts-button"));
 	await screen.findByTestId("resolve-conflicts-prompt");
-	// Resolve workspaces are prepared when the dialog opens.
-	await screen.findByText(/Resolve directories|treq resolve|\.treq\/resolve/i, {}, {
-		timeout: 10000,
-	}).catch(() => null);
+	// Resolve workspaces are prepared when the dialog opens (path listed + copy).
+	await screen.findAllByText(/\.treq\/resolve\//i, {}, { timeout: 15000 });
 
 	await captureDocument(document, {
 		name: "commits-resolve-conflicts-02-dialog",
 		expectations: [
-			'A dialog titled "Resolve conflicts…" is open.',
-			"A prompt textarea is visible for agent instructions.",
-			"Open in editor and Resolve actions are visible in the dialog footer.",
-			"Prepared resolve directory details are listed when ready.",
+			'A dialog titled "Resolve conflicts…" is open with a prompt textarea.',
+			"Copy mentions .treq/resolve/<workspace>/<change-id>/ sandboxes.",
+			"Prepared resolve directory paths under .treq/resolve are listed.",
 		],
 	});
 });
