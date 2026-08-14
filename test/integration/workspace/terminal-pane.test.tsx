@@ -141,6 +141,52 @@ describe("WorkspaceTerminalPane integration", () => {
     await user.click(scrollButton);
   });
 
+  it("queues follow-up messages and shows count with editable popover", async () => {
+    const { workspace } = await setupWorkspace("feat/terminal-message-queue");
+
+    render(<Dashboard />);
+    await user.click(await findSidebarBranchElement(workspace.branch_name));
+    await screen.findByText(/Terminals/i);
+
+    await user.keyboard("{Meta>}]{/Meta}");
+
+    const terminalPanel = await waitFor(() => {
+      const el = document.querySelector('[data-terminal-id^="claude-"]');
+      expect(el).not.toBeNull();
+      return el as HTMLElement;
+    });
+
+    const composer = await within(terminalPanel).findByTestId(
+      "agent-message-queue-composer",
+    );
+    await user.type(composer, "first queued follow-up{Enter}");
+    await user.type(composer, "second queued follow-up{Enter}");
+
+    expect(
+      await within(terminalPanel).findByTestId("agent-message-queue-count"),
+    ).toHaveTextContent("2");
+
+    await user.click(
+      within(terminalPanel).getByTestId("agent-message-queue-button"),
+    );
+    const popover = await screen.findByTestId("agent-message-queue-popover");
+    expect(
+      within(popover).getByText("first queued follow-up"),
+    ).toBeInTheDocument();
+    expect(
+      within(popover).getByText("second queued follow-up"),
+    ).toBeInTheDocument();
+
+    const removeButtons = within(popover).getAllByLabelText(
+      /remove queued message/i,
+    );
+    await user.click(removeButtons[1]);
+
+    expect(
+      await within(terminalPanel).findByTestId("agent-message-queue-count"),
+    ).toHaveTextContent("1");
+  });
+
   it("double-clicking a terminal scrolls it fully into view", async () => {
     const { workspace } = await setupWorkspace("feat/terminal-dblclick-scroll");
 

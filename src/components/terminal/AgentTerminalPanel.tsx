@@ -46,7 +46,12 @@ import {
   buildClaudeSandboxSettings,
   buildTreqAgentSystemPrompt,
 } from "../../lib/agentCommand";
+import { useAgentMessageQueue } from "../../hooks/useAgentMessageQueue";
 import { type ClaudeSessionData } from "./types";
+import {
+  AgentMessageQueueButton,
+  AgentMessageQueueComposer,
+} from "./AgentMessageQueue";
 import { TerminalSendPreviews } from "./TerminalSendPreviews";
 
 export interface AgentTerminalPanelProps {
@@ -96,6 +101,16 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
     const terminalId = `claude-${sessionData.sessionId}`;
     const isHidden = collapsed;
 
+    const {
+      messages: queuedMessages,
+      enqueue: enqueueMessage,
+      remove: removeQueuedMessage,
+      update: updateQueuedMessage,
+      markBusy,
+      markIdle,
+      clear: clearQueuedMessages,
+    } = useAgentMessageQueue({ ptySessionId: sessionData.ptySessionId });
+
     // Capture pendingPrompt and permissionMode in refs so they survive
     // the race condition where sessions refetch clears pendingClaudeSession
     // before isModelLoaded becomes true and ConsolidatedTerminal mounts.
@@ -123,14 +138,19 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
         .catch(() => {});
     }, [sessionData.repoPath, sessionData.sessionId]);
 
-    // Handle terminal output
+    // Handle terminal output — agent is busy while streaming.
     const handleTerminalOutput = useCallback(
       (output: string) => {
-        // Forward to parent callback
+        markBusy();
         onTerminalOutput?.(output);
       },
-      [onTerminalOutput],
+      [markBusy, onTerminalOutput],
     );
+
+    const handleTerminalIdle = useCallback(() => {
+      markIdle();
+      onTerminalIdle?.();
+    }, [markIdle, onTerminalIdle]);
 
     // Search handlers
     const openSearchPanel = useCallback(() => {
@@ -182,6 +202,8 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
       async (options?: { silent?: boolean }) => {
         setIsResetting(true);
         try {
+          clearQueuedMessages();
+          markBusy();
           await ptyClose(sessionData.ptySessionId).catch(console.error);
           setTerminalInstanceKey((prev) => prev + 1);
           if (!options?.silent) {
@@ -201,7 +223,7 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
           setIsResetting(false);
         }
       },
-      [sessionData.ptySessionId, addToast],
+      [sessionData.ptySessionId, sessionData.agent, addToast, clearQueuedMessages, markBusy],
     );
 
     // Model change handler
@@ -420,110 +442,120 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
           </div>
         </div>
 
-        {/* Terminal with search overlay */}
+        {/* Terminal with search overlay + message queue */}
         <div
-          className="flex-1 min-h-0 overflow-hidden relative border-r border-border"
+          className="flex flex-1 min-h-0 flex-col overflow-hidden border-r border-border"
           style={{ backgroundColor: "#1e1e1e" }}
         >
-          {/* Search overlay */}
-          {searchVisible && !collapsed && (
-            <div className="absolute top-2 right-2 z-20 bg-background border border-border rounded-md shadow-lg p-0.5 flex items-center gap-0.5">
-              <Input
-                ref={searchInputRef}
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Find"
-                onKeyDown={handleSearchKeyDown}
-                className="h-6 w-48 text-sm !outline-none !ring-0"
-              />
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="h-5 w-5 rounded-sm p-0 bg-background text-muted-foreground hover:text-foreground"
-                      onClick={() => runSearch("previous")}
-                      disabled={!searchQuery.trim()}
-                      aria-label="Find previous"
-                    >
-                      <ChevronUp className="w-4 h-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Previous (Shift+Enter)</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="h-5 w-5 rounded-sm p-0 bg-background text-muted-foreground hover:text-foreground"
-                      onClick={() => runSearch("next")}
-                      disabled={!searchQuery.trim()}
-                      aria-label="Find next"
-                    >
-                      <ChevronDown className="w-4 h-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Next (Enter)</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      className="h-5 w-5 rounded-sm p-0 bg-background text-muted-foreground hover:text-foreground"
-                      onClick={closeSearchPanel}
-                      aria-label="Close search"
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Close (Esc)</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-          )}
+          <div className="relative min-h-0 flex-1 overflow-hidden">
+            {/* Search overlay */}
+            {searchVisible && !collapsed && (
+              <div className="absolute top-2 right-2 z-30 bg-background border border-border rounded-md shadow-lg p-0.5 flex items-center gap-0.5">
+                <Input
+                  ref={searchInputRef}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Find"
+                  onKeyDown={handleSearchKeyDown}
+                  className="h-6 w-48 text-sm !outline-none !ring-0"
+                />
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="h-5 w-5 rounded-sm p-0 bg-background text-muted-foreground hover:text-foreground"
+                        onClick={() => runSearch("previous")}
+                        disabled={!searchQuery.trim()}
+                        aria-label="Find previous"
+                      >
+                        <ChevronUp className="w-4 h-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Previous (Shift+Enter)</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="h-5 w-5 rounded-sm p-0 bg-background text-muted-foreground hover:text-foreground"
+                        onClick={() => runSearch("next")}
+                        disabled={!searchQuery.trim()}
+                        aria-label="Find next"
+                      >
+                        <ChevronDown className="w-4 h-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Next (Enter)</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="h-5 w-5 rounded-sm p-0 bg-background text-muted-foreground hover:text-foreground"
+                        onClick={closeSearchPanel}
+                        aria-label="Close search"
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Close (Esc)</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+            )}
 
-          {/* Terminal */}
-          {isModelLoaded ? (
-            <>
-              <TerminalSendPreviews
-                ptySessionId={sessionData.ptySessionId}
-                isActive={!!isActive}
-              />
-              <ConsolidatedTerminal
-                key={`${sessionData.ptySessionId}-${terminalInstanceKey}`}
-                ref={(el) => {
-                  if (el) {
-                    terminalRefs.current.set(terminalId, el);
-                  } else {
-                    terminalRefs.current.delete(terminalId);
+            {/* Terminal */}
+            {isModelLoaded ? (
+              <>
+                <AgentMessageQueueButton
+                  messages={queuedMessages}
+                  onRemove={removeQueuedMessage}
+                  onUpdate={updateQueuedMessage}
+                />
+                <TerminalSendPreviews
+                  ptySessionId={sessionData.ptySessionId}
+                  isActive={!!isActive}
+                />
+                <ConsolidatedTerminal
+                  key={`${sessionData.ptySessionId}-${terminalInstanceKey}`}
+                  ref={(el) => {
+                    if (el) {
+                      terminalRefs.current.set(terminalId, el);
+                    } else {
+                      terminalRefs.current.delete(terminalId);
+                    }
+                  }}
+                  sessionId={sessionData.ptySessionId}
+                  workingDirectory={
+                    sessionData.workspacePath || sessionData.repoPath
                   }
-                }}
-                sessionId={sessionData.ptySessionId}
-                workingDirectory={
-                  sessionData.workspacePath || sessionData.repoPath
-                }
-                autoCommand={autoCommand}
-                onSessionError={onSessionError}
-                onClose={onClose}
-                onTerminalOutput={handleTerminalOutput}
-                onTerminalInput={onTerminalInput}
-                onTerminalIdle={onTerminalIdle}
-                containerClassName="h-full w-full overflow-hidden"
-                terminalPaneClassName="w-full h-full"
-                isHidden={isHidden}
-              />
-            </>
-          ) : (
-            <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
-              Loading...
-            </div>
+                  autoCommand={autoCommand}
+                  onSessionError={onSessionError}
+                  onClose={onClose}
+                  onTerminalOutput={handleTerminalOutput}
+                  onTerminalInput={onTerminalInput}
+                  onTerminalIdle={handleTerminalIdle}
+                  containerClassName="h-full w-full overflow-hidden"
+                  terminalPaneClassName="w-full h-full"
+                  isHidden={isHidden}
+                />
+              </>
+            ) : (
+              <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
+                Loading...
+              </div>
+            )}
+          </div>
+          {isModelLoaded && !collapsed && (
+            <AgentMessageQueueComposer onEnqueue={enqueueMessage} />
           )}
         </div>
       </div>
