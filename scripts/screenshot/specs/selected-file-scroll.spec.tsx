@@ -1,5 +1,5 @@
 import * as React from "react";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
 import {
 	createTestRepo,
@@ -13,8 +13,27 @@ import { getWorkspaces } from "../../../src/lib/api";
 import { captureDocument } from "../capture";
 
 const BRANCH_NAME = "feat/selected-file-scroll";
+const LAST_FILE = "file-08.txt";
+const LAST_FILE_ID = "file-section-file-08-txt";
 
-it("shows Selected and Changes files with their review collapsibles", async () => {
+function fileSectionSelector(path: string) {
+	return `#file-section-${path.replace(/[^a-zA-Z0-9]/g, "-")}`;
+}
+
+async function clickFileInSection(
+	user: ReturnType<typeof userEvent.setup>,
+	sectionName: "Changes" | "Selected",
+	filePath: string,
+) {
+	const sectionToggle = await screen.findByRole("button", {
+		name: new RegExp(`^${sectionName}`),
+	});
+	const section = sectionToggle.closest("div")?.parentElement;
+	if (!section) throw new Error(`${sectionName} section missing`);
+	await user.click(await within(section).findByTitle(filePath));
+}
+
+it("scrolls the Review collapsible when clicking Changes and Selected files", async () => {
 	const { repoPath } = createTestRepo(false);
 	openRepo(repoPath);
 
@@ -43,25 +62,51 @@ it("shows Selected and Changes files with their review collapsibles", async () =
 		repoPath,
 		workspace.workspace_path,
 	);
-	writeWorkspaceFile(workspaceDir, "alpha.txt", "alpha change\n");
-	writeWorkspaceFile(workspaceDir, "beta.txt", "beta change\n");
+	for (let i = 1; i <= 8; i++) {
+		const n = String(i).padStart(2, "0");
+		writeWorkspaceFile(
+			workspaceDir,
+			`file-${n}.txt`,
+			Array.from({ length: 12 }, (_, line) => `file ${n} line ${line + 1}`).join(
+				"\n",
+			) + "\n",
+		);
+	}
 
 	await user.click(await screen.findByRole("tab", { name: /Review/ }));
-	await screen.findAllByText("alpha.txt");
-	await screen.findAllByText("beta.txt");
+	await screen.findAllByText(LAST_FILE);
 
-	const changesSection = (
-		await screen.findByRole("button", { name: /^Changes/ })
-	).closest("div")?.parentElement;
-	if (!changesSection) throw new Error("Changes section missing");
-	await user.click(await within(changesSection).findByTitle("alpha.txt"));
+	const scrolledIds: string[] = [];
+	vi.spyOn(Element.prototype, "scrollIntoView").mockImplementation(
+		function scrollIntoViewMock(this: Element) {
+			scrolledIds.push((this as HTMLElement).id);
+		},
+	);
 
 	await captureDocument(document, {
-		name: "selected-file-scroll-01-changes-click",
+		name: "selected-file-scroll-01-before-click",
+		viewport: { width: 1440, height: 700 },
 		expectations: [
-			"The Review sidebar Changes list highlights alpha.txt as selected.",
-			"The main pane shows an alpha.txt file collapsible with its diff.",
-			"beta.txt is listed under Changes and has a file collapsible in the main pane.",
+			"The Review sidebar Changes list shows many files starting with file-01.txt.",
+			"The main pane shows the file-01.txt collapsible near the top.",
+			"file-08.txt is not the file collapsible at the top of the main pane.",
+		],
+	});
+
+	scrolledIds.length = 0;
+	await clickFileInSection(user, "Changes", LAST_FILE);
+	await waitFor(() => {
+		expect(scrolledIds).toContain(LAST_FILE_ID);
+	});
+
+	await captureDocument(document, {
+		name: "selected-file-scroll-02-after-changes-click",
+		viewport: { width: 1440, height: 700 },
+		scrollIntoView: fileSectionSelector(LAST_FILE),
+		expectations: [
+			"file-08.txt is highlighted in the Changes sidebar list.",
+			"The main pane is scrolled so the file-08.txt collapsible is visible.",
+			"The file-08.txt collapsible header and its diff lines are readable.",
 		],
 	});
 
@@ -69,18 +114,20 @@ it("shows Selected and Changes files with their review collapsibles", async () =
 	await user.click(stageButton);
 	await screen.findByRole("button", { name: /^Selected/ });
 
-	const selectedSection = (
-		await screen.findByRole("button", { name: /^Selected/ })
-	).closest("div")?.parentElement;
-	if (!selectedSection) throw new Error("Selected section missing");
-	await user.click(await within(selectedSection).findByTitle("alpha.txt"));
+	scrolledIds.length = 0;
+	await clickFileInSection(user, "Selected", LAST_FILE);
+	await waitFor(() => {
+		expect(scrolledIds).toContain(LAST_FILE_ID);
+	});
 
 	await captureDocument(document, {
-		name: "selected-file-scroll-02-selected-click",
+		name: "selected-file-scroll-03-after-selected-click",
+		viewport: { width: 1440, height: 700 },
+		scrollIntoView: fileSectionSelector(LAST_FILE),
 		expectations: [
-			"The Review sidebar has a Selected section listing alpha.txt.",
-			"alpha.txt is highlighted in the Selected list.",
-			"The main pane still shows the alpha.txt file collapsible.",
+			"The Review sidebar has a Selected section listing file-08.txt.",
+			"file-08.txt is highlighted in the Selected list.",
+			"The main pane shows the file-08.txt collapsible in view.",
 		],
 	});
 }, 60000);
