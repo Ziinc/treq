@@ -33,7 +33,7 @@ describe("useTerminalSessionSummaries preview output", () => {
     }>;
     expect(latest[0].previewOutput).toContain("echo hi");
     expect(latest[0].previewOutput).toContain("hi");
-    expect(latest[0].previewOutput).not.toMatch(/\x1b/);
+    expect(latest[0].previewOutput).not.toContain("\x1b");
     expect(latest[0].isStreaming).toBe(true);
   });
 });

@@ -2,6 +2,20 @@
  * Turn raw PTY scrollback into a short plain-text preview for Mission Control
  * cards. Strips ANSI/CSI sequences and keeps only the newest printable lines.
  */
+
+// Built via fromCharCode so the patterns avoid control chars in regex literals
+// (eslint no-control-regex).
+const ESC = String.fromCharCode(0x1b);
+const BEL = String.fromCharCode(0x07);
+const OSC_SEQUENCE = new RegExp(
+  `${ESC}\\][^${BEL}${ESC}]*(?:${BEL}|${ESC}\\\\)`,
+  "g",
+);
+const CSI_OR_ESC_SEQUENCE = new RegExp(
+  `${ESC}(?:[@-Z\\\\-_]|\\[[0-?]*[ -/]*[@-~])`,
+  "g",
+);
+
 export function formatTerminalPreview(
   rawOutput: string,
   options: { maxLines?: number; maxChars?: number } = {},
@@ -11,8 +25,8 @@ export function formatTerminalPreview(
 
   // CSI / OSC / single-char ESC sequences commonly emitted by shells and TUI apps.
   const withoutAnsi = rawOutput
-    .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, "")
-    .replace(/\x1b(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])/g, "")
+    .replace(OSC_SEQUENCE, "")
+    .replace(CSI_OR_ESC_SEQUENCE, "")
     .replace(/\r\n/g, "\n")
     .replace(/[^\n]*\r/g, "");
 
