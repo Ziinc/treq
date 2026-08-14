@@ -48,8 +48,8 @@ it("captures agent terminal message queue button and popover", async () => {
   await captureDocument(document, {
     name: "agent-message-queue-01-composer",
     expectations: [
-      "Agent terminal shows a follow-up composer at the bottom of the panel.",
-      "No queued-count button is visible while the queue is empty.",
+      "Agent terminal shows a dark rounded follow-up composer with a circular send arrow.",
+      "No queued-count chip is visible while the queue is empty.",
     ],
   });
 
@@ -63,22 +63,24 @@ it("captures agent terminal message queue button and popover", async () => {
   await captureDocument(document, {
     name: "agent-message-queue-02-count-button",
     expectations: [
-      "A pinned rounded button at the top of the agent terminal shows 2 queued.",
-      "The follow-up composer remains at the bottom of the terminal panel.",
+      "A dark 2 queued chip sits above the composer, not floating mid-terminal.",
+      "Helper text says the queue sends when the agent is idle.",
     ],
   });
 
   await user.click(
     within(terminalPanel).getByTestId("agent-message-queue-button"),
   );
-  await screen.findByTestId("agent-message-queue-popover");
-  expect(screen.getByText("Add unit tests for the queue")).toBeInTheDocument();
+  const popover = await screen.findByTestId("agent-message-queue-popover");
+  expect(
+    within(popover).getByText("Add unit tests for the queue"),
+  ).toBeInTheDocument();
 
   await captureDocument(document, {
     name: "agent-message-queue-03-popover",
     expectations: [
-      "A popover lists the two queued messages in order.",
-      "Each queued message row shows edit and remove controls.",
+      "A dark elevated popover lists queued messages above the composer.",
+      "Each row shows pencil and trash actions beside the message text.",
     ],
   });
 }, 60000);

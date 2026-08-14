@@ -106,4 +106,17 @@ describe("AgentMessageQueueComposer", () => {
     expect(onEnqueue).toHaveBeenCalledWith("please also add tests");
     expect(composer).toHaveValue("");
   });
+
+  it("queues from the send button", async () => {
+    const user = userEvent.setup();
+    const onEnqueue = vi.fn();
+
+    render(<AgentMessageQueueComposer onEnqueue={onEnqueue} />);
+
+    const composer = screen.getByTestId("agent-message-queue-composer");
+    await user.type(composer, "via send button");
+    await user.click(screen.getByLabelText(/queue message/i));
+
+    expect(onEnqueue).toHaveBeenCalledWith("via send button");
+  });
 });

@@ -45,10 +45,7 @@ import {
 } from "../../lib/agentCommand";
 import { useAgentMessageQueue } from "../../hooks/useAgentMessageQueue";
 import { type ClaudeSessionData } from "./types";
-import {
-  AgentMessageQueueButton,
-  AgentMessageQueueComposer,
-} from "./AgentMessageQueue";
+import { AgentMessageQueueComposer } from "./AgentMessageQueue";
 import { TerminalSearchOverlay } from "./TerminalSearchOverlay";
 import { TerminalSendPreviews } from "./TerminalSendPreviews";
 
@@ -467,11 +464,6 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
             {/* Terminal */}
             {isModelLoaded ? (
               <>
-                <AgentMessageQueueButton
-                  messages={queuedMessages}
-                  onRemove={removeQueuedMessage}
-                  onUpdate={updateQueuedMessage}
-                />
                 <TerminalSendPreviews
                   ptySessionId={sessionData.ptySessionId}
                   isActive={!!isActive}
@@ -507,7 +499,12 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
             )}
           </div>
           {isModelLoaded && !collapsed && (
-            <AgentMessageQueueComposer onEnqueue={enqueueMessage} />
+            <AgentMessageQueueComposer
+              onEnqueue={enqueueMessage}
+              messages={queuedMessages}
+              onRemove={removeQueuedMessage}
+              onUpdate={updateQueuedMessage}
+            />
           )}
         </div>
       </div>
