@@ -1,5 +1,5 @@
 import * as React from "react";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -11,7 +11,7 @@ import { createTestRepo, openRepo } from "../../../test/utils";
 import { captureDocument } from "../capture";
 
 function git(cwd: string, args: string[]) {
-  execSync(`git ${args.join(" ")}`, { cwd, encoding: "utf8" });
+  execFileSync("git", args, { cwd, encoding: "utf8" });
 }
 
 function createSubmoduleRepo(): string {
@@ -28,10 +28,11 @@ function createSubmoduleRepo(): string {
 it("captures readonly submodule missing then checkout", async () => {
   const { repoPath } = createTestRepo(false);
   const sub = createSubmoduleRepo();
-  execSync(`git -c protocol.file.allow=always submodule add ${sub} vendor/lib`, {
-    cwd: repoPath,
-    encoding: "utf8",
-  });
+  execFileSync(
+    "git",
+    ["-c", "protocol.file.allow=always", "submodule", "add", sub, "vendor/lib"],
+    { cwd: repoPath, encoding: "utf8" },
+  );
   git(repoPath, ["commit", "-m", "add submodule"]);
   fs.rmSync(path.join(repoPath, "vendor/lib"), { recursive: true, force: true });
   openRepo(repoPath);
@@ -40,7 +41,11 @@ it("captures readonly submodule missing then checkout", async () => {
   render(<Dashboard />);
 
   const panel = await screen.findByTestId("submodules-panel");
-  expect(panel.textContent).toContain("vendor/lib");
+  await waitFor(() => {
+    expect(screen.getByTestId("submodules-panel").textContent).toContain(
+      "vendor/lib",
+    );
+  });
   expect(panel.textContent).toContain("missing");
 
   await captureDocument(document, {
