@@ -119,15 +119,7 @@ export const TerminalMissionControl: React.FC<TerminalMissionControlProps> = ({
       />
 
       <div className="relative z-10 flex min-h-0 flex-1 flex-col animate-in fade-in-0 slide-in-from-bottom-4 duration-200">
-        <header className="flex shrink-0 items-center justify-between gap-4 px-8 pt-10 pb-4">
-          <div className="flex items-baseline gap-3 min-w-0">
-            <h2 className="text-2xl font-semibold tracking-tight text-foreground">
-              Terminals
-            </h2>
-            <span className="text-xs font-mono text-muted-foreground">
-              {sessions.length} session{sessions.length === 1 ? "" : "s"}
-            </span>
-          </div>
+        <div className="flex shrink-0 justify-end px-8 pt-6 pb-2">
           <Button
             type="button"
             size="icon-xs"
@@ -138,7 +130,7 @@ export const TerminalMissionControl: React.FC<TerminalMissionControlProps> = ({
           >
             <X className="h-4 w-4" />
           </Button>
-        </header>
+        </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-8 pb-16">
           <div className="mx-auto max-w-5xl space-y-8">

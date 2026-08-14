@@ -123,7 +123,7 @@ it("captures Terminal Mission Control open, select, and close", async () => {
 	await captureDocument(document, {
 		name: "terminal-mission-control-02-open",
 		expectations: [
-			"A full-screen Mission Control overlay titled 'Terminals' covers the app with a blurred backdrop.",
+			"A full-screen Mission Control overlay covers the app with a blurred backdrop and a top-right X close button.",
 			"Each terminal card has a dark preview pane and a small status icon in the header (not Active/Idle text).",
 			"Cards are grouped by workspace in a two-column grid.",
 		],
@@ -234,7 +234,7 @@ it("captures Mission Control cards with terminal output previews", async () => {
 	await captureDocument(document, {
 		name: "terminal-mission-control-04-output-previews",
 		expectations: [
-			"Mission Control has an X close button top-right and a centered text-sm swipe-down hint pinned at the bottom.",
+			"Mission Control has an X close button top-right and a centered text-sm swipe-down hint pinned at the bottom; there is no Terminals title or session count.",
 			"Workspace group headers show branch name with a right-aligned Gerrit-style +N/-M LOC indicator; cards have no footer under the dark output pane.",
 			"Card headers are icon + session name with status icon on the right; previews show terminal output text.",
 		],
