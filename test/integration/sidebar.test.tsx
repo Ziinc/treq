@@ -498,4 +498,85 @@ describe("Dashboard - workspace list", () => {
       });
     });
   });
+
+  describe("home repo action buttons", () => {
+    let user: ReturnType<typeof userEvent.setup>;
+
+    beforeEach(() => {
+      user = userEvent.setup();
+    });
+
+    it("shows agent, shell, and stack buttons on the home repo row", async () => {
+      render(<Dashboard />);
+
+      const homeRepoElement = await screen.findByTestId("home-repo-row");
+      expect(
+        within(homeRepoElement).getByRole("button", { name: "Start agent" }),
+      ).toBeTruthy();
+      expect(
+        within(homeRepoElement).getByRole("button", { name: "Open shell" }),
+      ).toBeTruthy();
+      expect(
+        within(homeRepoElement).getByRole("button", {
+          name: "Stack a workspace",
+        }),
+      ).toBeTruthy();
+    });
+
+    it("keeps home and workspace action buttons visible when unselected", async () => {
+      render(<Dashboard />);
+
+      const homeRepoElement = await screen.findByTestId("home-repo-row");
+      const alphaLabel = await findSidebarBranchElement("feat/alpha");
+      const alphaRow = alphaLabel.closest("div") as HTMLElement;
+      await user.click(alphaLabel);
+
+      expect(alphaRow).toHaveClass("bg-primary/20");
+      expect(homeRepoElement).not.toHaveClass("bg-primary/20");
+      expect(
+        within(homeRepoElement).getByRole("button", { name: "Start agent" }),
+      ).toBeTruthy();
+      expect(
+        within(homeRepoElement).getByRole("button", { name: "Open shell" }),
+      ).toBeTruthy();
+      expect(
+        within(homeRepoElement).getByRole("button", {
+          name: "Stack a workspace",
+        }),
+      ).toBeTruthy();
+
+      await user.click(homeRepoElement);
+      expect(homeRepoElement).toHaveClass("bg-primary/20");
+      expect(alphaRow).not.toHaveClass("bg-primary/20");
+      expect(
+        within(alphaRow).getByRole("button", { name: "Start agent" }),
+      ).toBeTruthy();
+      expect(
+        within(alphaRow).getByRole("button", { name: "Open shell" }),
+      ).toBeTruthy();
+      expect(
+        within(alphaRow).getByRole("button", { name: "Stack a workspace" }),
+      ).toBeTruthy();
+    });
+
+    it("opens the stack dialog for home when Stack is clicked", async () => {
+      vi.spyOn(api, "jjGitFetchBackground").mockResolvedValue(undefined);
+
+      render(<Dashboard />);
+
+      const homeRepoElement = await screen.findByTestId("home-repo-row");
+      await user.click(
+        within(homeRepoElement).getByRole("button", {
+          name: "Stack a workspace",
+        }),
+      );
+
+      expect(await screen.findByText("Stack a new Workspace")).toBeVisible();
+      expect(
+        screen.getByText(
+          "Create a new workspace from the current branch. Optionally move file changes.",
+        ),
+      ).toBeVisible();
+    });
+  });
 });

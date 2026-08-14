@@ -1023,6 +1023,29 @@ export const Dashboard: React.FC<DashboardProps> = ({
     );
   }, []);
 
+  const handleStartHomeShellFromSidebar = useCallback(() => {
+    setSelectedWorkspace(null);
+    if (repoPath) {
+      terminalPaneRef.current?.createShellSession(repoPath);
+    }
+  }, [repoPath]);
+
+  const handleStackHomeFromSidebar = useCallback(() => {
+    if (!repoPath) return;
+    if (!effectiveDefaultBranch) {
+      addToast({
+        title: "Cannot create stacked workspace",
+        description: "No parent branch available",
+        type: "error",
+      });
+      return;
+    }
+    setUnifiedDialogDefaults({
+      targetBranch: effectiveDefaultBranch,
+      sourceWorkspace: null,
+    });
+  }, [repoPath, effectiveDefaultBranch, addToast]);
+
   // Full workspace path -> branch name, used to resolve shell terminal
   // branches for the sidebar's terminal sessions list.
   const workspaceBranchByPath = useMemo(() => {
@@ -1375,6 +1398,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
           handleCreateSessionFromSidebar(workspace.id)
         }
         onStartShell={handleStartShellFromSidebar}
+        onStartHomeAgent={() => handleCreateSessionFromSidebar(null)}
+        onStartHomeShell={handleStartHomeShellFromSidebar}
+        onStackHome={handleStackHomeFromSidebar}
         terminalSessions={terminalSessionSummaries}
         onFocusTerminalSession={handleFocusTerminalSession}
         onCloseTerminalSession={handleCloseTerminalSession}

@@ -1,4 +1,4 @@
-import { GitBranch, Home } from "lucide-react";
+import { Bot, GitBranch, Home, Layers2, Terminal } from "lucide-react";
 import type { MouseEvent } from "react";
 import type { Workspace } from "../lib/api";
 import {
@@ -7,6 +7,8 @@ import {
   isChangeFilesDrag,
   type ChangeFilesMoveRequest,
 } from "../lib/change-file-drag";
+import { cn } from "../lib/utils";
+import { Button } from "./ui/button";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -29,6 +31,9 @@ interface HomeRepoSidebarRowProps {
   ) => void;
   onOpenBranchSwitcher?: () => void;
   onDropChangeFiles?: (request: ChangeFilesMoveRequest) => void;
+  onStartAgent?: () => void;
+  onStartShell?: () => void;
+  onStack?: () => void;
 }
 
 export function HomeRepoSidebarRow({
@@ -40,6 +45,9 @@ export function HomeRepoSidebarRow({
   onWorkspaceMultiSelect,
   onOpenBranchSwitcher,
   onDropChangeFiles,
+  onStartAgent,
+  onStartShell,
+  onStack,
 }: HomeRepoSidebarRowProps) {
   return (
     <ContextMenu>
@@ -48,9 +56,10 @@ export function HomeRepoSidebarRow({
           <TooltipTrigger asChild>
             <div
               data-testid="home-repo-row"
-              className={`relative flex items-center text-sm tracking-wide px-2 py-1 rounded-md transition-colors cursor-pointer ${
-                isHomeSelected ? "bg-primary/20" : "hover:bg-muted/50"
-              }`}
+              className={cn(
+                "relative flex items-center text-sm tracking-wide px-2 py-1 rounded-md transition-colors cursor-pointer",
+                isHomeSelected ? "bg-primary/20" : "hover:bg-muted/50",
+              )}
               onClick={(e) => {
                 if (
                   selectedWorkspaceIds &&
@@ -98,6 +107,59 @@ export function HomeRepoSidebarRow({
               >
                 {homeRepoDisplayRef || "…"}
               </span>
+              <div className="flex items-center gap-1 shrink-0 mr-1">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="icon-xs"
+                      variant="ghost"
+                      className="text-foreground"
+                      aria-label="Start agent"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onStartAgent?.();
+                      }}
+                    >
+                      <Bot className="w-4 h-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Start agent</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="icon-xs"
+                      variant="ghost"
+                      className="text-foreground"
+                      aria-label="Open shell"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onStartShell?.();
+                      }}
+                    >
+                      <Terminal className="w-4 h-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Open shell</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      size="icon-xs"
+                      variant="ghost"
+                      className="text-foreground"
+                      aria-label="Stack a workspace"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onStack?.();
+                      }}
+                    >
+                      <Layers2 className="w-4 h-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Stack workspace</TooltipContent>
+                </Tooltip>
+              </div>
             </div>
           </TooltipTrigger>
         </ContextMenuTrigger>

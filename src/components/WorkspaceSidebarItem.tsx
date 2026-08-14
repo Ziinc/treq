@@ -233,7 +233,7 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                     <div
                       style={indentStyle}
                       className={cn(
-                        "group/workspace relative flex items-center  tracking-wide pr-4 rounded-sm transition-colors cursor-pointer p-0.5",
+                        "relative flex items-center  tracking-wide pr-4 rounded-sm transition-colors cursor-pointer p-0.5",
                         {
                           "bg-primary/20": isSelected,
                           "hover:bg-muted/50": !isSelected,
@@ -318,83 +318,63 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                         </Tooltip>
                       )}
                       <div className="flex items-center gap-1 shrink-0 mr-1">
-                        <span
-                          className={cn(
-                            "group-hover/workspace:opacity-100 transition-opacity",
-                            {
-                              "opacity-100": isSelected,
-                              "opacity-0": !isSelected,
-                            },
-                          )}
-                        >
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                size="icon-xs"
-                                variant="ghost"
-                                className="text-foreground"
-                                aria-label="Start agent"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onStartAgent?.(workspace);
-                                }}
-                              >
-                                <Bot className="w-4 h-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent side="bottom">
-                              Start agent
-                            </TooltipContent>
-                          </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                size="icon-xs"
-                                variant="ghost"
-                                className="text-foreground"
-                                aria-label="Open shell"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onStartShell?.(workspace);
-                                }}
-                              >
-                                <Terminal className="w-4 h-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent side="bottom">
-                              Open shell
-                            </TooltipContent>
-                          </Tooltip>
-                        </span>
-                        <span
-                          className={cn(
-                            "group-hover/workspace:opacity-100 transition-opacity",
-                            {
-                              "opacity-100": isSelected,
-                              "opacity-0": !isSelected,
-                            },
-                          )}
-                        >
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                size="icon-xs"
-                                variant="ghost"
-                                className="text-foreground"
-                                aria-label="Stack a workspace"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onAddAfter?.(workspace);
-                                }}
-                              >
-                                <Layers2 className="w-4 h-4" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent side="bottom">
-                              Stack workspace
-                            </TooltipContent>
-                          </Tooltip>
-                        </span>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              size="icon-xs"
+                              variant="ghost"
+                              className="text-foreground"
+                              aria-label="Start agent"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onStartAgent?.(workspace);
+                              }}
+                            >
+                              <Bot className="w-4 h-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom">
+                            Start agent
+                          </TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              size="icon-xs"
+                              variant="ghost"
+                              className="text-foreground"
+                              aria-label="Open shell"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onStartShell?.(workspace);
+                              }}
+                            >
+                              <Terminal className="w-4 h-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom">
+                            Open shell
+                          </TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              size="icon-xs"
+                              variant="ghost"
+                              className="text-foreground"
+                              aria-label="Stack a workspace"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onAddAfter?.(workspace);
+                              }}
+                            >
+                              <Layers2 className="w-4 h-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom">
+                            Stack workspace
+                          </TooltipContent>
+                        </Tooltip>
                       </div>
                     </div>
                   </TooltipTrigger>
