@@ -180,15 +180,16 @@ describe("WorkspaceTerminalPane integration", () => {
       within(terminalPanel).getByTestId("agent-message-queue-button"),
     ).toBeInTheDocument();
 
-    const popover = await screen.findByTestId("agent-message-queue-popover");
+    const dialog = await screen.findByTestId("agent-message-queue-dialog");
+    expect(dialog).toHaveAttribute("data-position", "terminal-center");
     expect(
-      within(popover).getByText("first queued follow-up"),
+      within(dialog).getByText("first queued follow-up"),
     ).toBeInTheDocument();
     expect(
-      within(popover).getByText("second queued follow-up"),
+      within(dialog).getByText("second queued follow-up"),
     ).toBeInTheDocument();
 
-    const removeButtons = within(popover).getAllByLabelText(
+    const removeButtons = within(dialog).getAllByLabelText(
       /remove queued message/i,
     );
     await user.click(removeButtons[1]);

@@ -1,10 +1,10 @@
 /**
- * Captures agent-terminal message queue: toolbar button (with count badge
- * when non-empty) and popover with follow-up input.
+ * Captures agent-terminal message queue: leftmost toolbar button (with count
+ * badge when non-empty) and a dialog centered in the terminal body.
  */
 
 import * as React from "react";
-import { expect, it, vi } from "vitest";
+import { expect, it } from "vitest";
 import userEvent from "@testing-library/user-event";
 import {
   createTestRepo,
@@ -18,27 +18,7 @@ import { captureDocument } from "../capture";
 
 const BRANCH_NAME = "feat/agent-message-queue";
 
-/** jsdom has no layout; give the queue trigger a real box so the popover mock can portal above it. */
-function stubQueueTriggerRect(
-  button: HTMLElement,
-  rect: { top: number; left: number; width: number; height: number },
-) {
-  vi.spyOn(button, "getBoundingClientRect").mockReturnValue({
-    x: rect.left,
-    y: rect.top,
-    top: rect.top,
-    left: rect.left,
-    bottom: rect.top + rect.height,
-    right: rect.left + rect.width,
-    width: rect.width,
-    height: rect.height,
-    toJSON() {
-      return {};
-    },
-  });
-}
-
-it("captures agent terminal message queue button and popover", async () => {
+it("captures agent terminal message queue button and dialog", async () => {
   const { repoPath } = createTestRepo(false);
   openRepo(repoPath);
 
@@ -64,9 +44,10 @@ it("captures agent terminal message queue button and popover", async () => {
   const queueButton = await within(terminalPanel).findByTestId(
     "agent-message-queue-button",
   );
-  expect(
-    within(terminalPanel).getByTestId("agent-message-queue"),
-  ).toBeInTheDocument();
+  const toolbarButtons = within(
+    queueButton.parentElement!.parentElement!,
+  ).getAllByRole("button");
+  expect(toolbarButtons[0]).toBe(queueButton);
   expect(
     screen.queryByTestId("agent-message-queue-composer"),
   ).not.toBeInTheDocument();
@@ -74,28 +55,21 @@ it("captures agent terminal message queue button and popover", async () => {
   await captureDocument(document, {
     name: "agent-message-queue-01-toolbar",
     expectations: [
-      "Agent terminal toolbar shows a Queue icon button next to Search.",
-      "No follow-up input is visible until the Queue button is clicked.",
+      "Queue is the leftmost button in the agent terminal toolbar.",
+      "No follow-up dialog is visible until the Queue button is clicked.",
     ],
   });
 
-  stubQueueTriggerRect(queueButton, {
-    top: 470,
-    left: 900,
-    width: 28,
-    height: 28,
-  });
   await user.click(queueButton);
   const composer = await screen.findByTestId("agent-message-queue-composer");
-  expect(screen.getByTestId("agent-message-queue-popover")).toHaveAttribute(
-    "data-side",
-    "top",
-  );
+  const emptyDialog = screen.getByTestId("agent-message-queue-dialog");
+  expect(emptyDialog).toHaveAttribute("data-position", "terminal-center");
+  expect(terminalPanel.contains(emptyDialog)).toBe(true);
 
   await captureDocument(document, {
-    name: "agent-message-queue-02-empty-popover",
+    name: "agent-message-queue-02-empty-dialog",
     expectations: [
-      "A themed popover opens above the Queue toolbar button with a follow-up input.",
+      "A themed dialog is centered in the terminal body with a follow-up input.",
       "No queued message rows are listed while the queue is empty.",
     ],
   });
@@ -109,48 +83,38 @@ it("captures agent terminal message queue button and popover", async () => {
   expect(
     await within(terminalPanel).findByTestId("agent-message-queue-count"),
   ).toHaveTextContent("2");
-  expect(
-    within(terminalPanel).getByTestId("agent-message-queue-button"),
-  ).toBeInTheDocument();
 
   await user.click(
     within(terminalPanel).getByTestId("agent-message-queue-button"),
   );
   await waitFor(() => {
     expect(
-      screen.queryByTestId("agent-message-queue-popover"),
+      screen.queryByTestId("agent-message-queue-dialog"),
     ).not.toBeInTheDocument();
   });
 
   await captureDocument(document, {
     name: "agent-message-queue-03-toolbar-badge",
     expectations: [
-      "The Queue icon stays in the agent toolbar with a 2 count badge.",
+      "The Queue icon stays leftmost in the toolbar with a 2 count badge.",
       "No floating chip appears over the terminal body.",
     ],
   });
 
-  const toolbarQueueButton = within(terminalPanel).getByTestId(
-    "agent-message-queue-button",
+  await user.click(
+    within(terminalPanel).getByTestId("agent-message-queue-button"),
   );
-  stubQueueTriggerRect(toolbarQueueButton, {
-    top: 470,
-    left: 900,
-    width: 28,
-    height: 28,
-  });
-  await user.click(toolbarQueueButton);
-  const popover = await screen.findByTestId("agent-message-queue-popover");
-  expect(popover).toHaveAttribute("data-side", "top");
+  const dialog = await screen.findByTestId("agent-message-queue-dialog");
+  expect(dialog).toHaveAttribute("data-position", "terminal-center");
   expect(
-    within(popover).getByText("Add unit tests for the queue"),
+    within(dialog).getByText("Add unit tests for the queue"),
   ).toBeInTheDocument();
 
   await captureDocument(document, {
-    name: "agent-message-queue-04-popover",
+    name: "agent-message-queue-04-dialog",
     expectations: [
-      "The popover opens above the toolbar Queue button.",
-      "Queued messages and the follow-up input are listed inside the popover.",
+      "The dialog is centered in the middle of the terminal with space above the bottom edge.",
+      "Queued messages and the follow-up input are listed inside the dialog.",
     ],
   });
 }, 60000);

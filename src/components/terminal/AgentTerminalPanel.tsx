@@ -97,6 +97,8 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
     const isHidden = collapsed;
 
     const [queuePopoverOpen, setQueuePopoverOpen] = useState(false);
+    const [terminalBodyEl, setTerminalBodyEl] =
+      useState<HTMLDivElement | null>(null);
 
     const {
       messages: queuedMessages,
@@ -356,6 +358,15 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
             <span className="truncate">{sessionData.sessionName}</span>
           </div>
           <div className="flex items-center gap-1">
+            <AgentMessageQueue
+              messages={queuedMessages}
+              onEnqueue={handleEnqueueMessage}
+              onRemove={removeQueuedMessage}
+              onUpdate={updateQueuedMessage}
+              open={queuePopoverOpen}
+              onOpenChange={setQueuePopoverOpen}
+              overlayContainer={terminalBodyEl}
+            />
             {/* Model selector — Claude only */}
             {sessionData.agent !== "codex" &&
               sessionData.agent !== "cursor" && (
@@ -425,14 +436,6 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
                 <TooltipContent>Search (⌘+F)</TooltipContent>
               </Tooltip>
             </TooltipProvider>
-            <AgentMessageQueue
-              messages={queuedMessages}
-              onEnqueue={handleEnqueueMessage}
-              onRemove={removeQueuedMessage}
-              onUpdate={updateQueuedMessage}
-              open={queuePopoverOpen}
-              onOpenChange={setQueuePopoverOpen}
-            />
             {/* Close button */}
             {onClose && (
               <TooltipProvider>
@@ -462,7 +465,8 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
         </div>
 
         <div
-          className="flex min-h-0 flex-1 flex-col overflow-hidden border-r border-border"
+          ref={setTerminalBodyEl}
+          className="relative flex min-h-0 flex-1 flex-col overflow-hidden border-r border-border"
           style={{ backgroundColor: "#1e1e1e" }}
         >
           <div className="relative min-h-0 flex-1 overflow-hidden">

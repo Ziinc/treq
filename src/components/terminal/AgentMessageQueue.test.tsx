@@ -69,8 +69,11 @@ describe("AgentMessageQueue", () => {
     expect(composer).toHaveValue("");
   });
 
-  it("shows a count badge on the toolbar button and lists messages in the popover", async () => {
+  it("centers the dialog in the overlay container with a min bottom inset", async () => {
     const user = userEvent.setup();
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+
     const messages = [
       createQueuedAgentMessage("first follow-up", "m1", 1),
       createQueuedAgentMessage("second follow-up", "m2", 2),
@@ -82,28 +85,30 @@ describe("AgentMessageQueue", () => {
         onEnqueue={vi.fn()}
         onRemove={vi.fn()}
         onUpdate={vi.fn()}
+        overlayContainer={container}
       />,
     );
 
     expect(screen.getByTestId("agent-message-queue-count")).toHaveTextContent(
       "2",
     );
-    expect(
-      screen.queryByTestId("agent-message-queue-composer"),
-    ).not.toBeInTheDocument();
 
     await user.click(screen.getByTestId("agent-message-queue-button"));
 
-    const popover = await screen.findByTestId("agent-message-queue-popover");
-    expect(popover).toHaveAttribute("data-side", "top");
-    expect(within(popover).getByText("first follow-up")).toBeInTheDocument();
-    expect(within(popover).getByText("second follow-up")).toBeInTheDocument();
+    const dialog = await screen.findByTestId("agent-message-queue-dialog");
+    expect(container.contains(dialog)).toBe(true);
+    expect(dialog).toHaveAttribute("data-position", "terminal-center");
+    expect(dialog.className).toMatch(/pb-10/);
+    expect(within(dialog).getByText("first follow-up")).toBeInTheDocument();
+    expect(within(dialog).getByText("second follow-up")).toBeInTheDocument();
     expect(
-      within(popover).getByTestId("agent-message-queue-composer"),
+      within(dialog).getByTestId("agent-message-queue-composer"),
     ).toBeInTheDocument();
+
+    container.remove();
   });
 
-  it("removes a queued message from the popover", async () => {
+  it("removes a queued message from the dialog", async () => {
     const user = userEvent.setup();
     const onRemove = vi.fn();
     const messages = [createQueuedAgentMessage("drop me", "m1", 1)];
@@ -125,7 +130,7 @@ describe("AgentMessageQueue", () => {
     expect(onRemove).toHaveBeenCalledWith("m1");
   });
 
-  it("edits a queued message from the popover", async () => {
+  it("edits a queued message from the dialog", async () => {
     const user = userEvent.setup();
     const onUpdate = vi.fn();
     const messages = [createQueuedAgentMessage("old text", "m1", 1)];
