@@ -4,7 +4,7 @@
  */
 
 import * as React from "react";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
 import {
   createTestRepo,
@@ -17,6 +17,26 @@ import { Dashboard } from "../../../src/components/Dashboard";
 import { captureDocument } from "../capture";
 
 const BRANCH_NAME = "feat/agent-message-queue";
+
+/** jsdom has no layout; give the queue trigger a real box so the popover mock can portal above it. */
+function stubQueueTriggerRect(
+  button: HTMLElement,
+  rect: { top: number; left: number; width: number; height: number },
+) {
+  vi.spyOn(button, "getBoundingClientRect").mockReturnValue({
+    x: rect.left,
+    y: rect.top,
+    top: rect.top,
+    left: rect.left,
+    bottom: rect.top + rect.height,
+    right: rect.left + rect.width,
+    width: rect.width,
+    height: rect.height,
+    toJSON() {
+      return {};
+    },
+  });
+}
 
 it("captures agent terminal message queue button and popover", async () => {
   const { repoPath } = createTestRepo(false);
@@ -59,13 +79,24 @@ it("captures agent terminal message queue button and popover", async () => {
     ],
   });
 
+  // Toolbar trigger near the agent header controls (right side).
+  stubQueueTriggerRect(queueButton, {
+    top: 470,
+    left: 900,
+    width: 28,
+    height: 28,
+  });
   await user.click(queueButton);
   const composer = await screen.findByTestId("agent-message-queue-composer");
+  expect(screen.getByTestId("agent-message-queue-popover")).toHaveAttribute(
+    "data-side",
+    "top",
+  );
 
   await captureDocument(document, {
     name: "agent-message-queue-02-empty-popover",
     expectations: [
-      "A themed popover opens from the Queue button with a follow-up input.",
+      "A themed popover opens above the Queue toolbar button with a follow-up input.",
       "No queued message rows are listed while the queue is empty.",
     ],
   });
@@ -101,10 +132,19 @@ it("captures agent terminal message queue button and popover", async () => {
     ],
   });
 
-  await user.click(
-    within(terminalPanel).getByTestId("agent-message-queue-button"),
+  const pinnedButton = within(terminalPanel).getByTestId(
+    "agent-message-queue-button",
   );
+  // Pinned chip is centered near the top of the terminal body.
+  stubQueueTriggerRect(pinnedButton, {
+    top: 510,
+    left: 620,
+    width: 96,
+    height: 24,
+  });
+  await user.click(pinnedButton);
   const popover = await screen.findByTestId("agent-message-queue-popover");
+  expect(popover).toHaveAttribute("data-side", "top");
   expect(
     within(popover).getByText("Add unit tests for the queue"),
   ).toBeInTheDocument();
