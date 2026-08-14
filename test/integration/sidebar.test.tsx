@@ -524,6 +524,8 @@ describe("Dashboard - workspace list", () => {
     });
 
     it("opens the stack dialog for home when Stack is clicked", async () => {
+      vi.spyOn(api, "jjGitFetchBackground").mockResolvedValue(undefined);
+
       render(<Dashboard />);
 
       const homeRepoElement = await screen.findByTestId("home-repo-row");
