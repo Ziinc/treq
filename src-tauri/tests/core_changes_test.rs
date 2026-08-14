@@ -432,6 +432,89 @@ fn test_detects_conflicts_in_committed_tip_when_tree_diff_is_empty() {
 }
 
 #[test]
+fn test_resolving_markers_in_wc_clears_conflict_status_before_commit() {
+  let repo = TestRepo::new().expect("Failed to create test repo");
+
+  let workspace = treq_lib::core::create_workspace(
+    &repo.repo_path,
+    "feat/resolve-wc-before-commit",
+    Some("resolve in working copy".to_string()),
+    None,
+    None,
+    None,
+    None,
+  )
+  .expect("Failed to create workspace");
+  let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+  let workspace_path_str = workspace_path.to_str().unwrap();
+
+  TestRepo::write_workspace_file(workspace_path_str, "README.md", "workspace side\n")
+    .expect("Failed to write workspace README");
+  treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "workspace commit")
+    .expect("Failed to commit workspace");
+  let ws_change_id =
+    get_change_id(workspace_path_str, "@-").expect("Failed to get workspace change_id");
+
+  repo
+    .create_file("README.md", "main side\n")
+    .expect("Failed to write main README");
+  treq_lib::jj::jj_commit(&repo.repo_path, "main commit").expect("Failed to commit main");
+  let main_change_id = get_change_id(&repo.repo_path, "@-").expect("Failed to get main change_id");
+
+  TestRepo::run_jj(workspace_path_str, &["new", &ws_change_id, &main_change_id])
+    .expect("Failed to create unresolved merge conflict");
+
+  let before = treq_lib::core::workspace_status(&repo.repo_path, Some(workspace.id))
+    .expect("workspace_status before resolve");
+  assert!(
+    before.partial.has_conflicts,
+    "merge conflict must set has_conflicts before resolve"
+  );
+  assert!(
+    before.conflicted_files.contains(&"README.md".to_string()),
+    "merge conflict must list README.md before resolve, got {:?}",
+    before.conflicted_files
+  );
+
+  // Editing markers away must clear conflict status immediately — Review must
+  // treat the file as a normal uncommitted change before any resolve commit.
+  TestRepo::write_workspace_file(workspace_path_str, "README.md", "resolved content\n")
+    .expect("Failed to write resolved README");
+
+  let after_wc = treq_lib::core::workspace_status(&repo.repo_path, Some(workspace.id))
+    .expect("workspace_status after WC resolve");
+  assert!(
+    !after_wc.partial.has_conflicts,
+    "has_conflicts must clear once markers are resolved in the working copy"
+  );
+  assert!(
+    after_wc.conflicted_files.is_empty(),
+    "conflicted_files must clear once markers are resolved in the working copy, got {:?}",
+    after_wc.conflicted_files
+  );
+  assert!(
+    after_wc.partial.has_changes,
+    "resolved content must remain as uncommitted changes"
+  );
+  assert!(
+    !treq_lib::jj::workspace_has_unresolved_conflicts(workspace_path_str)
+      .expect("workspace_has_unresolved_conflicts should succeed"),
+    "snapshotted WC must report no unresolved conflicts after marker resolve"
+  );
+
+  let sidebar = treq_lib::core::list_workspace_statuses(&repo.repo_path)
+    .expect("list_workspace_statuses after WC resolve");
+  let sidebar_status = sidebar
+    .iter()
+    .find(|s| s.current.id == workspace.id)
+    .expect("workspace should appear in sidebar statuses");
+  assert!(
+    !sidebar_status.has_conflicts,
+    "sidebar has_conflicts must clear once markers are resolved in the working copy"
+  );
+}
+
+#[test]
 fn test_resolve_and_commit_clears_merge_conflict_from_status() {
   let repo = TestRepo::new().expect("Failed to create test repo");
 
