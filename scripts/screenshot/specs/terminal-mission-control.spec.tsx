@@ -1,5 +1,5 @@
 /**
- * Captures Terminal Mission Control: three-finger swipe up opens a
+ * Captures Terminal Mission Control: two-finger swipe up opens a
  * workspace-grouped, activity-sorted two-column card overlay; swipe down
  * (and Escape) close it; selecting a card focuses that terminal.
  */
@@ -50,14 +50,10 @@ function dispatchTouch(
 	window.dispatchEvent(event);
 }
 
-function threeFingerSwipe(direction: "up" | "down") {
+function twoFingerSwipe(direction: "up" | "down") {
 	const startY = direction === "up" ? 360 : 180;
 	const endY = direction === "up" ? 200 : 340;
-	const start = [
-		makeTouch(0, 120, startY),
-		makeTouch(1, 160, startY + 8),
-		makeTouch(2, 200, startY + 4),
-	];
+	const start = [makeTouch(0, 120, startY), makeTouch(1, 160, startY + 8)];
 	dispatchTouch("touchstart", start);
 	dispatchTouch(
 		"touchmove",
@@ -114,7 +110,7 @@ it("captures Terminal Mission Control open, select, and close", async () => {
 		],
 	});
 
-	threeFingerSwipe("up");
+	twoFingerSwipe("up");
 	expect(await screen.findByTestId("terminal-mission-control")).toBeTruthy();
 	expect(
 		screen.getByTestId(`mission-control-grid-${BRANCH_A}`).className,
@@ -144,16 +140,16 @@ it("captures Terminal Mission Control open, select, and close", async () => {
 		],
 	});
 
-	threeFingerSwipe("up");
+	twoFingerSwipe("up");
 	expect(await screen.findByTestId("terminal-mission-control")).toBeTruthy();
-	threeFingerSwipe("down");
+	twoFingerSwipe("down");
 	await waitFor(() => {
 		expect(
 			screen.queryByTestId("terminal-mission-control"),
 		).not.toBeInTheDocument();
 	});
 
-	threeFingerSwipe("up");
+	twoFingerSwipe("up");
 	expect(await screen.findByTestId("terminal-mission-control")).toBeTruthy();
 	await user.keyboard("{Escape}");
 	await waitFor(() => {

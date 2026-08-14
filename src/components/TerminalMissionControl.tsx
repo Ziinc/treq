@@ -237,7 +237,7 @@ export const TerminalMissionControl: React.FC<TerminalMissionControlProps> = ({
           data-testid="mission-control-swipe-hint"
           className="pointer-events-none absolute inset-x-0 bottom-4 z-10 text-center text-sm text-muted-foreground"
         >
-          Swipe down with three fingers to close
+          Swipe down with two fingers to close
         </p>
       </div>
     </div>

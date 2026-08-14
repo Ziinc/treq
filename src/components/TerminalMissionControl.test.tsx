@@ -142,7 +142,7 @@ describe("TerminalMissionControl", () => {
     const card = screen.getByTestId("mission-control-card-shell-feat");
     expect(card.textContent).not.toMatch(/feat\/thing.*feat\/thing/);
     const hint = screen.getByTestId("mission-control-swipe-hint");
-    expect(hint).toHaveTextContent("Swipe down with three fingers to close");
+    expect(hint).toHaveTextContent("Swipe down with two fingers to close");
     expect(hint.className).toContain("text-sm");
     expect(hint.className).toContain("bottom-4");
   });

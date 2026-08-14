@@ -1,8 +1,9 @@
 import { useEffect, useRef } from "react";
 
 const DEFAULT_THRESHOLD_PX = 80;
+const REQUIRED_FINGERS = 2;
 
-export interface UseThreeFingerSwipeOptions {
+export interface UseTwoFingerSwipeOptions {
   onSwipeUp: () => void;
   onSwipeDown: () => void;
   enabled?: boolean;
@@ -16,15 +17,16 @@ function averageClientY(touches: TouchList | Touch[]): number {
 }
 
 /**
- * Detects three-finger vertical swipes on the window.
+ * Detects two-finger vertical swipes on the window.
  * Swipe up / swipe down invoke the corresponding callbacks once per gesture.
+ * Uses two fingers to avoid conflicting with macOS Mission Control (three-finger).
  */
-export function useThreeFingerSwipe({
+export function useTwoFingerSwipe({
   onSwipeUp,
   onSwipeDown,
   enabled = true,
   thresholdPx = DEFAULT_THRESHOLD_PX,
-}: UseThreeFingerSwipeOptions) {
+}: UseTwoFingerSwipeOptions) {
   const onSwipeUpRef = useRef(onSwipeUp);
   const onSwipeDownRef = useRef(onSwipeDown);
   onSwipeUpRef.current = onSwipeUp;
@@ -46,7 +48,7 @@ export function useThreeFingerSwipe({
     };
 
     const onTouchStart = (event: TouchEvent) => {
-      if (event.touches.length !== 3) {
+      if (event.touches.length !== REQUIRED_FINGERS) {
         reset();
         return;
       }
@@ -58,7 +60,7 @@ export function useThreeFingerSwipe({
 
     const onTouchMove = (event: TouchEvent) => {
       if (!active) return;
-      if (event.touches.length !== 3) {
+      if (event.touches.length !== REQUIRED_FINGERS) {
         reset();
         return;
       }
@@ -81,7 +83,7 @@ export function useThreeFingerSwipe({
       if (!active) return;
       if (event.touches.length === 0) {
         reset();
-      } else if (event.touches.length !== 3) {
+      } else if (event.touches.length !== REQUIRED_FINGERS) {
         reset();
       }
     };

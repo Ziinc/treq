@@ -33,8 +33,8 @@ Most shortcuts act on the current [workspace](/docs/concepts/workspaces) or [ter
 
 | Gesture                 | Action                         |
 | ----------------------- | ------------------------------ |
-| Three-finger swipe up   | Open Terminal Mission Control  |
-| Three-finger swipe down | Close Terminal Mission Control |
+| Two-finger swipe up   | Open Terminal Mission Control  |
+| Two-finger swipe down | Close Terminal Mission Control |
 
 Mission Control shows every open terminal as a card, grouped by workspace and sorted by recent activity, in a two-column grid. Select a card to focus that terminal. `Escape` also closes Mission Control.
 

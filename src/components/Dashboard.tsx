@@ -7,7 +7,7 @@ import { ask } from "@tauri-apps/plugin-dialog";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
-import { useThreeFingerSwipe } from "../hooks/useThreeFingerSwipe";
+import { useTwoFingerSwipe } from "../hooks/useTwoFingerSwipe";
 import { useWorkspaceHierarchy } from "../hooks/useWorkspaceHierarchy";
 import {
   type AgentDeepLinkRequest,
@@ -350,7 +350,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     ],
   );
 
-  useThreeFingerSwipe({
+  useTwoFingerSwipe({
     onSwipeUp: () => setShowTerminalMissionControl(true),
     onSwipeDown: () => setShowTerminalMissionControl(false),
   });
