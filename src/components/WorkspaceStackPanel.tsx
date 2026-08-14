@@ -181,6 +181,7 @@ interface StackItemProps {
 
 function StackItem({ entry, diffStats, maxChange, onSelect }: StackItemProps) {
   const { workspace, isCurrent } = entry;
+  const hasStats = diffStats.insertions > 0 || diffStats.deletions > 0;
   const title = getWorkspaceDisplayTitle(workspace);
 
   return (
