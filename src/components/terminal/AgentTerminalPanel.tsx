@@ -316,7 +316,11 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
             const parsed: unknown = JSON.parse(
               await readFile(claudeLocalSettingsPath(cwd)),
             );
-            if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            if (
+              parsed &&
+              typeof parsed === "object" &&
+              !Array.isArray(parsed)
+            ) {
               existing = parsed as Record<string, unknown>;
             }
           } catch {
@@ -347,8 +351,7 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
             agent,
             permissionMode: permissionModeRef.current,
             sessionModel,
-            pendingPrompt:
-              agent === "cursor" ? null : pendingPromptRef.current,
+            pendingPrompt: agent === "cursor" ? null : pendingPromptRef.current,
             treqBinDir,
             files,
           }),

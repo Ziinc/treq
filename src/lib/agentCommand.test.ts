@@ -169,9 +169,7 @@ describe("buildAgentAutoCommand", () => {
       pendingPrompt: "fix the bug",
     });
 
-    expect(command).toContain(
-      "--settings '/tmp/treq-agent-settings-1.json'",
-    );
+    expect(command).toContain("--settings '/tmp/treq-agent-settings-1.json'");
     expect(command).toContain(
       "--append-system-prompt-file '/tmp/treq-agent-prompt-1.txt'",
     );
@@ -206,12 +204,9 @@ describe("buildAgentAutoCommand", () => {
     });
 
     expect(command).toContain("cursor-agent --plan -- ");
-    expect(command).toContain(
-      `"$(cat -- '/tmp/treq-agent-prompt-1.txt')"`,
-    );
+    expect(command).toContain(`"$(cat -- '/tmp/treq-agent-prompt-1.txt')"`);
   });
 });
-
 
 describe("appendAgentPrompt", () => {
   it("separates a prompt beginning with hyphens from CLI options", () => {
