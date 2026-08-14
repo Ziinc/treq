@@ -121,6 +121,55 @@ describe("TerminalMissionControl", () => {
     expect(screen.queryByText("Idle")).toBeNull();
   });
 
+  it("shows brand icons for agent sessions", () => {
+    renderMissionControl(
+      <TerminalMissionControl
+        open
+        sessions={[
+          session({
+            id: "claude-1",
+            kind: "agent",
+            name: "Claude session",
+            agent: "claude",
+            lastActivityAt: 1,
+          }),
+          session({
+            id: "codex-1",
+            kind: "agent",
+            name: "Codex session",
+            agent: "codex",
+            lastActivityAt: 2,
+          }),
+          session({
+            id: "cursor-1",
+            kind: "agent",
+            name: "Cursor session",
+            agent: "cursor",
+            lastActivityAt: 3,
+          }),
+        ]}
+        onClose={vi.fn()}
+        onFocus={vi.fn()}
+      />,
+    );
+
+    expect(
+      screen.getByTestId("mission-control-card-claude-1").querySelector(
+        '[data-agent-icon="claude"]',
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByTestId("mission-control-card-codex-1").querySelector(
+        '[data-agent-icon="codex"]',
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByTestId("mission-control-card-cursor-1").querySelector(
+        '[data-agent-icon="cursor"]',
+      ),
+    ).toBeTruthy();
+  });
+
   it("omits the card footer and pins the swipe hint at the bottom", () => {
     renderMissionControl(
       <TerminalMissionControl
