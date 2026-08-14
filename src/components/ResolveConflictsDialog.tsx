@@ -102,7 +102,7 @@ export const ResolveConflictsDialog: React.FC<ResolveConflictsDialogProps> = ({
         // keep default
       }
 
-      const primary = resolveSession.targets[0];
+      const [primary] = resolveSession.targets;
       if (!primary) {
         throw new Error("No resolve targets were created");
       }

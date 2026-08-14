@@ -1,3 +1,4 @@
+import { resolveCommit } from "./api";
 import { shellQuote } from "./shellQuote";
 
 /** Append an agent prompt as a positional argument, never as a CLI option. */
@@ -14,6 +15,10 @@ export const buildTreqAgentSystemPrompt = ({
   workspacePath,
   repoPath,
 }: AgentPathContext): string => {
+  if (typeof resolveCommit !== "function") {
+    throw new Error("resolveCommit Tauri invoke wrapper is missing");
+  }
+
   const locationContext = workspacePath
     ? [
         "You are operating inside a Treq workspace.",
