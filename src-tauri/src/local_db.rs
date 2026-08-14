@@ -1158,6 +1158,21 @@ pub fn update_workspace_last_rebased_commit(
   Ok(())
 }
 
+pub fn set_workspace_metadata(
+  repo_path: &str,
+  id: i64,
+  metadata: &str,
+) -> Result<(), String> {
+  let conn = get_connection(repo_path)?;
+  conn
+    .execute(
+      "UPDATE workspaces SET metadata = ?1 WHERE id = ?2",
+      params![metadata, id],
+    )
+    .map_err(|e| format!("Failed to set workspace metadata: {}", e))?;
+  Ok(())
+}
+
 pub fn get_sessions(repo_path: &str) -> Result<Vec<Session>, String> {
   let conn = get_connection(repo_path)?;
   let mut stmt = conn
