@@ -130,9 +130,7 @@ export function AgentMessageQueue({
                       <div className="flex flex-col gap-2">
                         <Textarea
                           value={editDraft}
-                          onChange={(event) =>
-                            setEditDraft(event.target.value)
-                          }
+                          onChange={(event) => setEditDraft(event.target.value)}
                           data-testid={`agent-message-queue-edit-input-${message.id}`}
                           className="min-h-[72px] resize-y text-sm"
                           autoFocus
@@ -254,9 +252,7 @@ export function AgentMessageQueue({
         )}
       </Button>
       {dialog &&
-        (overlayContainer
-          ? createPortal(dialog, overlayContainer)
-          : dialog)}
+        (overlayContainer ? createPortal(dialog, overlayContainer) : dialog)}
     </div>
   );
 }

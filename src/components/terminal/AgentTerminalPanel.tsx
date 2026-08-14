@@ -97,8 +97,9 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
     const isHidden = collapsed;
 
     const [queuePopoverOpen, setQueuePopoverOpen] = useState(false);
-    const [terminalBodyEl, setTerminalBodyEl] =
-      useState<HTMLDivElement | null>(null);
+    const [terminalBodyEl, setTerminalBodyEl] = useState<HTMLDivElement | null>(
+      null,
+    );
 
     const {
       messages: queuedMessages,
