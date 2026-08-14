@@ -1685,7 +1685,7 @@ export const FileBrowser = memo(
 
     // Virtualized rows: a code line for every source line, plus one inline
     // comment-thread row inserted right after any line that has comments
-    // (or the pending new-comment input), mirroring the Review tab's layout.
+    // (or the pending new-comment input), mirroring the Changes tab's layout.
     const rows = useMemo<FileBrowserRow[]>(() => {
       const totalLines = fileContentData?.lines.length ?? 0;
       const commentRowAnchors = new Set<number>(commentsByEndLine.keys());

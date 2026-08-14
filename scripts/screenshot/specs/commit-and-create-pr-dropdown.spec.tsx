@@ -102,8 +102,8 @@ it("captures the commit dropdown closing immediately and showing a Creating PR s
 		"feature content\n",
 	);
 
-	await user.click(await screen.findByRole("tab", { name: /^Review/ }));
-	await screen.findByRole("tab", { name: /^Review/, selected: true });
+	await user.click(await screen.findByRole("tab", { name: /^Changes/ }));
+	await screen.findByRole("tab", { name: /^Changes/, selected: true });
 	await waitFor(() =>
 		expect(screen.getAllByText("feature.txt").length).toBeGreaterThan(0),
 	);

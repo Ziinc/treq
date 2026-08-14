@@ -57,8 +57,8 @@ it("captures inline error when committing with an empty message", async () => {
 
 	writeWorkspaceFile(workspacePath, "changed.txt", "changed content\n");
 
-	await user.click(await screen.findByRole("tab", { name: /^Review/ }));
-	await screen.findByRole("tab", { name: /^Review/, selected: true });
+	await user.click(await screen.findByRole("tab", { name: /^Changes/ }));
+	await screen.findByRole("tab", { name: /^Changes/, selected: true });
 	await waitFor(() =>
 		expect(screen.getAllByText("changed.txt").length).toBeGreaterThan(0),
 	);

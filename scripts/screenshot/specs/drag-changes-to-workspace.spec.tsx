@@ -73,9 +73,9 @@ it("captures drag-to-workspace confirmation and completed move", async () => {
 	render(<Dashboard />);
 
 	await user.click(await findSidebarBranchElement(sourceBranch));
-	const reviewTab = await screen.findByRole("tab", { name: /^Review/ });
+	const reviewTab = await screen.findByRole("tab", { name: /^Changes/ });
 	await user.click(reviewTab);
-	await screen.findByRole("tab", { name: /^Review/, selected: true });
+	await screen.findByRole("tab", { name: /^Changes/, selected: true });
 
 	await waitFor(() =>
 		expect(screen.getAllByText("drag-me.txt").length).toBeGreaterThan(0),
@@ -118,7 +118,7 @@ it("captures drag-to-workspace confirmation and completed move", async () => {
 		expectations: [
 			"The confirmation dialog has closed.",
 			'The Changes list no longer shows "drag-me.txt" (empty or no-changes state).',
-			"The Review tab badge no longer shows a pending change count of 1.",
+			"The Changes tab badge no longer shows a pending change count of 1.",
 		],
 	});
 }, 60000);

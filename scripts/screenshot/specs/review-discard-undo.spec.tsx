@@ -1,5 +1,5 @@
 /**
- * Verifies the "Undo" action on the discard toasts in the Review tab: both
+ * Verifies the "Undo" action on the discard toasts in the Changes tab: both
  * "Discard all changes" (the Changes section header icon) and a per-file
  * "Discard file" (the file row's overflow menu) show a success toast with
  * an "Undo" button that restores the discarded content.
@@ -42,7 +42,7 @@ it("captures Undo on the discard-all toast restoring the change", async () => {
 
 	await user.click(await screen.findByText(BRANCH_NAME));
 	await screen.findByTestId("show-workspace-header");
-	await user.click(await screen.findByRole("tab", { name: /^Review/i }));
+	await user.click(await screen.findByRole("tab", { name: /^Changes/i }));
 	await screen.findAllByText("example.ts");
 
 	const changesHeading = await screen.findByText("Changes");

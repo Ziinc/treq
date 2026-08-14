@@ -27,8 +27,8 @@ it("captures the Code Review tab for the README", async () => {
 
   await user.click(await findSidebarBranchElement(MARKETING_BRANCH));
   await screen.findByTestId("show-workspace-header");
-  await user.click(await screen.findByRole("tab", { name: /^Review/ }));
-  await screen.findByRole("tab", { name: /^Review/, selected: true });
+  await user.click(await screen.findByRole("tab", { name: /^Changes/ }));
+  await screen.findByRole("tab", { name: /^Changes/, selected: true });
   await screen.findByTitle("src/client.ts");
   await screen.findByTitle("src/client.test.ts");
   await screen.findByText(/Committed/i);
@@ -41,7 +41,7 @@ it("captures the Code Review tab for the README", async () => {
     deviceScaleFactor: 2,
     publishTo: path.join(README_SCREENSHOTS_DIR, "review.png"),
     expectations: [
-      "The Review tab is active and a Committed section lists src/client.ts and/or src/client.test.ts.",
+      "The Changes tab is active and a Committed section lists src/client.ts and/or src/client.test.ts.",
       "A green addition diff for the event_message handling change is visible in the main pane.",
       "The page is in dark mode.",
     ],

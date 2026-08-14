@@ -166,7 +166,7 @@ describe("Committed Show toggle wiring", () => {
     renderDefaultBranchWorkspace();
 
     const user = userEvent.setup();
-    const changesTab = await screen.findByRole("tab", { name: /review/i });
+    const changesTab = await screen.findByRole("tab", { name: /changes/i });
     await user.click(changesTab);
 
     const viewer = await screen.findByTestId("changes-viewer");
@@ -185,7 +185,7 @@ describe("Committed Show toggle wiring", () => {
     renderDefaultBranchWorkspace();
 
     const user = userEvent.setup();
-    const changesTab = await screen.findByRole("tab", { name: /review/i });
+    const changesTab = await screen.findByRole("tab", { name: /changes/i });
     await user.click(changesTab);
 
     await screen.findByTestId("changes-viewer");
@@ -206,7 +206,7 @@ describe("Committed Show toggle wiring", () => {
     renderWorkspace();
 
     const user = userEvent.setup();
-    const changesTab = await screen.findByRole("tab", { name: /review/i });
+    const changesTab = await screen.findByRole("tab", { name: /changes/i });
     await user.click(changesTab);
 
     await screen.findByTestId("changes-viewer");

@@ -52,9 +52,9 @@ describe("ShowWorkspace - Search integration", () => {
     render(<Dashboard />);
     await user.click(await findSidebarBranchElement(branchName));
 
-    const reviewTab = await screen.findByRole("tab", { name: /^Review/ });
+    const reviewTab = await screen.findByRole("tab", { name: /^Changes/ });
     await user.click(reviewTab);
-    await screen.findByRole("tab", { name: /^Review/, selected: true });
+    await screen.findByRole("tab", { name: /^Changes/, selected: true });
 
     await waitFor(() =>
       expect(screen.getAllByText("search-test.txt").length).toBeGreaterThan(0),
@@ -82,9 +82,9 @@ describe("ShowWorkspace - Search integration", () => {
     render(<Dashboard />);
     await user.click(await findSidebarBranchElement(branchName));
 
-    const reviewTab = await screen.findByRole("tab", { name: /^Review/ });
+    const reviewTab = await screen.findByRole("tab", { name: /^Changes/ });
     await user.click(reviewTab);
-    await screen.findByRole("tab", { name: /^Review/, selected: true });
+    await screen.findByRole("tab", { name: /^Changes/, selected: true });
 
     await waitFor(() =>
       expect(screen.getAllByText("search-test.txt").length).toBeGreaterThan(0),

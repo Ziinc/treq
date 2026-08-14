@@ -61,9 +61,9 @@ async function navigateToReview(
   branchName: string,
 ) {
   await user.click(await findSidebarBranchElement(branchName));
-  const reviewTab = await screen.findByRole("tab", { name: /^Review/ });
+  const reviewTab = await screen.findByRole("tab", { name: /^Changes/ });
   await user.click(reviewTab);
-  await screen.findByRole("tab", { name: /^Review/, selected: true });
+  await screen.findByRole("tab", { name: /^Changes/, selected: true });
 }
 
 async function resolveAndCommitViaUi(
@@ -130,7 +130,7 @@ async function captureBeforeAfter(
     name: `${fixture.slug}-01-before-resolve-commit`,
     expectations: [
       `The workspace sidebar shows a red conflict indicator for ${fixture.branchName}.`,
-      'The Review tab shows a red "Conflicts" section listing the conflicted file(s).',
+      'The Changes tab shows a red "Conflicts" section listing the conflicted file(s).',
       "A Commit button is visible so the conflict can be resolved by committing a fix.",
     ],
   });
@@ -142,7 +142,7 @@ async function captureBeforeAfter(
     name: `${fixture.slug}-02-after-resolve-commit`,
     expectations: [
       `The workspace sidebar no longer shows a conflict indicator for ${fixture.branchName}.`,
-      'The Review tab no longer shows a "Conflicts" section.',
+      'The Changes tab no longer shows a "Conflicts" section.',
       'A "Commit created" toast confirms the resolve commit succeeded.',
     ],
   });
@@ -221,7 +221,7 @@ it("clears a second conflict that appears after the first was resolved", async (
   await captureDocument(document, {
     name: "conflict-clear-sequential-01-first-conflict",
     expectations: [
-      'The Review tab shows a "Conflicts" section for first.txt.',
+      'The Changes tab shows a "Conflicts" section for first.txt.',
       "The workspace sidebar shows a conflict indicator before the first resolve.",
     ],
   });
@@ -300,7 +300,7 @@ it("clears a second conflict that appears after the first was resolved", async (
     name: "conflict-clear-sequential-03-after-second-resolve",
     expectations: [
       "After resolving the second conflict, the sidebar conflict indicator is gone again.",
-      'The Review tab no longer shows a "Conflicts" section.',
+      'The Changes tab no longer shows a "Conflicts" section.',
       'A "Commit created" toast is visible for the second resolve commit.',
     ],
   });

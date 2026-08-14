@@ -81,8 +81,8 @@ it("captures workspace state before and after syncing a fresh commit", async () 
 	// commit box, then Sync.
 	writeWorkspaceFile(workspacePath, "synced.txt", "synced content\n");
 
-	await user.click(await screen.findByRole("tab", { name: /^Review/ }));
-	await screen.findByRole("tab", { name: /^Review/, selected: true });
+	await user.click(await screen.findByRole("tab", { name: /^Changes/ }));
+	await screen.findByRole("tab", { name: /^Changes/, selected: true });
 	await waitFor(() =>
 		expect(screen.getAllByText("synced.txt").length).toBeGreaterThan(0),
 	);
@@ -145,8 +145,8 @@ it("captures workspace state before and after syncing a fresh commit", async () 
 
 	// Second regression assertion: the committed change did not come back as an
 	// uncommitted current change (the headline symptom of the bug).
-	await user.click(await screen.findByRole("tab", { name: /^Review/ }));
-	await screen.findByRole("tab", { name: /^Review/, selected: true });
+	await user.click(await screen.findByRole("tab", { name: /^Changes/ }));
+	await screen.findByRole("tab", { name: /^Changes/, selected: true });
 	await waitFor(() => {
 		expect(screen.getAllByText("Committed").length).toBeGreaterThan(0);
 		expect(screen.queryByText("Changes")).not.toBeInTheDocument();
@@ -155,7 +155,7 @@ it("captures workspace state before and after syncing a fresh commit", async () 
 	await captureDocument(document, {
 		name: "sync-after-commit-03-review-after-sync",
 		expectations: [
-			"The Review tab is active and synced.txt appears only under a 'Committed' section.",
+			"The Changes tab is active and synced.txt appears only under a 'Committed' section.",
 			"There is no 'Changes' section — synced.txt has not reverted to being an uncommitted current change.",
 		],
 	});

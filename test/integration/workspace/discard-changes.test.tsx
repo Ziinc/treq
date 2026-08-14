@@ -38,9 +38,9 @@ async function openReviewTab(
 ) {
   render(<Dashboard />);
   await user.click(await findSidebarBranchElement(branchName));
-  const reviewTab = await screen.findByRole("tab", { name: /^Review/ });
+  const reviewTab = await screen.findByRole("tab", { name: /^Changes/ });
   await user.click(reviewTab);
-  await screen.findByRole("tab", { name: /^Review/, selected: true });
+  await screen.findByRole("tab", { name: /^Changes/, selected: true });
 }
 
 describe("Review tab - discard changes", () => {
@@ -50,7 +50,7 @@ describe("Review tab - discard changes", () => {
     user = userEvent.setup();
   });
 
-  it("discards all uncommitted changes from the Review tab", async () => {
+  it("discards all uncommitted changes from the Changes tab", async () => {
     const fileName = "discard-all.txt";
     const { workspacePath } = await createDirtyWorkspace(
       "feat/discard-all",

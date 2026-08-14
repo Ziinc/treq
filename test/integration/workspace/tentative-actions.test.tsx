@@ -67,7 +67,7 @@ describe("ShowWorkspace - tentative working copy actions", () => {
     ).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /view changes/i }));
-    await screen.findByRole("tab", { name: /Review/, selected: true });
+    await screen.findByRole("tab", { name: /Changes/, selected: true });
   });
 
   it("opens the move dialog with the tentative commit selected", async () => {

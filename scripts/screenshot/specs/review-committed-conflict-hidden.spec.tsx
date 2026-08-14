@@ -55,9 +55,9 @@ it("captures committed-tip conflict after hiding Committed changes", async () =>
 	await user.click(
 		await findSidebarBranchElement("feat/committed-conflict-hidden"),
 	);
-	const reviewTab = await screen.findByRole("tab", { name: /^Review/ });
+	const reviewTab = await screen.findByRole("tab", { name: /^Changes/ });
 	await user.click(reviewTab);
-	await screen.findByRole("tab", { name: /^Review/, selected: true });
+	await screen.findByRole("tab", { name: /^Changes/, selected: true });
 	await screen.findByText("Conflicts");
 
 	await captureDocument(document, {

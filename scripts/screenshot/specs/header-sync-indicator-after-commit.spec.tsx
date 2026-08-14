@@ -16,11 +16,11 @@ const BRANCH_NAME = "feat/sync-indicator";
 
 // Scenario: a workspace is created and pushed, so it is level with the remote
 // and the header shows no sync indicator. The user then edits a file and
-// commits it from the Review tab. The "↑1" indicator must appear on its own --
+// commits it from the Changes tab. The "↑1" indicator must appear on its own --
 // previously the header stayed stale (no indicator at all) until the
 // workspace-status query happened to refetch, e.g. by selecting another
 // workspace in the sidebar and navigating back.
-it("captures the header sync indicator before and after committing from the Review tab", async () => {
+it("captures the header sync indicator before and after committing from the Changes tab", async () => {
 	const { repoPath } = createTestRepo(true); // withRemote: real bare remote, so ahead/behind is meaningful
 	openRepo(repoPath);
 
@@ -64,13 +64,13 @@ it("captures the header sync indicator before and after committing from the Revi
 		"a line that puts the branch ahead of the remote\n",
 	);
 
-	await user.click(await screen.findByRole("tab", { name: /Review/ }));
+	await user.click(await screen.findByRole("tab", { name: /Changes/ }));
 	await screen.findAllByText("sync-indicator.txt");
 
 	await captureDocument(document, {
 		name: "header-sync-indicator-01-before-commit",
 		expectations: [
-			"The Review tab is active and the diff pane shows sync-indicator.txt with one added line highlighted green.",
+			"The Changes tab is active and the diff pane shows sync-indicator.txt with one added line highlighted green.",
 			"The header (top bar, showing the feat/sync-indicator branch) has NO sync control at all -- the workspace is level with the remote, so neither a '↑'/'↓' counter nor the circular refresh-arrows icon is drawn; only the green 'Merge...' button and the overflow menu sit at the right edge.",
 			"A commit message box with placeholder 'Message' and a 'Commit' button are visible in the left file sidebar.",
 		],
@@ -90,7 +90,7 @@ it("captures the header sync indicator before and after committing from the Revi
 		expectations: [
 			"The header now shows an '↑1' sync indicator with the circular refresh-arrows icon, just left of the green 'Merge...' button -- it appeared without navigating away from this workspace.",
 			"A 'Commit created' toast with a green check icon is visible in the bottom-left corner.",
-			"The Review tab's left sidebar no longer has a 'Changes' section; sync-indicator.txt now sits under 'Committed', tagged 'A'.",
+			"The Changes tab's left sidebar no longer has a 'Changes' section; sync-indicator.txt now sits under 'Committed', tagged 'A'.",
 		],
 	});
 

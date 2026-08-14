@@ -166,14 +166,14 @@ it("captures Sync completing while remote conflicts remain for local resolve", a
 		],
 	});
 
-	await user.click(await screen.findByRole("tab", { name: /^Review/ }));
-	await screen.findByRole("tab", { name: /^Review/, selected: true });
+	await user.click(await screen.findByRole("tab", { name: /^Changes/ }));
+	await screen.findByRole("tab", { name: /^Changes/, selected: true });
 	await screen.findByRole("button", { name: "Conflicts" });
 
 	await captureDocument(document, {
 		name: "sync-remote-conflict-03-review-conflicts",
 		expectations: [
-			'The Review tab shows a "Conflicts" section listing shared.txt.',
+			'The Changes tab shows a "Conflicts" section listing shared.txt.',
 			"The conflicted file remains available for local resolution after Sync.",
 		],
 	});

@@ -100,7 +100,7 @@ function renderWorkspace(onSessionCreated: (s: SessionCreationInfo) => void) {
 
 async function openReviewTab() {
   const user = userEvent.setup();
-  const reviewTab = await screen.findByRole("tab", { name: /review/i });
+  const reviewTab = await screen.findByRole("tab", { name: /changes/i });
   await user.click(reviewTab);
   await screen.findByTestId("changes-viewer");
   await waitFor(() => expect(capturedOnCreateAgentWithReview).toBeDefined());

@@ -1,5 +1,5 @@
 /**
- * Verifies the file-level "Add file comment" affordance in the Review tab:
+ * Verifies the file-level "Add file comment" affordance in the Changes tab:
  * each file row's header has a comment button (like GitHub's per-file
  * comment), which opens a comment composer at the TOP of that file's
  * collapsible -- above the diff -- and the submitted comment renders there
@@ -22,7 +22,7 @@ import { captureDocument } from "../capture";
 
 const BRANCH_NAME = "feat/file-comment";
 
-it("captures the file-level comment button and thread in the Review tab", async () => {
+it("captures the file-level comment button and thread in the Changes tab", async () => {
 	const { repoPath } = createTestRepo(false);
 	openRepo(repoPath);
 
@@ -44,7 +44,7 @@ it("captures the file-level comment button and thread in the Review tab", async 
 
 	await user.click(await screen.findByText(BRANCH_NAME));
 	await screen.findByTestId("show-workspace-header");
-	await user.click(await screen.findByRole("tab", { name: /^Review/i }));
+	await user.click(await screen.findByRole("tab", { name: /^Changes/i }));
 	await screen.findAllByText("example.ts");
 
 	const commentButton = await screen.findByTestId("add-file-comment-button");
@@ -108,7 +108,7 @@ it("captures the file-level comment button and thread in the Review tab", async 
 	const card = await screen.findByTestId("file-comment-card");
 	const deleteButton = await screen.findByTitle("Delete comment");
 	await user.click(deleteButton);
-	await screen.findByRole("tab", { name: /^Review/i });
+	await screen.findByRole("tab", { name: /^Changes/i });
 	expect(screen.queryByTestId("file-comment-card")).not.toBeInTheDocument();
 	expect(card).not.toBeInTheDocument();
 

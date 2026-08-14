@@ -1,5 +1,5 @@
 /**
- * Verifies that the Review tab picks up on-disk file edits made while the
+ * Verifies that the Changes tab picks up on-disk file edits made while the
  * window was unfocused, once the window regains focus. This covers the case
  * where an already-modified file gets edited further: the file's jj status
  * doesn't change (it's still just "modified"/"added"), so the file-watcher
@@ -24,7 +24,7 @@ import { captureDocument } from "../capture";
 
 const BRANCH_NAME = "feat/refocus-refresh";
 
-it("refreshes the Review tab's diff content when the window regains focus", async () => {
+it("refreshes the Changes tab's diff content when the window regains focus", async () => {
 	const { repoPath } = createTestRepo(false);
 	openRepo(repoPath);
 
@@ -42,14 +42,14 @@ it("refreshes the Review tab's diff content when the window regains focus", asyn
 
 	await user.click(await screen.findByText(BRANCH_NAME));
 	await screen.findByTestId("show-workspace-header");
-	await user.click(await screen.findByRole("tab", { name: /^Review/i }));
+	await user.click(await screen.findByRole("tab", { name: /^Changes/i }));
 	await screen.findAllByText("test.txt");
 	await screen.findByText(/line two/);
 
 	await captureDocument(document, {
 		name: "review-tab-refocus-refresh-01-before-edit",
 		expectations: [
-			"The Review tab shows test.txt's diff with two added lines: 'line one' and 'line two'.",
+			"The Changes tab shows test.txt's diff with two added lines: 'line one' and 'line two'.",
 		],
 	});
 
@@ -82,7 +82,7 @@ it("refreshes the Review tab's diff content when the window regains focus", asyn
 	await captureDocument(document, {
 		name: "review-tab-refocus-refresh-02-after-refocus",
 		expectations: [
-			"The Review tab's test.txt diff now also shows 'line three' below 'line two', reflecting the on-disk edit made after the tab first loaded and the window regaining focus.",
+			"The Changes tab's test.txt diff now also shows 'line three' below 'line two', reflecting the on-disk edit made after the tab first loaded and the window regaining focus.",
 		],
 	});
 

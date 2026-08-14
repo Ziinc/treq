@@ -16,7 +16,7 @@ import { captureDocument } from "../capture";
 const BRANCH_NAME = "feat/committed-label";
 
 // Scenario: a stacked workspace has one committed file and one uncommitted
-// file. On the Review tab, only the committed-only file-row collapsible in
+// file. On the Changes tab, only the committed-only file-row collapsible in
 // the main pane should show a "Committed" badge.
 it("marks committed-only file collapsibles with a Committed label", async () => {
 	const { repoPath } = createTestRepo(false);
@@ -57,7 +57,7 @@ it("marks committed-only file collapsibles with a Committed label", async () => 
 		"still dirty\n",
 	);
 
-	await user.click(await screen.findByRole("tab", { name: /Review/ }));
+	await user.click(await screen.findByRole("tab", { name: /Changes/ }));
 	await screen.findAllByText("uncommitted-only.txt");
 	await screen.findAllByText("committed-only.txt");
 

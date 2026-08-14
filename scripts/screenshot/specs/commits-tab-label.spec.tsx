@@ -130,7 +130,7 @@ it("captures home Commits tab without a count pill", async () => {
 		name: "commits-tab-label-03-home-no-count",
 		expectations: [
 			"On the home repository, the Commits tab has no number pill.",
-			"Code, Commits, and Review tabs are visible in the tab bar.",
+			"Code, Commits, and Changes tabs are visible in the tab bar.",
 			"The home workspace header is showing (not a stacked feature branch).",
 		],
 	});

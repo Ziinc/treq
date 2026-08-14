@@ -1,5 +1,5 @@
 /**
- * Verifies the Review tab file-row (collapsible) copy button: clicking the
+ * Verifies the Changes tab file-row (collapsible) copy button: clicking the
  * copy icon next to the file path copies the path and shows a success toast.
  */
 
@@ -19,7 +19,7 @@ import { captureDocument } from "../capture";
 
 const BRANCH_NAME = "feat/copy-file-path";
 
-it("captures the Review tab collapsible copy file path button", async () => {
+it("captures the Changes tab collapsible copy file path button", async () => {
 	const { repoPath } = createTestRepo(false);
 	openRepo(repoPath);
 
@@ -43,7 +43,7 @@ it("captures the Review tab collapsible copy file path button", async () => {
 
 	await user.click(await screen.findByText(BRANCH_NAME));
 	await screen.findByTestId("show-workspace-header");
-	await user.click(await screen.findByRole("tab", { name: /^Review/i }));
+	await user.click(await screen.findByRole("tab", { name: /^Changes/i }));
 	await screen.findAllByText("example.ts");
 
 	const copyButton = await screen.findByRole("button", {
@@ -53,7 +53,7 @@ it("captures the Review tab collapsible copy file path button", async () => {
 	await captureDocument(document, {
 		name: "review-copy-file-path-01-before",
 		expectations: [
-			"The Review tab is active with the example.ts file row header visible.",
+			"The Changes tab is active with the example.ts file row header visible.",
 			"A copy (clipboard) icon sits next to the example.ts path in the collapsible header.",
 			"No 'Copied' success toast is visible yet.",
 		],
@@ -73,7 +73,7 @@ it("captures the Review tab collapsible copy file path button", async () => {
 		expectations: [
 			"A success toast titled 'Copied' is visible after clicking the copy icon.",
 			"The toast description reads 'File path copied to clipboard'.",
-			"The example.ts file row header and copy icon remain visible in the Review tab.",
+			"The example.ts file row header and copy icon remain visible in the Changes tab.",
 		],
 	});
 }, 60000);

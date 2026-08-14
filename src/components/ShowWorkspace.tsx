@@ -391,7 +391,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
     const conflictCount = normalizedConflictedFiles.length;
 
     // Review badge: unique working-copy + committed files, independent of
-    // whether the Review tab (ChangesDiffViewer) is mounted. Mounting Review
+    // whether the Changes tab (ChangesDiffViewer) is mounted. Mounting Review
     // must not change this number.
     const includeCommittedInReviewCount =
       Boolean(workspace) && workspace!.branch_name !== defaultTargetBranch;
@@ -1177,7 +1177,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
                 className="inline-flex items-center gap-1.5"
               >
                 <FileDiff className="w-4 h-4" />
-                <span>Review</span>
+                <span>Changes</span>
                 {reviewTabPill && (
                   <span
                     data-testid="review-change-count"

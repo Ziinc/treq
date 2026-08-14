@@ -17,7 +17,7 @@ import {
 } from "../../../src/lib/api";
 import { captureDocument } from "../capture";
 
-it("captures Committed section Show button on the Review tab", async () => {
+it("captures Committed section Show button on the Changes tab", async () => {
 	const { repoPath } = createTestRepo(false);
 	openRepo(repoPath);
 
@@ -40,9 +40,9 @@ it("captures Committed section Show button on the Review tab", async () => {
 	render(<Dashboard />);
 	await user.click(await findSidebarBranchElement("feat/committed-show"));
 
-	const reviewTab = await screen.findByRole("tab", { name: /^Review/ });
+	const reviewTab = await screen.findByRole("tab", { name: /^Changes/ });
 	await user.click(reviewTab);
-	await screen.findByRole("tab", { name: /^Review/, selected: true });
+	await screen.findByRole("tab", { name: /^Changes/, selected: true });
 
 	await screen.findByTitle("committed.txt");
 	await screen.findByTitle("working.txt");

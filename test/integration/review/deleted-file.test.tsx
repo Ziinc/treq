@@ -49,8 +49,8 @@ describe("Review - deleted file collapsible", () => {
 
     render(<Dashboard />);
     await user.click(await findSidebarBranchElement("feat/deleted-file"));
-    await user.click(await screen.findByRole("tab", { name: /^Review/ }));
-    await screen.findByRole("tab", { name: /^Review/, selected: true });
+    await user.click(await screen.findByRole("tab", { name: /^Changes/ }));
+    await screen.findByRole("tab", { name: /^Changes/, selected: true });
 
     await waitFor(() => {
       expect(screen.getAllByText("doomed.txt").length).toBeGreaterThan(0);
