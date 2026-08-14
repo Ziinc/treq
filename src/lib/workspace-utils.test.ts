@@ -50,19 +50,13 @@ describe("isWorkspaceHidden", () => {
 
   it("is hidden when hidden_until is in the future", () => {
     expect(
-      isWorkspaceHidden(
-        { hidden_until: "2026-08-15T09:00:00.000Z" },
-        now,
-      ),
+      isWorkspaceHidden({ hidden_until: "2026-08-15T09:00:00.000Z" }, now),
     ).toBe(true);
   });
 
   it("is visible when hidden_until has passed or is missing", () => {
     expect(
-      isWorkspaceHidden(
-        { hidden_until: "2026-08-14T11:00:00.000Z" },
-        now,
-      ),
+      isWorkspaceHidden({ hidden_until: "2026-08-14T11:00:00.000Z" }, now),
     ).toBe(false);
     expect(isWorkspaceHidden({}, now)).toBe(false);
     expect(isWorkspaceHidden({ hidden_until: null }, now)).toBe(false);

@@ -109,8 +109,7 @@ export const ScheduleWorkspaceDialog: React.FC<
   };
 
   const count = workspaceIds.length;
-  const title =
-    mode === "stack" ? "Schedule stack" : "Schedule workspace";
+  const title = mode === "stack" ? "Schedule stack" : "Schedule workspace";
   const description =
     mode === "stack"
       ? `Hide ${count} workspace${count === 1 ? "" : "s"} in this stack until the chosen time. Directories stay on disk.`

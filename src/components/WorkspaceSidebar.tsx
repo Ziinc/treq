@@ -188,7 +188,8 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
       return statuses.filter((status) => !isWorkspaceHidden(status.current));
     }, [statuses, showHidden]);
     const hiddenCount = useMemo(
-      () => statuses.filter((status) => isWorkspaceHidden(status.current)).length,
+      () =>
+        statuses.filter((status) => isWorkspaceHidden(status.current)).length,
       [statuses],
     );
 

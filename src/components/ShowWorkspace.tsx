@@ -1311,7 +1311,8 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
                           setScheduleDialog({
                             mode: "stack",
                             workspaceIds: stackWorkspaces.map((ws) => ws.id),
-                            currentHiddenUntil: stackWorkspaces[0]?.hidden_until,
+                            currentHiddenUntil:
+                              stackWorkspaces[0]?.hidden_until,
                           })
                         }
                       />
@@ -1604,37 +1605,37 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
                                 conflictCount === 1 ? "" : "s"
                               } detected`
                             : `Create stacked workspace from ${branchTitle}`}
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    )}
-                    {workspace && (
-                      <TooltipProvider delayDuration={200}>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() =>
-                                setScheduleDialog({
-                                  mode: "workspace",
-                                  workspaceIds: [workspace.id],
-                                  currentHiddenUntil: workspace.hidden_until,
-                                })
-                              }
-                              data-testid="schedule-workspace-button"
-                            >
-                              <CalendarClock className="w-4 h-4" />
-                              Schedule
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            Hide this workspace in the sidebar until a chosen time
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    )}
-                    {!workspace && (
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+                {workspace && (
+                  <TooltipProvider delayDuration={200}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            setScheduleDialog({
+                              mode: "workspace",
+                              workspaceIds: [workspace.id],
+                              currentHiddenUntil: workspace.hidden_until,
+                            })
+                          }
+                          data-testid="schedule-workspace-button"
+                        >
+                          <CalendarClock className="w-4 h-4" />
+                          Schedule
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        Hide this workspace in the sidebar until a chosen time
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+                {!workspace && (
                   <>
                     <button
                       type="button"

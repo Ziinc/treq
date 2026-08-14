@@ -1,6 +1,12 @@
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { ArrowDown, CalendarClock, CircleHelp, ExternalLink, Layers2 } from "lucide-react";
+import {
+  ArrowDown,
+  CalendarClock,
+  CircleHelp,
+  ExternalLink,
+  Layers2,
+} from "lucide-react";
 import { memo, useMemo } from "react";
 import { listCommits, listWorkspaceStatuses, type Workspace } from "../lib/api";
 import { WEB_URL } from "../lib/supabase";
@@ -41,7 +47,13 @@ interface WorkspaceStackPanelProps {
  * the default/external branch with no stacked descendants).
  */
 export const WorkspaceStackPanel = memo<WorkspaceStackPanelProps>(
-  ({ repoPath, workspace, defaultBranch, onSelectWorkspace, onScheduleStack }) => {
+  ({
+    repoPath,
+    workspace,
+    defaultBranch,
+    onSelectWorkspace,
+    onScheduleStack,
+  }) => {
     const { data: workspaceStatuses } = useQuery({
       queryKey: ["workspace-statuses", repoPath],
       queryFn: () => listWorkspaceStatuses(repoPath),

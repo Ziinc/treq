@@ -19,7 +19,10 @@ import type { QueueEntryStatus, Workspace } from "../lib/api";
 import type { PrInfo } from "../lib/api-types";
 import { cn, getFullWorkspacePath } from "../lib/utils";
 import type { FlattenedWorkspaceNode } from "../lib/workspace-tree";
-import { getWorkspaceTitle as getWorkspaceTitleFromUtils, isWorkspaceHidden } from "../lib/workspace-utils";
+import {
+  getWorkspaceTitle as getWorkspaceTitleFromUtils,
+  isWorkspaceHidden,
+} from "../lib/workspace-utils";
 import {
   getChangeFilesDragData,
   isChangeFilesDrag,
