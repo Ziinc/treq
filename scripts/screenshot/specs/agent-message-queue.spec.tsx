@@ -83,6 +83,16 @@ it("captures agent terminal message queue button and popover", async () => {
     within(terminalPanel).getByTestId("agent-message-queue"),
   ).toHaveAttribute("data-variant", "pinned");
 
+  // Close then reopen so the pinned chip is visible without the popover overlay.
+  await user.click(
+    within(terminalPanel).getByTestId("agent-message-queue-button"),
+  );
+  await waitFor(() => {
+    expect(
+      screen.queryByTestId("agent-message-queue-popover"),
+    ).not.toBeInTheDocument();
+  });
+
   await captureDocument(document, {
     name: "agent-message-queue-03-pinned",
     expectations: [

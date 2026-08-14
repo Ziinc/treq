@@ -180,9 +180,7 @@ describe("WorkspaceTerminalPane integration", () => {
       within(terminalPanel).getByTestId("agent-message-queue"),
     ).toHaveAttribute("data-variant", "pinned");
 
-    await user.click(
-      within(terminalPanel).getByTestId("agent-message-queue-button"),
-    );
+    // Popover stays open across enqueue (controlled open); assert list there.
     const popover = await screen.findByTestId("agent-message-queue-popover");
     expect(
       within(popover).getByText("first queued follow-up"),

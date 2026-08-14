@@ -8,12 +8,6 @@ import { type QueuedAgentMessage } from "../../lib/agentMessageQueue";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "../ui/tooltip";
 
 export type AgentMessageQueueVariant = "toolbar" | "pinned";
 
@@ -146,31 +140,15 @@ export function AgentMessageQueue({
     >
       <div className={cn(isPinned && "pointer-events-auto")}>
         <Popover open={open} onOpenChange={handleOpenChange}>
-          {variant === "toolbar" ? (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <PopoverTrigger asChild>{toolbarButton}</PopoverTrigger>
-                </TooltipTrigger>
-                <TooltipContent>Queue message</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          ) : (
-            <PopoverTrigger asChild>{pinnedButton}</PopoverTrigger>
-          )}
+          <PopoverTrigger asChild>
+            {variant === "toolbar" ? toolbarButton : pinnedButton}
+          </PopoverTrigger>
           <PopoverContent
             align={isPinned ? "center" : "end"}
             side="bottom"
             sideOffset={8}
             className="w-[24rem] rounded-xl border-border bg-popover p-2 text-popover-foreground shadow-lg"
             data-testid="agent-message-queue-popover"
-            onOpenAutoFocus={(event) => {
-              event.preventDefault();
-              const composer = document.querySelector<HTMLTextAreaElement>(
-                '[data-testid="agent-message-queue-composer"]',
-              );
-              composer?.focus();
-            }}
           >
             <div className="px-2 pb-2 pt-1 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
               {count === 0 ? "Queue a follow-up" : "Queued messages"}
