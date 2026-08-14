@@ -44,4 +44,6 @@ export interface TerminalSessionSummary {
   lastUserInputAt: number;
   /** True while output is actively streaming (shows a spinner). */
   isStreaming: boolean;
+  /** Newest printable terminal output for Mission Control card previews. */
+  previewOutput: string;
 }

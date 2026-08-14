@@ -16,6 +16,7 @@ const session = (
   lastActivityAt,
   lastUserInputAt: 0,
   isStreaming: false,
+  previewOutput: "",
 });
 
 const flushAnimationFrames = (frames: FrameRequestCallback[]) => {
