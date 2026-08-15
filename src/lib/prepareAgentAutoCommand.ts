@@ -65,11 +65,7 @@ export const prepareAgentAutoCommand = async ({
     );
   }
 
-  const files = await writeAgentCliFiles(
-    promptContents,
-    settingsJson,
-    agent === "codex" || agent === "claude" ? cwd : null,
-  );
+  const files = await writeAgentCliFiles(promptContents, settingsJson, cwd);
   const filePaths = [
     files.promptPath,
     files.settingsPath,

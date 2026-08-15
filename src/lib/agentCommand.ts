@@ -141,10 +141,7 @@ export const buildAgentAutoCommand = ({
     }
   } else if (agent === "cursor") {
     const planFlag = permissionMode === "plan" ? " --plan" : "";
-    const pluginDir = files.skillDir
-      ? ` --plugin-dir ${shellQuote(files.skillDir)}`
-      : "";
-    autoCommand = `cursor-agent${planFlag}${pluginDir} -- "${shellCat(files.promptPath)}"`;
+    autoCommand = `cursor-agent${planFlag} -- "${shellCat(files.promptPath)}"`;
   } else {
     const permissionModeArg =
       permissionMode === "plan"

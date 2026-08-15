@@ -205,16 +205,22 @@ describe("buildAgentAutoCommand", () => {
     );
   });
 
-  it("loads the Cursor prompt from a file and the Treq skill via plugin-dir", () => {
+  it("loads the Cursor prompt from a file; skills come from .agents/skills", () => {
     const command = buildAgentAutoCommand({
       agent: "cursor",
       permissionMode: "plan",
-      files: { promptPath: files.promptPath, skillDir: files.skillDir },
+      files: {
+        promptPath: files.promptPath,
+        skillDir: files.skillDir,
+        agentsSkillPath: "/ws/.agents/skills/treq",
+      },
     });
 
-    expect(command).toContain(
-      "cursor-agent --plan --plugin-dir '/tmp/treq-agent-skills-1' -- ",
-    );
+    expect(command).toContain("cursor-agent --plan -- ");
+    expect(command).not.toContain("--plugin-dir");
     expect(command).toContain(`"$(cat -- '/tmp/treq-agent-prompt-1.txt')"`);
+    expect(command).toContain(
+      `trap "rm -rf '/tmp/treq-agent-prompt-1.txt' '/tmp/treq-agent-skills-1' '/ws/.agents/skills/treq'" EXIT`,
+    );
   });
 });

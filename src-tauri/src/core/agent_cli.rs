@@ -5,7 +5,6 @@ use std::path::{Path, PathBuf};
 
 const FILE_PREFIX: &str = "treq-agent-";
 const TREQ_SKILL_MD: &str = include_str!("../../resources/agent-skill/SKILL.md");
-const TREQ_SKILL_PLUGIN_JSON: &str = include_str!("../../resources/agent-skill/plugin.json");
 const PROJECT_SKILL_MARKER: &str = ".treq-generated";
 const AGENTS_SKILL_RELATIVE: &str = ".agents/skills/treq";
 const CLAUDE_SKILL_RELATIVE: &str = ".claude/skills/treq";
@@ -109,7 +108,6 @@ fn write_treq_skill_pack(temp_dir: &Path, id: &uuid::Uuid) -> Result<PathBuf, St
     skill_dir.join("skills/treq/SKILL.md"),
     skill_dir.join(".claude/skills/treq/SKILL.md"),
     skill_dir.join(".agents/skills/treq/SKILL.md"),
-    skill_dir.join(".cursor/skills/treq/SKILL.md"),
   ];
   for path in &copies {
     let parent = path
@@ -118,8 +116,6 @@ fn write_treq_skill_pack(temp_dir: &Path, id: &uuid::Uuid) -> Result<PathBuf, St
     fs::create_dir_all(parent).map_err(|e| format!("Failed to create skill pack dir: {e}"))?;
     fs::write(path, TREQ_SKILL_MD).map_err(|e| format!("Failed to write Treq skill: {e}"))?;
   }
-  fs::write(skill_dir.join("plugin.json"), TREQ_SKILL_PLUGIN_JSON)
-    .map_err(|e| format!("Failed to write Treq skill plugin manifest: {e}"))?;
   Ok(skill_dir)
 }
 
@@ -211,7 +207,10 @@ mod tests {
     assert!(Path::new(&files.skill_dir)
       .join(".agents/skills/treq/SKILL.md")
       .exists());
-    assert!(Path::new(&files.skill_dir).join("plugin.json").exists());
+    assert!(!Path::new(&files.skill_dir)
+      .join(".cursor/skills/treq/SKILL.md")
+      .exists());
+    assert!(!Path::new(&files.skill_dir).join("plugin.json").exists());
 
     assert!(files.agents_skill_path.is_none());
     assert!(files.claude_skill_path.is_none());
