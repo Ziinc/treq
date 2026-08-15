@@ -36,6 +36,14 @@ The same prompt also allows `treq` CLI commands that create or manage other work
 
 This boundary separates concurrent tasks at the file-system level. Repository history remains shared across workspaces, while each agent sees the working copy for its assigned workspace.
 
+## Bundled Treq skill
+
+Treq writes a `treq` skill into a temporary directory when it starts the agent. You do not install it, and it is not committed to the repository.
+
+Claude Code loads `.claude/skills/treq/`. Codex and Cursor Agent load `.agents/skills/treq/`. Treq appends `.agents/skills/treq*/` and `.claude/skills/treq*/` to `.gitignore`. The same globs are in Treq's snapshot ignore list, so `treq commit` and external `git` both skip those folders. The copies are deleted when the agent process exits.
+
+The skill covers workspace CLI commands, `treq send` for UI previews, `treq commit` when the task needs a recorded revision, and inplace [conflict resolution](/docs/concepts/commit-management#resolve-commit-conflicts-inplace). See the [CLI reference](/docs/reference/cli) and [Workspaces](/docs/concepts/workspaces).
+
 ## Creating Sessions
 
 You can create a session from the task input, workspace sidebar, command palette, review handoff, or a Treq agent link. Each current entry point creates a new session record.

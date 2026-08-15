@@ -1064,7 +1064,11 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
         .get("settingsJson")
         .and_then(|v| v.as_str())
         .map(str::to_string);
-      let files = treq_lib::core::write_agent_cli_files(&prompt, settings_json.as_deref())?;
+      let files = treq_lib::core::write_agent_cli_files(
+        &prompt,
+        settings_json.as_deref(),
+        args.get("cwd").and_then(|v| v.as_str()),
+      )?;
       serde_json::to_value(files).map_err(|e| e.to_string())
     }
 
