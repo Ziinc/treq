@@ -2664,11 +2664,8 @@ pub fn jj_undo_operation(workspace_path: &str, operation_id: &str) -> Result<Str
   let mut tx = loaded.repo.start_transaction();
   tx.repo_mut().set_view(restored_view);
   let _ = git::export_refs(tx.repo_mut());
-  let new_repo = block_on(tx.commit(format!(
-    "undo: restore to operation {}",
-    parent.id().hex()
-  )))
-  .map_err(|e| JjError::IoError(format!("Failed to commit undo: {}", e)))?;
+  let new_repo = block_on(tx.commit(format!("undo: restore to operation {}", parent.id().hex())))
+    .map_err(|e| JjError::IoError(format!("Failed to commit undo: {}", e)))?;
   update_workspace_after_history_edit(&mut loaded, &new_repo, None, CheckoutMode::Immediate)?;
   Ok(new_repo.op_id().hex())
 }

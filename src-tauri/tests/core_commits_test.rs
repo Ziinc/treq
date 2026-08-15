@@ -613,17 +613,16 @@ fn test_undo_repo_operation_rejects_stale_operation() {
 
   let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
   let workspace_path_str = workspace_path.to_str().unwrap();
-  TestRepo::write_workspace_file(workspace_path_str, "stale.txt", "one")
-    .expect("Failed to write");
+  TestRepo::write_workspace_file(workspace_path_str, "stale.txt", "one").expect("Failed to write");
   treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "first")
     .expect("Failed to commit");
 
   let default_branch = repo.default_branch();
-  let commits = treq_lib::jj::jj_get_commits_ahead(workspace_path_str, default_branch)
-    .expect("commits");
+  let commits =
+    treq_lib::jj::jj_get_commits_ahead(workspace_path_str, default_branch).expect("commits");
   let change_id = commits.commits.last().unwrap().change_id.clone();
-  let op_id = treq_lib::core::abandon_commit(&repo.repo_path, workspace.id, &change_id)
-    .expect("abandon");
+  let op_id =
+    treq_lib::core::abandon_commit(&repo.repo_path, workspace.id, &change_id).expect("abandon");
 
   TestRepo::write_workspace_file(workspace_path_str, "later.txt", "two")
     .expect("Failed to write later file");

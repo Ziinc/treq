@@ -27,6 +27,10 @@ const ToastContext = React.createContext<{
   removeToast: (id: string) => void;
 } | null>(null);
 
+function excludeToast(id: string) {
+  return (toasts: Toast[]) => toasts.filter((toast) => toast.id !== id);
+}
+
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = React.useState<Toast[]>([]);
 
@@ -36,12 +40,12 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
     const durationMs = toast.action ? 12000 : 5000;
     setTimeout(() => {
-      setToasts((prev) => prev.filter((item) => item.id !== id));
+      setToasts(excludeToast(id));
     }, durationMs);
   }, []);
 
   const removeToast = React.useCallback((id: string) => {
-    setToasts((prev) => prev.filter((toast) => toast.id !== id));
+    setToasts(excludeToast(id));
   }, []);
 
   return (
