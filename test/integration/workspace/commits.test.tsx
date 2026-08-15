@@ -1,7 +1,7 @@
 import * as React from "react";
 import { beforeEach, describe, expect, it } from "vitest";
 import userEvent from "@testing-library/user-event";
-import { render, screen, within } from "../../test-utils";
+import { render, screen, waitFor, within } from "../../test-utils";
 import {
   commitRepoFile,
   commitWorkspaceFile,
@@ -376,10 +376,15 @@ describe("ShowWorkspace - Commits tab tentative working copy", () => {
 });
 
 describe("ShowWorkspace - Commits tab timestamp edit", () => {
+  let user: ReturnType<typeof userEvent.setup>;
+
+  beforeEach(() => {
+    user = userEvent.setup();
+  });
+
   it("shifts a mutable commit forward by days from the Commits tab", async () => {
     const { repoPath } = createTestRepo(false);
     openRepo(repoPath);
-    const user = userEvent.setup();
     const workspace = await createWorkspaceRef(repoPath, "feat/edit-timestamp");
     await commitWorkspaceFile(
       repoPath,
@@ -397,18 +402,20 @@ describe("ShowWorkspace - Commits tab timestamp edit", () => {
     );
 
     await openWorkspaceCommitsTab(user, "feat/edit-timestamp");
-    const commitA = await screen.findByText("Timestamp commit A");
-    await user.click(commitA);
-    await user.click(
-      await screen.findByRole("button", { name: "Edit timestamp" }),
-    );
+    const commitA = await screen.findByTitle("Timestamp commit A");
+    await user.click(commitA.closest("button") ?? commitA);
+    await screen.findByRole("button", { name: "Edit description" });
+    await user.click(await screen.findByTestId(/edit-timestamp-/));
 
     const daysInput = await screen.findByLabelText("Days");
     await user.clear(daysInput);
     await user.type(daysInput, "2");
     await user.click(screen.getByRole("button", { name: "Apply" }));
 
-    await screen.findByRole("button", { name: "Edit timestamp" });
+    await waitFor(() => {
+      expect(screen.queryByTestId("modal")).not.toBeInTheDocument();
+    });
+    await screen.findByText("Timestamp updated");
     const logs = await api.listCommits(repoPath, workspace.id);
     const older = logs.commits.find(
       (commit) => commit.description === "Timestamp commit A",
@@ -422,6 +429,5 @@ describe("ShowWorkspace - Commits tab timestamp edit", () => {
     const newerMs = Date.parse(newer!.timestamp);
     expect(newerMs).toBeGreaterThan(olderMs);
     expect(olderMs).toBeGreaterThan(Date.now() + 24 * 60 * 60 * 1000);
-
   });
 });

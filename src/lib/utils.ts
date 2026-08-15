@@ -74,6 +74,17 @@ export function formatRelativeTime(timestamp: string): string {
 
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
+  if (diffMs < 0) {
+    const aheadSeconds = Math.floor(-diffMs / 1000);
+    const aheadMinutes = Math.floor(aheadSeconds / 60);
+    const aheadHours = Math.floor(aheadMinutes / 60);
+    const aheadDays = Math.floor(aheadHours / 24);
+    if (aheadSeconds < 60) return "in a few seconds";
+    if (aheadMinutes < 60) return `in ${aheadMinutes} minutes`;
+    if (aheadHours < 24) return `in ${aheadHours} hours`;
+    if (aheadDays === 1) return "in 1 day";
+    return `in ${aheadDays} days`;
+  }
   const diffSeconds = Math.floor(diffMs / 1000);
   const diffMinutes = Math.floor(diffSeconds / 60);
   const diffHours = Math.floor(diffMinutes / 60);

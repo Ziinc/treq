@@ -1255,12 +1255,13 @@ function CommitWithDiff({
                   <Pencil className="w-4 h-4" />
                   Edit description
                 </Button>
-                {canAction && (
+                {canAction && !commit.is_immutable && (
                   <Button
                     variant="outline"
                     size="sm"
                     className="gap-1.5"
                     onClick={() => onEditTimestamp(commit)}
+                    data-testid={`edit-timestamp-${commit.change_id}`}
                   >
                     <Clock className="w-4 h-4" />
                     Edit timestamp
