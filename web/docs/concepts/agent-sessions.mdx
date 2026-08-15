@@ -40,7 +40,7 @@ This boundary separates concurrent tasks at the file-system level. Repository hi
 
 Treq writes a `treq` skill into a temporary directory when it starts the agent. You do not install it, and it is not committed to the repository.
 
-Claude Code and Codex also get a working-copy copy at the path each agent scans: `.claude/skills/treq/` and `.agents/skills/treq/`. Treq's snapshot ignore list excludes those folders, so they do not show up as workspace changes or land in commits. The copies are deleted when the agent process exits. Cursor Agent loads the temp pack through `--plugin-dir`. Claude still also receives `--add-dir` for the temp pack.
+Claude Code and Codex get a working-copy copy at the path each agent scans: `.claude/skills/treq/` and `.agents/skills/treq/`. Treq's snapshot ignore list excludes those folders, so they do not show up as workspace changes or land in commits. The copies are deleted when the agent process exits. Cursor Agent loads the temp pack through `--plugin-dir`.
 
 The skill covers workspace CLI commands, `treq send` for UI previews, `treq commit` when the task needs a recorded revision, and inplace [conflict resolution](/docs/concepts/commit-management#resolve-commit-conflicts-inplace). See the [CLI reference](/docs/reference/cli) and [Workspaces](/docs/concepts/workspaces).
 

@@ -177,7 +177,7 @@ describe("buildAgentAutoCommand", () => {
     expect(command).toContain(
       "--append-system-prompt-file '/tmp/treq-agent-prompt-1.txt'",
     );
-    expect(command).toContain("--add-dir '/tmp/treq-agent-skills-1'");
+    expect(command).not.toContain("--add-dir");
     expect(command).not.toContain("--append-system-prompt ");
     expect(command).not.toContain("You are operating");
     expect(command).toContain(

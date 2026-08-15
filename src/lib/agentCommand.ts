@@ -160,9 +160,6 @@ export const buildAgentAutoCommand = ({
     cleanupPaths.push(files.settingsPath);
     autoCommand += ` --settings ${shellQuote(files.settingsPath)}`;
     autoCommand += ` --append-system-prompt-file ${shellQuote(files.promptPath)}`;
-    if (files.skillDir) {
-      autoCommand += ` --add-dir ${shellQuote(files.skillDir)}`;
-    }
     if (pendingPrompt) {
       autoCommand += ` -- ${shellQuote(pendingPrompt)}`;
     }
