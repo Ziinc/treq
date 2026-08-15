@@ -22,6 +22,7 @@ import {
   ptyWrite,
   ptyWriteSuppressEcho,
 } from "../lib/api";
+import { consumePtyEcho } from "./terminal/consumePtyEcho";
 import { useTerminalSettings } from "../hooks/useTerminalSettings";
 import { cn } from "../lib/utils";
 import { Loader2 } from "lucide-react";
@@ -33,7 +34,7 @@ interface ConsolidatedTerminalProps {
   shell?: string;
   autoCommand?: string;
   onSessionError?: (message: string) => void;
-  onTerminalOutput?: (output: string) => void;
+  onTerminalOutput?: (output: string, fromProcess?: boolean) => void;
   onTerminalInput?: () => void;
   onTerminalIdle?: () => void;
   onClose?: () => void;
@@ -94,6 +95,7 @@ export const ConsolidatedTerminal = forwardRef<
     const webglContextLossDisposeRef = useRef<IDisposable | null>(null);
     const unlistenRef = useRef<(() => void) | null>(null);
     const outputRef = useRef("");
+    const pendingEchoRef = useRef("");
     const idleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const [isPtyReady, setIsPtyReady] = useState(false);
     const isPtyReadyRef = useRef(isPtyReady);
@@ -112,9 +114,7 @@ export const ConsolidatedTerminal = forwardRef<
     const onTerminalInputRef = useRef(onTerminalInput);
     const onTerminalIdleRef = useRef(onTerminalIdle);
 
-    // Get font size from settings and scale to text-xs (0.75x)
-    const { fontSize: baseFontSize } = useTerminalSettings();
-    const fontSize = Math.round(baseFontSize * 0.8125);
+    const fontSize = Math.round(useTerminalSettings().fontSize * 0.8125);
 
     // Sync isPtyReady state with ref for use in callbacks
     useEffect(() => {
@@ -141,6 +141,7 @@ export const ConsolidatedTerminal = forwardRef<
     // Reset output and error when session changes
     useEffect(() => {
       outputRef.current = "";
+      pendingEchoRef.current = "";
       autoCommandSentRef.current = false;
       setTerminalError(null);
     }, [sessionId, instanceKey]);
@@ -249,7 +250,6 @@ export const ConsolidatedTerminal = forwardRef<
         }
       };
 
-      // Local key event handler
       const localHandleKeyEvent = (event: KeyboardEvent): boolean => {
         // Allow global shortcuts to propagate (don't let XTerm consume them)
         // Note: Escape is NOT included - it should always go to the terminal
@@ -302,22 +302,22 @@ export const ConsolidatedTerminal = forwardRef<
         return true;
       };
 
-      // Local xterm data handler
       const localHandleXtermData = (data: string) => {
         if (!isPtyReadyRef.current) return;
+        pendingEchoRef.current += data;
         onTerminalInputRef.current?.();
         ptyWrite(sessionId, data).catch(localHandleError);
       };
 
-      // Local PTY output handler
       const localHandlePtyOutput = (chunk: string) => {
         xterm.write(chunk);
         outputRef.current += chunk;
-        onTerminalOutputRef.current?.(outputRef.current);
-
-        if (idleTimeoutRef.current) {
-          clearTimeout(idleTimeoutRef.current);
-        }
+        const consumed = consumePtyEcho(pendingEchoRef.current, chunk);
+        pendingEchoRef.current = consumed.pendingEcho;
+        const fromProcess = consumed.processOutput.length > 0;
+        onTerminalOutputRef.current?.(outputRef.current, fromProcess);
+        if (!fromProcess) return;
+        if (idleTimeoutRef.current) clearTimeout(idleTimeoutRef.current);
         idleTimeoutRef.current = setTimeout(() => {
           onTerminalIdleRef.current?.();
         }, idleTimeoutMs);
@@ -326,7 +326,6 @@ export const ConsolidatedTerminal = forwardRef<
       xterm.attachCustomKeyEventHandler(localHandleKeyEvent);
       xterm.onData(localHandleXtermData);
 
-      // Clipboard image paste handler
       const handlePaste = (e: ClipboardEvent) => {
         const items = e.clipboardData?.items;
         if (!items) return;

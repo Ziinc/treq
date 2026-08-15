@@ -16,7 +16,7 @@ import type { WorkspaceDiffStats } from "../lib/workspace-stack";
 import { buildMissionControlGroups } from "./terminal-mission-control/buildMissionControlGroups";
 import { useMissionControlDiffStats } from "./terminal-mission-control/useMissionControlDiffStats";
 import {
-  TERMINAL_IDLE_THRESHOLD_MS,
+  isTerminalSessionIdle,
   type TerminalSessionSummary,
 } from "./terminal/types";
 import { Button } from "./ui/button";
@@ -48,7 +48,7 @@ function sessionStatus(
   now: number,
 ): SessionStatus {
   if (session.isStreaming) return "streaming";
-  if (now - session.lastActivityAt >= TERMINAL_IDLE_THRESHOLD_MS) return "idle";
+  if (isTerminalSessionIdle(session, now)) return "idle";
   return "active";
 }
 

@@ -57,7 +57,7 @@ export interface AgentTerminalPanelProps {
   onDoubleClick?: () => void;
   onClose?: () => void;
   onSessionError?: (message: string) => void;
-  onTerminalOutput?: (output: string) => void;
+  onTerminalOutput?: (output: string, fromProcess?: boolean) => void;
   onTerminalInput?: () => void;
   onTerminalIdle?: () => void;
   terminalRefs: React.MutableRefObject<
@@ -146,11 +146,11 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
         .catch(() => {});
     }, [sessionData.repoPath, sessionData.sessionId]);
 
-    // Handle terminal output — agent is busy while streaming.
+    // Handle terminal output — agent is busy while streaming process output.
     const handleTerminalOutput = useCallback(
-      (output: string) => {
-        markBusy();
-        onTerminalOutput?.(output);
+      (output: string, fromProcess?: boolean) => {
+        if (fromProcess !== false) markBusy();
+        onTerminalOutput?.(output, fromProcess);
       },
       [markBusy, onTerminalOutput],
     );

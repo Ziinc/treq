@@ -23,7 +23,7 @@ interface ShellTerminalPanelProps {
   onClose?: () => void;
   canClose: boolean;
   onSessionError?: (message: string) => void;
-  onTerminalOutput?: (output: string) => void;
+  onTerminalOutput?: (output: string, fromProcess?: boolean) => void;
   onTerminalInput?: () => void;
   onTerminalIdle?: () => void;
   terminalRefs: React.MutableRefObject<TerminalRefsMap>;

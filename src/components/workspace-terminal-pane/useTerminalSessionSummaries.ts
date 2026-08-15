@@ -65,24 +65,42 @@ export function useTerminalSessionSummaries({
     });
   }, [allTerminals]);
 
-  const handleTerminalOutput = useCallback((id: string, output?: string) => {
-    const previewOutput =
-      output === undefined ? undefined : formatTerminalPreview(output);
-    setActivity((prev) => {
-      const existing = prev.get(id);
-      const nextPreview = previewOutput ?? existing?.previewOutput ?? "";
-      // Skip notify-churn when the visible preview text did not change and we
-      // are already marked streaming — still refresh lastActivityAt though.
-      const next = new Map(prev);
-      next.set(id, {
-        lastActivityAt: Date.now(),
-        lastUserInputAt: existing?.lastUserInputAt ?? 0,
-        isStreaming: true,
-        previewOutput: nextPreview,
+  const handleTerminalOutput = useCallback(
+    (id: string, output?: string, fromProcess = true) => {
+      const previewOutput =
+        output === undefined ? undefined : formatTerminalPreview(output);
+      setActivity((prev) => {
+        const existing = prev.get(id);
+        const nextPreview = previewOutput ?? existing?.previewOutput ?? "";
+        const lastActivityAt = fromProcess
+          ? Date.now()
+          : (existing?.lastActivityAt ?? Date.now());
+        const isStreaming = fromProcess
+          ? true
+          : (existing?.isStreaming ?? false);
+
+        const lastUserInputAt = existing?.lastUserInputAt ?? 0;
+        if (
+          existing &&
+          existing.lastActivityAt === lastActivityAt &&
+          existing.isStreaming === isStreaming &&
+          existing.previewOutput === nextPreview
+        ) {
+          return prev;
+        }
+
+        const next = new Map(prev);
+        next.set(id, {
+          lastActivityAt,
+          lastUserInputAt,
+          isStreaming,
+          previewOutput: nextPreview,
+        });
+        return next;
       });
-      return next;
-    });
-  }, []);
+    },
+    [],
+  );
 
   const handleTerminalInput = useCallback((id: string) => {
     setActivity((prev) => {
