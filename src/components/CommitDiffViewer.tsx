@@ -190,6 +190,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
       Map<string, { diff: JjRevisionDiff; loading: boolean; error?: string }>
     >(new Map());
     const containerRef = useRef<HTMLDivElement>(null);
+    const hideCommitTimeoutsRef = useRef<Map<string, number>>(new Map());
 
     // Move/abandon commit state
     const [removingCommitIds, setRemovingCommitIds] = useState<Set<string>>(
@@ -437,7 +438,14 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
           );
           setRemovingCommitIds((prev) => new Set(prev).add(commit.commit_id));
 
-          window.setTimeout(() => {
+          const previousHide = hideCommitTimeoutsRef.current.get(
+            commit.commit_id,
+          );
+          if (previousHide !== undefined) {
+            window.clearTimeout(previousHide);
+          }
+          const hideTimeout = window.setTimeout(() => {
+            hideCommitTimeoutsRef.current.delete(commit.commit_id);
             setRemovedCommitIds((prev) => new Set(prev).add(commit.commit_id));
             setRemovingCommitIds((prev) => {
               const next = new Set(prev);
@@ -446,6 +454,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
             });
             onCommitAbandoned?.();
           }, REMOVE_ANIMATION_MS);
+          hideCommitTimeoutsRef.current.set(commit.commit_id, hideTimeout);
 
           addToast({
             title: "Commit deleted",
@@ -456,6 +465,13 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
               onClick: () => {
                 void (async () => {
                   try {
+                    const pendingHide = hideCommitTimeoutsRef.current.get(
+                      commit.commit_id,
+                    );
+                    if (pendingHide !== undefined) {
+                      window.clearTimeout(pendingHide);
+                      hideCommitTimeoutsRef.current.delete(commit.commit_id);
+                    }
                     await undoRepoOperation(repoPath, workspaceId, operationId);
                     setRemovedCommitIds((prev) => {
                       const next = new Set(prev);

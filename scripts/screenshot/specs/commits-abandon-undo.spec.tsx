@@ -69,7 +69,7 @@ it("captures Undo on the abandon-commit toast restoring the commit", async () =>
 		name: "commits-abandon-undo-01-before-abandon",
 		expectations: [
 			'The Commits tab shows "Keep this commit" expanded with a "Delete commit" button.',
-			"No discard or restore toast is visible.",
+			'No "Commit deleted" or "Restored" toast is visible.',
 		],
 	});
 
@@ -78,6 +78,11 @@ it("captures Undo on the abandon-commit toast restoring the commit", async () =>
 	);
 	const toast = await screen.findByText(/Abandoned commit/i);
 	expect(fs.existsSync(fileOnDisk)).toBe(false);
+	await waitFor(() => {
+		expect(
+			screen.getByText(/no commits within this workspace branch yet/i),
+		).toBeInTheDocument();
+	});
 
 	const undoButton = within(toast.closest('[role="status"]')!).getByRole(
 		"button",
@@ -87,7 +92,7 @@ it("captures Undo on the abandon-commit toast restoring the commit", async () =>
 		name: "commits-abandon-undo-02-toast-with-undo",
 		expectations: [
 			'A toast titled "Commit deleted" is visible with an underlined "Undo" action.',
-			'"Keep this commit" is no longer listed as an active workspace commit, or is animating out.',
+			'The workspace commit list is empty ("There are no commits within this workspace branch yet").',
 		],
 	});
 
