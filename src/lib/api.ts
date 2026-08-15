@@ -404,6 +404,17 @@ export const updateWorkspace = (
     ...(description !== undefined && { description }),
   });
 
+export const scheduleWorkspaces = (
+  repoPath: string,
+  workspaceIds: number[],
+  hiddenUntil: string | null,
+): Promise<Workspace[]> =>
+  invoke("schedule_workspaces", {
+    repoPath,
+    workspaceIds,
+    hiddenUntil,
+  });
+
 export const setWorkspaceTargetBranch = (
   repoPath: string,
   workspacePath: string,

@@ -1,7 +1,9 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { Draggable } from "@hello-pangea/dnd";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
   AlertTriangle,
+  CalendarClock,
   Copy,
   FolderOpen,
   GitBranch,
@@ -14,17 +16,22 @@ import {
 import { ClaudeIcon } from "./icons/AgentIcons";
 import { useState } from "react";
 import { useEditorApps } from "../hooks/useEditorApps";
-import type { QueueEntryStatus, Workspace } from "../lib/api";
+import { type QueueEntryStatus, type Workspace } from "../lib/api";
+import { clearWorkspaceSchedule } from "../lib/clear-workspace-schedule";
 import type { PrInfo } from "../lib/api-types";
 import { cn, getFullWorkspacePath } from "../lib/utils";
 import type { FlattenedWorkspaceNode } from "../lib/workspace-tree";
-import { getWorkspaceTitle as getWorkspaceTitleFromUtils } from "../lib/workspace-utils";
+import {
+  getWorkspaceTitle as getWorkspaceTitleFromUtils,
+  isWorkspaceHidden,
+} from "../lib/workspace-utils";
 import {
   getChangeFilesDragData,
   isChangeFilesDrag,
   type ChangeFilesMoveRequest,
 } from "../lib/change-file-drag";
 import { Button } from "./ui/button";
+import { useToast } from "./ui/toast";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -206,6 +213,8 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
   onDropChangeFiles,
 }) => {
   const workspace = node.status.current;
+  const queryClient = useQueryClient();
+  const { addToast } = useToast();
   const isSelected =
     selectedWorkspaceIds?.has(workspace.id) ||
     selectedWorkspaceId === workspace.id;
@@ -213,6 +222,7 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
     paddingLeft: `${16 + (node.depth - 1) * 6}px`,
   };
   const isConflicted = node.status.has_conflicts;
+  const isHidden = isWorkspaceHidden(workspace);
   const workspaceTitle = getWorkspaceTitleFromUtils(workspace);
   const prStatus = hasRemote && prInfo ? prIconStyle(prInfo) : null;
   const [isChangeDropTarget, setIsChangeDropTarget] = useState(false);
@@ -240,6 +250,7 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                           "bg-primary/10":
                             dragSnapshot.combineTargetFor || isChangeDropTarget,
                           "opacity-50": dragSnapshot.isDragging,
+                          "opacity-60": isHidden && !dragSnapshot.isDragging,
                           "text-destructive": isConflicted,
                         },
                       )}
@@ -297,6 +308,12 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                       >
                         {workspaceTitle}
                       </span>
+                      {isHidden && (
+                        <CalendarClock
+                          className="w-3 h-3 text-muted-foreground shrink-0 mr-1"
+                          aria-label="Scheduled hidden"
+                        />
+                      )}
                       {isConflicted && (
                         <AlertTriangle
                           data-testid={`workspace-conflict-indicator-${workspace.id}`}
@@ -417,6 +434,27 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                   <Pencil className="w-4 h-4 mr-2" />
                   Rename Workspace
                 </ContextMenuItem>
+                {repoPath && isWorkspaceHidden(workspace) && (
+                  <ContextMenuItem
+                    data-testid="remove-schedule-menu-item"
+                    onClick={() => {
+                      void clearWorkspaceSchedule(
+                        repoPath,
+                        [workspace.id],
+                        queryClient,
+                      ).then(() => {
+                        addToast({
+                          title: "Workspace unscheduled",
+                          description: "Shown in the sidebar again.",
+                          type: "success",
+                        });
+                      });
+                    }}
+                  >
+                    <CalendarClock className="w-4 h-4 mr-2" />
+                    Remove schedule
+                  </ContextMenuItem>
+                )}
                 <ContextMenuSeparator />
                 <PathContextMenuItems
                   relativePath={

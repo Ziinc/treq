@@ -11,6 +11,8 @@ export interface Workspace {
   description?: string | null;
   not_on_remote: boolean;
   sparse_patterns?: string[] | null;
+  /** RFC3339. Hidden in the sidebar until this time. */
+  hidden_until?: string | null;
 }
 
 export type RemoteSyncStatus =

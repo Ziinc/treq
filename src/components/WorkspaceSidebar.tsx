@@ -1,6 +1,6 @@
 import { DragDropContext, Droppable, type DropResult } from "@hello-pangea/dnd";
 import { useQuery } from "@tanstack/react-query";
-import { Archive, Github, Search, Settings } from "lucide-react";
+import { Archive, CalendarClock, Github, Search, Settings } from "lucide-react";
 import { memo, useCallback, useMemo, useState } from "react";
 import {
   useGitRemoteInfo,
@@ -27,6 +27,7 @@ import {
   getDescendants,
   getEntireStack,
 } from "../lib/workspace-tree";
+import { isWorkspaceHidden } from "../lib/workspace-utils";
 import { HomeRepoSidebarRow } from "./HomeRepoSidebarRow";
 import { RenameWorkspaceDialog } from "./RenameWorkspaceDialog";
 import { TerminalSessionsSidebar } from "./TerminalSessionsSidebar";
@@ -180,11 +181,22 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
       [statuses],
     );
     const [renameTarget, setRenameTarget] = useState<Workspace | null>(null);
+    const [showHidden, setShowHidden] = useState(false);
+
+    const visibleStatuses = useMemo(() => {
+      if (showHidden) return statuses;
+      return statuses.filter((status) => !isWorkspaceHidden(status.current));
+    }, [statuses, showHidden]);
+    const hiddenCount = useMemo(
+      () =>
+        statuses.filter((status) => isWorkspaceHidden(status.current)).length,
+      [statuses],
+    );
 
     const flattenedNodes = useMemo(() => {
-      const tree = buildWorkspaceTree(statuses);
+      const tree = buildWorkspaceTree(visibleStatuses);
       return flattenWorkspaceTree(tree);
-    }, [statuses]);
+    }, [visibleStatuses]);
 
     const handleContainerClick = useCallback(
       (e: React.MouseEvent) => {
@@ -373,9 +385,50 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                     ref={droppableProvided.innerRef}
                     {...droppableProvided.droppableProps}
                   >
-                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest px-2 py-1">
-                      Workspaces
-                    </h4>
+                    <div className="flex items-center justify-between px-2 py-1">
+                      <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest">
+                        Workspaces
+                      </h4>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            data-testid="show-hidden-workspaces-toggle"
+                            aria-pressed={showHidden}
+                            aria-label={
+                              showHidden
+                                ? "Hide scheduled workspaces"
+                                : hiddenCount > 0
+                                  ? `Show ${hiddenCount} hidden workspace${hiddenCount === 1 ? "" : "s"}`
+                                  : "Show hidden workspaces"
+                            }
+                            onClick={() => setShowHidden((value) => !value)}
+                            className={`relative h-6 min-w-6 px-1 rounded-md flex items-center justify-center transition-colors ${
+                              showHidden
+                                ? "bg-primary/20 text-primary"
+                                : "text-muted-foreground hover:bg-muted"
+                            }`}
+                          >
+                            <CalendarClock className="w-3.5 h-3.5" />
+                            {hiddenCount > 0 && (
+                              <span
+                                data-testid="hidden-workspace-count"
+                                className="absolute -top-1 -right-1 min-w-3.5 h-3.5 px-0.5 rounded-full bg-foreground/70 text-background text-[9px] leading-none font-semibold flex items-center justify-center"
+                              >
+                                {hiddenCount}
+                              </span>
+                            )}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">
+                          {showHidden
+                            ? "Hide scheduled workspaces"
+                            : hiddenCount > 0
+                              ? `Show ${hiddenCount} hidden workspace${hiddenCount === 1 ? "" : "s"}`
+                              : "Show hidden workspaces"}
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
                     {workspacesPending &&
                       flattenedNodes.length === 0 &&
                       Array.from({ length: 6 }, (_, index) => (

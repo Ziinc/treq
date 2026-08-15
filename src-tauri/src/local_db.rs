@@ -25,6 +25,9 @@ pub struct Workspace {
   pub moved_files: Option<Vec<String>>,
   pub not_on_remote: bool,
   pub sparse_patterns: Option<Vec<String>>,
+  /// RFC3339 timestamp. The workspace is hidden in the sidebar until this time.
+  #[serde(default)]
+  pub hidden_until: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -61,6 +64,7 @@ fn workspace_from_row(repo_path: &str, row: &Row<'_>) -> rusqlite::Result<Worksp
     description: row.get(11)?,
     moved_files,
     sparse_patterns,
+    hidden_until: row.get(13)?,
   })
 }
 
@@ -201,6 +205,7 @@ pub fn init_local_db(repo_path: &str) -> Result<PathBuf, String> {
   let _ = conn.execute("ALTER TABLE workspaces ADD COLUMN moved_files TEXT", []);
   let _ = conn.execute("ALTER TABLE workspaces ADD COLUMN refreshed_at TEXT", []);
   let _ = conn.execute("ALTER TABLE workspaces ADD COLUMN sparse_patterns TEXT", []);
+  let _ = conn.execute("ALTER TABLE workspaces ADD COLUMN hidden_until TEXT", []);
 
   conn
     .execute(
@@ -698,7 +703,7 @@ pub fn prune_stale_instance_registry(
 pub fn get_workspaces(repo_path: &str) -> Result<Vec<Workspace>, String> {
   let conn = get_connection(repo_path)?;
   let mut stmt = conn
-        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, refreshed_at, metadata, target_branch, COALESCE(not_on_remote, 0), COALESCE(title, branch_name), moved_files, description, sparse_patterns FROM workspaces ORDER BY branch_name COLLATE NOCASE ASC")
+        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, refreshed_at, metadata, target_branch, COALESCE(not_on_remote, 0), COALESCE(title, branch_name), moved_files, description, sparse_patterns, hidden_until FROM workspaces ORDER BY branch_name COLLATE NOCASE ASC")
         .map_err(|e| format!("Failed to prepare workspaces query: {}", e))?;
 
   let workspaces = stmt
@@ -713,7 +718,7 @@ pub fn get_workspaces(repo_path: &str) -> Result<Vec<Workspace>, String> {
 pub fn get_workspace_by_id(repo_path: &str, id: i64) -> Result<Option<Workspace>, String> {
   let conn = get_connection(repo_path)?;
   let mut stmt = conn
-        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, refreshed_at, metadata, target_branch, COALESCE(not_on_remote, 0), COALESCE(title, branch_name), moved_files, description, sparse_patterns FROM workspaces WHERE id = ?1")
+        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, refreshed_at, metadata, target_branch, COALESCE(not_on_remote, 0), COALESCE(title, branch_name), moved_files, description, sparse_patterns, hidden_until FROM workspaces WHERE id = ?1")
         .map_err(|e| format!("Failed to prepare workspace query: {}", e))?;
 
   let workspace = stmt
@@ -730,7 +735,7 @@ pub fn get_workspace_by_path(
 ) -> Result<Option<Workspace>, String> {
   let conn = get_connection(repo_path)?;
   let mut stmt = conn
-        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, refreshed_at, metadata, target_branch, COALESCE(not_on_remote, 0), COALESCE(title, branch_name), moved_files, description, sparse_patterns FROM workspaces WHERE workspace_path = ?1")
+        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, refreshed_at, metadata, target_branch, COALESCE(not_on_remote, 0), COALESCE(title, branch_name), moved_files, description, sparse_patterns, hidden_until FROM workspaces WHERE workspace_path = ?1")
         .map_err(|e| format!("Failed to prepare workspace query: {}", e))?;
 
   let workspace = stmt
@@ -747,7 +752,7 @@ pub fn get_workspace_by_branch(
 ) -> Result<Option<Workspace>, String> {
   let conn = get_connection(repo_path)?;
   let mut stmt = conn
-        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, refreshed_at, metadata, target_branch, COALESCE(not_on_remote, 0), COALESCE(title, branch_name), moved_files, description, sparse_patterns FROM workspaces WHERE branch_name = ?1")
+        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, refreshed_at, metadata, target_branch, COALESCE(not_on_remote, 0), COALESCE(title, branch_name), moved_files, description, sparse_patterns, hidden_until FROM workspaces WHERE branch_name = ?1")
         .map_err(|e| format!("Failed to prepare workspace query: {}", e))?;
 
   let workspace = stmt
@@ -837,6 +842,21 @@ pub fn update_workspace_title(repo_path: &str, id: i64, title: &str) -> Result<(
       params![title, id],
     )
     .map_err(|e| format!("Failed to update workspace title: {}", e))?;
+  Ok(())
+}
+
+pub fn update_workspace_hidden_until(
+  repo_path: &str,
+  id: i64,
+  hidden_until: Option<&str>,
+) -> Result<(), String> {
+  let conn = get_connection(repo_path)?;
+  conn
+    .execute(
+      "UPDATE workspaces SET hidden_until = ?1 WHERE id = ?2",
+      params![hidden_until, id],
+    )
+    .map_err(|e| format!("Failed to update workspace hidden_until: {}", e))?;
   Ok(())
 }
 
@@ -966,7 +986,7 @@ pub fn get_workspaces_by_target_branch(
 ) -> Result<Vec<Workspace>, String> {
   let conn = get_connection(repo_path)?;
   let mut stmt = conn
-        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, refreshed_at, metadata, target_branch, COALESCE(not_on_remote, 0), COALESCE(title, branch_name), moved_files, description, sparse_patterns FROM workspaces WHERE target_branch = ?1 ORDER BY branch_name COLLATE NOCASE ASC")
+        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, refreshed_at, metadata, target_branch, COALESCE(not_on_remote, 0), COALESCE(title, branch_name), moved_files, description, sparse_patterns, hidden_until FROM workspaces WHERE target_branch = ?1 ORDER BY branch_name COLLATE NOCASE ASC")
         .map_err(|e| format!("Failed to prepare workspaces query: {}", e))?;
 
   let workspaces = stmt
@@ -1078,7 +1098,7 @@ pub fn sync_discovered_workspaces(
     .map(|workspace| workspace.workspace_path.as_str())
     .collect();
   let mut stmt = conn
-        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, refreshed_at, metadata, target_branch, COALESCE(not_on_remote, 0), COALESCE(title, branch_name), moved_files, description, sparse_patterns FROM workspaces ORDER BY branch_name COLLATE NOCASE ASC")
+        .prepare("SELECT id, workspace_name, workspace_path, branch_name, created_at, refreshed_at, metadata, target_branch, COALESCE(not_on_remote, 0), COALESCE(title, branch_name), moved_files, description, sparse_patterns, hidden_until FROM workspaces ORDER BY branch_name COLLATE NOCASE ASC")
         .map_err(|e| format!("Failed to prepare synced workspaces query: {}", e))?;
 
   let workspaces = stmt
@@ -1990,6 +2010,7 @@ mod tests {
       Some("test description")
     );
     assert!(workspaces[0].target_branch.is_none());
+    assert!(workspaces[0].hidden_until.is_none());
 
     let db_path = get_local_db_path(repo_path);
     assert!(
