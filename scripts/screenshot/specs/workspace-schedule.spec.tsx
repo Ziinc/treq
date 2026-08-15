@@ -26,18 +26,20 @@ it("captures scheduling a workspace hidden from the sidebar", async () => {
 		expectations: [
 			"The workspace header shows a Schedule button next to Stack.",
 			"The sidebar lists feat/scheduled and feat/visible under Workspaces.",
-			"An eye-off toggle sits on the Workspaces heading row.",
+			"A calendar toggle sits on the Workspaces heading with no count pip yet.",
 		],
 	});
 
 	await user.click(await within(header).findByTestId("schedule-workspace-button"));
 	const dialog = await screen.findByTestId("schedule-workspace-dialog");
 	await within(dialog).findByText("Schedule workspace");
+	await user.click(within(dialog).getByTestId("schedule-preset-1h"));
 
 	await captureDocument(document, {
 		name: "workspace-schedule-02-dialog",
 		expectations: [
-			"A Schedule workspace dialog is open with a Hide until datetime field.",
+			"A Schedule workspace dialog shows interval chips (1 hour, Tomorrow 9am) and week chips (Mon 9am, Fri 5pm).",
+			"An inline calendar with a time column is visible under Hide until.",
 			"The dialog has Cancel and Schedule buttons.",
 		],
 	});
@@ -56,6 +58,7 @@ it("captures scheduling a workspace hidden from the sidebar", async () => {
 		expectations: [
 			"feat/scheduled is gone from the sidebar.",
 			"feat/visible remains listed under Workspaces.",
+			"The calendar toggle on Workspaces shows a pip with 1.",
 		],
 	});
 
@@ -65,7 +68,7 @@ it("captures scheduling a workspace hidden from the sidebar", async () => {
 	await captureDocument(document, {
 		name: "workspace-schedule-04-show-hidden",
 		expectations: [
-			"The show-hidden toggle is active on the Workspaces heading.",
+			"The calendar show-hidden toggle is active and still shows pip 1.",
 			"feat/scheduled is listed again in the sidebar, dimmed as hidden.",
 			"feat/visible is still listed.",
 		],

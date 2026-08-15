@@ -37,6 +37,7 @@ describe("workspace scheduling", () => {
     );
 
     const dialog = await screen.findByTestId("schedule-workspace-dialog");
+    await user.click(within(dialog).getByTestId("schedule-preset-1h"));
     await user.click(within(dialog).getByRole("button", { name: "Schedule" }));
 
     await waitFor(() => {
@@ -46,6 +47,9 @@ describe("workspace scheduling", () => {
       expect(within(sidebarRoot).queryByText("feat/alpha")).toBeNull();
     });
     expect(await findSidebarBranchElement("feat/beta")).toBeTruthy();
+    expect(
+      await screen.findByTestId("hidden-workspace-count"),
+    ).toHaveTextContent("1");
 
     await user.click(
       await screen.findByTestId("show-hidden-workspaces-toggle"),

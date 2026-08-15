@@ -2,8 +2,8 @@ import { Draggable } from "@hello-pangea/dnd";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
   AlertTriangle,
+  CalendarClock,
   Copy,
-  EyeOff,
   FolderOpen,
   GitBranch,
   Layers2,
@@ -304,7 +304,7 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                         {workspaceTitle}
                       </span>
                       {isHidden && (
-                        <EyeOff
+                        <CalendarClock
                           className="w-3 h-3 text-muted-foreground shrink-0 mr-1"
                           aria-label="Scheduled hidden"
                         />

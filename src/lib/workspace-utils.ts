@@ -37,23 +37,44 @@ export function isWorkspaceHidden(
   return Number.isFinite(until) && until > nowMs;
 }
 
-/** `datetime-local` value in the user's timezone. */
-export function toDatetimeLocalValue(date: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
-export function datetimeLocalToRfc3339(value: string): string {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    throw new Error("Invalid date");
-  }
-  return parsed.toISOString();
-}
-
-export function defaultScheduleDatetimeLocal(now: Date = new Date()): string {
+export function defaultScheduleDate(now: Date = new Date()): Date {
   const tomorrow = new Date(now);
   tomorrow.setDate(tomorrow.getDate() + 1);
   tomorrow.setHours(9, 0, 0, 0);
-  return toDatetimeLocalValue(tomorrow);
+  return tomorrow;
+}
+
+export function addHours(from: Date, hours: number): Date {
+  return new Date(from.getTime() + hours * 60 * 60 * 1000);
+}
+
+export function addDaysAtHour(from: Date, days: number, hour: number): Date {
+  const result = new Date(from);
+  result.setDate(result.getDate() + days);
+  result.setHours(hour, 0, 0, 0);
+  return result;
+}
+
+/** Next occurrence of `weekday` (0=Sun … 6=Sat) at local hour. Uses today if still upcoming. */
+export function nextWeekdayAt(from: Date, weekday: number, hour: number): Date {
+  const result = new Date(from);
+  result.setHours(hour, 0, 0, 0);
+  const daysAhead = (weekday - from.getDay() + 7) % 7;
+  if (daysAhead === 0 && result.getTime() <= from.getTime()) {
+    result.setDate(result.getDate() + 7);
+  } else {
+    result.setDate(result.getDate() + daysAhead);
+  }
+  return result;
+}
+
+/** Always the following Monday at 9am, never today. */
+export function followingMondayAtNine(from: Date): Date {
+  const result = new Date(from);
+  result.setHours(9, 0, 0, 0);
+  const daysUntilMonday = (1 - from.getDay() + 7) % 7;
+  result.setDate(
+    result.getDate() + (daysUntilMonday === 0 ? 7 : daysUntilMonday),
+  );
+  return result;
 }

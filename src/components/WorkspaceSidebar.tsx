@@ -1,6 +1,6 @@
 import { DragDropContext, Droppable, type DropResult } from "@hello-pangea/dnd";
 import { useQuery } from "@tanstack/react-query";
-import { Archive, EyeOff, Github, Search, Settings } from "lucide-react";
+import { Archive, CalendarClock, Github, Search, Settings } from "lucide-react";
 import { memo, useCallback, useMemo, useState } from "react";
 import {
   useGitRemoteInfo,
@@ -398,16 +398,26 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                             aria-label={
                               showHidden
                                 ? "Hide scheduled workspaces"
-                                : "Show hidden workspaces"
+                                : hiddenCount > 0
+                                  ? `Show ${hiddenCount} hidden workspace${hiddenCount === 1 ? "" : "s"}`
+                                  : "Show hidden workspaces"
                             }
                             onClick={() => setShowHidden((value) => !value)}
-                            className={`h-6 w-6 rounded-md flex items-center justify-center transition-colors ${
+                            className={`relative h-6 min-w-6 px-1 rounded-md flex items-center justify-center transition-colors ${
                               showHidden
                                 ? "bg-primary/20 text-primary"
                                 : "text-muted-foreground hover:bg-muted"
                             }`}
                           >
-                            <EyeOff className="w-3.5 h-3.5" />
+                            <CalendarClock className="w-3.5 h-3.5" />
+                            {hiddenCount > 0 && (
+                              <span
+                                data-testid="hidden-workspace-count"
+                                className="absolute -top-1 -right-1 min-w-3.5 h-3.5 px-0.5 rounded-full bg-primary text-primary-foreground text-[9px] leading-none font-semibold flex items-center justify-center"
+                              >
+                                {hiddenCount}
+                              </span>
+                            )}
                           </button>
                         </TooltipTrigger>
                         <TooltipContent side="bottom">
