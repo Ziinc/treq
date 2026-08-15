@@ -769,15 +769,15 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
         None | Some(Value::Null) => None,
         Some(v) => Some(serde_json::from_value(v.clone()).map_err(|e| e.to_string())?),
       };
-      let result =
-        treq_lib::core::start_resolve_conflicts(&repo_path, workspace_id, change_ids)?;
+      let result = treq_lib::core::start_resolve_conflicts(&repo_path, workspace_id, change_ids)?;
       serde_json::to_value(result).map_err(|e| e.to_string())
     }
 
     "build_resolve_agent_prompt" => {
       let user_prompt = get_str(&args, "userPrompt")?;
       let session: treq_lib::core::ResolveConflictsSession = serde_json::from_value(
-        args.get("session")
+        args
+          .get("session")
           .cloned()
           .ok_or("Missing argument: session")?,
       )
@@ -794,8 +794,7 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
         Some(v) => serde_json::from_value(v.clone()).map_err(|e| e.to_string())?,
       };
       let parsed_sides = treq_lib::core::parse_resolve_sides(&sides)?;
-      let result =
-        treq_lib::core::resolve_commit(&repo_path, &revision, &parsed_sides, None)?;
+      let result = treq_lib::core::resolve_commit(&repo_path, &revision, &parsed_sides, None)?;
       serde_json::to_value(result).map_err(|e| e.to_string())
     }
 

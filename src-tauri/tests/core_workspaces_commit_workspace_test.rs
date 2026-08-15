@@ -529,12 +529,7 @@ fn test_create_commit_excludes_bundled_codex_skill() {
 
   let git_tree = TestRepo::run_git(
     &repo.repo_path,
-    &[
-      "ls-tree",
-      "-r",
-      "--name-only",
-      "feat/codex-skill-untracked",
-    ],
+    &["ls-tree", "-r", "--name-only", "feat/codex-skill-untracked"],
   )
   .expect("git ls-tree of workspace bookmark failed");
   assert!(

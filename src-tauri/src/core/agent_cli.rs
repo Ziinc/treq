@@ -86,8 +86,7 @@ pub fn cleanup_agent_cli_files(paths: &[String]) -> Result<(), String> {
       Ok(p) => p,
       Err(_) => continue,
     };
-    if !is_safe_agent_cli_temp_path(&canonical, &temp_dir)
-      && !is_safe_project_skill_dir(&canonical)
+    if !is_safe_agent_cli_temp_path(&canonical, &temp_dir) && !is_safe_project_skill_dir(&canonical)
     {
       return Err(format!(
         "Refusing to delete path outside treq agent temp files: {path}"
