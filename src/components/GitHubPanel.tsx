@@ -1,6 +1,7 @@
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import {
   AlertCircle,
+  Check,
   CircleDot,
   Github,
   GitPullRequest,
@@ -8,6 +9,7 @@ import {
   Plus,
   RefreshCw,
 } from "lucide-react";
+import { useState } from "react";
 import { useLocation, useRoute } from "wouter";
 import { useAuth } from "../hooks/useAuth";
 import {
@@ -26,8 +28,12 @@ import {
   type GitHubStateFilter,
   type GitHubTab,
 } from "../lib/githubRoutes";
-import type { QueueEntry } from "../lib/merge-queue-stacks";
+import {
+  MERGE_QUEUE_HISTORY_PAGE_SIZE,
+  type QueueEntry,
+} from "../lib/merge-queue-stacks";
 import { supabase } from "../lib/supabase";
+import { cn } from "../lib/utils";
 import { MergeQueueTab } from "./github-panel/MergeQueueTab";
 import { CreateIssueForm, IssueDetailPanel } from "./github-panel/IssueDetail";
 import { CreatePrForm, PrDetailPanel } from "./github-panel/PrDetail";
@@ -64,6 +70,10 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
     useGitRemoteInfo(repoPath);
   const { data: queueEnabled } = useMergeQueueEnabled(repoPath);
   const dequeueBranches = useDequeueBranches(repoPath);
+  const [showMergedHistory, setShowMergedHistory] = useState(false);
+  const [historyLimit, setHistoryLimit] = useState(
+    MERGE_QUEUE_HISTORY_PAGE_SIZE,
+  );
 
   // Routing: the current tab, filter, selection, and create-form state all
   // live in the URL (as /github/<tab>/<filter>/<selector?>) so browser
@@ -299,6 +309,57 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
           </div>
         )}
 
+        {activeTab === "merge-queue" &&
+          isPro &&
+          queueEnabled === true &&
+          !!remoteInfo && (
+            <div
+              className="flex items-center gap-2 px-4 pb-2 shrink-0"
+              data-testid="merge-queue-toolbar"
+            >
+              <button
+                type="button"
+                role="checkbox"
+                aria-checked={showMergedHistory}
+                aria-label="Merged"
+                onClick={() => {
+                  const next = !showMergedHistory;
+                  setShowMergedHistory(next);
+                  if (next) setHistoryLimit(MERGE_QUEUE_HISTORY_PAGE_SIZE);
+                }}
+                className={cn(
+                  "inline-flex items-center gap-1.5 h-7 px-2 rounded-md border text-base transition-colors",
+                  showMergedHistory
+                    ? "border-primary/40 bg-primary/10 text-foreground"
+                    : "border-border bg-background text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <span
+                  className={cn(
+                    "flex h-3.5 w-3.5 items-center justify-center rounded-sm border",
+                    showMergedHistory
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-muted-foreground/40",
+                  )}
+                  aria-hidden="true"
+                >
+                  {showMergedHistory ? <Check className="h-3 w-3" /> : null}
+                </span>
+                Merged
+              </button>
+              <div className="flex-1" />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={handleRefresh}
+                title="Refresh"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+              </Button>
+            </div>
+          )}
+
         {showCreateForm && remoteInfo && isListTab && (
           <div className="shrink-0 overflow-y-auto">
             {activeTab === "issues" ? (
@@ -417,10 +478,14 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
             <MergeQueueTab
               isPro={isPro}
               hasRemote={!!remoteInfo}
+              repoPath={repoPath}
               queueEnabled={queueEnabled}
               queueLoading={queueLoading}
               queueEntries={queueEntries}
               dequeueBranches={dequeueBranches}
+              showMergedHistory={showMergedHistory}
+              historyLimit={historyLimit}
+              onHistoryLimitChange={setHistoryLimit}
               onOpenSettings={onOpenSettings}
             />
           )}

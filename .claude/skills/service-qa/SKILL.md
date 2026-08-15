@@ -1,0 +1,265 @@
+---
+name: service-qa
+description: >-
+  Verify treq's integration with the local Supabase CLI stack (Auth, PostgREST
+  RPCs/RLS, Edge Functions) by driving real HTTP/RPC calls against
+  http://127.0.0.1:54321 — no mocked supabase-js. Use explicitly when the user
+  runs /service-qa or asks to QA auth, desktop token exchange, merge-queue
+  RPCs, webhooks, or other Supabase-backed flows. ALSO use proactively, without
+  being asked, right after implementing or modifying anything that changes the
+  service contract: supabase/migrations/**, supabase/functions/**,
+  supabase/config.toml, src/lib/supabase.ts, src/hooks/useAuth.tsx,
+  src/hooks/useMergeQueueStatus.ts, or web auth/callback/GitHub-install pages
+  that call Supabase. Do this before telling the user the change is done. A
+  PostToolUse hook (.claude/hooks/post-edit-service-qa.sh) injects a reminder
+  for exactly this case — treat that reminder as the trigger to run this skill,
+  not just a suggestion.
+---
+
+# Service QA (Supabase CLI integration checks)
+
+## When to use
+
+- User invokes `/service-qa`, optionally naming a flow ("service-qa desktop
+  token exchange", "service-qa merge-queue enabled RPC", "service-qa webhook
+  HMAC").
+- Proactively, immediately after an Edit/Write/MultiEdit that changes the
+  Supabase service contract or the app code that calls it — don't wait to be
+  asked. If you see `additionalContext` from `post-edit-service-qa.sh` naming a
+  changed file, that *is* the request.
+
+## Relationship to app-qa
+
+| Skill | Proves | Stack |
+|---|---|---|
+| `/app-qa` | UI pixels and interaction | real jj + NAPI + jsdom React; **mocks** Supabase |
+| `/service-qa` | Auth, RLS, RPCs, Edge Functions | real local Supabase CLI; **no** mocked supabase-js |
+| UI + live Supabase | Desktop button → real RPC/RLS + webhook drain | screenshot harness **without** mocking `src/lib/supabase` (see `scripts/screenshot/specs/service-qa-ui-live-supabase.spec.tsx`); enqueue via simulated `pull_request` labeled webhooks, CI via `check_suite`, merges via worker + `MERGE_QUEUE_GITHUB_STUB` |
+
+Do not substitute one for the other. A green `/app-qa` screenshot with a mocked
+`supabase.rpc` does not prove the migration or Edge Function works. A green
+service-qa RPC alone does not prove the desktop button wiring is correct — when
+the user asks for screenshots of the UI talking to Supabase, capture via the
+screenshot harness against `http://127.0.0.1:54321` (email/password session on
+the app singleton, Pro gate stubbed only if local Stripe FDW has no plan). Never
+paste terminal logs or outcome HTML as stand-ins for those UI captures.
+
+Pure `_shared/merge-queue` unit tests under `test/merge-queue/` stay in
+`npm test`. service-qa covers the **I/O boundary**: Postgres, Auth Admin API,
+PostgREST, and `functions/v1/*`.
+
+## Delegate grunt work and discovery to cheaper subagents
+
+Most of the cost of a service-qa run is search and mechanical legwork, not
+judgement. Push that to subagents on a cheaper model (`Agent` with
+`model: "haiku"`, or `"sonnet"` when the answer needs some reasoning) and keep
+the expensive context for the parts that actually need it. Run independent
+delegations in parallel in a single message.
+
+Good candidates — hand these off:
+
+- **Finding prior art.** Which `scripts/service-qa/specs/` already covers this
+  contract; which migration defines the RPC/table; which Edge Function the app
+  invokes. Use `Explore`.
+- **Tracing the app call site.** Which hook or page calls
+  `supabase.rpc(...)` / `functions.invoke(...)` for the changed surface.
+- **Mechanical sweeps.** Reading a batch of `<name>.json` manifests under
+  `scripts/service-qa/.generated/`, diffing a new spec against the closest
+  worked example.
+
+Keep these yourself — they are the skill, not the legwork:
+
+- Deciding what service contract to verify and what the `expectations` should
+  claim.
+- Writing the spec and driving the real local stack.
+- **Step 5 verification.** Read the `.generated/<name>.json` outcomes yourself
+  and confirm each claim against the test output / DB state. A subagent's
+  "looks fine" is not that.
+- The final report to the user.
+
+## Ground rule: real local Supabase only, never mock the client
+
+Every call inside a service-qa spec must hit the local CLI stack at
+`http://127.0.0.1:54321` through the harness clients in
+`scripts/service-qa/clients.ts` (anon JWT for user-scoped calls, service-role
+for seeding / admin). Never `vi.mock("../../src/lib/supabase")`. Never point
+at production (`*.supabase.co`).
+
+If a flow needs a signed-in user, use **email/password only** via
+`createTestUser` / `signInWithEmailPassword` in `scripts/service-qa/seed.ts`
+(public `signUp` + `signInWithPassword`). Do not use OAuth. service-qa overrides
+`package.json` → `featureFlags.emailSignup` to `true` in
+`scripts/service-qa/features.ts` so this path stays available even when the
+shipped product flag is off. Do not hard-code production user IDs or paste live
+session tokens. Prefer `withMergeQueueFixture` (or an equivalent try/finally)
+so every user, install, and queue row is torn down.
+
+GitHub App side effects (labeling PRs, merging) are out of scope for early
+specs unless you mock only the **outbound GitHub adapter** inside an Edge
+Function test — never mock PostgREST or Auth themselves. Prefer specs that
+assert DB rows, RPC return values, and HTTP status codes from Edge Functions.
+
+## How the harness works
+
+1. **Local stack** — `supabase start` (Makefile `make start`) brings up API
+   `:54321`, DB `:54322`, Studio `:54323`, Inbucket `:54324`, and the local
+   Edge runtime. `supabase db reset --local` applies
+   `supabase/migrations/**` + `supabase/seed.sql`.
+2. **Health gate** — `scripts/service-qa/health.ts` (loaded from
+   `test/setup.service-qa.ts`) fails the run immediately if
+   `127.0.0.1:54321` is down, with instructions to run
+   `npm run service-qa:up`.
+3. **Clients** — `getAnonClient()` / `getServiceClient()` read keys from
+   `supabase status -o env` when available, falling back to the standard local
+   demo JWTs (same anon key as `package.json` → `env.dev.supabase`).
+4. **Seed helpers** — `createTestUser` (email/password `signUp`),
+   `signInWithEmailPassword`, `linkGithubRepo`, `withMergeQueueFixture`
+   (setup + teardown). Profile rows are auto-created by `handle_new_user`.
+   Edge Functions import `@supabase/supabase-js` from
+   `supabase/functions/node_modules` (see `deno.json` import map); `service-qa:up`
+   runs `npm install --prefix supabase/functions`.
+5. **`recordOutcome(name, { expectations, details })`** — writes
+   `scripts/service-qa/.generated/<name>.json`. Like app-qa's
+   `captureDocument` expectations, these are plain-English claims for the
+   agent checklist in step 5 — complementary to the Vitest `expect` calls,
+   not a replacement.
+
+`vitest.service-qa.config.ts` uses the **node** environment (not jsdom) and is
+**excluded** from `npm test`, so the main suite stays runnable without Docker.
+
+## Prerequisites
+
+```bash
+# One-time: CLI + Docker Desktop (or compatible engine) installed and running.
+# https://supabase.com/docs/guides/local-development/cli/getting-started
+
+npm run service-qa:up    # supabase start && db reset --local
+# or: make start && make db.reset
+```
+
+Optional secrets for flows that need them (OAuth, GitHub App):
+
+- `SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET` / `SUPABASE_AUTH_EXTERNAL_GITHUB_SECRET`
+  (see `supabase/config.toml`)
+- `GITHUB_APP_ID`, `GITHUB_APP_PRIVATE_KEY_BASE64`, `GITHUB_WEBHOOK_SECRET`
+  for enqueue / webhook / worker specs (see
+  `supabase/functions/_shared/merge-queue/README.md`)
+
+Email confirmations are **off** locally (`[auth.email] enable_confirmations =
+false`), so password signup works without Inbucket. service-qa **overrides**
+`featureFlags.emailSignup` to `true` in `scripts/service-qa/features.ts` and
+creates users only via Auth email/password (`signUp` / `signInWithPassword`) —
+never OAuth.
+
+Stripe FDW (`002_stripe_fdw.sql`) uses a vault placeholder locally. Specs that
+read `subscriptions` must tolerate an empty/unavailable Stripe remote — prefer
+asserting Auth + treq tables/RPCs first.
+
+## Steps
+
+1. **Identify the contract to verify.** From the user's ask, or from the
+   changed file(s) named in the hook's `additionalContext`, work out which
+   Auth/RPC/Edge path changed. Search `scripts/service-qa/specs/` and the
+   matching migration or `supabase/functions/<name>/` for prior art. Delegate
+   that search to an `Explore` subagent; do the "which contract matters" call
+   yourself.
+
+2. **Write or extend a spec** under
+   `scripts/service-qa/specs/<slug>.spec.ts`. One spec per contract. Auth must
+   use email/password (`createTestUser` / `signInWithEmailPassword` /
+   `withMergeQueueFixture`) — the service-qa feature override keeps
+   `emailSignup` on. If an existing spec already covers this flow, add steps
+   to it rather than duplicating seed setup. Shape:
+
+   ```ts
+   import { it, expect } from "vitest";
+   import { getAnonClient, getServiceClient } from "../clients";
+   import { createTestUser, linkGithubRepo } from "../seed";
+   import { recordOutcome } from "../record";
+
+   it("verifies <the contract>", async () => {
+     const admin = getServiceClient();
+     const { user, password, email } = await createTestUser(admin);
+
+     const anon = getAnonClient();
+     const { data: signIn, error: signInError } =
+       await anon.auth.signInWithPassword({ email, password });
+     expect(signInError).toBeNull();
+     expect(signIn.session).toBeTruthy();
+
+     // Real service assertions -- prove the contract BEFORE recording.
+     const { data, error } = await anon.rpc("some_rpc", { /* ... */ });
+     expect(error).toBeNull();
+     expect(data).toEqual(/* ... */);
+
+     await recordOutcome("<slug>-01-<what>", {
+       expectations: [
+         "Plain-English claim about the service outcome a reviewer should confirm.",
+         "A second claim, if needed.",
+       ],
+       details: { userId: user.id, data },
+     });
+   }, 60000);
+   ```
+
+   `scripts/service-qa/specs/desktop-token-exchange.spec.ts` is the worked
+   example for Auth + Edge Function. `merge-queue-enabled-rpc.spec.ts` is the
+   worked example for seeding a linked GitHub repo and exercising an RPC the
+   desktop app calls. Copy whichever shape fits.
+
+   Give every outcome a numbered, descriptive `name` —
+   `<slug>-<NN>-<what-it-shows>` — that string becomes the JSON filename.
+
+3. **`expectations` are for the service outcome checklist, not a substitute
+   for `expect`.** `recordOutcome` requires a non-empty `expectations:
+   string[]` — plain-English claims about what the run proved (status codes,
+   token single-use, RPC return value, RLS denial). These are written to
+   `<name>.json` so step 5 has a concrete checklist. Keep real Vitest
+   assertions in the spec body too.
+
+   **At most 3 expectations per outcome** — same discipline as app-qa. If you
+   need more, split into a second `recordOutcome` with its own `name`.
+
+4. **Run it.**
+   - First run in a session, or after touching migrations / `config.toml`:
+     `npm run service-qa:full` (start + reset + all specs).
+   - Stack already up, iterating on one spec:
+     `npx vitest run --config vitest.service-qa.config.ts scripts/service-qa/specs/<slug>.spec.ts`
+   - After a migration-only change with stack already running:
+     `make db.reset && npm run service-qa`
+
+5. **Verify each outcome against its expectations before saying the task is
+   done.** For every `recordOutcome`: read
+   `scripts/service-qa/.generated/<name>.json` and confirm or refute each
+   claim against the Vitest output and, when relevant, a follow-up query via
+   the service-role client or Studio (`http://127.0.0.1:54323`). A spec whose
+   `expect` calls passed can still leave the wrong row shape or a half-applied
+   migration — the checklist is what forces a second look.
+
+6. **Show the result.** Report which contracts passed, quote any expectation
+   that did not hold, and name the spec file(s) added or extended. Do not dump
+   full JSON unless the user asks.
+
+7. **Lint, format, and typecheck the whole change, last.** Only after the
+   contract is verified:
+   - `npm run format`
+   - `npm run lint`
+   - `npm run check`
+
+   Fix everything these flag — including in any spec you added in step 2.
+
+## Keep specs around
+
+`scripts/service-qa/specs/` is a growing service-contract library, not a scratch
+directory. Don't delete a spec after using it — if a later change touches the
+same contract, extend its steps instead of writing a near-duplicate file.
+
+## What not to do
+
+- Do not mock `@supabase/supabase-js` or `src/lib/supabase`.
+- Do not hit production Supabase.
+- Do not put business logic in the harness — only health, clients, seed, and
+  outcome recording.
+- Do not start the full desktop UI inside service-qa; that is app-qa's job.
+- Do not skip the failing step: a green test written against a mock is a false
+  test for this skill.

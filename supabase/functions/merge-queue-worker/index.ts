@@ -11,7 +11,7 @@
 // message exclusive while in flight, and the per-queue execution lease
 // serializes all mutations of a given merge queue.
 
-import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import {
   archiveCommand,
   publishDeadLetter,
@@ -28,6 +28,10 @@ import {
   RetryableError,
 } from "../_shared/merge-queue/errors.ts";
 import { GitHubRestAdapter } from "../_shared/merge-queue/github-adapter.ts";
+import {
+  isGithubStubEnabled,
+  StubGitHubAdapter,
+} from "../_shared/merge-queue/stub-github-adapter.ts";
 import {
   claimCommandExecution,
   markExecution,
@@ -153,8 +157,20 @@ async function processMessage(
         supabase,
         workerId,
         leaseToken: lease?.token,
-        adapterFor: (repo: RepoMeta) =>
-          GitHubRestAdapter.forInstallation(repo.installationId, repo.owner, repo.name),
+        adapterFor: async (repo: RepoMeta) => {
+          if (isGithubStubEnabled()) {
+            return new StubGitHubAdapter(
+              supabase,
+              repo.id,
+              repo.defaultBranch,
+            );
+          }
+          return GitHubRestAdapter.forInstallation(
+            repo.installationId,
+            repo.owner,
+            repo.name,
+          );
+        },
         publish: async (cmd, delaySeconds = 0) => {
           await publishMergeQueueCommand(supabase, cmd, delaySeconds);
         },
