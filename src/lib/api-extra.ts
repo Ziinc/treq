@@ -2,7 +2,6 @@ import type {
   CachedDirectoryEntry,
   DiffCacheEntry,
   DirectoryEntry,
-  GitSubmodule,
   FileBrowserPendingReview,
   FileSearchResult,
   LineComment,
@@ -21,28 +20,11 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 
-export const listGitSubmodules = (
-  repoPath: string,
-  workspaceId: number | null,
-): Promise<GitSubmodule[]> =>
-  invoke("list_git_submodules", { repoPath, workspaceId });
-
-export const updateGitSubmodules = (
-  repoPath: string,
-  workspaceId: number | null,
-  path?: string | null,
-): Promise<GitSubmodule[]> =>
-  invoke("update_git_submodules", {
-    repoPath,
-    workspaceId,
-    path: path ?? null,
-  });
-
 export const setGitSubmoduleSynced = (
   repoPath: string,
   path: string,
   enabled: boolean,
-): Promise<GitSubmodule[]> =>
+): Promise<void> =>
   invoke("set_git_submodule_synced", { repoPath, path, enabled });
 
 export const startResolveConflicts = (

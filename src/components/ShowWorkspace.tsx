@@ -1369,7 +1369,10 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
                                 <input
                                   type="checkbox"
                                   className="size-3.5 accent-primary"
-                                  checked={Boolean(entry.submodule_synced)}
+                                  key={`${entry.name}-${Boolean(entry.submodule_synced)}`}
+                                  defaultChecked={Boolean(
+                                    entry.submodule_synced,
+                                  )}
                                   disabled={submoduleSync.isPending}
                                   aria-label={`Sync ${entry.name}`}
                                   onChange={(event) =>

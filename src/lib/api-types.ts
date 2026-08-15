@@ -123,17 +123,6 @@ export interface JjFileChange {
   diff_deferred: boolean;
 }
 
-export type GitSubmoduleState = "missing" | "clean" | "dirty" | "diverged";
-
-export interface GitSubmodule {
-  name: string;
-  path: string;
-  url: string;
-  pin: string;
-  head: string | null;
-  state: GitSubmoduleState;
-}
-
 export interface JjFileLines {
   lines: string[];
   start_line: number;
