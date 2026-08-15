@@ -11,7 +11,7 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { useToast } from "./ui/toast";
-import { type JjLogCommit, shiftCommitTimestamp } from "../lib/api";
+import { type JjLogCommit, shiftCommitTimestamp, shiftMutableCommitsToNow } from "../lib/api";
 import { formatFullTimestamp } from "../lib/utils";
 
 interface EditCommitTimestampDialogProps {
@@ -197,24 +197,60 @@ export const EditCommitTimestampDialog: React.FC<
           {error && <div className="text-sm text-destructive">{error}</div>}
         </div>
 
-        <div className="flex justify-end gap-2">
+        <div className="flex items-center justify-between gap-2">
           <Button
             variant="outline"
-            onClick={() => onOpenChange(false)}
+            onClick={async () => {
+              if (saving) return;
+              setSaving(true);
+              setError("");
+              try {
+                await shiftMutableCommitsToNow(repoPath, workspaceId);
+                addToast({
+                  title: "Timestamps updated",
+                  description:
+                    "Mutable commits on this branch now end at the current time",
+                  type: "success",
+                });
+                onSuccess();
+                onOpenChange(false);
+              } catch (err) {
+                const errorMsg =
+                  err instanceof Error ? err.message : String(err);
+                setError(errorMsg);
+                addToast({
+                  title: "Failed to shift timestamps",
+                  description: errorMsg,
+                  type: "error",
+                });
+              } finally {
+                setSaving(false);
+              }
+            }}
             disabled={saving}
+            data-testid="shift-stack-to-now"
           >
-            Cancel
+            Shift stack to now
           </Button>
-          <Button onClick={handleSave} disabled={!canSubmit}>
-            {saving ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              "Apply"
-            )}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={saving}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleSave} disabled={!canSubmit}>
+              {saving ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Apply"
+              )}
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

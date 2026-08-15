@@ -445,6 +445,15 @@ export const shiftCommitTimestamp = (
     toDay: shift.toDay ?? null,
   });
 
+export const shiftMutableCommitsToNow = (
+  repoPath: string,
+  workspaceId: number,
+): Promise<void> =>
+  invoke("shift_mutable_commits_to_now", {
+    repoPath,
+    workspaceId,
+  });
+
 export const getTreqBinDir = (): Promise<string> => invoke("get_treq_bin_dir");
 
 /**

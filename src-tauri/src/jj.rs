@@ -2774,6 +2774,134 @@ pub fn jj_shift_commit_timestamps(
   drop(is_immutable);
   drop(immutable_revset);
 
+  apply_lineage_timestamp_plan(
+    loaded,
+    workspace_path,
+    &mutable_lineage,
+    &planned,
+    "shift commit timestamps",
+  )
+}
+
+/// Uniformly shift mutable first-parent commits so the newest real commit is now.
+pub fn jj_shift_mutable_lineage_to_now(
+  workspace_path: &str,
+  target_branch: &str,
+) -> Result<(), JjError> {
+  if !Path::new(workspace_path).exists() {
+    return Ok(());
+  }
+  validate_branch_name(target_branch, "target")?;
+
+  let loaded = load_workspace_repo(workspace_path)?;
+  let workspace_name = loaded.workspace.workspace_name().to_owned();
+  let Some(wc_commit_id) = loaded
+    .repo
+    .view()
+    .get_wc_commit_id(&workspace_name)
+    .cloned()
+  else {
+    return Err(JjError::IoError(
+      "Workspace has no working-copy commit".to_string(),
+    ));
+  };
+  let wc_commit = loaded
+    .repo
+    .store()
+    .get_commit(&wc_commit_id)
+    .map_err(|e| JjError::IoError(format!("Failed to load working-copy commit: {}", e)))?;
+
+  let immutable_ref = resolve_target_branch_symbol(&loaded, workspace_path, target_branch)
+    .unwrap_or_else(|_| target_branch.to_string());
+  let immutable_revset = evaluate_revset(
+    &loaded,
+    &format!("::{}", format_revset_symbol(&immutable_ref)),
+  )?;
+  let is_immutable = immutable_revset.containing_fn();
+
+  let mut newest_first = Vec::new();
+  let mut current = wc_commit;
+  loop {
+    if is_immutable(current.id()).unwrap_or(false) {
+      break;
+    }
+    newest_first.push(current.clone());
+    let parents = block_on(current.parents())
+      .map_err(|e| JjError::IoError(format!("Failed to load commit parents: {}", e)))?;
+    let Some(parent) = parents.first() else {
+      break;
+    };
+    current = parent.clone();
+    if newest_first.len() > 10_000 {
+      return Err(JjError::IoError(
+        "Mutable lineage is unexpectedly long".to_string(),
+      ));
+    }
+  }
+  if newest_first.is_empty() {
+    return Err(JjError::IoError(
+      "No mutable commits found on this workspace".to_string(),
+    ));
+  }
+  newest_first.reverse();
+  let mutable_lineage = newest_first;
+
+  let original_millis: Vec<i64> = mutable_lineage
+    .iter()
+    .map(|commit| commit.author().timestamp.timestamp.0)
+    .collect();
+  let empty_flags: Vec<bool> = mutable_lineage
+    .iter()
+    .map(|commit| is_empty_commit(&loaded.repo, commit))
+    .collect();
+  let Some(tip_index) = crate::commit_timestamps::newest_real_commit_index(&empty_flags) else {
+    return Err(JjError::IoError(
+      "No mutable commits found on this workspace".to_string(),
+    ));
+  };
+
+  let parent_millis = {
+    let parents = block_on(mutable_lineage[0].parents())
+      .map_err(|e| JjError::IoError(format!("Failed to load commit parents: {}", e)))?;
+    parents
+      .first()
+      .map(|parent| parent.author().timestamp.timestamp.0)
+  };
+
+  let now = chrono::Utc::now().timestamp_millis();
+  let mut delta = now.saturating_sub(original_millis[tip_index]);
+  if let Some(parent) = parent_millis {
+    let min_oldest = parent.saturating_add(crate::commit_timestamps::MIN_TIMESTAMP_GAP_MS);
+    let oldest_after = original_millis[0].saturating_add(delta);
+    if oldest_after < min_oldest {
+      delta = min_oldest.saturating_sub(original_millis[0]);
+    }
+  }
+  if delta.abs() < crate::commit_timestamps::MIN_TIMESTAMP_GAP_MS {
+    return Ok(());
+  }
+
+  let planned = crate::commit_timestamps::plan_uniform_lineage_shift(&original_millis, delta);
+
+  drop(is_immutable);
+  drop(immutable_revset);
+
+  apply_lineage_timestamp_plan(
+    loaded,
+    workspace_path,
+    &mutable_lineage,
+    &planned,
+    "shift commits to now",
+  )
+}
+
+fn apply_lineage_timestamp_plan(
+  loaded: LoadedWorkspaceRepo,
+  workspace_path: &str,
+  mutable_lineage: &[Commit],
+  planned: &[i64],
+  op_description: &str,
+) -> Result<(), JjError> {
   let mut tx = loaded.repo.start_transaction();
   for (commit, new_millis) in mutable_lineage.iter().zip(planned.iter()).rev() {
     if *new_millis == commit.author().timestamp.timestamp.0
@@ -2796,7 +2924,7 @@ pub fn jj_shift_commit_timestamps(
   }
   block_on(tx.repo_mut().rebase_descendants())
     .map_err(|e| JjError::InitFailed(format!("Failed to rebase descendants: {}", e)))?;
-  block_on(tx.commit("shift commit timestamps"))
+  block_on(tx.commit(op_description))
     .map_err(|e| JjError::InitFailed(format!("Failed to shift commit timestamps: {}", e)))?;
 
   let repo_path =

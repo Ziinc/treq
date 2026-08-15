@@ -379,6 +379,37 @@ pub fn shift_commit_timestamp(
   Ok(())
 }
 
+/// Shift this workspace's mutable first-parent lineage so the newest real
+/// commit lands at now, preserving gaps between commits.
+pub fn shift_mutable_commits_to_now(repo_path: &str, workspace_id: i64) -> Result<(), String> {
+  let workspace = local_db::get_workspace_by_id(repo_path, workspace_id)
+    .map_err(|e| format!("Failed to get workspace: {}", e))?
+    .ok_or_else(|| format!("Workspace not found: {}", workspace_id))?;
+
+  let workspace_dir = Path::new(repo_path)
+    .join(".treq")
+    .join("workspaces")
+    .join(&workspace.workspace_path);
+  let workspace_dir_str = workspace_dir
+    .to_str()
+    .ok_or("Failed to convert workspace path to string")?;
+
+  let default_branch = jj::get_default_branch(repo_path)
+    .map_err(|e| format!("Failed to resolve default branch: {}", e))?;
+  let target_branch = workspace
+    .target_branch
+    .as_deref()
+    .unwrap_or(&default_branch);
+
+  jj::jj_shift_mutable_lineage_to_now(workspace_dir_str, target_branch)
+    .map_err(|e| format!("Failed to shift commits to now: {}", e))?;
+
+  jj::update_stale_workspace(workspace_dir_str)
+    .map_err(|e| format!("Failed to update workspace working copy: {}", e))?;
+
+  Ok(())
+}
+
 /// Returns the diff for a specific commit in a workspace.
 ///
 /// # Arguments

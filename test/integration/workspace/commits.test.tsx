@@ -430,4 +430,49 @@ describe("ShowWorkspace - Commits tab timestamp edit", () => {
     expect(newerMs).toBeGreaterThan(olderMs);
     expect(olderMs).toBeGreaterThan(Date.now() + 24 * 60 * 60 * 1000);
   });
+
+  it("shifts the newest mutable commits to now", async () => {
+    const { repoPath } = createTestRepo(false);
+    openRepo(repoPath);
+    const workspace = await createWorkspaceRef(repoPath, "feat/shift-to-now");
+    await commitWorkspaceFile(
+      repoPath,
+      workspace,
+      "now-a.txt",
+      "a",
+      "Now commit A",
+    );
+    await commitWorkspaceFile(
+      repoPath,
+      workspace,
+      "now-b.txt",
+      "b",
+      "Now commit B",
+    );
+
+    const before = await api.listCommits(repoPath, workspace.id);
+    const older = before.commits.find(
+      (commit) => commit.description === "Now commit A",
+    );
+    expect(older).toBeTruthy();
+    await api.shiftCommitTimestamp(
+      repoPath,
+      workspace.id,
+      older!.change_id,
+      { days: 2 },
+    );
+
+    await openWorkspaceCommitsTab(user, "feat/shift-to-now");
+    await user.click(await screen.findByTestId("shift-commits-to-now"));
+    await screen.findByText("Timestamps updated");
+
+    const after = await api.listCommits(repoPath, workspace.id);
+    const newer = after.commits.find(
+      (commit) => commit.description === "Now commit B",
+    );
+    expect(newer).toBeTruthy();
+    expect(Math.abs(Date.parse(newer!.timestamp) - Date.now())).toBeLessThan(
+      10_000,
+    );
+  });
 });

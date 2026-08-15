@@ -340,6 +340,28 @@ pub async fn shift_commit_timestamp(
   result
 }
 
+/// Shift the workspace's mutable commits so the newest real commit is now.
+#[tauri::command]
+pub async fn shift_mutable_commits_to_now(
+  repo_path: String,
+  workspace_id: i64,
+) -> Result<(), String> {
+  let started_at = Instant::now();
+  let result = tauri::async_runtime::spawn_blocking({
+    let repo_path = repo_path.clone();
+    move || core::shift_mutable_commits_to_now(&repo_path, workspace_id)
+  })
+  .await
+  .map_err(|e| format!("Failed to join shift_mutable_commits_to_now task: {}", e))?;
+  log::debug!(
+    "shift_mutable_commits_to_now(repo_path={}, workspace_id={}) completed in {:?}",
+    repo_path,
+    workspace_id,
+    started_at.elapsed()
+  );
+  result
+}
+
 #[tauri::command]
 pub async fn start_resolve_conflicts(
   repo_path: String,

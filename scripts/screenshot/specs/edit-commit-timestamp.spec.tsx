@@ -60,6 +60,16 @@ it("captures editing a mutable commit timestamp from the Commits tab", async () 
 
 	await user.click(await screen.findByRole("tab", { name: /^Commits/ }));
 	await screen.findByText("Timestamp commit B");
+	await screen.findByTestId("shift-commits-to-now");
+
+	await captureDocument(document, {
+		name: "edit-commit-timestamp-00-shift-to-now",
+		expectations: [
+			"The Commits tab lists Timestamp commit A and Timestamp commit B.",
+			"A 'Shift to now' helper button is visible at the top of the commit list.",
+		],
+	});
+
 	const commitRow = await screen.findByText("Timestamp commit A");
 	await user.click(commitRow);
 	await screen.findByRole("button", { name: "Edit timestamp" });
@@ -83,6 +93,7 @@ it("captures editing a mutable commit timestamp from the Commits tab", async () 
 		expectations: [
 			"A dialog titled 'Edit commit timestamp' is open.",
 			"Shift by duration is selected, with Days, Hours, and Minutes fields and Forward/Back toggles.",
+			"A 'Shift stack to now' helper button is visible in the dialog footer.",
 		],
 	});
 

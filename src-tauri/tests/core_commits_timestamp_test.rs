@@ -263,3 +263,58 @@ fn rejects_immutable_and_invalid_change_ids() {
   );
   assert!(err.is_err(), "should reject immutable commit, got {err:?}");
 }
+
+#[test]
+fn shift_mutable_commits_to_now_moves_newest_real_commit_and_preserves_gaps() {
+  let repo = TestRepo::new().expect("repo");
+  let (workspace_id, _) = setup_stack(
+    &repo,
+    "feat/shift-to-now",
+    &["Commit A", "Commit B", "Commit C"],
+  );
+
+  let before = treq_lib::core::list_commits(&repo.repo_path, Some(workspace_id), false, None, None)
+    .expect("list");
+  let commits = workspace_commits(&before);
+  let newest = commits[0];
+  let middle = commits[1];
+  let oldest = commits[2];
+  let gap_newest = parse_millis(&newest.timestamp) - parse_millis(&middle.timestamp);
+  let gap_middle = parse_millis(&middle.timestamp) - parse_millis(&oldest.timestamp);
+
+  treq_lib::core::shift_commit_timestamp(
+    &repo.repo_path,
+    workspace_id,
+    &oldest.change_id,
+    2,
+    0,
+    0,
+    None,
+  )
+  .expect("shift into the future");
+
+  treq_lib::core::shift_mutable_commits_to_now(&repo.repo_path, workspace_id).expect("to now");
+
+  let after = treq_lib::core::list_commits(&repo.repo_path, Some(workspace_id), false, None, None)
+    .expect("list after");
+  let by_desc = |description: &str| {
+    after
+      .commits
+      .iter()
+      .find(|commit| commit.description == description)
+      .unwrap()
+  };
+  let oldest_after = parse_millis(&by_desc("Commit A").timestamp);
+  let middle_after = parse_millis(&by_desc("Commit B").timestamp);
+  let newest_after = parse_millis(&by_desc("Commit C").timestamp);
+  let now = chrono::Utc::now().timestamp_millis();
+
+  assert!(
+    (newest_after - now).abs() < 5_000,
+    "newest real commit should land at now, got {newest_after} vs {now}"
+  );
+  assert_eq!(middle_after - oldest_after, gap_middle.max(1000));
+  assert_eq!(newest_after - middle_after, gap_newest.max(1000));
+  assert!(oldest_after < middle_after);
+  assert!(middle_after < newest_after);
+}

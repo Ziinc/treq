@@ -749,7 +749,12 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
       Ok(Value::Null)
     }
 
-    // ── Commits ───────────────────────────────────────────────────────
+    "shift_mutable_commits_to_now" => {
+      let repo_path = get_str(&args, "repoPath")?;
+      let workspace_id: i64 = get_i64(&args, "workspaceId")?;
+      treq_lib::core::shift_mutable_commits_to_now(&repo_path, workspace_id)?;
+      Ok(Value::Null)
+    }
     "jj_snapshot_working_copy" => {
       let workspace_path = get_str(&args, "workspacePath")?;
       let result = treq_lib::core::snapshot_working_copy(&workspace_path)?;

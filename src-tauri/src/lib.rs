@@ -535,6 +535,7 @@ pub fn run() {
             commands::get_commit_description,
             commands::describe_commit,
             commands::shift_commit_timestamp,
+            commands::shift_mutable_commits_to_now,
             commands::start_resolve_conflicts,
             commands::build_resolve_agent_prompt,
             commands::resolve_commit,

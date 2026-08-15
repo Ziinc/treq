@@ -32,6 +32,7 @@ import {
   type JjLogCommit,
   type JjRevisionDiff,
   listCommits,
+  shiftMutableCommitsToNow,
   stashCommit,
 } from "../lib/api";
 import { getLanguageFromPath, highlightCode } from "../lib/syntax-highlight";
@@ -198,6 +199,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
     );
     const { addToast } = useToast();
     const queryClient = useQueryClient();
+    const [shiftingToNow, setShiftingToNow] = useState(false);
 
     // Edit description dialog state
     const [editingCommit, setEditingCommit] = useState<JjLogCommit | null>(
@@ -220,6 +222,36 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
         queryKey: ["commit-diff-viewer-commits", repoPath, workspaceId],
       });
     }, [queryClient, repoPath, workspaceId]);
+
+    const handleShiftToNow = useCallback(async () => {
+      if (workspaceId == null || shiftingToNow) return;
+      setShiftingToNow(true);
+      try {
+        await shiftMutableCommitsToNow(repoPath, workspaceId);
+        addToast({
+          title: "Timestamps updated",
+          description:
+            "Mutable commits on this branch now end at the current time",
+          type: "success",
+        });
+        handleDescriptionEdited();
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        addToast({
+          title: "Failed to shift timestamps",
+          description: errorMsg,
+          type: "error",
+        });
+      } finally {
+        setShiftingToNow(false);
+      }
+    }, [
+      addToast,
+      handleDescriptionEdited,
+      repoPath,
+      shiftingToNow,
+      workspaceId,
+    ]);
 
     useEffect(() => {
       setTargetBranchLimit(10);
@@ -667,6 +699,12 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
       targetBranchCommits.length > 0;
     const showTentativeWorkingCopy =
       !isHomeRepo && tentativeWorkingCopy != null;
+    const hasMutableWorkspaceCommits = commits.some(
+      (commit) =>
+        !commit.is_immutable &&
+        !commit.on_target_only &&
+        !commit.is_working_copy,
+    );
 
     useEffect(() => {
       setHideTentativeWorkingCopy(false);
@@ -702,6 +740,26 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
       <>
         <div ref={containerRef} className="h-full overflow-auto">
           <div className="p-4">
+            {workspaceId != null && hasMutableWorkspaceCommits && (
+              <div className="mb-3 flex justify-end">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5"
+                  onClick={handleShiftToNow}
+                  disabled={shiftingToNow}
+                  data-testid="shift-commits-to-now"
+                >
+                  {shiftingToNow ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Clock className="h-4 w-4" />
+                  )}
+                  Shift to now
+                </Button>
+              </div>
+            )}
             {conflictedCommits.length > 0 && (
               <div
                 className="mb-4 flex items-center justify-between gap-3 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2"

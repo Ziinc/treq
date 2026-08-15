@@ -89,6 +89,23 @@ pub fn apply_shift_to_millis(
   }
 }
 
+/// Add the same delta to every timestamp on a lineage (oldest → newest).
+pub fn plan_uniform_lineage_shift(original_millis: &[i64], delta_millis: i64) -> Vec<i64> {
+  original_millis
+    .iter()
+    .map(|millis| millis.saturating_add(delta_millis))
+    .collect()
+}
+
+/// Newest non-empty commit in oldest → newest order. Empty working copies are
+/// skipped so "shift to now" lands on the last real commit.
+pub fn newest_real_commit_index(empty_flags: &[bool]) -> Option<usize> {
+  empty_flags
+    .iter()
+    .rposition(|is_empty| !*is_empty)
+    .or_else(|| empty_flags.last().map(|_| empty_flags.len() - 1))
+}
+
 pub fn parse_day(value: &str) -> Result<(i32, u32, u32), String> {
   let trimmed = value.trim();
   let parts: Vec<&str> = trimmed.split('-').collect();
@@ -143,6 +160,21 @@ mod tests {
       Some(86_400_000 + 7_200_000 + 180_000)
     );
     assert_eq!(offset_to_millis(-1, 0, 0), Some(-86_400_000));
+  }
+
+  #[test]
+  fn uniform_shift_preserves_gaps() {
+    assert_eq!(
+      plan_uniform_lineage_shift(&[1_000, 4_000, 7_000], 10_000),
+      vec![11_000, 14_000, 17_000]
+    );
+  }
+
+  #[test]
+  fn newest_real_commit_skips_trailing_empty() {
+    assert_eq!(newest_real_commit_index(&[false, false, true]), Some(1));
+    assert_eq!(newest_real_commit_index(&[true]), Some(0));
+    assert_eq!(newest_real_commit_index(&[]), None);
   }
 
   #[test]
