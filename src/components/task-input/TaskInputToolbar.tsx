@@ -1,4 +1,5 @@
 import { Paperclip, Plus } from "lucide-react";
+import { AgentIcon } from "../icons/AgentIcons";
 import { Button } from "../ui/button";
 import {
   Tooltip,
@@ -69,16 +70,22 @@ export const TaskInputToolbar: React.FC<TaskInputToolbarProps> = ({
           Set as default for this repo
         </label>
       )}
-      <select
-        aria-label="Agent"
-        value={selectedAgent}
-        onChange={(e) => onAgentChange(e.target.value as AgentType)}
-        className="h-7 text-xs px-2 rounded-md border border-border bg-background text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-400"
-      >
-        <option value="claude">Claude</option>
-        <option value="codex">Codex</option>
-        <option value="cursor">Cursor</option>
-      </select>
+      <div className="flex items-center gap-1.5">
+        <AgentIcon
+          agent={selectedAgent}
+          className="w-3.5 h-3.5 text-muted-foreground shrink-0"
+        />
+        <select
+          aria-label="Agent"
+          value={selectedAgent}
+          onChange={(e) => onAgentChange(e.target.value as AgentType)}
+          className="h-7 text-xs px-2 rounded-md border border-border bg-background text-foreground cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-400"
+        >
+          <option value="claude">Claude</option>
+          <option value="codex">Codex</option>
+          <option value="cursor">Cursor</option>
+        </select>
+      </div>
       {selectedAgent !== "codex" && (
         <Button
           size="sm"

@@ -1,12 +1,5 @@
-import {
-  Bot,
-  Loader2,
-  Moon,
-  MousePointer2,
-  Sparkles,
-  Terminal,
-  X,
-} from "lucide-react";
+import { Loader2, Moon, Terminal, X } from "lucide-react";
+import { agentIconComponent } from "./icons/AgentIcons";
 import {
   isTerminalSessionIdle,
   type TerminalSessionSummary,
@@ -23,9 +16,7 @@ interface TerminalSessionsSidebarItemProps {
 
 function getSessionIcon(session: TerminalSessionSummary) {
   if (session.kind === "shell") return Terminal;
-  if (session.agent === "codex") return Sparkles;
-  if (session.agent === "cursor") return MousePointer2;
-  return Bot;
+  return agentIconComponent(session.agent);
 }
 
 export const TerminalSessionsSidebarItem: React.FC<

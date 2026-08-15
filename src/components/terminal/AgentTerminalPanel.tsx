@@ -20,16 +20,8 @@ import { Button } from "../ui/button";
 import { Kbd, KbdGroup } from "../ui/kbd";
 import { cn } from "../../lib/utils";
 import { ptyClose, setSessionModel } from "../../lib/api";
-import {
-  ArrowDownToLine,
-  Bot,
-  Loader2,
-  MousePointer2,
-  RotateCw,
-  Search,
-  Sparkles,
-  X,
-} from "lucide-react";
+import { ArrowDownToLine, Loader2, RotateCw, Search, X } from "lucide-react";
+import { AgentIcon } from "../icons/AgentIcons";
 import { ModelSelector } from "../ModelSelector";
 import { useToast } from "../ui/toast";
 import { useAgentMessageQueue } from "../../hooks/useAgentMessageQueue";
@@ -264,13 +256,7 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
           onDoubleClick={onDoubleClick}
         >
           <div className="flex items-center gap-1 text-sm font-medium text-gray-200">
-            {sessionData.agent === "codex" ? (
-              <Sparkles className="w-4 h-4" />
-            ) : sessionData.agent === "cursor" ? (
-              <MousePointer2 className="w-4 h-4" />
-            ) : (
-              <Bot className="w-4 h-4" />
-            )}
+            <AgentIcon agent={sessionData.agent} className="w-4 h-4" />
             <span className="truncate">{sessionData.sessionName}</span>
           </div>
           <div className="flex items-center gap-1">

@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { Sparkles } from "lucide-react";
+import { ClaudeIcon } from "./icons/AgentIcons";
 import {
   Tooltip,
   TooltipContent,
@@ -68,7 +68,7 @@ export function ModelSelector({
                 className="bg-transparent text-gray-200 hover:bg-muted/20 hover:text-gray-200"
                 aria-label={`Model: ${getCurrentModelLabel()}`}
               >
-                <Sparkles className="w-4 h-4 text-gray-200" />
+                <ClaudeIcon className="w-4 h-4 text-gray-200" />
                 {getCurrentModelLabel()}
               </Button>
             </DropdownMenuTrigger>

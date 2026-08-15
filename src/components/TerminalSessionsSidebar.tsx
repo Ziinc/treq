@@ -1,4 +1,5 @@
-import { Bot, Moon, SquareTerminal, Trash2 } from "lucide-react";
+import { Moon, SquareTerminal, Trash2 } from "lucide-react";
+import { ClaudeIcon } from "./icons/AgentIcons";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   isTerminalSessionIdle,
@@ -118,7 +119,7 @@ export const TerminalSessionsSidebar: React.FC<
                 aria-label="New agent terminal"
                 onClick={onCreateAgent}
               >
-                <Bot className="w-3.5 h-3.5" />
+                <ClaudeIcon className="w-3.5 h-3.5" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top">New agent terminal</TooltipContent>
