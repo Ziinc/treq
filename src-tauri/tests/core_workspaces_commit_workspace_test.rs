@@ -445,3 +445,99 @@ fn test_commit_workspace_abandons_stray_empty_commit_in_history() {
     "expected new commit to be present, got:\n{raw_log}"
   );
 }
+
+#[test]
+fn test_create_commit_excludes_bundled_codex_skill() {
+  let repo = TestRepo::new().expect("Failed to create test repo");
+  let workspace = treq_lib::core::create_workspace(
+    &repo.repo_path,
+    "feat/codex-skill-untracked",
+    None,
+    None,
+    None,
+    None,
+    None,
+  )
+  .expect("Failed to create workspace");
+
+  let ws_dir = repo.workspaces_dir().join(&workspace.workspace_path);
+  let ws_dir_str = ws_dir.to_str().expect("utf-8");
+  TestRepo::write_workspace_file(ws_dir_str, "app.txt", "real work\n").expect("write app file");
+  let installed = treq_lib::core::write_agent_cli_files("prompt", None, Some(ws_dir_str))
+    .expect("install bundled skill");
+  let skill_path = installed
+    .agents_skill_path
+    .expect("Codex skill should be installed in the workspace");
+  assert!(
+    std::path::Path::new(&skill_path).join("SKILL.md").exists(),
+    "skill file should exist on disk during the session"
+  );
+
+  treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "add app")
+    .expect("commit_workspace failed");
+
+  let log = treq_lib::core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None)
+    .expect("list_commits failed");
+  let committed = log
+    .commits
+    .iter()
+    .find(|c| c.description.contains("add app"))
+    .expect("committed revision with 'add app' should exist");
+  let diff = treq_lib::core::get_commit_diff_with_conflict_style(
+    &repo.repo_path,
+    Some(workspace.id),
+    &committed.change_id,
+    "git",
+  )
+  .expect("commit diff failed");
+  let committed_paths: Vec<&str> = diff
+    .committed_files
+    .iter()
+    .map(|f| f.path.as_str())
+    .collect();
+  assert!(
+    committed_paths.iter().any(|path| *path == "app.txt"),
+    "expected app.txt in the committed diff, got: {committed_paths:?}"
+  );
+  assert!(
+    committed_paths
+      .iter()
+      .all(|path| !path.contains(".agents/skills/treq")),
+    "bundled Codex skill must not be in the committed diff, got: {committed_paths:?}"
+  );
+
+  let tracked = treq_lib::jj::jj_get_tracked_files(ws_dir_str).expect("tracked files");
+  assert!(
+    tracked.iter().any(|path| path == "app.txt"),
+    "expected app.txt to stay tracked, got: {tracked:?}"
+  );
+  assert!(
+    tracked
+      .iter()
+      .all(|path| !path.contains(".agents/skills/treq")),
+    "bundled Codex skill must not be tracked after commit, got: {tracked:?}"
+  );
+
+  let git_tree = TestRepo::run_git(
+    &repo.repo_path,
+    &[
+      "ls-tree",
+      "-r",
+      "--name-only",
+      "feat/codex-skill-untracked",
+    ],
+  )
+  .expect("git ls-tree of workspace bookmark failed");
+  assert!(
+    git_tree.lines().any(|line| line == "app.txt"),
+    "expected app.txt in the git tree, got:\n{git_tree}"
+  );
+  assert!(
+    !git_tree.contains(".agents/skills/treq"),
+    "bundled Codex skill must not be tracked in git, got:\n{git_tree}"
+  );
+  assert!(
+    std::path::Path::new(&skill_path).join("SKILL.md").exists(),
+    "ignored skill should remain on disk after commit"
+  );
+}
