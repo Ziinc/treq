@@ -95,7 +95,9 @@ Keep protected branches free of unexpected force pushes, and coordinate when a s
 
 Recovery races the retention window. Once an entry expires and `git gc` prunes the unreachable objects, the tip is gone from that clone.
 
-Jujutsu logs repository-changing commands in an [operation log](./version-control). `jj undo` and `jj op log` cover a similar recovery need with a different command model. In a colocated repository you can still inspect Git reflogs for Git-side ref movement.
+Jujutsu logs repository-changing commands in an [operation log](./version-control). `jj undo` and `jj op log` cover a similar recovery need with a different command model.
+
+In Treq, [discard and abandon](/docs/how-to/discarding-changes) restore from the **Undo** button on the success toast while that operation is still HEAD. Use the reflog for Git-side ref movement, not for those Treq working-copy actions.
 
 ## Scaling and Operations
 
@@ -119,6 +121,7 @@ Do that only after you have rotated credentials and confirmed no remaining local
 
 ## Next Steps
 
+- [Recover a Deleted Git Branch](/learn/how-to/recover-deleted-git-branch): recreate a deleted branch from a `HEAD` reflog tip
 - [What is Version Control?](./version-control): review commits, branches, and recovery basics
 - [Merge vs Rebase](./merge-vs-rebase): understand rewrite operations that move refs
 - [Cherry-pick vs Rebase](./cherry-pick-vs-rebase): compare selective replay with branch rewriting

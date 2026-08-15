@@ -20,7 +20,7 @@ If you moved the wrong files, discard them in the destination and use **Undo** o
 
 If the move created a commit in the destination, delete that commit from the Commits tab. The success toast includes **Undo**, which restores the abandoned commit while it is still the latest repository operation.
 
-Do not use `git stash` or `git reflog` for this. Treq workspaces share a colocated Jujutsu repo. Undo is a Treq toast action on the operation Treq just recorded.
+Do not use `git stash` or the [git reflog](/learn/concepts/git/git-reflog) for this. Treq workspaces share a colocated Jujutsu repo. Undo is a Treq toast action on the operation Treq just recorded.
 
 ## Commit and Move
 

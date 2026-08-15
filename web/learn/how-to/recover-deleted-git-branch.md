@@ -67,6 +67,6 @@ Act before retention windows lapse. Unreachable reflog entries default to about 
 
 ## Related
 
-- [Discarding Changes](/docs/how-to/discarding-changes): recovery options when uncommitted work is gone
+- [Discarding Changes](/docs/how-to/discarding-changes): Treq toast Undo for discarded working-copy edits
 - [What is Version Control?](/learn/concepts/git/version-control): commits, branches, and local recovery basics
 - [Merge vs Rebase](/learn/concepts/git/merge-vs-rebase): rewrite operations that move refs and leave tips to recover

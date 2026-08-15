@@ -26,7 +26,7 @@ Use **Undo** on the discard toast. That restores the working-copy snapshot Treq 
 
 If the toast is gone, later repository operations have moved on, or you discarded from outside Treq, Treq cannot reconstruct that snapshot. Editor local history can still help for a single file.
 
-Do not reach for `git checkout` or `git reflog` in a Treq workspace. The working copy is a Jujutsu commit. Treq's undo talks to that operation, not to Git's reflog.
+Do not use `git checkout` or the [git reflog](/learn/concepts/git/git-reflog) to undo a Treq discard. The working copy is a Jujutsu commit. Treq's undo talks to that operation. The reflog recovers moved committed tips in Git, not uncommitted Treq working-copy edits.
 
 Before a large discard, [commit](/docs/concepts/commit-management) to a throwaway workspace if you want a named backup instead of a short-lived toast.
 
