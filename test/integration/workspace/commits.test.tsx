@@ -455,12 +455,9 @@ describe("ShowWorkspace - Commits tab timestamp edit", () => {
       (commit) => commit.description === "Now commit A",
     );
     expect(older).toBeTruthy();
-    await api.shiftCommitTimestamp(
-      repoPath,
-      workspace.id,
-      older!.change_id,
-      { days: 2 },
-    );
+    await api.shiftCommitTimestamp(repoPath, workspace.id, older!.change_id, {
+      days: 2,
+    });
 
     await openWorkspaceCommitsTab(user, "feat/shift-to-now");
     await user.click(await screen.findByTestId("shift-commits-to-now"));
