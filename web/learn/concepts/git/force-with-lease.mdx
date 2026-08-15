@@ -10,6 +10,8 @@ _Refuse a force push when the remote tip has moved past what you expect._
 
 After you rewrite local history with [rebase](./merge-vs-rebase) or amend, a normal push is rejected because the remote tip is not an ancestor of your new tip. A [force push](/docs/how-to/pushing-to-remote) overwrites that remote tip. `--force-with-lease` still overwrites, but only when the remote matches the tip your repository already expects.
 
+Treq Push uses that same check. You do not pass the Git flag.
+
 ## Introduction
 
 `--force` updates a remote branch to your local tip with no check against concurrent work. If a collaborator pushed while you rebased, those commits disappear from the branch.
@@ -72,9 +74,21 @@ git push --force-with-lease=feature/my-work:a3f9c12 origin feature/my-work
 
 If the lease fails, fetch and inspect the remote branch before deciding whether to rebase onto the new tip or recover the other person's commits.
 
+In Treq you do not run those Git commands. Each [workspace](/docs/concepts/workspaces) has its own bookmark. **Push** on the workspace card asks Jujutsu to update that bookmark on `origin`. Jujutsu sends the tip it last stored for the remote and your new local tip.
+
+The Git server accepts the write only when those tips match. That is the `--force-with-lease` check. Treq does not offer an unconditional `--force` on Push.
+
+**Sync** fetches first, then runs the same Push path. If the bookmark diverged, Treq rebases your local mutable commits onto the remote tip before that push. The new commits then sit on the current remote tip, so the push is usually a fast-forward.
+
+If you already rewrote history and the remote did not move, Sync still uses the lease. It does not skip the compare.
+
+The Treq CLI has no force-push path. Workspace Push and Sync are the rewrite-safe remote updates.
+
 ## Engineering Considerations
 
 The default lease trusts your remote-tracking branch. Background `git fetch` from an IDE, terminal helper, or cron job can advance that cache to the live remote tip without merging those commits into your working branch. The lease then passes, and a force push can overwrite work you never integrated locally.
+
+Treq can fetch when you open a workspace. That fetch updates the stored remote tip the same way. Push then has the same limit as default `--force-with-lease`. Use Sync when you need remote commits in the workspace before you overwrite the branch.
 
 `--force-if-includes` closes that gap when combined with `--force-with-lease`. Before allowing the update, Git checks that the tip of the remote-tracking branch is reachable from one of your local branch's reflog entries. If those remote commits are absent from that history, the push is rejected even when the tip hashes match.
 
