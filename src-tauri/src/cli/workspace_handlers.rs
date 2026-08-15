@@ -492,6 +492,75 @@ pub(super) fn handle_workspace_commit(matches: &Matches) -> bool {
   true
 }
 
+pub(super) fn handle_resolve(matches: &Matches) -> bool {
+  use std::collections::HashMap;
+  use std::io::{IsTerminal, Read};
+
+  let commit_id = match get_arg_value(matches, "commit_id") {
+    Some(value) => value,
+    None => {
+      super::log_cli_error("Error: commit id is required");
+      eprintln!("Usage: treq resolve <commit_id> [sides...]");
+      return false;
+    }
+  };
+
+  let side_tokens = get_arg_values(matches, "sides");
+  let sides = match core::parse_resolve_sides(&side_tokens) {
+    Ok(parsed) => parsed,
+    Err(error) => {
+      super::log_cli_error(&format!("Error: {}", error));
+      return false;
+    }
+  };
+
+  let repo_path = match detect_repo_path() {
+    Ok(path) => path,
+    Err(error) => {
+      super::log_cli_error(&format!("Error: {}", error));
+      return false;
+    }
+  };
+
+  if let Err(error) = core::init(&repo_path) {
+    super::log_cli_error(&format!("Error initializing repo: {}", error));
+    return false;
+  }
+
+  let mut replacements: Option<HashMap<String, String>> = None;
+  if !std::io::stdin().is_terminal() {
+    let mut stdin_body = String::new();
+    if std::io::stdin().read_to_string(&mut stdin_body).is_ok() {
+      let trimmed = stdin_body.trim();
+      if !trimmed.is_empty() {
+        match serde_json::from_str::<HashMap<String, String>>(trimmed) {
+          Ok(map) => replacements = Some(map),
+          Err(error) => {
+            super::log_cli_error(&format!("Error: invalid stdin JSON: {}", error));
+            return false;
+          }
+        }
+      }
+    }
+  }
+
+  match core::resolve_commit(&repo_path, &commit_id, &sides, replacements) {
+    Ok(result) => {
+      if result.success {
+        println!("{}", result.message);
+        true
+      } else {
+        super::log_cli_error(&result.message);
+        false
+      }
+    }
+    Err(error) => {
+      super::log_cli_error(&format!("Error: {}", error));
+      false
+    }
+  }
+}
+
 pub(super) fn handle_send(matches: &Matches) -> bool {
   use std::io::IsTerminal;
 

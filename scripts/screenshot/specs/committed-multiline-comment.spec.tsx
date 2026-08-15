@@ -42,7 +42,7 @@ it("selects multiple committed lines and opens a comment composer", async () => 
 
 	await user.click(await screen.findByText(BRANCH_NAME));
 	await screen.findByTestId("show-workspace-header");
-	await user.click(await screen.findByRole("tab", { name: /^Review/i }));
+	await user.click(await screen.findByRole("tab", { name: /^Changes/i }));
 	await screen.findAllByText("example.ts");
 
 	await waitFor(() => {
@@ -75,7 +75,7 @@ it("selects multiple committed lines and opens a comment composer", async () => 
 	await captureDocument(document, {
 		name: "committed-multiline-comment-01-selection",
 		expectations: [
-			"The Review tab shows committed example.ts with lines b/c/d highlighted in blue as a multi-line selection.",
+			"The Changes tab shows committed example.ts with lines b/c/d highlighted in blue as a multi-line selection.",
 			"Line a remains unselected (green add only), confirming the drag covered L2-L4.",
 		],
 	});

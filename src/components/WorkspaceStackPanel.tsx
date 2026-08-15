@@ -14,13 +14,13 @@ import {
   type StackedWorkspaceEntry,
 } from "../lib/workspace-tree";
 import { getWorkspaceDisplayTitle } from "../lib/workspace-utils";
-import { LocDiffMarker } from "./LocDiffMarker";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "./ui/tooltip";
+import { WorkspaceLocIndicator } from "./WorkspaceLocIndicator";
 
 const STACK_DOCS_URL = `${WEB_URL}/docs/concepts/workspaces#stacks-and-rebasing`;
 
@@ -172,6 +172,8 @@ export const WorkspaceStackPanel = memo<WorkspaceStackPanelProps>(
   },
 );
 
+// Diff bar sizing lives in WorkspaceLocIndicator (Gerrit-style LOC display).
+
 interface StackItemProps {
   entry: StackedWorkspaceEntry;
   diffStats: WorkspaceDiffStats;
@@ -224,7 +226,7 @@ function StackItem({ entry, diffStats, maxChange, onSelect }: StackItemProps) {
               </Tooltip>
             </TooltipProvider>
             {hasStats && (
-              <LocDiffMarker
+              <WorkspaceLocIndicator
                 className="ml-auto"
                 diffStats={diffStats}
                 maxChange={maxChange}

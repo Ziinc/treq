@@ -1,0 +1,7 @@
+{
+  "name": "treq-edge-functions",
+  "private": true,
+  "dependencies": {
+    "@supabase/supabase-js": "2.95.3"
+  }
+}

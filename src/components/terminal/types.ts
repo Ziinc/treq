@@ -22,8 +22,18 @@ export interface ShellTerminalData {
 
 export type TerminalRefsMap = Map<string, ConsolidatedTerminalHandle | null>;
 
-/** No output for this long marks a terminal session as idle in the sidebar list. */
+/** No *process* output for this long marks a terminal session as idle. */
 export const TERMINAL_IDLE_THRESHOLD_MS = 60_000;
+
+export function isTerminalSessionIdle(
+  session: { isStreaming: boolean; lastActivityAt: number },
+  now: number,
+): boolean {
+  return (
+    !session.isStreaming &&
+    now - session.lastActivityAt >= TERMINAL_IDLE_THRESHOLD_MS
+  );
+}
 
 /**
  * Unified summary of a single terminal (agent or shell) surfaced in the
@@ -44,4 +54,6 @@ export interface TerminalSessionSummary {
   lastUserInputAt: number;
   /** True while output is actively streaming (shows a spinner). */
   isStreaming: boolean;
+  /** Newest printable terminal output for Mission Control card previews. */
+  previewOutput: string;
 }

@@ -22,7 +22,7 @@ import path from "node:path";
 const BRANCH_NAME = "feat/discard-qa";
 const FILE_NAME = "discard-me.txt";
 
-it("captures Review tab discard-all clearing the changes list", async () => {
+it("captures Changes tab discard-all clearing the changes list", async () => {
 	const { repoPath } = createTestRepo(false);
 	openRepo(repoPath);
 
@@ -42,13 +42,13 @@ it("captures Review tab discard-all clearing the changes list", async () => {
 
 	await user.click(await screen.findByText(BRANCH_NAME));
 	await screen.findByTestId("show-workspace-header");
-	await user.click(await screen.findByRole("tab", { name: /^Review/i }));
+	await user.click(await screen.findByRole("tab", { name: /^Changes/i }));
 	await screen.findAllByText(FILE_NAME);
 
 	await captureDocument(document, {
 		name: "review-discard-01-before",
 		expectations: [
-			"The Review tab is selected and the Changes sidebar lists discard-me.txt as an uncommitted file.",
+			"The Changes tab is selected and the Changes sidebar lists discard-me.txt as an uncommitted file.",
 			'A discard-all control (undo icon with accessible name "Discard all changes") is visible in the Changes section header.',
 			"The main pane shows the discard-me.txt diff with the added dirty content.",
 		],

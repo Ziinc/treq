@@ -260,7 +260,7 @@ describe("ShowWorkspace - header sync indicator", () => {
       "ahead of remote\n",
     );
 
-    await user.click(await screen.findByRole("tab", { name: /Review/ }));
+    await user.click(await screen.findByRole("tab", { name: /Changes/ }));
     await screen.findAllByText("sync-indicator.txt");
 
     await user.type(

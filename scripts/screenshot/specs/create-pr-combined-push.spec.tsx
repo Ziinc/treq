@@ -92,7 +92,7 @@ it("captures Create PR pushing an unpushed branch before creating the PR", async
 	await within(header).findByText(BRANCH_NAME);
 
 	// Create PR is disabled until the workspace has a real commit (not just
-	// working-copy changes), so drive an actual commit through the Review tab
+	// working-copy changes), so drive an actual commit through the Changes tab
 	// -- writing the file alone wouldn't do it, and committing via the NAPI
 	// helper directly would bypass the query invalidation a real commit
 	// triggers, leaving the button stuck showing stale (disabled) state.
@@ -104,8 +104,8 @@ it("captures Create PR pushing an unpushed branch before creating the PR", async
 		"feature.txt",
 		"feature content\n",
 	);
-	await user.click(await screen.findByRole("tab", { name: /^Review/ }));
-	await screen.findByRole("tab", { name: /^Review/, selected: true });
+	await user.click(await screen.findByRole("tab", { name: /^Changes/ }));
+	await screen.findByRole("tab", { name: /^Changes/, selected: true });
 	await user.type(await screen.findByPlaceholderText("Message"), "Add feature");
 	await user.click(await screen.findByRole("button", { name: /^commit\b/i }));
 

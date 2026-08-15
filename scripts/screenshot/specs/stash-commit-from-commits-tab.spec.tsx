@@ -40,7 +40,7 @@ it("stashes a commit from the Commits tab and applies it onto another workspace"
   render(<Dashboard />);
 
   await user.click(await findSidebarBranchElement(sourceBranch));
-  await user.click(await screen.findByRole("tab", { name: "Commits" }));
+  await user.click(await screen.findByRole("tab", { name: /^Commits/ }));
 
   const commitHeadline = await screen.findByText("Park me for stash");
   await user.click(commitHeadline);
@@ -93,7 +93,7 @@ it("stashes a commit from the Commits tab and applies it onto another workspace"
   );
 
   await user.click(await findSidebarBranchElement(targetBranch));
-  const reviewTab = await screen.findByRole("tab", { name: /^Review/ });
+  const reviewTab = await screen.findByRole("tab", { name: /^Changes/ });
   await user.click(reviewTab);
   await waitFor(() =>
     expect(screen.getAllByText("parked-commit.txt").length).toBeGreaterThan(0),
@@ -102,7 +102,7 @@ it("stashes a commit from the Commits tab and applies it onto another workspace"
   await captureDocument(document, {
     name: "stash-commit-03-applied-on-target",
     expectations: [
-      "On the target workspace Review tab, parked-commit.txt appears after applying the stashed commit.",
+      "On the target workspace Changes tab, parked-commit.txt appears after applying the stashed commit.",
       "A success toast about the stash apply may be visible.",
     ],
   });

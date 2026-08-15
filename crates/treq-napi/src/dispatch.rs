@@ -778,6 +778,43 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
       serde_json::to_value(result).map_err(|e| e.to_string())
     }
 
+    "start_resolve_conflicts" => {
+      let repo_path = get_str(&args, "repoPath")?;
+      let workspace_id: Option<i64> = opt_i64(&args, "workspaceId");
+      let change_ids: Option<Vec<String>> = match args.get("changeIds") {
+        None | Some(Value::Null) => None,
+        Some(v) => Some(serde_json::from_value(v.clone()).map_err(|e| e.to_string())?),
+      };
+      let result =
+        treq_lib::core::start_resolve_conflicts(&repo_path, workspace_id, change_ids)?;
+      serde_json::to_value(result).map_err(|e| e.to_string())
+    }
+
+    "build_resolve_agent_prompt" => {
+      let user_prompt = get_str(&args, "userPrompt")?;
+      let session: treq_lib::core::ResolveConflictsSession = serde_json::from_value(
+        args.get("session")
+          .cloned()
+          .ok_or("Missing argument: session")?,
+      )
+      .map_err(|e| e.to_string())?;
+      let result = treq_lib::core::build_resolve_agent_prompt(&user_prompt, &session);
+      Ok(Value::String(result))
+    }
+
+    "resolve_commit" => {
+      let repo_path = get_str(&args, "repoPath")?;
+      let revision = get_str(&args, "revision")?;
+      let sides: Vec<String> = match args.get("sides") {
+        None | Some(Value::Null) => Vec::new(),
+        Some(v) => serde_json::from_value(v.clone()).map_err(|e| e.to_string())?,
+      };
+      let parsed_sides = treq_lib::core::parse_resolve_sides(&sides)?;
+      let result =
+        treq_lib::core::resolve_commit(&repo_path, &revision, &parsed_sides, None)?;
+      serde_json::to_value(result).map_err(|e| e.to_string())
+    }
+
     "get_workspace_diff" => {
       let repo_path = get_str(&args, "repoPath")?;
       let workspace_id: i64 = get_i64(&args, "workspaceId")?;

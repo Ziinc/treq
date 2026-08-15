@@ -103,7 +103,7 @@ it("places GitHub review threads on committed Review-tab lines", async () => {
 	);
 	if (!workspace) throw new Error(`workspace ${BRANCH_NAME} not found`);
 
-	// Commit the file so the Review tab shows it only via committedFileHunks
+	// Commit the file so the Changes tab shows it only via committedFileHunks
 	// (no uncommitted working-tree change).
 	await commitWorkspaceFile(
 		repoPath,
@@ -118,7 +118,7 @@ it("places GitHub review threads on committed Review-tab lines", async () => {
 
 	await user.click(await screen.findByText(BRANCH_NAME));
 	await screen.findByTestId("show-workspace-header");
-	await user.click(await screen.findByRole("tab", { name: /^Review/i }));
+	await user.click(await screen.findByRole("tab", { name: /^Changes/i }));
 	await screen.findAllByText("example.ts");
 
 	// Must render inline on the committed line — not an unplaced/outdated section.

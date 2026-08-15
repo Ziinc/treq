@@ -1,9 +1,13 @@
 import { Bot, Moon, SquareTerminal, Trash2 } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
-  TERMINAL_IDLE_THRESHOLD_MS,
+  isTerminalSessionIdle,
   type TerminalSessionSummary,
 } from "./terminal/types";
+import {
+  createSessionOrderState,
+  nextTerminalSessionOrder,
+} from "./terminal/nextTerminalSessionOrder";
 import { TerminalSessionsSidebarItem } from "./TerminalSessionsSidebarItem";
 import { Button } from "./ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
@@ -36,28 +40,32 @@ export const TerminalSessionsSidebar: React.FC<
   onCreateAgent,
   onCreateShell,
 }) => {
-  const [, setTick] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    const interval = setInterval(() => setTick((t) => t + 1), TICK_INTERVAL_MS);
+    const interval = setInterval(() => setNow(Date.now()), TICK_INTERVAL_MS);
     return () => clearInterval(interval);
   }, []);
 
-  const now = Date.now();
-
-  const orderedSessions = useMemo(
-    () => [...sessions].sort((a, b) => b.lastUserInputAt - a.lastUserInputAt),
-    [sessions],
-  );
+  const orderStateRef = useRef(createSessionOrderState());
+  const orderedSessions = useMemo(() => {
+    orderStateRef.current = nextTerminalSessionOrder(
+      orderStateRef.current,
+      sessions,
+      now,
+    );
+    const byId = new Map(sessions.map((session) => [session.id, session]));
+    return orderStateRef.current.order.flatMap((id) => {
+      const session = byId.get(id);
+      return session ? [session] : [];
+    });
+  }, [sessions, now]);
 
   const idleCount = useMemo(
-    () =>
-      orderedSessions.filter(
-        (s) =>
-          !s.isStreaming &&
-          now - s.lastActivityAt >= TERMINAL_IDLE_THRESHOLD_MS,
-      ).length,
+    () => orderedSessions.filter((s) => isTerminalSessionIdle(s, now)).length,
     [orderedSessions, now],
   );
+
+  const orderedSessionIds = orderedSessions.map((session) => session.id).join();
 
   // FLIP reorder animation: capture each item's position before the reorder
   // takes effect in the DOM, then animate from the old position to the new
@@ -92,7 +100,7 @@ export const TerminalSessionsSidebar: React.FC<
       }
     });
     prevRectsRef.current = nextRects;
-  }, [orderedSessions]);
+  }, [orderedSessionIds]);
 
   return (
     <div className="border-t border-border flex-shrink-0 flex flex-col">

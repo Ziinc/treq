@@ -41,7 +41,7 @@ it("auto-reloads the Review diff after commit instead of showing the stale banne
 
 	await user.click(await screen.findByText(BRANCH_NAME));
 	await screen.findByTestId("show-workspace-header");
-	await user.click(await screen.findByRole("tab", { name: /^Review/i }));
+	await user.click(await screen.findByRole("tab", { name: /^Changes/i }));
 	await waitFor(() => {
 		expect(screen.getAllByText(FILE_NAME).length).toBeGreaterThan(0);
 	});

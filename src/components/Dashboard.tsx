@@ -7,6 +7,7 @@ import { ask } from "@tauri-apps/plugin-dialog";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
+import { useTwoFingerSwipe } from "../hooks/useTwoFingerSwipe";
 import { useWorkspaceHierarchy } from "../hooks/useWorkspaceHierarchy";
 import {
   type AgentDeepLinkRequest,
@@ -78,6 +79,7 @@ import { PromptHistoryModal } from "./PromptHistoryModal";
 import { StashModal } from "./StashModal";
 import { SettingsPage } from "./SettingsPage";
 import { ShowWorkspace } from "./ShowWorkspace";
+import { TerminalMissionControl } from "./TerminalMissionControl";
 import type { BranchListItem } from "./TargetBranchSelector";
 import type {
   ClaudeSessionData,
@@ -143,6 +145,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
   );
   const [mergeWorkspace, setMergeWorkspace] = useState<Workspace | null>(null);
   const [showCommandPalette, setShowCommandPalette] = useState(false);
+  const [showTerminalMissionControl, setShowTerminalMissionControl] =
+    useState(false);
   const [showAgentPromptDialog, setShowAgentPromptDialog] = useState(false);
   const [showPromptHistory, setShowPromptHistory] = useState(false);
   const [promptHistoryFocusId, setPromptHistoryFocusId] = useState<
@@ -167,6 +171,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         pendingPrompt?: string;
         permissionMode?: "plan" | "acceptEdits";
         agent?: "claude" | "codex" | "cursor";
+        workspacePath?: string | null;
       }
     >
   >(new Map());
@@ -339,11 +344,30 @@ export const Dashboard: React.FC<DashboardProps> = ({
     { ignoreShift: true },
   );
 
-  useKeyboardShortcut("Escape", false, () => {
-    if (unifiedDialogDefaults) setUnifiedDialogDefaults(null);
-    if (showCommandPalette) setShowCommandPalette(false);
-    if (showFilePicker) setShowFilePicker(false);
-    setShowKeyboardShortcuts(false);
+  useKeyboardShortcut(
+    "Escape",
+    false,
+    () => {
+      if (showTerminalMissionControl) {
+        setShowTerminalMissionControl(false);
+        return;
+      }
+      if (unifiedDialogDefaults) setUnifiedDialogDefaults(null);
+      if (showCommandPalette) setShowCommandPalette(false);
+      if (showFilePicker) setShowFilePicker(false);
+      setShowKeyboardShortcuts(false);
+    },
+    [
+      showTerminalMissionControl,
+      unifiedDialogDefaults,
+      showCommandPalette,
+      showFilePicker,
+    ],
+  );
+
+  useTwoFingerSwipe({
+    onSwipeUp: () => setShowTerminalMissionControl(true),
+    onSwipeDown: () => setShowTerminalMissionControl(false),
   });
 
   // Initialize repo from URL param (set by backend on startup, or by "Open in New Window")
@@ -755,6 +779,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     (sessionData: {
       sessionId: number;
       workspaceId?: number | null;
+      workspacePath?: string | null;
       pendingPrompt?: string;
       permissionMode?: "plan" | "acceptEdits";
       agent?: "claude" | "codex" | "cursor";
@@ -764,7 +789,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
       if (
         sessionData.pendingPrompt ||
         sessionData.permissionMode ||
-        sessionData.agent
+        sessionData.agent ||
+        sessionData.workspacePath
       ) {
         setPendingSessionData((prev) => {
           const next = new Map(prev);
@@ -772,6 +798,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             pendingPrompt: sessionData.pendingPrompt,
             permissionMode: sessionData.permissionMode,
             agent: sessionData.agent,
+            workspacePath: sessionData.workspacePath,
           });
           return next;
         });
@@ -1346,9 +1373,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
         sessionId: session.id,
         sessionName: session.name,
         ptySessionId: `session-${session.id}`,
-        workspacePath: sessionWorkspace
-          ? getFullWorkspacePath(sessionWorkspace)
-          : null,
+        workspacePath:
+          pending?.workspacePath ??
+          (sessionWorkspace ? getFullWorkspacePath(sessionWorkspace) : null),
         repoPath: sessionWorkspace?.repo_path ?? repoPath,
         workspaceName: sessionWorkspace?.branch_name ?? null,
         ...(pending && {
@@ -1713,6 +1740,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
             handleOpenSession(newWorkspace);
           }
         }}
+      />
+
+      <TerminalMissionControl
+        open={showTerminalMissionControl}
+        sessions={terminalSessionSummaries}
+        repoPath={repoPath}
+        workspaces={workspaces}
+        onClose={() => setShowTerminalMissionControl(false)}
+        onFocus={handleFocusTerminalSession}
       />
 
       <CommandPalette

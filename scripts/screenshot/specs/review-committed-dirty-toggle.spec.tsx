@@ -49,9 +49,9 @@ it("keeps dirty committed files visible after hiding Committed Show", async () =
 		await findSidebarBranchElement("feat/committed-dirty-show"),
 	);
 
-	const reviewTab = await screen.findByRole("tab", { name: /^Review/ });
+	const reviewTab = await screen.findByRole("tab", { name: /^Changes/ });
 	await user.click(reviewTab);
-	await screen.findByRole("tab", { name: /^Review/, selected: true });
+	await screen.findByRole("tab", { name: /^Changes/, selected: true });
 
 	await waitFor(() => {
 		expect(screen.getByTitle("shared.txt")).toBeInTheDocument();

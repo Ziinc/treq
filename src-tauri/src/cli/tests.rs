@@ -47,6 +47,40 @@ fn send_is_handled_by_cli_dispatch() {
 }
 
 #[test]
+fn resolve_is_handled_by_cli_dispatch() {
+  let subcommand = make_subcommand("resolve");
+  assert!(handle_cli_command(&subcommand).is_some());
+}
+
+#[test]
+fn resolve_subcommand_defines_commit_id_positional() {
+  let config_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tauri.conf.json");
+  let config = fs::read_to_string(config_path).expect("failed to read tauri.conf.json");
+  let json: Value = serde_json::from_str(&config).expect("failed to parse tauri.conf.json");
+  let resolve = json["plugins"]["cli"]["subcommands"]["resolve"]
+    .as_object()
+    .expect("resolve subcommand must exist");
+  let args = resolve
+    .get("args")
+    .and_then(Value::as_array)
+    .expect("resolve args must be an array");
+
+  let commit_id = args
+    .iter()
+    .find(|arg| arg.get("name").and_then(Value::as_str) == Some("commit_id"))
+    .expect("resolve must define commit_id positional arg");
+  assert_eq!(commit_id.get("index").and_then(Value::as_i64), Some(1));
+  assert_eq!(
+    commit_id.get("takesValue").and_then(Value::as_bool),
+    Some(true)
+  );
+  assert_eq!(
+    commit_id.get("required").and_then(Value::as_bool),
+    Some(true)
+  );
+}
+
+#[test]
 fn send_subcommand_defines_optional_path_positional() {
   let config_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tauri.conf.json");
   let config = fs::read_to_string(config_path).expect("failed to read tauri.conf.json");

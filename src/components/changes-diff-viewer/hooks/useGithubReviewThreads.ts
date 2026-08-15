@@ -13,7 +13,7 @@ interface UseGithubReviewThreadsParams {
   repoPath: string | undefined;
   branchName: string | undefined;
   allFileHunks: Map<string, FileHunksData>;
-  /** Committed PR/workspace hunks shown in the Review tab. */
+  /** Committed PR/workspace hunks shown in the Changes tab. */
   committedFileHunks?: Map<string, FileHunksData>;
 }
 

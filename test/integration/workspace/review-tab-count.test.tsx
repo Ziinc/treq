@@ -40,7 +40,7 @@ async function setupWorkspaceWithCommittedAndUncommitted(branchName: string) {
 }
 
 function getReviewBadgeCount(): number | null {
-  const tab = screen.getByRole("tab", { name: /^Review/ });
+  const tab = screen.getByRole("tab", { name: /^Changes/ });
   const badge = within(tab).queryByTestId("review-change-count");
   if (!badge?.textContent) return null;
   return Number(badge.textContent);
@@ -66,8 +66,8 @@ describe("Review tab change count", () => {
     });
 
     const before = getReviewBadgeCount();
-    await user.click(await screen.findByRole("tab", { name: /^Review/ }));
-    await screen.findByRole("tab", { name: /^Review/, selected: true });
+    await user.click(await screen.findByRole("tab", { name: /^Changes/ }));
+    await screen.findByRole("tab", { name: /^Changes/, selected: true });
     await screen.findByTitle("uncommitted-only.txt");
     await screen.findByTitle("committed-only.txt");
 

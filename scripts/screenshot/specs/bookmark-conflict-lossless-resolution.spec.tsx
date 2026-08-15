@@ -82,13 +82,13 @@ it("captures lossless bookmark-conflict resolution", async () => {
 		],
 	});
 
-	await user.click(await screen.findByRole("tab", { name: /^Review/i }));
+	await user.click(await screen.findByRole("tab", { name: /^Changes/i }));
 	await screen.findByTestId("review-change-count", {}, { timeout: 20000 });
 	expect(screen.queryByText(/No changes to review/i)).not.toBeInTheDocument();
 	await captureDocument(document, {
 		name: "bookmark-conflict-lossless-01b-review-after-resolve",
 		expectations: [
-			"The Review tab is selected after the conflicted bookmark was auto-resolved.",
+			"The Changes tab is selected after the conflicted bookmark was auto-resolved.",
 			"Review shows committed file changes rather than an empty 'No changes to review' state.",
 			"The slash branch name remains visible in the workspace header.",
 		],

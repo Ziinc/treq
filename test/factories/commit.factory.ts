@@ -47,6 +47,7 @@ export function createMockCommit(
     bookmarks: [],
     insertions: Math.floor(Math.random() * 100),
     deletions: Math.floor(Math.random() * 50),
+    has_conflicts: false,
     ...overrides,
   };
 }

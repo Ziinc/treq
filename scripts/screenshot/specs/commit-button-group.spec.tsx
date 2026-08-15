@@ -15,7 +15,7 @@ import { captureDocument } from "../capture";
 
 const BRANCH_NAME = "feat/commit-button-group";
 
-// The Commit button in the Review tab's changes sidebar was changed from a
+// The Commit button in the Changes tab's changes sidebar was changed from a
 // single button into a split-button group: a primary "Commit" button plus a
 // caret dropdown offering "Commit and push" / "Commit and create PR". These
 // captures verify the split control renders correctly and that the dropdown
@@ -62,8 +62,8 @@ it("captures the commit split-button group and its dropdown menu", async () => {
 
 	writeWorkspaceFile(workspacePath, "changed.txt", "changed content\n");
 
-	await user.click(await screen.findByRole("tab", { name: /^Review/ }));
-	await screen.findByRole("tab", { name: /^Review/, selected: true });
+	await user.click(await screen.findByRole("tab", { name: /^Changes/ }));
+	await screen.findByRole("tab", { name: /^Changes/, selected: true });
 	await waitFor(() =>
 		expect(screen.getAllByText("changed.txt").length).toBeGreaterThan(0),
 	);

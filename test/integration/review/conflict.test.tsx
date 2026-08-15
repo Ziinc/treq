@@ -35,9 +35,9 @@ async function navigateToReviewTab(
   branchName: string,
 ) {
   await user.click(await findSidebarBranchElement(branchName));
-  const reviewTab = await screen.findByRole("tab", { name: /^Review/ });
+  const reviewTab = await screen.findByRole("tab", { name: /^Changes/ });
   await user.click(reviewTab);
-  await screen.findByRole("tab", { name: /^Review/, selected: true });
+  await screen.findByRole("tab", { name: /^Changes/, selected: true });
 }
 
 async function clickFileInSection(
@@ -316,7 +316,7 @@ describe("Review - conflict rendering contract", () => {
       expect(pill.className).not.toMatch(/destructive/);
     });
 
-    expect(screen.getByText("Changes")).toBeTruthy();
+    expect(screen.getByRole("button", { name: /^Changes$/ })).toBeTruthy();
   });
 
   it("unresolved conflict state: Conflicts section is rendered from backend metadata", async () => {
@@ -334,7 +334,9 @@ describe("Review - conflict rendering contract", () => {
     });
     await navigateToReviewTab(user, fixture.branchName);
     await screen.findByText("Conflicts");
-    expect(screen.queryByText("Changes")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /^Changes$/ }),
+    ).not.toBeInTheDocument();
     await waitFor(() => {
       expect(screen.getAllByText("README.md").length).toBeGreaterThan(0);
     });

@@ -427,7 +427,7 @@ export function useFileLoading({
   // (e.g. edits to an already-modified file), so the file watcher event
   // above isn't enough to keep an open diff fresh. Re-read everything from
   // disk whenever the window regains focus, so switching back to the app
-  // never leaves the Review tab showing what was there before you left.
+  // never leaves the Changes tab showing what was there before you left.
   const loadChangedFilesRef = useRef(loadChangedFiles);
   loadChangedFilesRef.current = loadChangedFiles;
   const loadAllFileHunksRef = useRef(loadAllFileHunks);

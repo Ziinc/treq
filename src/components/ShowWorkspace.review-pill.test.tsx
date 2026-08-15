@@ -139,18 +139,18 @@ function jjFile(path: string, statusCode = "M") {
 
 async function openReviewTab() {
   const user = userEvent.setup();
-  const tab = await screen.findByRole("tab", { name: /review/i });
+  const tab = await screen.findByRole("tab", { name: /changes/i });
   await user.click(tab);
   await screen.findByTestId("changes-viewer");
   return user;
 }
 
 function reviewPill() {
-  const tab = screen.getByRole("tab", { name: /review/i });
+  const tab = screen.getByRole("tab", { name: /changes/i });
   return tab.querySelector('[data-testid="review-change-count"]');
 }
 
-describe("ShowWorkspace Review tab pill colors", () => {
+describe("ShowWorkspace Changes tab pill colors", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     onChangedFilesChange = undefined;

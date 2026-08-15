@@ -16,6 +16,7 @@ const session = (
   lastActivityAt,
   lastUserInputAt: 0,
   isStreaming: false,
+  previewOutput: "",
 });
 
 const flushAnimationFrames = (frames: FrameRequestCallback[]) => {
@@ -47,7 +48,10 @@ describe("TerminalSessionsSidebar reorder animation", () => {
     const { rerender, getByTestId } = render(
       <TooltipProvider>
         <TerminalSessionsSidebar
-          sessions={[session("first", 2), session("second", 1)]}
+          sessions={[
+            { ...session("first", Date.now()), lastUserInputAt: 2 },
+            { ...session("second", Date.now()), lastUserInputAt: 1 },
+          ]}
         />
       </TooltipProvider>,
     );
@@ -56,7 +60,10 @@ describe("TerminalSessionsSidebar reorder animation", () => {
     rerender(
       <TooltipProvider>
         <TerminalSessionsSidebar
-          sessions={[session("first", 1), session("second", 2)]}
+          sessions={[
+            { ...session("first", Date.now()), lastUserInputAt: 1 },
+            { ...session("second", Date.now()), lastUserInputAt: 3 },
+          ]}
         />
       </TooltipProvider>,
     );
@@ -87,13 +94,14 @@ describe("TerminalSessionsSidebar reorder animation", () => {
   });
 
   it("sorts sessions by their most recent user input instead of output", () => {
-    const recentOutput = session("recent-output", 300);
+    const now = Date.now();
+    const recentOutput = session("recent-output", now);
     const recentInput = {
-      ...session("recent-input", 100),
+      ...session("recent-input", now),
       lastUserInputAt: 200,
     };
     const olderInput = {
-      ...session("older-input", 400),
+      ...session("older-input", now),
       lastUserInputAt: 150,
     };
 
@@ -110,5 +118,43 @@ describe("TerminalSessionsSidebar reorder animation", () => {
         (item) => item.dataset.flipId,
       ),
     ).toEqual(["recent-input", "older-input", "recent-output"]);
+  });
+
+  it("moves a session below active ones only after it becomes idle", () => {
+    const now = Date.now();
+    const active = session("active", now);
+    const goingIdle = {
+      ...session("going-idle", now),
+      lastUserInputAt: 50,
+    };
+
+    const { rerender, getAllByTestId } = render(
+      <TooltipProvider>
+        <TerminalSessionsSidebar sessions={[active, goingIdle]} />
+      </TooltipProvider>,
+    );
+
+    expect(
+      getAllByTestId(/terminal-session-item-/).map(
+        (item) => item.dataset.flipId,
+      ),
+    ).toEqual(["going-idle", "active"]);
+
+    rerender(
+      <TooltipProvider>
+        <TerminalSessionsSidebar
+          sessions={[
+            { ...active, lastActivityAt: now },
+            { ...goingIdle, lastActivityAt: now - 120_000 },
+          ]}
+        />
+      </TooltipProvider>,
+    );
+
+    expect(
+      getAllByTestId(/terminal-session-item-/).map(
+        (item) => item.dataset.flipId,
+      ),
+    ).toEqual(["active", "going-idle"]);
   });
 });

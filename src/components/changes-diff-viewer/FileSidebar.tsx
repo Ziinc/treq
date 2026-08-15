@@ -37,10 +37,6 @@ interface FileSidebarProps {
   toggleSectionCollapse: (section: string) => void;
   activeFilePath: string | null;
   setActiveFilePath: React.Dispatch<React.SetStateAction<string | null>>;
-  setLargeChangesetExpanded: React.Dispatch<React.SetStateAction<boolean>>;
-  setCollapsedFiles: React.Dispatch<React.SetStateAction<Set<string>>>;
-  setExpandedLargeDiffs: React.Dispatch<React.SetStateAction<Set<string>>>;
-  conflictFileRefs: React.MutableRefObject<Map<string, HTMLDivElement>>;
   showCommittedChanges: boolean | undefined;
   onToggleShowCommitted: (() => void) | undefined;
   committedFiles: JjFileChange[];
@@ -90,10 +86,6 @@ export function FileSidebar({
   toggleSectionCollapse,
   activeFilePath,
   setActiveFilePath,
-  setLargeChangesetExpanded,
-  setCollapsedFiles,
-  setExpandedLargeDiffs,
-  conflictFileRefs,
   showCommittedChanges,
   onToggleShowCommitted,
   committedFiles,
@@ -168,22 +160,7 @@ export function FileSidebar({
                 activeFilePath={activeFilePath}
                 onFileSelect={(path) => {
                   setActiveFilePath(path);
-                  setLargeChangesetExpanded(true);
-                  setCollapsedFiles((prev) => {
-                    const next = new Set(prev);
-                    next.delete(path);
-                    return next;
-                  });
-                  setExpandedLargeDiffs((prev) => {
-                    const next = new Set(prev);
-                    next.add(path);
-                    return next;
-                  });
-                  setTimeout(() => {
-                    const el = conflictFileRefs.current.get(path);
-                    if (el)
-                      el.scrollIntoView({ behavior: "smooth", block: "start" });
-                  }, 50);
+                  scrollToFileIfNeeded(path);
                 }}
               />
             )}

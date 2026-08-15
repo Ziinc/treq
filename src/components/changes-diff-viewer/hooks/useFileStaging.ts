@@ -150,8 +150,9 @@ export function useFileStaging({
         return next;
       });
       setLastSelectedStagedIndex(fileIndex);
+      scrollToFileIfNeeded(path);
     },
-    [stagedFiles, files, lastSelectedStagedIndex],
+    [stagedFiles, files, lastSelectedStagedIndex, scrollToFileIfNeeded],
   );
 
   const toggleFileCollapse = useCallback((filePath: string) => {

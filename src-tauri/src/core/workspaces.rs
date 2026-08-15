@@ -788,7 +788,14 @@ pub fn restore_working_copy_snapshot(
 }
 
 pub fn list_workspaces(repo_path: &str) -> Result<Vec<local_db::Workspace>, String> {
-  local_db::get_workspaces(repo_path).map_err(|e| format!("Failed to get workspaces: {}", e))
+  let workspaces =
+    local_db::get_workspaces(repo_path).map_err(|e| format!("Failed to get workspaces: {}", e))?;
+  Ok(
+    workspaces
+      .into_iter()
+      .filter(|w| !crate::core::resolve::is_resolve_workspace(w))
+      .collect(),
+  )
 }
 
 /// Prunes workspaces whose `.treq/workspaces/…` directories are missing (e.g. deleted outside treq),

@@ -86,7 +86,7 @@ it("applies a stash onto an existing workspace via the Apply popover", async () 
     expect(screen.queryByTestId("stash-modal")).not.toBeInTheDocument(),
   );
   await user.click(await findSidebarBranchElement(targetBranch));
-  const reviewTab = await screen.findByRole("tab", { name: /^Review/ });
+  const reviewTab = await screen.findByRole("tab", { name: /^Changes/ });
   await user.click(reviewTab);
   await waitFor(() =>
     expect(screen.getAllByText("apply-me.txt").length).toBeGreaterThan(0),
@@ -95,7 +95,7 @@ it("applies a stash onto an existing workspace via the Apply popover", async () 
   await captureDocument(document, {
     name: "stash-apply-existing-02-on-target",
     expectations: [
-      "On feat/stash-apply-dst Review tab, apply-me.txt is listed in Changes after the stash was applied.",
+      "On feat/stash-apply-dst Changes tab, apply-me.txt is listed in Changes after the stash was applied.",
       "The working-copy diff shows the applied content.",
     ],
   });

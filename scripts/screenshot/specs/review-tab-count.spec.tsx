@@ -1,6 +1,6 @@
 /**
- * Verifies the Review tab badge shows the stable total of unique committed +
- * uncommitted files both before and after selecting the Review tab (it must
+ * Verifies the Changes tab badge shows the stable total of unique committed +
+ * uncommitted files both before and after selecting the Changes tab (it must
  * not drop when ChangesDiffViewer mounts).
  */
 
@@ -25,7 +25,7 @@ import { captureDocument } from "../capture";
 const BRANCH_NAME = "feat/review-badge-count";
 
 function getReviewBadgeCount(): number | null {
-	const tab = screen.getByRole("tab", { name: /^Review/ });
+	const tab = screen.getByRole("tab", { name: /^Changes/ });
 	const badge = within(tab).queryByTestId("review-change-count");
 	if (!badge?.textContent) return null;
 	return Number(badge.textContent);
@@ -62,13 +62,13 @@ it("captures Review badge showing total WC + committed count before and after se
 	await captureDocument(document, {
 		name: "review-tab-count-01-code-tab",
 		expectations: [
-			"The Code tab is selected; the Review tab badge shows the number 2.",
-			"The badge sits next to the Review label as a muted pill, not empty.",
+			"The Code tab is selected; the Changes tab badge shows the number 2.",
+			"The badge sits next to the Changes label as a muted pill, not empty.",
 		],
 	});
 
-	await user.click(await screen.findByRole("tab", { name: /^Review/ }));
-	await screen.findByRole("tab", { name: /^Review/, selected: true });
+	await user.click(await screen.findByRole("tab", { name: /^Changes/ }));
+	await screen.findByRole("tab", { name: /^Changes/, selected: true });
 	await screen.findByTitle("uncommitted-only.txt");
 	await screen.findByTitle("committed-only.txt");
 
@@ -79,7 +79,7 @@ it("captures Review badge showing total WC + committed count before and after se
 	await captureDocument(document, {
 		name: "review-tab-count-02-review-tab",
 		expectations: [
-			"The Review tab is selected and its badge still shows 2 (did not drop).",
+			"The Changes tab is selected and its badge still shows 2 (did not drop).",
 			"The Changes sidebar lists uncommitted-only.txt and the Committed section lists committed-only.txt.",
 		],
 	});

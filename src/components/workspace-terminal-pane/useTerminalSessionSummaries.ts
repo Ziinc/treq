@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { formatTerminalPreview } from "../terminal-mission-control/formatTerminalPreview";
 import { type TerminalSessionSummary } from "../terminal/types";
 import { type TerminalEntry } from "./types";
 
@@ -8,6 +9,13 @@ interface UseTerminalSessionSummariesOptions {
   currentBranch?: string | null;
   onTerminalsChange?: (summaries: TerminalSessionSummary[]) => void;
 }
+
+type TerminalActivity = {
+  lastActivityAt: number;
+  lastUserInputAt: number;
+  isStreaming: boolean;
+  previewOutput: string;
+};
 
 function getTerminalSummaryId(t: TerminalEntry) {
   return t.type === "shell" ? t.data.id : `claude-${t.data.sessionId}`;
@@ -24,12 +32,9 @@ export function useTerminalSessionSummaries({
   currentBranch,
   onTerminalsChange,
 }: UseTerminalSessionSummariesOptions) {
-  const [activity, setActivity] = useState<
-    Map<
-      string,
-      { lastActivityAt: number; lastUserInputAt: number; isStreaming: boolean }
-    >
-  >(new Map());
+  const [activity, setActivity] = useState<Map<string, TerminalActivity>>(
+    new Map(),
+  );
 
   // Seed a fresh activity entry for every newly-mounted terminal, and prune
   // entries for terminals that have been closed. Single source of truth so
@@ -45,6 +50,7 @@ export function useTerminalSessionSummaries({
             lastActivityAt: Date.now(),
             lastUserInputAt: 0,
             isStreaming: false,
+            previewOutput: "",
           });
           changed = true;
         }
@@ -59,17 +65,42 @@ export function useTerminalSessionSummaries({
     });
   }, [allTerminals]);
 
-  const handleTerminalOutput = useCallback((id: string) => {
-    setActivity((prev) => {
-      const next = new Map(prev);
-      next.set(id, {
-        lastActivityAt: Date.now(),
-        lastUserInputAt: prev.get(id)?.lastUserInputAt ?? 0,
-        isStreaming: true,
+  const handleTerminalOutput = useCallback(
+    (id: string, output?: string, fromProcess = true) => {
+      const previewOutput =
+        output === undefined ? undefined : formatTerminalPreview(output);
+      setActivity((prev) => {
+        const existing = prev.get(id);
+        const nextPreview = previewOutput ?? existing?.previewOutput ?? "";
+        const lastActivityAt = fromProcess
+          ? Date.now()
+          : (existing?.lastActivityAt ?? Date.now());
+        const isStreaming = fromProcess
+          ? true
+          : (existing?.isStreaming ?? false);
+
+        const lastUserInputAt = existing?.lastUserInputAt ?? 0;
+        if (
+          existing &&
+          existing.lastActivityAt === lastActivityAt &&
+          existing.isStreaming === isStreaming &&
+          existing.previewOutput === nextPreview
+        ) {
+          return prev;
+        }
+
+        const next = new Map(prev);
+        next.set(id, {
+          lastActivityAt,
+          lastUserInputAt,
+          isStreaming,
+          previewOutput: nextPreview,
+        });
+        return next;
       });
-      return next;
-    });
-  }, []);
+    },
+    [],
+  );
 
   const handleTerminalInput = useCallback((id: string) => {
     setActivity((prev) => {
@@ -79,6 +110,7 @@ export function useTerminalSessionSummaries({
         lastActivityAt: existing?.lastActivityAt ?? Date.now(),
         lastUserInputAt: Date.now(),
         isStreaming: existing?.isStreaming ?? false,
+        previewOutput: existing?.previewOutput ?? "",
       });
       return next;
     });
@@ -102,6 +134,7 @@ export function useTerminalSessionSummaries({
           lastActivityAt: 0,
           lastUserInputAt: 0,
           isStreaming: false,
+          previewOutput: "",
         };
         if (t.type === "claude") {
           return {
@@ -114,6 +147,7 @@ export function useTerminalSessionSummaries({
             lastActivityAt: act.lastActivityAt,
             lastUserInputAt: act.lastUserInputAt,
             isStreaming: act.isStreaming,
+            previewOutput: act.previewOutput,
           };
         }
         const resolvedBranch = workspaceBranchByPath?.get(
@@ -128,6 +162,7 @@ export function useTerminalSessionSummaries({
           lastActivityAt: act.lastActivityAt,
           lastUserInputAt: act.lastUserInputAt,
           isStreaming: act.isStreaming,
+          previewOutput: act.previewOutput,
         };
       }),
     [allTerminals, activity, workspaceBranchByPath, currentBranch],

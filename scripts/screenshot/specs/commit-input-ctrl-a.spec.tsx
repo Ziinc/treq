@@ -65,8 +65,8 @@ it("captures Ctrl+A in the commit message textarea leaving the file list unselec
 	writeWorkspaceFile(workspacePath, "beta.txt", "beta content\n");
 	writeWorkspaceFile(workspacePath, "gamma.txt", "gamma content\n");
 
-	await user.click(await screen.findByRole("tab", { name: /^Review/ }));
-	await screen.findByRole("tab", { name: /^Review/, selected: true });
+	await user.click(await screen.findByRole("tab", { name: /^Changes/ }));
+	await screen.findByRole("tab", { name: /^Changes/, selected: true });
 	await waitFor(() =>
 		expect(screen.getAllByText("alpha.txt").length).toBeGreaterThan(0),
 	);

@@ -58,6 +58,9 @@ crates/treq-napi/treq-napi.*.node
 
 # screenshot harness output (compiled CSS, HTML snapshots, PNGs)
 scripts/screenshot/.generated/
+
+# service-qa harness output (outcome manifests)
+scripts/service-qa/.generated/
 *storybook.log
 storybook-static
 scripts/storybook/.generated/

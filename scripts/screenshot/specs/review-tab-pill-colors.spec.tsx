@@ -1,5 +1,5 @@
 /**
- * Captures the Review tab number pill in its three color states:
+ * Captures the Changes tab number pill in its three color states:
  * yellow (uncommitted), grey (committed only), red (conflict).
  */
 
@@ -26,10 +26,10 @@ import {
 import { captureDocument } from "../capture";
 
 function reviewPill(): HTMLElement {
-	const tab = screen.getByRole("tab", { name: /^Review/ });
+	const tab = screen.getByRole("tab", { name: /^Changes/ });
 	const pill = tab.querySelector("span.rounded-full");
 	if (!(pill instanceof HTMLElement)) {
-		throw new Error("Review tab pill not found");
+		throw new Error("Changes tab pill not found");
 	}
 	return pill;
 }
@@ -54,7 +54,7 @@ it("captures yellow Review pill for uncommitted changes", async () => {
 
 	await user.click(await findSidebarBranchElement("feat/pill-yellow"));
 	await screen.findByTestId("show-workspace-header");
-	await user.click(await screen.findByRole("tab", { name: /^Review/ }));
+	await user.click(await screen.findByRole("tab", { name: /^Changes/ }));
 	await screen.findAllByText("dirty.txt");
 
 	await waitFor(() => {
@@ -66,8 +66,8 @@ it("captures yellow Review pill for uncommitted changes", async () => {
 	await captureDocument(document, {
 		name: "review-tab-pill-01-yellow-uncommitted",
 		expectations: [
-			'The Review tab shows a yellow number pill reading "1" next to the Review label.',
-			"The Review tab is selected and dirty.txt appears in the Changes sidebar.",
+			'The Changes tab shows a yellow number pill reading "1" next to the Changes label.',
+			"The Changes tab is selected and dirty.txt appears in the Changes sidebar.",
 			"The pill is yellow (not red or grey), signalling uncommitted working-copy changes.",
 		],
 	});
@@ -108,7 +108,7 @@ it("captures grey Review pill for committed changes only", async () => {
 	await captureDocument(document, {
 		name: "review-tab-pill-02-grey-committed",
 		expectations: [
-			'The Review tab shows a muted grey number pill reading "1" next to the Review label.',
+			'The Changes tab shows a muted grey number pill reading "1" next to the Changes label.',
 			"The Code tab is still the active tab; the grey pill is visible in the tab bar.",
 			"The pill is grey (not yellow or red), signalling committed changes only.",
 		],
@@ -155,7 +155,7 @@ it("captures red Review pill for conflicts", async () => {
 	await captureDocument(document, {
 		name: "review-tab-pill-03-red-conflict",
 		expectations: [
-			"The Review tab shows a soft destructive-red number pill next to the Review label.",
+			"The Changes tab shows a soft destructive-red number pill next to the Changes label.",
 			"The workspace header / sidebar indicates a conflict for this branch.",
 			"The pill uses a muted destructive tint (not solid filled red, and not yellow or grey).",
 		],

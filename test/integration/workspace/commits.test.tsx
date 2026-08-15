@@ -34,7 +34,7 @@ async function openWorkspaceCommitsTab(
 ) {
   render(<Dashboard />);
   await user.click(await findSidebarBranchElement(branchName));
-  await user.click(await screen.findByRole("tab", { name: "Commits" }));
+  await user.click(await screen.findByRole("tab", { name: /^Commits/ }));
 }
 
 describe("ShowWorkspace - Commits tab", () => {
@@ -338,7 +338,7 @@ describe("ShowWorkspace - Commits tab tentative working copy", () => {
     await dirtyUser.click(await screen.findByText("Working copy"));
 
     expect(
-      await screen.findByRole("tab", { name: "Commits", selected: true }),
+      await screen.findByRole("tab", { name: /^Commits/, selected: true }),
     ).toBeInTheDocument();
     await screen.findByText("sidebar-tentative.txt");
     await screen.findByText("tentative sidebar click content");

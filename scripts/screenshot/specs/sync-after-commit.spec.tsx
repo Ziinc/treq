@@ -81,8 +81,8 @@ it("captures workspace state before and after syncing a fresh commit", async () 
 	// commit box, then Sync.
 	writeWorkspaceFile(workspacePath, "synced.txt", "synced content\n");
 
-	await user.click(await screen.findByRole("tab", { name: /^Review/ }));
-	await screen.findByRole("tab", { name: /^Review/, selected: true });
+	await user.click(await screen.findByRole("tab", { name: /^Changes/ }));
+	await screen.findByRole("tab", { name: /^Changes/, selected: true });
 	await waitFor(() =>
 		expect(screen.getAllByText("synced.txt").length).toBeGreaterThan(0),
 	);
@@ -97,14 +97,14 @@ it("captures workspace state before and after syncing a fresh commit", async () 
 	// section and into the "Committed" section.
 	await waitFor(() => {
 		expect(screen.getAllByText("Committed").length).toBeGreaterThan(0);
-		expect(screen.queryByText("Changes")).not.toBeInTheDocument();
+		expect(screen.queryByRole("button", { name: /^Changes$/ })).not.toBeInTheDocument();
 	});
 
 	// Visit the home repo and come back so the workspace-status query refetches
 	// and the header reflects the new ahead-of-remote count.
 	await user.click(await findSidebarBranchElement(defaultBranch));
 	await user.click(await findSidebarBranchElement(BRANCH_NAME));
-	await user.click(await screen.findByRole("tab", { name: "Commits" }));
+	await user.click(await screen.findByRole("tab", { name: /^Commits/ }));
 	await screen.findByText("Commit that must survive sync");
 
 	// The sync control is icon-only; the '↑1' ahead-count text identifies it.
@@ -145,17 +145,17 @@ it("captures workspace state before and after syncing a fresh commit", async () 
 
 	// Second regression assertion: the committed change did not come back as an
 	// uncommitted current change (the headline symptom of the bug).
-	await user.click(await screen.findByRole("tab", { name: /^Review/ }));
-	await screen.findByRole("tab", { name: /^Review/, selected: true });
+	await user.click(await screen.findByRole("tab", { name: /^Changes/ }));
+	await screen.findByRole("tab", { name: /^Changes/, selected: true });
 	await waitFor(() => {
 		expect(screen.getAllByText("Committed").length).toBeGreaterThan(0);
-		expect(screen.queryByText("Changes")).not.toBeInTheDocument();
+		expect(screen.queryByRole("button", { name: /^Changes$/ })).not.toBeInTheDocument();
 	});
 
 	await captureDocument(document, {
 		name: "sync-after-commit-03-review-after-sync",
 		expectations: [
-			"The Review tab is active and synced.txt appears only under a 'Committed' section.",
+			"The Changes tab is active and synced.txt appears only under a 'Committed' section.",
 			"There is no 'Changes' section — synced.txt has not reverted to being an uncommitted current change.",
 		],
 	});

@@ -1,7 +1,7 @@
 // All merge-queue domain reads and writes (queues, entries, configs, repos).
 // No GitHub calls and no scheduling policy live here.
 
-import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type { EntryStatus } from "./state-machine.ts";
 
 export interface QueueRow {
@@ -40,6 +40,7 @@ export interface RepoMeta {
   owner: string;
   name: string;
   fullName: string;
+  defaultBranch: string;
 }
 
 export const DEFAULT_CONFIG: QueueConfigRow = {
@@ -105,7 +106,7 @@ export async function getRepoMeta(
 ): Promise<RepoMeta | null> {
   const { data, error } = await supabase
     .from("github_repositories")
-    .select("id, installation_id, owner, name, full_name")
+    .select("id, installation_id, owner, name, full_name, default_branch")
     .eq("id", repoId)
     .maybeSingle();
   if (error) throw new Error(`failed to load repo ${repoId}: ${error.message}`);
@@ -116,6 +117,7 @@ export async function getRepoMeta(
     owner: data.owner,
     name: data.name,
     fullName: data.full_name,
+    defaultBranch: data.default_branch ?? "main",
   };
 }
 

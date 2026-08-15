@@ -17,7 +17,7 @@ const BRANCH_NAME = "feat/committed-collapse";
 
 // Scenario: a workspace already has one committed change (so the "Committed"
 // section renders, expanded by default) plus a new uncommitted change. The
-// user commits the uncommitted change from the Review tab, and the
+// user commits the uncommitted change from the Changes tab, and the
 // "Committed" section should collapse automatically instead of staying
 // expanded and pushing the newly-committed file into view unannounced.
 it("collapses the Committed section automatically after a commit", async () => {
@@ -59,7 +59,7 @@ it("collapses the Committed section automatically after a commit", async () => {
 		"a new uncommitted line\n",
 	);
 
-	await user.click(await screen.findByRole("tab", { name: /Review/ }));
+	await user.click(await screen.findByRole("tab", { name: /Changes/ }));
 	await screen.findAllByText("new-change.txt");
 	await screen.findAllByText("already-committed.txt");
 
