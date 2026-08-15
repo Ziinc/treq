@@ -413,7 +413,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                             {hiddenCount > 0 && (
                               <span
                                 data-testid="hidden-workspace-count"
-                                className="absolute -top-1 -right-1 min-w-3.5 h-3.5 px-0.5 rounded-full bg-primary text-primary-foreground text-[9px] leading-none font-semibold flex items-center justify-center"
+                                className="absolute -top-1 -right-1 min-w-3.5 h-3.5 px-0.5 rounded-full bg-muted-foreground text-background text-[9px] leading-none font-semibold flex items-center justify-center"
                               >
                                 {hiddenCount}
                               </span>
