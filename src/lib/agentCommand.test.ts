@@ -169,7 +169,7 @@ describe("buildAgentAutoCommand", () => {
   it("points Claude at settings, prompt, and the bundled skill directory", () => {
     const command = buildAgentAutoCommand({
       agent: "claude",
-      files,
+      files: { ...files, claudeSkillPath: "/ws/.claude/skills/treq" },
       pendingPrompt: "fix the bug",
     });
 
@@ -181,7 +181,7 @@ describe("buildAgentAutoCommand", () => {
     expect(command).not.toContain("--append-system-prompt ");
     expect(command).not.toContain("You are operating");
     expect(command).toContain(
-      `trap "rm -rf '/tmp/treq-agent-prompt-1.txt' '/tmp/treq-agent-skills-1' '/tmp/treq-agent-settings-1.json'" EXIT`,
+      `trap "rm -rf '/tmp/treq-agent-prompt-1.txt' '/tmp/treq-agent-skills-1' '/ws/.claude/skills/treq' '/tmp/treq-agent-settings-1.json'" EXIT`,
     );
     expect(command).toContain("-- 'fix the bug'");
   });

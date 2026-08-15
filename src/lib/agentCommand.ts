@@ -17,6 +17,7 @@ export interface AgentCliFiles {
   settingsPath?: string;
   skillDir?: string;
   agentsSkillPath?: string;
+  claudeSkillPath?: string;
 }
 
 /** Build the single-line system prompt injected into agent terminal sessions. */
@@ -128,6 +129,9 @@ export const buildAgentAutoCommand = ({
   }
   if (files.agentsSkillPath) {
     cleanupPaths.push(files.agentsSkillPath);
+  }
+  if (files.claudeSkillPath) {
+    cleanupPaths.push(files.claudeSkillPath);
   }
 
   if (agent === "codex") {

@@ -124,7 +124,7 @@ fn build_snapshot_base_ignores(ignore_root: &str) -> Arc<GitIgnoreFile> {
     .chain(
       "",
       Path::new("<treq builtins>"),
-      b".jj/\n.treq/\n.jj*/\nnode_modules/\n.agents/skills/treq/\n",
+      b".jj/\n.treq/\n.jj*/\nnode_modules/\n.agents/skills/treq/\n.claude/skills/treq/\n",
     )
     .unwrap_or_else(|_| GitIgnoreFile::empty());
 

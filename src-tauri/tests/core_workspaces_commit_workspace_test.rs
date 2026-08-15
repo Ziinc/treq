@@ -468,9 +468,18 @@ fn test_create_commit_excludes_bundled_codex_skill() {
   let skill_path = installed
     .agents_skill_path
     .expect("Codex skill should be installed in the workspace");
+  let claude_skill_path = installed
+    .claude_skill_path
+    .expect("Claude skill should be installed in the workspace");
   assert!(
     std::path::Path::new(&skill_path).join("SKILL.md").exists(),
     "skill file should exist on disk during the session"
+  );
+  assert!(
+    std::path::Path::new(&claude_skill_path)
+      .join("SKILL.md")
+      .exists(),
+    "Claude skill file should exist on disk during the session"
   );
 
   treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "add app")
@@ -502,8 +511,8 @@ fn test_create_commit_excludes_bundled_codex_skill() {
   assert!(
     committed_paths
       .iter()
-      .all(|path| !path.contains(".agents/skills/treq")),
-    "bundled Codex skill must not be in the committed diff, got: {committed_paths:?}"
+      .all(|path| !path.contains(".agents/skills/treq") && !path.contains(".claude/skills/treq")),
+    "bundled agent skills must not be in the committed diff, got: {committed_paths:?}"
   );
 
   let tracked = treq_lib::jj::jj_get_tracked_files(ws_dir_str).expect("tracked files");
@@ -514,8 +523,8 @@ fn test_create_commit_excludes_bundled_codex_skill() {
   assert!(
     tracked
       .iter()
-      .all(|path| !path.contains(".agents/skills/treq")),
-    "bundled Codex skill must not be tracked after commit, got: {tracked:?}"
+      .all(|path| !path.contains(".agents/skills/treq") && !path.contains(".claude/skills/treq")),
+    "bundled agent skills must not be tracked after commit, got: {tracked:?}"
   );
 
   let git_tree = TestRepo::run_git(
@@ -533,11 +542,14 @@ fn test_create_commit_excludes_bundled_codex_skill() {
     "expected app.txt in the git tree, got:\n{git_tree}"
   );
   assert!(
-    !git_tree.contains(".agents/skills/treq"),
-    "bundled Codex skill must not be tracked in git, got:\n{git_tree}"
+    !git_tree.contains(".agents/skills/treq") && !git_tree.contains(".claude/skills/treq"),
+    "bundled agent skills must not be tracked in git, got:\n{git_tree}"
   );
   assert!(
-    std::path::Path::new(&skill_path).join("SKILL.md").exists(),
-    "ignored skill should remain on disk after commit"
+    std::path::Path::new(&skill_path).join("SKILL.md").exists()
+      && std::path::Path::new(&claude_skill_path)
+        .join("SKILL.md")
+        .exists(),
+    "ignored skills should remain on disk after commit"
   );
 }

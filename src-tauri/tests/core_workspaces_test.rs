@@ -1005,6 +1005,12 @@ fn test_jj_get_changed_files_ignores_gitignored_noise_in_workspace() {
     "---\nname: treq\n---\n",
   )
   .expect("Failed to write bundled Codex skill");
+  TestRepo::write_workspace_file(
+    workspace_path_str,
+    ".claude/skills/treq/SKILL.md",
+    "---\nname: treq\n---\n",
+  )
+  .expect("Failed to write bundled Claude skill");
 
   let changed_files =
     treq_lib::jj::jj_get_changed_files(workspace_path_str).expect("Failed to get changed files");

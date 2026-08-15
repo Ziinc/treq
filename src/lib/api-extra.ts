@@ -105,6 +105,7 @@ export const writeAgentCliFiles = (
   settingsPath?: string;
   skillDir: string;
   agentsSkillPath?: string;
+  claudeSkillPath?: string;
 }> =>
   invoke("write_agent_cli_files", {
     prompt,
