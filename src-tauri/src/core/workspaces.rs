@@ -22,6 +22,12 @@ pub struct WorkspaceEntry {
   pub path: String,
   pub is_directory: bool,
   pub modified_at: Option<String>,
+  /// Superproject gitlink SHA when this row is a Git submodule.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub submodule_pin: Option<String>,
+  /// Repo-level preference: populate this submodule in every workspace. Default off.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub submodule_synced: Option<bool>,
 }
 
 /// Defines how a workspace is merged into its target branch.
@@ -229,9 +235,18 @@ pub fn ls_workspace(
         path: entry_path.to_string_lossy().to_string(),
         is_directory: entry_path.is_dir(),
         modified_at,
+        submodule_pin: None,
+        submodule_synced: None,
       });
     }
   }
+
+  crate::core::submodules::merge_submodules_into_entries(
+    repo_path,
+    workspace_id,
+    &workspace_root,
+    &mut entries,
+  );
 
   entries.sort_by(|a, b| match (a.is_directory, b.is_directory) {
     (true, false) => std::cmp::Ordering::Less,
@@ -646,6 +661,8 @@ pub fn create_workspace_with_symlinked_dirs(
       let _ = jj::update_stale_workspace(&source_workspace_path);
     }
   }
+
+  let _ = crate::core::submodules::populate_synced_submodules(repo_path, Some(workspace.id));
 
   Ok(workspace)
 }

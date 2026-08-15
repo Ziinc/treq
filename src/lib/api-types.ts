@@ -273,6 +273,8 @@ export interface DirectoryEntry {
   path: string;
   is_directory: boolean;
   modified_at?: string | null;
+  submodule_pin?: string | null;
+  submodule_synced?: boolean | null;
 }
 
 export interface CachedDirectoryEntry {

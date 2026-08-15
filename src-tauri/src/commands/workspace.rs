@@ -61,6 +61,19 @@ pub async fn update_git_submodules(
 }
 
 #[tauri::command]
+pub async fn set_git_submodule_synced(
+  repo_path: String,
+  path: String,
+  enabled: bool,
+) -> Result<Vec<crate::core::GitSubmodule>, String> {
+  tauri::async_runtime::spawn_blocking(move || {
+    crate::core::set_submodule_synced(&repo_path, &path, enabled)
+  })
+  .await
+  .map_err(|e| format!("Failed to join set_git_submodule_synced task: {}", e))?
+}
+
+#[tauri::command]
 pub async fn get_workspaces(repo_path: String) -> Result<Vec<Workspace>, String> {
   tauri::async_runtime::spawn_blocking(move || crate::core::list_workspaces(&repo_path))
     .await

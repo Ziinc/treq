@@ -38,6 +38,13 @@ export const updateGitSubmodules = (
     path: path ?? null,
   });
 
+export const setGitSubmoduleSynced = (
+  repoPath: string,
+  path: string,
+  enabled: boolean,
+): Promise<GitSubmodule[]> =>
+  invoke("set_git_submodule_synced", { repoPath, path, enabled });
+
 export const startResolveConflicts = (
   repoPath: string,
   workspaceId: number | null,

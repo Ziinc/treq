@@ -379,6 +379,117 @@ fn run_git_with_config(cwd: &str, args: &[&str]) -> Result<String, String> {
   Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
+const SUBMODULE_SYNC_KEY: &str = "submodule_sync";
+
+fn load_submodule_sync_map(repo_path: &str) -> BTreeMap<String, bool> {
+  let app_db_path = crate::core::resolve_app_db_path(repo_path);
+  if !app_db_path.exists() {
+    return BTreeMap::new();
+  }
+  let Ok(db) = crate::db::Database::new(app_db_path) else {
+    return BTreeMap::new();
+  };
+  let Ok(Some(raw)) = db.get_repo_setting(repo_path, SUBMODULE_SYNC_KEY) else {
+    return BTreeMap::new();
+  };
+  serde_json::from_str(&raw).unwrap_or_default()
+}
+
+fn save_submodule_sync_map(repo_path: &str, map: &BTreeMap<String, bool>) -> Result<(), String> {
+  let app_db_path = crate::core::resolve_app_db_path(repo_path);
+  let db = crate::db::Database::new(app_db_path).map_err(|e| e.to_string())?;
+  db.init().map_err(|e| e.to_string())?;
+  let raw = serde_json::to_string(map).map_err(|e| e.to_string())?;
+  db.set_repo_setting(repo_path, SUBMODULE_SYNC_KEY, &raw)
+    .map_err(|e| e.to_string())
+}
+
+/// Persist whether `path` should be populated in every workspace, then apply it.
+///
+/// Default is off. Enabling clones/checks out the pin in the home repo and all
+/// registered workspaces. Disabling only clears the preference.
+pub fn set_submodule_synced(
+  repo_path: &str,
+  path: &str,
+  enabled: bool,
+) -> Result<Vec<GitSubmodule>, String> {
+  let mut map = load_submodule_sync_map(repo_path);
+  if enabled {
+    map.insert(path.to_string(), true);
+  } else {
+    map.remove(path);
+  }
+  save_submodule_sync_map(repo_path, &map)?;
+  if enabled {
+    populate_submodule_everywhere(repo_path, path)?;
+  }
+  list_submodules(repo_path, None)
+}
+
+/// Populate every submodule marked synced into one working copy.
+pub fn populate_synced_submodules(
+  repo_path: &str,
+  workspace_id: Option<i64>,
+) -> Result<(), String> {
+  for (path, enabled) in load_submodule_sync_map(repo_path) {
+    if enabled {
+      update_submodules(repo_path, workspace_id, Some(&path))?;
+    }
+  }
+  Ok(())
+}
+
+fn populate_submodule_everywhere(repo_path: &str, path: &str) -> Result<(), String> {
+  update_submodules(repo_path, None, Some(path))?;
+  if let Ok(workspaces) = crate::core::list_workspaces(repo_path) {
+    for workspace in workspaces {
+      update_submodules(repo_path, Some(workspace.id), Some(path))?;
+    }
+  }
+  Ok(())
+}
+
+/// Inject gitlink rows into a depth-1 directory listing, using the full
+/// submodule path as `name` even when the checkout is nested.
+pub fn merge_submodules_into_entries(
+  repo_path: &str,
+  workspace_id: Option<i64>,
+  workspace_root: &str,
+  entries: &mut Vec<crate::core::WorkspaceEntry>,
+) {
+  let Ok(listed) = list_submodules(repo_path, workspace_id) else {
+    return;
+  };
+  if listed.is_empty() {
+    return;
+  }
+  let sync = load_submodule_sync_map(repo_path);
+  let base = Path::new(workspace_root);
+  for submodule in listed {
+    let entry_path = base.join(&submodule.path);
+    let modified_at = fs::metadata(&entry_path)
+      .ok()
+      .and_then(|metadata| metadata.modified().ok())
+      .map(|modified| chrono::DateTime::<chrono::Utc>::from(modified).to_rfc3339());
+    let entry = crate::core::WorkspaceEntry {
+      name: submodule.path.clone(),
+      path: entry_path.to_string_lossy().into_owned(),
+      is_directory: true,
+      modified_at,
+      submodule_pin: Some(submodule.pin),
+      submodule_synced: Some(sync.get(&submodule.path).copied().unwrap_or(false)),
+    };
+    if let Some(index) = entries
+      .iter()
+      .position(|existing| existing.name == submodule.path)
+    {
+      entries[index] = entry;
+    } else {
+      entries.push(entry);
+    }
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -522,5 +633,76 @@ mod tests {
     .unwrap();
     let listed = list_submodules(&superproject, None).unwrap();
     assert_eq!(listed[0].state, SubmoduleState::Dirty);
+  }
+
+  #[test]
+  fn ls_workspace_lists_nested_submodule_path_with_pin_unsynced() {
+    let (_temp, superproject, _) = create_superproject_with_submodule();
+    let entries = crate::core::ls_workspace(&superproject, None).unwrap();
+    let row = entries
+      .iter()
+      .find(|entry| entry.name == "vendor/lib")
+      .expect("nested submodule path should appear in the directory list");
+    assert!(row.is_directory);
+    assert!(row
+      .submodule_pin
+      .as_ref()
+      .is_some_and(|pin| !pin.is_empty()));
+    assert_eq!(row.submodule_synced, Some(false));
+  }
+
+  #[test]
+  fn set_submodule_synced_defaults_off_and_populates_when_enabled() {
+    let (_temp, superproject, _) = create_superproject_with_submodule();
+    fs::remove_dir_all(Path::new(&superproject).join("vendor/lib")).unwrap();
+
+    let listed = crate::core::ls_workspace(&superproject, None).unwrap();
+    let row = listed
+      .iter()
+      .find(|entry| entry.name == "vendor/lib")
+      .unwrap();
+    assert_eq!(row.submodule_synced, Some(false));
+
+    set_submodule_synced(&superproject, "vendor/lib", true).unwrap();
+    assert!(Path::new(&superproject).join("vendor/lib/.git").exists());
+    let listed = crate::core::ls_workspace(&superproject, None).unwrap();
+    let row = listed
+      .iter()
+      .find(|entry| entry.name == "vendor/lib")
+      .unwrap();
+    assert_eq!(row.submodule_synced, Some(true));
+  }
+
+  #[test]
+  fn set_submodule_synced_populates_existing_and_new_workspaces() {
+    let (_temp, superproject, _) = create_superproject_with_submodule();
+    let workspace =
+      crate::core::create_workspace(&superproject, "feat/sub-sync", None, None, None, None, None)
+        .unwrap();
+    let workspace_root = Path::new(&superproject)
+      .join(".treq")
+      .join("workspaces")
+      .join(&workspace.workspace_path);
+    fs::remove_dir_all(workspace_root.join("vendor/lib")).ok();
+    fs::remove_dir_all(Path::new(&superproject).join("vendor/lib")).ok();
+
+    set_submodule_synced(&superproject, "vendor/lib", true).unwrap();
+    assert!(workspace_root.join("vendor/lib/.git").exists());
+
+    let second = crate::core::create_workspace(
+      &superproject,
+      "feat/sub-sync-2",
+      None,
+      None,
+      None,
+      None,
+      None,
+    )
+    .unwrap();
+    let second_root = Path::new(&superproject)
+      .join(".treq")
+      .join("workspaces")
+      .join(&second.workspace_path);
+    assert!(second_root.join("vendor/lib/.git").exists());
   }
 }

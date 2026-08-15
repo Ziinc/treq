@@ -30,6 +30,7 @@ function createSubmoduleRepo(): string {
 describe("readonly git submodules", () => {
   let repoPath: string;
   let user: ReturnType<typeof userEvent.setup>;
+  let pin: string;
 
   beforeEach(() => {
     ({ repoPath } = createTestRepo(false));
@@ -47,6 +48,7 @@ describe("readonly git submodules", () => {
       { cwd: repoPath, encoding: "utf8" },
     );
     git(repoPath, ["commit", "-m", "add submodule"]);
+    pin = git(sub, ["rev-parse", "HEAD"]).trim().slice(0, 7);
     fs.rmSync(path.join(repoPath, "vendor/lib"), {
       recursive: true,
       force: true,
@@ -55,23 +57,23 @@ describe("readonly git submodules", () => {
     user = userEvent.setup();
   });
 
-  it("shows a missing submodule and checks it out on update", async () => {
+  it("lists the nested submodule path with @pin and a default-off Sync toggle", async () => {
     render(<Dashboard />);
 
-    const panel = await screen.findByTestId("submodules-panel");
+    const row = await screen.findByTestId("submodule-row-vendor/lib");
     await waitFor(() => {
-      expect(screen.getByTestId("submodules-panel").textContent).toContain(
-        "vendor/lib",
-      );
+      expect(row.textContent).toContain("vendor/lib");
+      expect(row.textContent).toContain(`@ ${pin}`);
     });
-    expect(panel.textContent).toContain("missing");
 
-    await user.click(screen.getByRole("button", { name: "Update" }));
+    const sync = screen.getByRole("checkbox", { name: "Sync vendor/lib" });
+    expect(sync).not.toBeChecked();
 
+    await user.click(sync);
     await waitFor(() => {
-      expect(screen.getByTestId("submodules-panel").textContent).toContain(
-        "at pin",
-      );
+      expect(
+        screen.getByRole("checkbox", { name: "Sync vendor/lib" }),
+      ).toBeChecked();
     });
     expect(fs.existsSync(path.join(repoPath, "vendor/lib/.git"))).toBe(true);
   });

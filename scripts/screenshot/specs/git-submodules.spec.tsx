@@ -25,7 +25,7 @@ function createSubmoduleRepo(): string {
   return dir;
 }
 
-it("captures readonly submodule missing then checkout", async () => {
+it("captures nested submodule path with GitHub-style pin and Sync toggle", async () => {
   const { repoPath } = createTestRepo(false);
   const sub = createSubmoduleRepo();
   execFileSync(
@@ -40,36 +40,35 @@ it("captures readonly submodule missing then checkout", async () => {
   const user = userEvent.setup();
   render(<Dashboard />);
 
-  const panel = await screen.findByTestId("submodules-panel");
+  const row = await screen.findByTestId("submodule-row-vendor/lib");
   await waitFor(() => {
-    expect(screen.getByTestId("submodules-panel").textContent).toContain(
-      "vendor/lib",
-    );
+    expect(row.textContent).toContain("vendor/lib");
+    expect(row.textContent).toContain("@");
   });
-  expect(panel.textContent).toContain("missing");
+  const sync = screen.getByRole("checkbox", { name: "Sync vendor/lib" });
+  expect(sync).not.toBeChecked();
 
   await captureDocument(document, {
     name: "git-submodules-01-missing",
     expectations: [
-      "A Submodules panel is visible on the Code tab.",
-      "The panel lists vendor/lib as missing.",
-      "An Update button is visible on the panel.",
+      "The Code tab file list includes a vendor/lib row.",
+      "The row shows an @ short SHA like GitHub submodule listings.",
+      "A Sync checkbox is pulled to the right and is unchecked.",
     ],
   });
 
-  await user.click(screen.getByRole("button", { name: "Update" }));
+  await user.click(sync);
   await waitFor(() => {
-    expect(screen.getByTestId("submodules-panel").textContent).toContain(
-      "at pin",
-    );
+    expect(
+      screen.getByRole("checkbox", { name: "Sync vendor/lib" }),
+    ).toBeChecked();
   });
 
   await captureDocument(document, {
     name: "git-submodules-02-at-pin",
     expectations: [
-      "The Submodules panel still lists vendor/lib.",
-      "The row shows at pin instead of missing.",
-      "The Update button is no longer shown.",
+      "The vendor/lib row is still in the file list.",
+      "The Sync checkbox on that row is checked.",
     ],
   });
 }, 90000);

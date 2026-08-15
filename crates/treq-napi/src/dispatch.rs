@@ -541,6 +541,17 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
       serde_json::to_value(submodules).map_err(|e| e.to_string())
     }
 
+    "set_git_submodule_synced" => {
+      let repo_path = get_str(&args, "repoPath")?;
+      let path = get_str(&args, "path")?;
+      let enabled = args
+        .get("enabled")
+        .and_then(|v| v.as_bool())
+        .ok_or_else(|| "Missing or invalid argument: enabled".to_string())?;
+      let submodules = treq_lib::core::set_submodule_synced(&repo_path, &path, enabled)?;
+      serde_json::to_value(submodules).map_err(|e| e.to_string())
+    }
+
     "ls_workspace" => {
       let repo_path = get_str(&args, "repoPath")?;
       let workspace_id: Option<i64> = opt_i64(&args, "workspaceId");
