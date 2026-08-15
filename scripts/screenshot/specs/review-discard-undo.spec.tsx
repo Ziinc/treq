@@ -12,6 +12,7 @@ import { expect, it } from "vitest";
 import userEvent from "@testing-library/user-event";
 import {
 	createTestRepo,
+	findSidebarBranchElement,
 	openRepo,
 	resolveWorkspacePath,
 	writeWorkspaceFile,
@@ -40,15 +41,13 @@ it("captures Undo on the discard-all toast restoring the change", async () => {
 	const user = userEvent.setup();
 	render(<Dashboard />);
 
-	await user.click(await screen.findByText(BRANCH_NAME));
+	await user.click(await findSidebarBranchElement(BRANCH_NAME));
 	await screen.findByTestId("show-workspace-header");
 	await user.click(await screen.findByRole("tab", { name: /^Changes/i }));
 	await screen.findAllByText("example.ts");
 
-	const changesHeading = await screen.findByText("Changes");
-	const changesHeader = changesHeading.closest("div")!;
-	const discardAllTrigger = changesHeader
-		.querySelector("svg.lucide-undo-2")
+	const discardAllTrigger = document
+		.querySelector(".lucide-undo-2")
 		?.closest("button") as HTMLElement | null;
 	if (!discardAllTrigger) throw new Error("Discard-all button not found");
 
