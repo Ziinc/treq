@@ -19,15 +19,7 @@ import {
 import { Button } from "../ui/button";
 import { Kbd, KbdGroup } from "../ui/kbd";
 import { cn } from "../../lib/utils";
-import {
-  getSessionModel,
-  getTreqBinDir,
-  ptyClose,
-  readFile,
-  setSessionModel,
-  writeAgentCliFiles,
-  cleanupAgentCliFiles,
-} from "../../lib/api";
+import { ptyClose, setSessionModel } from "../../lib/api";
 import {
   ArrowDownToLine,
   Bot,
@@ -40,19 +32,12 @@ import {
 } from "lucide-react";
 import { ModelSelector } from "../ModelSelector";
 import { useToast } from "../ui/toast";
-import {
-  buildAgentAutoCommand,
-  buildClaudeSandboxSettings,
-  buildTreqAgentSystemPrompt,
-  claudeLocalSettingsPath,
-  cursorPromptFileContents,
-  mergeClaudeLocalSettings,
-} from "../../lib/agentCommand";
 import { useAgentMessageQueue } from "../../hooks/useAgentMessageQueue";
 import { type ClaudeSessionData } from "./types";
 import { AgentMessageQueue } from "./AgentMessageQueue";
 import { TerminalSearchOverlay } from "./TerminalSearchOverlay";
 import { TerminalSendPreviews } from "./TerminalSendPreviews";
+import { useAgentAutoCommand } from "./useAgentAutoCommand";
 
 export interface AgentTerminalPanelProps {
   sessionData: ClaudeSessionData;
@@ -91,14 +76,11 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
     const [searchVisible, setSearchVisible] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
     const [isResetting, setIsResetting] = useState(false);
-    const [sessionModel, setSessionModelState] = useState<string | null>(null);
     const [isChangingModel, setIsChangingModel] = useState(false);
-    const [isModelLoaded, setIsModelLoaded] = useState(false);
     const [terminalInstanceKey, setTerminalInstanceKey] = useState(0);
     const [pendingModelReset, setPendingModelReset] = useState(false);
-    const [treqBinDir, setTreqBinDir] = useState<string | null>(null);
-    const [treqBinDirReady, setTreqBinDirReady] = useState(false);
-    const [autoCommand, setAutoCommand] = useState<string | null>(null);
+    const { sessionModel, setSessionModelState, isModelLoaded, autoCommand } =
+      useAgentAutoCommand(sessionData);
 
     const terminalId = `claude-${sessionData.sessionId}`;
     const isHidden = collapsed;
@@ -125,34 +107,6 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
       },
       [enqueueMessage],
     );
-
-    // Capture pendingPrompt and permissionMode in refs so they survive
-    // the race condition where sessions refetch clears pendingClaudeSession
-    // before isModelLoaded becomes true and ConsolidatedTerminal mounts.
-    const pendingPromptRef = useRef(sessionData.pendingPrompt);
-    const permissionModeRef = useRef(sessionData.permissionMode);
-
-    // Load session model and treq bin dir on mount
-    useEffect(() => {
-      const loadModel = async () => {
-        try {
-          const model = await getSessionModel(
-            sessionData.repoPath,
-            sessionData.sessionId,
-          );
-          setSessionModelState(model);
-        } catch (error) {
-          console.error("Failed to load session model:", error);
-        } finally {
-          setIsModelLoaded(true);
-        }
-      };
-      loadModel();
-      getTreqBinDir()
-        .then(setTreqBinDir)
-        .catch(() => {})
-        .finally(() => setTreqBinDirReady(true));
-    }, [sessionData.repoPath, sessionData.sessionId]);
 
     // Handle terminal output — agent is busy while streaming process output.
     const handleTerminalOutput = useCallback(
@@ -288,92 +242,6 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
       };
       performReset();
     }, [pendingModelReset, handleReset, sessionModel, addToast]);
-
-    useEffect(() => {
-      if (!isModelLoaded || !treqBinDirReady) return;
-
-      let cancelled = false;
-
-      const prepareAutoCommand = async () => {
-        const cwd = sessionData.workspacePath || sessionData.repoPath;
-        const agentPathContext = {
-          workspacePath: sessionData.workspacePath,
-          repoPath: sessionData.repoPath,
-        };
-        const systemPrompt = buildTreqAgentSystemPrompt(agentPathContext);
-        const agent = sessionData.agent ?? "claude";
-
-        let promptContents = systemPrompt;
-        let settingsJson: string | undefined;
-        if (agent === "cursor") {
-          promptContents = cursorPromptFileContents(
-            systemPrompt,
-            pendingPromptRef.current,
-          );
-        } else if (agent === "claude") {
-          let existing: Record<string, unknown> | null = null;
-          try {
-            const parsed: unknown = JSON.parse(
-              await readFile(claudeLocalSettingsPath(cwd)),
-            );
-            if (
-              parsed &&
-              typeof parsed === "object" &&
-              !Array.isArray(parsed)
-            ) {
-              existing = parsed as Record<string, unknown>;
-            }
-          } catch {
-            existing = null;
-          }
-          settingsJson = JSON.stringify(
-            mergeClaudeLocalSettings(
-              existing,
-              buildClaudeSandboxSettings(agentPathContext),
-            ),
-            null,
-            2,
-          );
-        }
-
-        const files = await writeAgentCliFiles(promptContents, settingsJson);
-        if (cancelled) {
-          await cleanupAgentCliFiles(
-            [files.promptPath, files.settingsPath].filter(
-              (path): path is string => !!path,
-            ),
-          );
-          return;
-        }
-
-        setAutoCommand(
-          buildAgentAutoCommand({
-            agent,
-            permissionMode: permissionModeRef.current,
-            sessionModel,
-            pendingPrompt: agent === "cursor" ? null : pendingPromptRef.current,
-            treqBinDir,
-            files,
-          }),
-        );
-      };
-
-      prepareAutoCommand().catch((error) => {
-        console.error("Failed to prepare agent CLI files:", error);
-      });
-
-      return () => {
-        cancelled = true;
-      };
-    }, [
-      isModelLoaded,
-      treqBinDirReady,
-      sessionData.agent,
-      sessionData.workspacePath,
-      sessionData.repoPath,
-      sessionModel,
-      treqBinDir,
-    ]);
 
     return (
       <div

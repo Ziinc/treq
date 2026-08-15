@@ -77,7 +77,7 @@ export const mergeClaudeLocalSettings = (
   existing: Record<string, unknown> | null,
   sandboxSettings: ReturnType<typeof buildClaudeSandboxSettings>,
 ): Record<string, unknown> => ({
-  ...(existing ?? {}),
+  ...existing,
   sandbox: sandboxSettings.sandbox,
 });
 
