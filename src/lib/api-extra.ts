@@ -393,11 +393,22 @@ export const abandonCommit = (
   repoPath: string,
   workspaceId: number,
   commitChangeId: string,
-): Promise<void> =>
+): Promise<string> =>
   invoke("abandon_commit", {
     repoPath,
     workspaceId,
     commitChangeId,
+  });
+
+export const undoRepoOperation = (
+  repoPath: string,
+  workspaceId: number | null,
+  operationId: string,
+): Promise<string> =>
+  invoke("undo_repo_operation", {
+    repoPath,
+    workspaceId,
+    operationId,
   });
 
 export const getCommitDescription = (

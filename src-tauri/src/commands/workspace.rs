@@ -535,7 +535,7 @@ pub async fn abandon_commit(
   repo_path: String,
   workspace_id: i64,
   commit_change_id: String,
-) -> Result<(), String> {
+) -> Result<String, String> {
   let started_at = Instant::now();
   let repo_path_for_task = repo_path.clone();
   let commit_change_id_for_task = commit_change_id.clone();

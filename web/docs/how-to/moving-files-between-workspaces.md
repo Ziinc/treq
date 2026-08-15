@@ -10,38 +10,18 @@ Use this when you started work in the wrong workspace, want to split changes int
 
 ## Using Treq's Move Feature
 
-In the source workspace's diff viewer, select changed files (use `Cmd/Ctrl+Click` for multiple or `Shift+Click` for ranges). Right-click and choose **Move to Workspace**, or click the **Move** button. Select the destination workspace from the dropdown and click **Move Files**.
+In the source workspace's Changes tab, select changed files (use `Cmd/Ctrl+Click` for multiple or `Shift+Click` for ranges). Right-click and choose **Move to Workspace**, or click **Move**. Pick the destination workspace and confirm.
 
-Only uncommitted changes are moved. [Committed changes](/docs/concepts/commit-management) must be handled separately, for example with [cherry-pick](/learn/concepts/git/cherry-pick-vs-rebase).
-
-## Using Git Stash
-
-For more control, use git stash:
-
-```bash
-# In source workspace
-git stash push -m "moving to other workspace"
-
-# In destination workspace
-git stash pop stash@{0}
-```
-
-## Commit and Cherry-Pick
-
-The most reliable method is to commit your changes in the source, cherry-pick in the destination, then reset the source:
-
-```bash
-# In source
-git add files-to-move && git commit -m "temp: changes to move"
-
-# In destination
-git cherry-pick <commit-hash>
-
-# In source (to undo the commit but keep changes)
-git reset HEAD~1
-```
+Only uncommitted changes move. [Committed changes](/docs/concepts/commit-management) belong on a different path, such as [cherry-pick](/learn/concepts/git/cherry-pick-vs-rebase) or moving a commit from the Commits tab.
 
 ## Recovery
 
-If you moved the wrong files and haven't committed in the destination, discard there and check the source's stash or reflog. If already committed, reset the commit in the destination and move files back.
+If you moved the wrong files, discard them in the destination and use **Undo** on that discard toast if you still need the destination copy. The source workspace already lost those working-copy edits when the move succeeded.
 
+If the move created a commit in the destination, delete that commit from the Commits tab. The success toast includes **Undo**, which restores the abandoned commit while it is still the latest repository operation.
+
+Do not use `git stash` or the [git reflog](/learn/concepts/git/git-reflog) for this. Treq workspaces share a colocated Jujutsu repo. Undo is a Treq toast action on the operation Treq just recorded.
+
+## Commit and Move
+
+To keep a named copy, commit in the source, then use **Move commit** on the Commits tab to send that commit to another workspace.

@@ -543,6 +543,101 @@ fn test_abandon_commit() {
 }
 
 #[test]
+fn test_undo_abandon_commit_restores_commit_and_files() {
+  let repo = TestRepo::new().expect("Failed to create test repo");
+  let default_branch = repo.default_branch();
+
+  let workspace = treq_lib::core::create_workspace(
+    &repo.repo_path,
+    "feat/undo-abandon",
+    Some("undo abandon".to_string()),
+    None,
+    None,
+    None,
+    None,
+  )
+  .expect("Failed to create workspace");
+
+  let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+  let workspace_path_str = workspace_path.to_str().unwrap();
+
+  TestRepo::write_workspace_file(workspace_path_str, "undo-abandon.txt", "keep me")
+    .expect("Failed to write");
+  treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "Commit to undo-abandon")
+    .expect("Failed to commit");
+
+  let commits_ahead = treq_lib::jj::jj_get_commits_ahead(workspace_path_str, default_branch)
+    .expect("Failed to get commits ahead");
+  let change_id = commits_ahead.commits.last().unwrap().change_id.clone();
+
+  let op_id = treq_lib::core::abandon_commit(&repo.repo_path, workspace.id, &change_id)
+    .expect("Failed to abandon commit");
+  assert!(
+    !op_id.is_empty(),
+    "abandon_commit should return the operation id"
+  );
+  assert!(
+    !workspace_path.join("undo-abandon.txt").exists(),
+    "file should be gone after abandon"
+  );
+
+  treq_lib::core::undo_repo_operation(&repo.repo_path, Some(workspace.id), &op_id)
+    .expect("undo should restore the abandoned commit");
+
+  let commits_restored = treq_lib::jj::jj_get_commits_ahead(workspace_path_str, default_branch)
+    .expect("Failed to get commits after undo");
+  assert_eq!(
+    commits_restored.commits.len(),
+    1,
+    "abandoned commit should be restored"
+  );
+  assert!(
+    workspace_path.join("undo-abandon.txt").exists(),
+    "undo-abandon.txt should exist after undo"
+  );
+}
+
+#[test]
+fn test_undo_repo_operation_rejects_stale_operation() {
+  let repo = TestRepo::new().expect("Failed to create test repo");
+  let workspace = treq_lib::core::create_workspace(
+    &repo.repo_path,
+    "feat/stale-undo",
+    Some("stale undo".to_string()),
+    None,
+    None,
+    None,
+    None,
+  )
+  .expect("Failed to create workspace");
+
+  let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+  let workspace_path_str = workspace_path.to_str().unwrap();
+  TestRepo::write_workspace_file(workspace_path_str, "stale.txt", "one").expect("Failed to write");
+  treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "first")
+    .expect("Failed to commit");
+
+  let default_branch = repo.default_branch();
+  let commits =
+    treq_lib::jj::jj_get_commits_ahead(workspace_path_str, default_branch).expect("commits");
+  let change_id = commits.commits.last().unwrap().change_id.clone();
+  let op_id =
+    treq_lib::core::abandon_commit(&repo.repo_path, workspace.id, &change_id).expect("abandon");
+
+  TestRepo::write_workspace_file(workspace_path_str, "later.txt", "two")
+    .expect("Failed to write later file");
+  treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "after abandon")
+    .expect("Failed to commit after abandon");
+
+  let err = treq_lib::core::undo_repo_operation(&repo.repo_path, Some(workspace.id), &op_id)
+    .expect_err("undo of a stale operation should fail");
+  assert!(
+    err.to_lowercase().contains("changed") || err.to_lowercase().contains("since"),
+    "unexpected error: {err}"
+  );
+}
+
+#[test]
 fn test_commit_diff_added_files() {
   let repo = TestRepo::new().expect("Failed to create test repo");
 

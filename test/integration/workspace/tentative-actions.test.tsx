@@ -11,6 +11,8 @@ import {
 } from "../../utils";
 import * as api from "../../../src/lib/api";
 import { Dashboard } from "../../../src/components/Dashboard";
+import fs from "node:fs";
+import path from "node:path";
 
 async function createDirtyWorkspace(branchName: string) {
   const { repoPath } = createTestRepo(false);
@@ -105,6 +107,41 @@ describe("ShowWorkspace - tentative working copy actions", () => {
       expect(
         screen.queryAllByRole("button", { name: /working copy/i }),
       ).toHaveLength(0);
+    });
+  });
+
+  it("restores discarded tentative changes from the toast Undo action", async () => {
+    const { repoPath, workspace } = await createDirtyWorkspace(
+      "feat/tentative-undo",
+    );
+    await openWorkspaceCommitsTab(user, "feat/tentative-undo");
+
+    const workspacePath = resolveWorkspacePath(
+      repoPath,
+      workspace.workspace_path,
+    );
+
+    const workingCopyButton = await screen.findByRole("button", {
+      name: /working copy/i,
+    });
+    await user.click(workingCopyButton);
+    await user.click(screen.getByRole("button", { name: /delete changes/i }));
+
+    await waitFor(() => {
+      expect(
+        screen.queryAllByRole("button", { name: /working copy/i }),
+      ).toHaveLength(0);
+    });
+
+    await user.click(await screen.findByRole("button", { name: "Undo" }));
+    await screen.findByText("Working copy changes were restored");
+    expect(
+      fs.existsSync(path.join(workspacePath, "tentative-actions.txt")),
+    ).toBe(true);
+    await waitFor(() => {
+      expect(
+        screen.getAllByRole("button", { name: /working copy/i }).length,
+      ).toBeGreaterThan(0);
     });
   });
 });

@@ -44,6 +44,8 @@ import {
   createSession,
   type DirectoryEntry,
   jjRestoreAll,
+  jjRestoreSnapshot,
+  jjSnapshotWorkingCopy,
   dryRunHomeRepoRebase,
   getRepoSetting,
   getSetting,
@@ -813,11 +815,60 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
       if (!workspace?.workspace_path || !effectiveRepoPath) return;
 
       try {
+        const snapshotId = await jjSnapshotWorkingCopy(workingDirectory);
         await jjRestoreAll(workingDirectory);
         addToast({
           title: "Changes discarded",
           description: "Working copy changes were removed",
           type: "success",
+          action: {
+            label: "Undo",
+            onClick: () => {
+              void (async () => {
+                try {
+                  await jjRestoreSnapshot(workingDirectory, snapshotId);
+                  await Promise.all([
+                    refetchWorkspaceStatus(),
+                    queryClient.invalidateQueries({
+                      queryKey: [
+                        "commit-diff-viewer-commits",
+                        effectiveRepoPath,
+                        workspace.id,
+                      ],
+                    }),
+                    queryClient.invalidateQueries({
+                      queryKey: [
+                        "workspace-status",
+                        effectiveRepoPath,
+                        workspace.id,
+                      ],
+                    }),
+                    queryClient.invalidateQueries({
+                      queryKey: [
+                        "workspace-overview",
+                        effectiveRepoPath,
+                        workspace.id,
+                      ],
+                    }),
+                  ]);
+                  addToast({
+                    title: "Restored",
+                    description: "Working copy changes were restored",
+                    type: "success",
+                  });
+                } catch (undoError) {
+                  addToast({
+                    title: "Undo Failed",
+                    description:
+                      undoError instanceof Error
+                        ? undoError.message
+                        : String(undoError),
+                    type: "error",
+                  });
+                }
+              })();
+            },
+          },
         });
         await Promise.all([
           refetchWorkspaceStatus(),
@@ -848,6 +899,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
       addToast,
       queryClient,
       refetchWorkspaceStatus,
+      workingDirectory,
     ]);
 
     const handleHomeRebase = useCallback(async () => {

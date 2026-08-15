@@ -54,7 +54,7 @@ use jj_lib::merge::Diff;
 use jj_lib::merged_tree::MergedTree;
 use jj_lib::merged_tree_builder::MergedTreeBuilder;
 use jj_lib::object_id::{HexPrefix, ObjectId};
-use jj_lib::op_store::{RefTarget, RemoteRef};
+use jj_lib::op_store::{OperationId, RefTarget, RemoteRef};
 use jj_lib::ref_name::{RefName, RemoteName, RemoteRefSymbol, WorkspaceNameBuf};
 use jj_lib::refs::{classify_ref_push_action, LocalAndRemoteRef, RefPushAction};
 use jj_lib::repo::{MutableRepo, ReadonlyRepo, Repo as _, StoreFactories};
@@ -2623,15 +2623,51 @@ pub fn jj_abandon(workspace_path: &str, change_id: &str) -> Result<String, JjErr
   tx.repo_mut().record_abandoned_commit(&commit);
   block_on(tx.repo_mut().rebase_descendants())
     .map_err(|e| JjError::InitFailed(format!("Failed to rebase descendants: {}", e)))?;
-  block_on(tx.commit("abandon commit"))
+  let new_repo = block_on(tx.commit("abandon commit"))
     .map_err(|e| JjError::InitFailed(format!("Failed to abandon commit: {}", e)))?;
+  let op_hex = new_repo.op_id().hex();
 
   // rebase_descendants() may have rewritten WC commits of every workspace; reconcile all.
   let repo_path =
     derive_repo_path_from_workspace(workspace_path).unwrap_or_else(|| workspace_path.to_string());
   let _ = reconcile_all_workspaces_after_rewrite(&repo_path, None);
 
-  Ok(String::new())
+  Ok(op_hex)
+}
+
+/// Restore the repository view to the parent of `operation_id`.
+///
+/// Fails if `operation_id` is not the current operation, so a toast Undo cannot
+/// clobber later work.
+pub fn jj_undo_operation(workspace_path: &str, operation_id: &str) -> Result<String, JjError> {
+  let mut loaded = load_workspace_repo_for_history_edit(workspace_path)?;
+  let requested = OperationId::try_from_hex(operation_id)
+    .ok_or_else(|| JjError::IoError("Invalid operation id".to_string()))?;
+  if loaded.repo.op_id() != &requested {
+    return Err(JjError::IoError(
+      "Cannot undo: the repository has changed since this action".to_string(),
+    ));
+  }
+  let operation = loaded.repo.operation().clone();
+  let parents = block_on(operation.parents())
+    .map_err(|e| JjError::IoError(format!("Failed to load operation parents: {}", e)))?;
+  if parents.len() != 1 {
+    return Err(JjError::IoError(
+      "Cannot undo a merge operation".to_string(),
+    ));
+  }
+  let parent = parents.into_iter().next().unwrap();
+  let parent_repo = block_on(loaded.repo.loader().load_at(&parent))
+    .map_err(|e| JjError::IoError(format!("Failed to load parent operation: {}", e)))?;
+  let restored_view = parent_repo.view().store_view().clone();
+
+  let mut tx = loaded.repo.start_transaction();
+  tx.repo_mut().set_view(restored_view);
+  let _ = git::export_refs(tx.repo_mut());
+  let new_repo = block_on(tx.commit(format!("undo: restore to operation {}", parent.id().hex())))
+    .map_err(|e| JjError::IoError(format!("Failed to commit undo: {}", e)))?;
+  update_workspace_after_history_edit(&mut loaded, &new_repo, None, CheckoutMode::Immediate)?;
+  Ok(new_repo.op_id().hex())
 }
 
 /// Get the full (multi-line) description of a specific commit.

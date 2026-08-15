@@ -20,5 +20,5 @@ Click **Commit** or press `Cmd+Enter` to create the commit. Treq validates that 
 
 ## Discarding Changes
 
-**Deselecting** a file removes it from the next commit without losing changes. **Discarding** permanently deletes changes. Right-click a file, select "Discard Changes," then confirm. This cannot be undone.
+**Deselecting** a file removes it from the next commit without losing changes. **Discarding** restores the file to its last committed state. Right-click a file and choose Discard. The success toast includes **Undo**, which restores the working-copy snapshot Treq took before the discard.
 

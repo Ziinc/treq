@@ -32,6 +32,7 @@ import {
   type JjRevisionDiff,
   listCommits,
   stashCommit,
+  undoRepoOperation,
 } from "../lib/api";
 import { getLanguageFromPath, highlightCode } from "../lib/syntax-highlight";
 import {
@@ -189,6 +190,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
       Map<string, { diff: JjRevisionDiff; loading: boolean; error?: string }>
     >(new Map());
     const containerRef = useRef<HTMLDivElement>(null);
+    const hideCommitTimeoutsRef = useRef<Map<string, number>>(new Map());
 
     // Move/abandon commit state
     const [removingCommitIds, setRemovingCommitIds] = useState<Set<string>>(
@@ -429,10 +431,21 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
         if (!confirmed) return;
 
         try {
-          await abandonCommit(repoPath, workspaceId, commit.change_id);
+          const operationId = await abandonCommit(
+            repoPath,
+            workspaceId,
+            commit.change_id,
+          );
           setRemovingCommitIds((prev) => new Set(prev).add(commit.commit_id));
 
-          window.setTimeout(() => {
+          const previousHide = hideCommitTimeoutsRef.current.get(
+            commit.commit_id,
+          );
+          if (previousHide !== undefined) {
+            window.clearTimeout(previousHide);
+          }
+          const hideTimeout = window.setTimeout(() => {
+            hideCommitTimeoutsRef.current.delete(commit.commit_id);
             setRemovedCommitIds((prev) => new Set(prev).add(commit.commit_id));
             setRemovingCommitIds((prev) => {
               const next = new Set(prev);
@@ -441,11 +454,60 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
             });
             onCommitAbandoned?.();
           }, REMOVE_ANIMATION_MS);
+          hideCommitTimeoutsRef.current.set(commit.commit_id, hideTimeout);
 
           addToast({
             title: "Commit deleted",
             description: `Abandoned commit ${commit.short_id}`,
             type: "success",
+            action: {
+              label: "Undo",
+              onClick: () => {
+                void (async () => {
+                  try {
+                    const pendingHide = hideCommitTimeoutsRef.current.get(
+                      commit.commit_id,
+                    );
+                    if (pendingHide !== undefined) {
+                      window.clearTimeout(pendingHide);
+                      hideCommitTimeoutsRef.current.delete(commit.commit_id);
+                    }
+                    await undoRepoOperation(repoPath, workspaceId, operationId);
+                    setRemovedCommitIds((prev) => {
+                      const next = new Set(prev);
+                      next.delete(commit.commit_id);
+                      return next;
+                    });
+                    setRemovingCommitIds((prev) => {
+                      const next = new Set(prev);
+                      next.delete(commit.commit_id);
+                      return next;
+                    });
+                    await queryClient.invalidateQueries({
+                      queryKey: [
+                        "commit-diff-viewer-commits",
+                        repoPath,
+                        workspaceId,
+                      ],
+                    });
+                    addToast({
+                      title: "Restored",
+                      description: `Restored commit ${commit.short_id}`,
+                      type: "success",
+                    });
+                  } catch (undoErr) {
+                    addToast({
+                      title: "Undo Failed",
+                      description:
+                        undoErr instanceof Error
+                          ? undoErr.message
+                          : String(undoErr),
+                      type: "error",
+                    });
+                  }
+                })();
+              },
+            },
           });
         } catch (err) {
           const errorMsg = err instanceof Error ? err.message : String(err);
@@ -456,7 +518,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
           });
         }
       },
-      [repoPath, workspaceId, onCommitAbandoned, addToast],
+      [repoPath, workspaceId, onCommitAbandoned, addToast, queryClient],
     );
 
     const handleStashCommit = useCallback(
