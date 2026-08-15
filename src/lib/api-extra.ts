@@ -99,7 +99,7 @@ export const readFile = (path: string): Promise<string> =>
 export const writeAgentCliFiles = (
   prompt: string,
   settingsJson?: string | null,
-): Promise<{ promptPath: string; settingsPath?: string }> =>
+): Promise<{ promptPath: string; settingsPath?: string; skillDir: string }> =>
   invoke("write_agent_cli_files", {
     prompt,
     settingsJson: settingsJson ?? null,

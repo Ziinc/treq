@@ -36,6 +36,14 @@ The same prompt also allows `treq` CLI commands that create or manage other work
 
 This boundary separates concurrent tasks at the file-system level. Repository history remains shared across workspaces, while each agent sees the working copy for its assigned workspace.
 
+## Bundled Treq skill
+
+Treq writes a `treq` skill into a temporary directory when it starts the agent. The skill is not copied into the repository. You do not install it.
+
+The skill covers workspace CLI commands, `treq send` for UI previews, `treq commit` when the task needs a recorded revision, and inplace [conflict resolution](/docs/concepts/commit-management#resolve-commit-conflicts-inplace). See the [CLI reference](/docs/reference/cli) and [Workspaces](/docs/concepts/workspaces).
+
+Claude Code loads the skill through `--add-dir`. Cursor Agent loads it through `--plugin-dir`. Codex receives the skill file path in its developer instructions.
+
 ## Creating Sessions
 
 You can create a session from the task input, workspace sidebar, command palette, review handoff, or a Treq agent link. Each current entry point creates a new session record.

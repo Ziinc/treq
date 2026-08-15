@@ -44,6 +44,9 @@ describe("buildTreqAgentSystemPrompt", () => {
     expect(prompt).toContain(
       "You may run treq CLI commands even when they create or manage workspaces outside the current working directory.",
     );
+    expect(prompt).toContain(
+      "A Treq skill named treq is loaded automatically for this session.",
+    );
     expect(prompt).not.toMatch(/[\r\n]/);
     expect(prompt).not.toContain("\\n");
   });
@@ -160,9 +163,10 @@ describe("buildAgentAutoCommand", () => {
   const files = {
     promptPath: "/tmp/treq-agent-prompt-1.txt",
     settingsPath: "/tmp/treq-agent-settings-1.json",
+    skillDir: "/tmp/treq-agent-skills-1",
   };
 
-  it("points Claude at settings and prompt files instead of inlining them", () => {
+  it("points Claude at settings, prompt, and the bundled skill directory", () => {
     const command = buildAgentAutoCommand({
       agent: "claude",
       files,
@@ -173,10 +177,11 @@ describe("buildAgentAutoCommand", () => {
     expect(command).toContain(
       "--append-system-prompt-file '/tmp/treq-agent-prompt-1.txt'",
     );
+    expect(command).toContain("--add-dir '/tmp/treq-agent-skills-1'");
     expect(command).not.toContain("--append-system-prompt ");
     expect(command).not.toContain("You are operating");
     expect(command).toContain(
-      `trap "rm -f '/tmp/treq-agent-prompt-1.txt' '/tmp/treq-agent-settings-1.json'" EXIT`,
+      `trap "rm -rf '/tmp/treq-agent-prompt-1.txt' '/tmp/treq-agent-skills-1' '/tmp/treq-agent-settings-1.json'" EXIT`,
     );
     expect(command).toContain("-- 'fix the bug'");
   });
@@ -184,7 +189,7 @@ describe("buildAgentAutoCommand", () => {
   it("loads Codex developer instructions from a file via cat", () => {
     const command = buildAgentAutoCommand({
       agent: "codex",
-      files: { promptPath: files.promptPath },
+      files: { promptPath: files.promptPath, skillDir: files.skillDir },
     });
 
     expect(command).toContain(
@@ -192,120 +197,20 @@ describe("buildAgentAutoCommand", () => {
     );
     expect(command).not.toContain("--append-system-prompt");
     expect(command).toContain(
-      `trap "rm -f '/tmp/treq-agent-prompt-1.txt'" EXIT`,
+      `trap "rm -rf '/tmp/treq-agent-prompt-1.txt' '/tmp/treq-agent-skills-1'" EXIT`,
     );
   });
 
-  it("loads the Cursor prompt from a file because cursor-agent has no prompt-file flag", () => {
+  it("loads the Cursor prompt from a file and the Treq skill via plugin-dir", () => {
     const command = buildAgentAutoCommand({
       agent: "cursor",
       permissionMode: "plan",
-      files: { promptPath: files.promptPath },
+      files: { promptPath: files.promptPath, skillDir: files.skillDir },
     });
 
-    expect(command).toContain("cursor-agent --plan -- ");
+    expect(command).toContain(
+      "cursor-agent --plan --plugin-dir '/tmp/treq-agent-skills-1' -- ",
+    );
     expect(command).toContain(`"$(cat -- '/tmp/treq-agent-prompt-1.txt')"`);
-  });
-});
-
-describe("appendAgentPrompt", () => {
-  it("separates a prompt beginning with hyphens from CLI options", () => {
-    expect(
-      appendAgentPrompt(
-        "codex -c 'instructions=treq'",
-        "---- test failure ----",
-      ),
-    ).toBe("codex -c 'instructions=treq' -- '---- test failure ----'");
-  });
-
-  it("quotes shell metacharacters in the prompt", () => {
-    expect(appendAgentPrompt("codex", "it's $HOME `pwd`!")).toBe(
-      "codex -- 'it'\\''s $HOME `pwd`!'",
-    );
-  });
-});
-
-describe("buildTreqAgentSystemPrompt", () => {
-  it("describes a workspace and limits direct file access to it", () => {
-    const prompt = buildTreqAgentSystemPrompt({
-      repoPath: "/repos/treq",
-      workspacePath: "/repos/treq/.treq/workspaces/fix-parser",
-    });
-
-    expect(prompt).toContain("You are operating inside a Treq workspace.");
-    expect(prompt).toContain(
-      "Your current working directory and direct filesystem scope is /repos/treq/.treq/workspaces/fix-parser.",
-    );
-    expect(prompt).toContain("The Treq home repository is /repos/treq.");
-    expect(prompt).toContain(
-      "The home repository and sibling workspaces are outside your direct filesystem scope.",
-    );
-    expect(prompt).toContain(
-      "You may run treq CLI commands even when they create or manage workspaces outside the current working directory.",
-    );
-    expect(prompt).not.toMatch(/[\r\n]/);
-    expect(prompt).not.toContain("\\n");
-  });
-
-  it("describes a home repository without workspace-only exclusions", () => {
-    const prompt = buildTreqAgentSystemPrompt({
-      repoPath: "/repos/treq",
-      workspacePath: null,
-    });
-
-    expect(prompt).toContain("You are operating in the Treq home repository.");
-    expect(prompt).toContain(
-      "Your current working directory and direct filesystem scope is /repos/treq.",
-    );
-    expect(prompt).toContain(
-      "You may freely read and write files within this directory and its descendants.",
-    );
-    expect(prompt).toContain(
-      "Do not directly read, write, edit, or delete files outside this directory.",
-    );
-    expect(prompt).not.toContain("sibling workspaces");
-    expect(prompt).not.toContain("outside your direct filesystem scope");
-    expect(prompt).not.toMatch(/[\r\n]/);
-  });
-});
-
-describe("buildClaudeSandboxSettings", () => {
-  it("allows workspace reads and writes while denying the home repository", () => {
-    expect(
-      buildClaudeSandboxSettings({
-        repoPath: "/repos/treq",
-        workspacePath: "/repos/treq/.treq/workspaces/fix-parser",
-      }),
-    ).toEqual({
-      sandbox: {
-        enabled: true,
-        failIfUnavailable: true,
-        allowUnsandboxedCommands: false,
-        filesystem: {
-          denyRead: ["/repos/treq"],
-          allowRead: ["/repos/treq/.treq/workspaces/fix-parser"],
-          allowWrite: ["/repos/treq/.treq/workspaces/fix-parser"],
-        },
-      },
-    });
-  });
-
-  it("allows home repository reads and writes without workspace exclusions", () => {
-    expect(
-      buildClaudeSandboxSettings({
-        repoPath: "/repos/treq",
-        workspacePath: null,
-      }),
-    ).toEqual({
-      sandbox: {
-        enabled: true,
-        failIfUnavailable: true,
-        allowUnsandboxedCommands: false,
-        filesystem: {
-          allowRead: ["/repos/treq"],
-          allowWrite: ["/repos/treq"],
-        },
-      },
-    });
   });
 });

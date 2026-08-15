@@ -80,6 +80,20 @@ treq agent <branch> <prompt> [-m <edit|plan>]
 - `prompt`: prompt to send to the agent.
 - `-m, --mode`: [permission mode](/docs/concepts/agent-sessions). Use `edit` or `plan`.
 
+### `treq commit`
+
+Create a commit from the pending changes in a workspace.
+
+```bash
+treq commit <workspace_name> -m <message> [--push]
+```
+
+- `workspace_name`: workspace branch name.
+- `-m, --message`: commit message (required).
+- `--push`: push the workspace to the remote after a successful commit.
+
+This records working-copy changes in that workspace. It does not merge the workspace into its target. See [Commit Management](/docs/concepts/commit-management).
+
 ### `treq resolve`
 
 Finish inplace conflict resolution for a conflicted commit that already has a resolve directory under `.treq/resolve/<workspace-slug>/`.

@@ -66,9 +66,11 @@ export const prepareAgentAutoCommand = async ({
   }
 
   const files = await writeAgentCliFiles(promptContents, settingsJson);
-  const filePaths = [files.promptPath, files.settingsPath].filter(
-    (path): path is string => !!path,
-  );
+  const filePaths = [
+    files.promptPath,
+    files.settingsPath,
+    files.skillDir,
+  ].filter((path): path is string => !!path);
 
   return {
     command: buildAgentAutoCommand({

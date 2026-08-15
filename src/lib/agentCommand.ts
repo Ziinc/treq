@@ -15,6 +15,7 @@ export type AgentKind = "claude" | "codex" | "cursor";
 export interface AgentCliFiles {
   promptPath: string;
   settingsPath?: string;
+  skillDir?: string;
 }
 
 /** Build the single-line system prompt injected into agent terminal sessions. */
@@ -42,11 +43,9 @@ export const buildTreqAgentSystemPrompt = ({
     ...locationContext,
     "You may freely read and write files within this directory and its descendants.",
     "Do not directly read, write, edit, or delete files outside this directory.",
-    "You have access to the treq CLI for managing workspaces.",
-    "Run `treq --help` to discover the currently available commands before using the CLI.",
+    "A Treq skill named treq is loaded automatically for this session.",
+    "Follow it for the treq CLI, workspaces, sending files to the user, and commits.",
     "You may run treq CLI commands even when they create or manage workspaces outside the current working directory.",
-    "To finish conflict resolution, work under `.treq/resolve/<workspace-slug>/`. Each change-id subdirectory is one conflicted commit. Run `treq resolve <change-id> [1|2|base|both]` or pipe JSON path→content replacements into `treq resolve <change-id>`. Your work is complete when no change-id directories remain.",
-    "Use `treq send <path>` (or pipe text into `treq send`) to preview images and text in the Treq UI for the user.",
   ].join(" ");
 };
 
@@ -88,7 +87,7 @@ const shellCat = (path: string): string => `$(cat -- ${shellQuote(path)})`;
 
 const wrapWithTempFileCleanup = (command: string, paths: string[]): string => {
   const quoted = paths.map(shellQuote).join(" ");
-  return `( trap "rm -f ${quoted}" EXIT; ${command} )`;
+  return `( trap "rm -rf ${quoted}" EXIT; ${command} )`;
 };
 
 export const cursorPromptFileContents = (
@@ -123,6 +122,9 @@ export const buildAgentAutoCommand = ({
 }: BuildAgentAutoCommandOptions): string => {
   let autoCommand: string;
   const cleanupPaths = [files.promptPath];
+  if (files.skillDir) {
+    cleanupPaths.push(files.skillDir);
+  }
 
   if (agent === "codex") {
     autoCommand = `codex -c "developer_instructions=${shellCat(files.promptPath)}"`;
@@ -131,7 +133,10 @@ export const buildAgentAutoCommand = ({
     }
   } else if (agent === "cursor") {
     const planFlag = permissionMode === "plan" ? " --plan" : "";
-    autoCommand = `cursor-agent${planFlag} -- "${shellCat(files.promptPath)}"`;
+    const pluginDir = files.skillDir
+      ? ` --plugin-dir ${shellQuote(files.skillDir)}`
+      : "";
+    autoCommand = `cursor-agent${planFlag}${pluginDir} -- "${shellCat(files.promptPath)}"`;
   } else {
     const permissionModeArg =
       permissionMode === "plan"
@@ -147,6 +152,9 @@ export const buildAgentAutoCommand = ({
     cleanupPaths.push(files.settingsPath);
     autoCommand += ` --settings ${shellQuote(files.settingsPath)}`;
     autoCommand += ` --append-system-prompt-file ${shellQuote(files.promptPath)}`;
+    if (files.skillDir) {
+      autoCommand += ` --add-dir ${shellQuote(files.skillDir)}`;
+    }
     if (pendingPrompt) {
       autoCommand += ` -- ${shellQuote(pendingPrompt)}`;
     }
