@@ -28,8 +28,9 @@ pub fn read_file(path: String) -> Result<String, String> {
 pub fn write_agent_cli_files(
   prompt: String,
   settings_json: Option<String>,
+  cwd: Option<String>,
 ) -> Result<crate::core::AgentCliFiles, String> {
-  crate::core::write_agent_cli_files(&prompt, settings_json.as_deref())
+  crate::core::write_agent_cli_files(&prompt, settings_json.as_deref(), cwd.as_deref())
 }
 
 #[tauri::command]

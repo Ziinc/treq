@@ -189,7 +189,11 @@ describe("buildAgentAutoCommand", () => {
   it("loads Codex developer instructions from a file via cat", () => {
     const command = buildAgentAutoCommand({
       agent: "codex",
-      files: { promptPath: files.promptPath, skillDir: files.skillDir },
+      files: {
+        promptPath: files.promptPath,
+        skillDir: files.skillDir,
+        agentsSkillPath: "/ws/.agents/skills/treq",
+      },
     });
 
     expect(command).toContain(
@@ -197,7 +201,7 @@ describe("buildAgentAutoCommand", () => {
     );
     expect(command).not.toContain("--append-system-prompt");
     expect(command).toContain(
-      `trap "rm -rf '/tmp/treq-agent-prompt-1.txt' '/tmp/treq-agent-skills-1'" EXIT`,
+      `trap "rm -rf '/tmp/treq-agent-prompt-1.txt' '/tmp/treq-agent-skills-1' '/ws/.agents/skills/treq'" EXIT`,
     );
   });
 

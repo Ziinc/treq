@@ -6,6 +6,8 @@ use std::path::{Path, PathBuf};
 const FILE_PREFIX: &str = "treq-agent-";
 const TREQ_SKILL_MD: &str = include_str!("../../resources/agent-skill/SKILL.md");
 const TREQ_SKILL_PLUGIN_JSON: &str = include_str!("../../resources/agent-skill/plugin.json");
+const AGENTS_SKILL_RELATIVE: &str = ".agents/skills/treq";
+const AGENTS_SKILL_MARKER: &str = ".treq-generated";
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -14,17 +16,24 @@ pub struct AgentCliFiles {
   #[serde(skip_serializing_if = "Option::is_none")]
   pub settings_path: Option<String>,
   pub skill_dir: String,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub agents_skill_path: Option<String>,
 }
 
 /// Write the agent system prompt, optional Claude settings, and bundled Treq skill pack.
 pub fn write_agent_cli_files(
   prompt: &str,
   settings_json: Option<&str>,
+  cwd: Option<&str>,
 ) -> Result<AgentCliFiles, String> {
   let id = uuid::Uuid::new_v4();
   let dir = std::env::temp_dir();
 
   let skill_dir = write_treq_skill_pack(&dir, &id)?;
+  let agents_skill_path = match cwd {
+    Some(path) => install_agents_treq_skill(Path::new(path))?,
+    None => None,
+  };
 
   let prompt_with_skill = format!(
     "{prompt} The bundled Treq skill file is at {}/skills/treq/SKILL.md.",
@@ -48,6 +57,7 @@ pub fn write_agent_cli_files(
     prompt_path: path_to_string(&prompt_path),
     settings_path,
     skill_dir: path_to_string(&skill_dir),
+    agents_skill_path,
   })
 }
 
@@ -67,7 +77,8 @@ pub fn cleanup_agent_cli_files(paths: &[String]) -> Result<(), String> {
       Ok(p) => p,
       Err(_) => continue,
     };
-    if !is_safe_agent_cli_temp_path(&canonical, &temp_dir) {
+    if !is_safe_agent_cli_temp_path(&canonical, &temp_dir) && !is_safe_agents_skill_dir(&canonical)
+    {
       return Err(format!(
         "Refusing to delete path outside treq agent temp files: {path}"
       ));
@@ -99,6 +110,25 @@ fn write_treq_skill_pack(temp_dir: &Path, id: &uuid::Uuid) -> Result<PathBuf, St
   fs::write(skill_dir.join("plugin.json"), TREQ_SKILL_PLUGIN_JSON)
     .map_err(|e| format!("Failed to write Treq skill plugin manifest: {e}"))?;
   Ok(skill_dir)
+}
+
+fn install_agents_treq_skill(cwd: &Path) -> Result<Option<String>, String> {
+  let skill_dir = cwd.join(AGENTS_SKILL_RELATIVE);
+  let marker = skill_dir.join(AGENTS_SKILL_MARKER);
+  if skill_dir.exists() && !marker.exists() {
+    return Ok(None);
+  }
+  fs::create_dir_all(&skill_dir)
+    .map_err(|e| format!("Failed to create .agents/skills/treq: {e}"))?;
+  fs::write(skill_dir.join("SKILL.md"), TREQ_SKILL_MD)
+    .map_err(|e| format!("Failed to write Codex Treq skill: {e}"))?;
+  fs::write(&marker, "treq\n").map_err(|e| format!("Failed to write Treq skill marker: {e}"))?;
+  Ok(Some(path_to_string(&skill_dir)))
+}
+
+fn is_safe_agents_skill_dir(canonical: &Path) -> bool {
+  canonical.ends_with(Path::new(AGENTS_SKILL_RELATIVE))
+    && canonical.join(AGENTS_SKILL_MARKER).is_file()
 }
 
 fn with_skill_dir_allow_read(settings_json: &str, skill_dir: &Path) -> Result<String, String> {
@@ -139,6 +169,7 @@ mod tests {
     let files = write_agent_cli_files(
       "you are in a workspace",
       Some(r#"{"sandbox":{"filesystem":{"allowRead":["/ws"]}}}"#),
+      None,
     )
     .expect("write files");
 
@@ -171,12 +202,13 @@ mod tests {
       .exists());
     assert!(Path::new(&files.skill_dir).join("plugin.json").exists());
 
+    assert!(files.agents_skill_path.is_none());
     cleanup_agent_cli_files(&[files.prompt_path, settings_path, files.skill_dir]).expect("cleanup");
   }
 
   #[test]
   fn omits_settings_file_when_not_requested() {
-    let files = write_agent_cli_files("prompt only", None).expect("write");
+    let files = write_agent_cli_files("prompt only", None, None).expect("write");
     assert!(files.settings_path.is_none());
     assert!(Path::new(&files.prompt_path).exists());
     assert!(Path::new(&files.skill_dir).is_dir());
@@ -188,6 +220,7 @@ mod tests {
     let files = write_agent_cli_files(
       "tmp",
       Some(r#"{"sandbox":{"filesystem":{"allowRead":[]}}}"#),
+      None,
     )
     .expect("write");
     let settings_path = files.settings_path.clone().unwrap();
@@ -221,5 +254,38 @@ mod tests {
       allow,
       &vec![json!("/ws"), json!("/tmp/treq-agent-skills-1")]
     );
+  }
+
+  #[test]
+  fn installs_agents_skill_under_cwd_for_codex_discovery() {
+    let cwd = tempfile::TempDir::new().expect("cwd");
+    let files = write_agent_cli_files("prompt", None, cwd.path().to_str()).expect("write");
+    let skill_dir = files.agents_skill_path.expect("agents skill path");
+    assert_eq!(
+      Path::new(&skill_dir),
+      cwd.path().join(".agents/skills/treq")
+    );
+    assert!(Path::new(&skill_dir).join("SKILL.md").exists());
+    assert!(Path::new(&skill_dir).join(".treq-generated").exists());
+
+    cleanup_agent_cli_files(&[files.prompt_path, files.skill_dir, skill_dir.clone()])
+      .expect("cleanup");
+    assert!(!Path::new(&skill_dir).exists());
+  }
+
+  #[test]
+  fn does_not_overwrite_existing_user_agents_skill() {
+    let cwd = tempfile::TempDir::new().expect("cwd");
+    let skill_dir = cwd.path().join(".agents/skills/treq");
+    fs::create_dir_all(&skill_dir).expect("mkdir");
+    fs::write(skill_dir.join("SKILL.md"), "user skill\n").expect("write user skill");
+
+    let files = write_agent_cli_files("prompt", None, cwd.path().to_str()).expect("write");
+    assert!(files.agents_skill_path.is_none());
+    assert_eq!(
+      fs::read_to_string(skill_dir.join("SKILL.md")).expect("read"),
+      "user skill\n"
+    );
+    cleanup_agent_cli_files(&[files.prompt_path, files.skill_dir]).expect("cleanup");
   }
 }
