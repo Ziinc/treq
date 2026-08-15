@@ -21,27 +21,24 @@ const TUI_STYLE = [
   "pointer-events:none",
 ].join(";");
 
-const CLAUDE_TUI = `<div data-testid="marketing-tui-claude" style="${TUI_STYLE}">
-<span style="color:#d97757">  ▐▛███▜▌</span>   <span style="color:#f4f4f5">Claude Code</span> <span style="color:#737373">v2.1.0</span>
-<span style="color:#d97757"> ▝▜█████▛▘</span>  <span style="color:#a1a1aa">Opus 4.6 · lorem-ipsum/event-bus</span>
-<span style="color:#d97757">   ▘▘ ▝▝</span>    <span style="color:#52525b">feat/empty-event-message</span>
+const CLAUDE_PEACH = "#e8a87c";
+const CLAUDE_DIM = "#b8845c";
 
-<span style="color:#a1a1aa">  Welcome back. Context restored from the previous session.</span>
-
-<span style="color:#60a5fa">&gt; Fix empty event_message when posting Discord events, then
-  rebase this stacked PR onto feat/event-ingest.</span>
-
-<span style="color:#d97757">⏺</span> I'll inspect the client and the conflicted Home page.
-
-<span style="color:#52525b">  ⎿  Read packages/web/src/lib/client.ts</span>
-<span style="color:#52525b">  ⎿  Read packages/web/src/pages/Home.tsx</span>
-
-<span style="color:#d97757">⏺ Update</span> <span style="color:#a1a1aa">packages/web/src/lib/client.ts</span>
-<span style="color:#4ade80">      + const message = body.event_message?.trim() || JSON.stringify(body);</span>
-<span style="color:#f87171">      - return fetch("/events", { method: "POST", body: JSON.stringify(body) });</span>
-
-<span style="color:#a1a1aa">  Conflict in packages/web/src/pages/Home.tsx — Side #1 vs Side #2.</span>
-<span style="color:#fbbf24">  ▸ packages/web</span> <span style="color:#f87171">conflict</span>
+/** Matches the Claude Code startup TUI: peach mono, dashed frame, welcome + prompt. */
+const CLAUDE_TUI = `<div data-testid="marketing-tui-claude" style="${TUI_STYLE};color:${CLAUDE_PEACH};line-height:1.25;font-size:10px">
+<span style="color:${CLAUDE_PEACH}">╭─ Claude Code v2.0.0 ──╮  Recent activity</span>
+<span style="color:${CLAUDE_PEACH}">│                       │  <span style="color:${CLAUDE_DIM}">1m ago</span>  Inspect Home.tsx</span>
+<span style="color:${CLAUDE_PEACH}">│    Welcome back       │  <span style="color:${CLAUDE_DIM}">8m ago</span>  Handle empty events</span>
+<span style="color:${CLAUDE_PEACH}">│                       │  <span style="color:${CLAUDE_DIM}">2d ago</span>  Wire event feed</span>
+<span style="color:${CLAUDE_PEACH}">│       ▄ ▄             │  <span style="color:${CLAUDE_DIM}">1w ago</span>  Add EventBody schema</span>
+<span style="color:${CLAUDE_PEACH}">│      █████            │  <span style="color:${CLAUDE_DIM}">... /resume for more</span></span>
+<span style="color:${CLAUDE_PEACH}">│     █ ███ █           │  ╌ ╌ ╌ ╌ ╌ ╌ ╌ ╌</span>
+<span style="color:${CLAUDE_PEACH}">│                       │  What's new</span>
+<span style="color:${CLAUDE_PEACH}">│  Sonnet 4.5 • Max 20x │  /agents to create subagents</span>
+<span style="color:${CLAUDE_PEACH}">│  ~/event-bus          │  /security-review for review</span>
+<span style="color:${CLAUDE_PEACH}">╰───────────────────────╯  ctrl+b to background bashes</span>
+<span style="color:${CLAUDE_DIM}">────────────────────────────────────────</span>
+<span style="color:${CLAUDE_PEACH}">&gt; </span><span style="background:#f4f4f5;color:#1e1e1e"> </span><span style="color:${CLAUDE_DIM}"> try "edit &lt;filepath&gt; to …"</span>
 </div>`;
 
 const CODEX_TUI = `<div data-testid="marketing-tui-codex" style="${TUI_STYLE}">

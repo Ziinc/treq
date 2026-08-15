@@ -124,7 +124,7 @@ it("captures the Code Overview for the README", async () => {
     publishTo: path.join(README_SCREENSHOTS_DIR, "code.png"),
     expectations: [
       "The Code tab shows a nested packages/ file tree, a stack panel for feat/empty-event-message on feat/event-ingest, and GitHub View PR plus CI pills in the header.",
-      "The terminal pane shows three agent TUIs: Claude Code, Codex, and Cursor Agent, with visible prompt/diff text (not empty black panels).",
+      "The terminal pane shows Claude Code as a peach/orange dashed welcome TUI (v2.0.0, Sonnet, prompt), plus Codex and Cursor Agent panes with visible text.",
       "The sidebar lists stacked workspaces with GitHub PR icons; packages/web looks conflicted or changed.",
     ],
   });
