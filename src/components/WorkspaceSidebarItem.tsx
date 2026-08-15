@@ -16,7 +16,8 @@ import {
 import { ClaudeIcon } from "./icons/AgentIcons";
 import { useState } from "react";
 import { useEditorApps } from "../hooks/useEditorApps";
-import { scheduleWorkspaces, type QueueEntryStatus, type Workspace } from "../lib/api";
+import { type QueueEntryStatus, type Workspace } from "../lib/api";
+import { clearWorkspaceSchedule } from "../lib/clear-workspace-schedule";
 import type { PrInfo } from "../lib/api-types";
 import { cn, getFullWorkspacePath } from "../lib/utils";
 import type { FlattenedWorkspaceNode } from "../lib/workspace-tree";
@@ -437,33 +438,17 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                   <ContextMenuItem
                     data-testid="remove-schedule-menu-item"
                     onClick={() => {
-                      void (async () => {
-                        try {
-                          await scheduleWorkspaces(
-                            repoPath,
-                            [workspace.id],
-                            null,
-                          );
-                          addToast({
-                            title: "Workspace unscheduled",
-                            description: "Shown in the sidebar again.",
-                            type: "success",
-                          });
-                          void queryClient.invalidateQueries({
-                            queryKey: ["workspaces"],
-                          });
-                          void queryClient.invalidateQueries({
-                            queryKey: ["workspace-statuses"],
-                          });
-                        } catch (err) {
-                          addToast({
-                            title: "Could not remove schedule",
-                            description:
-                              err instanceof Error ? err.message : String(err),
-                            type: "error",
-                          });
-                        }
-                      })();
+                      void clearWorkspaceSchedule(
+                        repoPath,
+                        [workspace.id],
+                        queryClient,
+                      ).then(() => {
+                        addToast({
+                          title: "Workspace unscheduled",
+                          description: "Shown in the sidebar again.",
+                          type: "success",
+                        });
+                      });
                     }}
                   >
                     <CalendarClock className="w-4 h-4 mr-2" />

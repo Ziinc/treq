@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { scheduleWorkspaces } from "../lib/api";
+import { clearWorkspaceSchedule } from "../lib/clear-workspace-schedule";
 import {
   addDaysAtHour,
   addHours,
@@ -146,13 +147,12 @@ export const ScheduleWorkspaceDialog: React.FC<
     setLoading(true);
     setError("");
     try {
-      await scheduleWorkspaces(repoPath, workspaceIds, null);
+      await clearWorkspaceSchedule(repoPath, workspaceIds, queryClient);
       addToast({
         title: mode === "stack" ? "Stack unscheduled" : "Workspace unscheduled",
         description: "Shown in the sidebar again.",
         type: "success",
       });
-      invalidate();
       onOpenChange(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
