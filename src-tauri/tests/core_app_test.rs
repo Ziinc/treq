@@ -61,6 +61,16 @@ fn test_repo_initialization() {
     1,
     ".treq/ should appear exactly once"
   );
+  assert_eq!(
+    gitignore_content.matches(".agents/skills/treq*/").count(),
+    1,
+    ".agents/skills/treq*/ should appear exactly once"
+  );
+  assert_eq!(
+    gitignore_content.matches(".claude/skills/treq*/").count(),
+    1,
+    ".claude/skills/treq*/ should appear exactly once"
+  );
   assert!(
     !gitignore_content.contains("# Added by Treq"),
     ".gitignore should not contain Treq comment"
