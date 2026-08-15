@@ -130,11 +130,11 @@ it("captures the Code Overview for the README", async () => {
   });
 }, 120000);
 
-it("captures the Code Review tab for the README", async () => {
+it("captures the Changes tab for the README", async () => {
   const user = await prepareMarketingView();
 
-  await user.click(await screen.findByRole("tab", { name: /^Review/ }));
-  await screen.findByRole("tab", { name: /^Review/, selected: true });
+  await user.click(await screen.findByRole("tab", { name: /^Changes/ }));
+  await screen.findByRole("tab", { name: /^Changes/, selected: true });
 
   const conflictsToggle = await screen.findByRole("button", {
     name: "Conflicts",
@@ -154,7 +154,7 @@ it("captures the Code Review tab for the README", async () => {
     scrollIntoView: '[data-conflict-section-label="Side #1"]',
     publishTo: path.join(README_SCREENSHOTS_DIR, "review.png"),
     expectations: [
-      "The Review tab is open on a conflicted packages/web/src/pages/Home.tsx with an inline conflict card (Side #1 / Base / Side #2).",
+      "The Changes tab is open on a conflicted packages/web/src/pages/Home.tsx with an inline conflict card (Side #1 / Base / Side #2).",
       "Committed files such as client.ts are listed; GitHub View PR and CI remain in the header.",
       "The terminal pane still shows Claude, Codex, and Cursor TUI content.",
     ],
@@ -164,8 +164,8 @@ it("captures the Code Review tab for the README", async () => {
 it("captures the Commits tab for the README", async () => {
   const user = await prepareMarketingView();
 
-  await user.click(await screen.findByRole("tab", { name: "Commits" }));
-  await screen.findByRole("tab", { name: "Commits", selected: true });
+  await user.click(await screen.findByRole("tab", { name: /^Commits/ }));
+  await screen.findByRole("tab", { name: /^Commits/, selected: true });
 
   const commitTitle = await screen.findByText(
     "feat: handle empty event messages",
