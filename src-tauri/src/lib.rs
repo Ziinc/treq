@@ -521,6 +521,7 @@ pub fn run() {
             commands::jj_split,
             commands::get_repo_current_branch,
             commands::get_workspace_changed_files,
+            commands::set_git_submodule_synced,
             commands::init_repo,
             commands::jj_git_fetch_background,
             commands::jj_get_commits_ahead,

@@ -525,6 +525,17 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
       serde_json::to_value(files).map_err(|e| e.to_string())
     }
 
+    "set_git_submodule_synced" => {
+      let repo_path = get_str(&args, "repoPath")?;
+      let path = get_str(&args, "path")?;
+      let enabled = args
+        .get("enabled")
+        .and_then(|v| v.as_bool())
+        .ok_or_else(|| "Missing or invalid argument: enabled".to_string())?;
+      let submodules = treq_lib::core::set_submodule_synced(&repo_path, &path, enabled)?;
+      serde_json::to_value(submodules).map_err(|e| e.to_string())
+    }
+
     "ls_workspace" => {
       let repo_path = get_str(&args, "repoPath")?;
       let workspace_id: Option<i64> = opt_i64(&args, "workspaceId");
@@ -769,15 +780,15 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
         None | Some(Value::Null) => None,
         Some(v) => Some(serde_json::from_value(v.clone()).map_err(|e| e.to_string())?),
       };
-      let result =
-        treq_lib::core::start_resolve_conflicts(&repo_path, workspace_id, change_ids)?;
+      let result = treq_lib::core::start_resolve_conflicts(&repo_path, workspace_id, change_ids)?;
       serde_json::to_value(result).map_err(|e| e.to_string())
     }
 
     "build_resolve_agent_prompt" => {
       let user_prompt = get_str(&args, "userPrompt")?;
       let session: treq_lib::core::ResolveConflictsSession = serde_json::from_value(
-        args.get("session")
+        args
+          .get("session")
           .cloned()
           .ok_or("Missing argument: session")?,
       )
@@ -794,8 +805,7 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
         Some(v) => serde_json::from_value(v.clone()).map_err(|e| e.to_string())?,
       };
       let parsed_sides = treq_lib::core::parse_resolve_sides(&sides)?;
-      let result =
-        treq_lib::core::resolve_commit(&repo_path, &revision, &parsed_sides, None)?;
+      let result = treq_lib::core::resolve_commit(&repo_path, &revision, &parsed_sides, None)?;
       serde_json::to_value(result).map_err(|e| e.to_string())
     }
 

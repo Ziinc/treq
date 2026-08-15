@@ -1,7 +1,10 @@
 use crate::{jj, local_db};
 use std::path::Path;
 
-fn resolve_workspace_dir(repo_path: &str, workspace_id: Option<i64>) -> Result<String, String> {
+pub(crate) fn resolve_workspace_dir(
+  repo_path: &str,
+  workspace_id: Option<i64>,
+) -> Result<String, String> {
   match workspace_id {
     Some(id) => {
       let workspace = local_db::get_workspace_by_id(repo_path, id)

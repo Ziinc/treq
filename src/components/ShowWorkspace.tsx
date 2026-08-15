@@ -2,6 +2,7 @@
 
 import {
   type QueryClient,
+  useMutation,
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
@@ -13,6 +14,7 @@ import {
   File,
   FileDiff,
   Folder,
+  FolderGit2,
   GitBranch,
   GitCommitHorizontal,
   GitCompareArrows,
@@ -57,6 +59,7 @@ import {
   pushWorkspaceToRemote,
   rebaseHomeRepoBranch,
   resolveBookmarkConflict,
+  setGitSubmoduleSynced,
   type SingleRebaseResult,
   updateWorkspace,
   type Workspace,
@@ -560,6 +563,20 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 
     // Invalidate sidebar query when conflicts change
     const queryClient = useQueryClient();
+
+    const submoduleSync = useMutation({
+      mutationFn: ({ path, enabled }: { path: string; enabled: boolean }) =>
+        setGitSubmoduleSynced(effectiveRepoPath, path, enabled),
+      onSuccess: () => {
+        void queryClient.invalidateQueries({
+          queryKey: [
+            "workspace-overview",
+            effectiveRepoPath,
+            workspace?.id ?? null,
+          ],
+        });
+      },
+    });
 
     useEffect(() => {
       if (workspace?.id === undefined || !effectiveRepoPath) return;
@@ -1304,27 +1321,73 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 
                     {/* File Listing */}
                     <div className="border rounded-lg divide-y divide-border">
-                      {displayedEntries.map((entry) => (
-                        <button
-                          key={entry.path}
-                          type="button"
-                          onClick={() => handleOverviewEntryClick(entry)}
-                          className="flex items-center gap-3 px-4 py-1 text-sm w-full hover:bg-muted/60 transition text-left"
-                        >
-                          {entry.is_directory ? (
-                            <Folder className="w-4 h-4 text-blue-500" />
-                          ) : (
-                            <File className="w-4 h-4 text-muted-foreground" />
-                          )}
-                          <span
-                            className="flex-1 font-mono"
-                            style={{ fontSize: `${fontSize}px` }}
+                      {displayedEntries.map((entry) => {
+                        const submodulePin = entry.submodule_pin;
+                        const isSubmodule = Boolean(submodulePin);
+                        const shortPin = submodulePin
+                          ? submodulePin.slice(0, 7)
+                          : "";
+                        const showSyncToggle = !workspace && isSubmodule;
+                        return (
+                          <div
+                            key={entry.path}
+                            className="flex items-center hover:bg-muted/60 transition"
+                            data-testid={
+                              isSubmodule
+                                ? `submodule-row-${entry.name}`
+                                : undefined
+                            }
                           >
-                            {entry.name}
-                          </span>
-                          <StatusPip status={getEntryStatus(entry)} />
-                        </button>
-                      ))}
+                            <button
+                              type="button"
+                              onClick={() => handleOverviewEntryClick(entry)}
+                              className="flex items-center gap-3 px-4 py-1 text-sm flex-1 min-w-0 text-left"
+                            >
+                              {isSubmodule ? (
+                                <FolderGit2 className="w-4 h-4 text-blue-500 shrink-0" />
+                              ) : entry.is_directory ? (
+                                <Folder className="w-4 h-4 text-blue-500 shrink-0" />
+                              ) : (
+                                <File className="w-4 h-4 text-muted-foreground shrink-0" />
+                              )}
+                              <span
+                                className="flex-1 font-mono truncate"
+                                style={{ fontSize: `${fontSize}px` }}
+                              >
+                                {entry.name}
+                                {isSubmodule && (
+                                  <span className="text-muted-foreground">
+                                    {" "}
+                                    @ {shortPin}
+                                  </span>
+                                )}
+                              </span>
+                              <StatusPip status={getEntryStatus(entry)} />
+                            </button>
+                            {showSyncToggle && (
+                              <label className="flex items-center gap-1.5 shrink-0 pr-4 pl-2 text-xs text-muted-foreground cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  className="size-3.5 accent-primary"
+                                  key={`${entry.name}-${Boolean(entry.submodule_synced)}`}
+                                  defaultChecked={Boolean(
+                                    entry.submodule_synced,
+                                  )}
+                                  disabled={submoduleSync.isPending}
+                                  aria-label={`Sync ${entry.name}`}
+                                  onChange={(event) =>
+                                    submoduleSync.mutate({
+                                      path: entry.name,
+                                      enabled: event.target.checked,
+                                    })
+                                  }
+                                />
+                                Sync
+                              </label>
+                            )}
+                          </div>
+                        );
+                      })}
                       {!overviewPending && rootEntries.length === 0 && (
                         <div className="px-4 py-8 text-center text-sm text-muted-foreground">
                           No files found

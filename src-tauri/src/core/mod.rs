@@ -5,6 +5,7 @@ pub mod commits;
 pub mod repo;
 pub mod resolve;
 pub mod stash;
+pub mod submodules;
 pub mod workspaces;
 pub use agent_cli::*;
 pub use app::*;
@@ -14,6 +15,7 @@ pub use repo::*;
 pub use resolve::*;
 pub use stash::*;
 use std::path::{Path, PathBuf};
+pub use submodules::*;
 pub use workspaces::*;
 
 pub const DEFAULT_CONFLICT_MARKER_STYLE: &str = "git";

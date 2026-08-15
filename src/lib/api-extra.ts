@@ -20,6 +20,13 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 
+export const setGitSubmoduleSynced = (
+  repoPath: string,
+  path: string,
+  enabled: boolean,
+): Promise<void> =>
+  invoke("set_git_submodule_synced", { repoPath, path, enabled });
+
 export const startResolveConflicts = (
   repoPath: string,
   workspaceId: number | null,

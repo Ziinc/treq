@@ -79,6 +79,8 @@ pub fn list_directory(path: String) -> Result<Vec<DirectoryEntry>, String> {
           path: entry_path.to_string_lossy().to_string(),
           is_directory: is_dir,
           modified_at: modified_at_rfc3339(&entry_path.to_string_lossy()),
+          submodule_pin: None,
+          submodule_synced: None,
         });
       }
     }
