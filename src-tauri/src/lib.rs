@@ -542,6 +542,8 @@ pub fn run() {
             commands::pty_resize,
             commands::pty_close,
             commands::read_file,
+            commands::write_agent_cli_files,
+            commands::cleanup_agent_cli_files,
             commands::get_file_modified_at,
             commands::list_directory,
             commands::ls_workspace,

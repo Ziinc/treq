@@ -10,6 +10,13 @@ interface AgentPathContext {
   repoPath: string;
 }
 
+export type AgentKind = "claude" | "codex" | "cursor";
+
+export interface AgentCliFiles {
+  promptPath: string;
+  settingsPath?: string;
+}
+
 /** Build the single-line system prompt injected into agent terminal sessions. */
 export const buildTreqAgentSystemPrompt = ({
   workspacePath,
@@ -64,3 +71,92 @@ export const buildClaudeSandboxSettings = ({
         },
   },
 });
+
+/** Overlay Treq sandbox config onto a copy of `.claude/settings.local.json`. */
+export const mergeClaudeLocalSettings = (
+  existing: Record<string, unknown> | null,
+  sandboxSettings: ReturnType<typeof buildClaudeSandboxSettings>,
+): Record<string, unknown> => ({
+  ...existing,
+  sandbox: sandboxSettings.sandbox,
+});
+
+export const claudeLocalSettingsPath = (cwd: string): string =>
+  `${cwd.replace(/\/+$/, "")}/.claude/settings.local.json`;
+
+const shellCat = (path: string): string => `$(cat -- ${shellQuote(path)})`;
+
+const wrapWithTempFileCleanup = (command: string, paths: string[]): string => {
+  const quoted = paths.map(shellQuote).join(" ");
+  return `( trap "rm -f ${quoted}" EXIT; ${command} )`;
+};
+
+export const cursorPromptFileContents = (
+  systemPrompt: string,
+  pendingPrompt?: string | null,
+): string =>
+  pendingPrompt ? `${systemPrompt} ${pendingPrompt}` : systemPrompt;
+
+export interface BuildAgentAutoCommandOptions {
+  agent: AgentKind;
+  permissionMode?: string | null;
+  sessionModel?: string | null;
+  pendingPrompt?: string | null;
+  treqBinDir?: string | null;
+  files: AgentCliFiles;
+}
+
+/**
+ * Build the PTY auto-command for an agent CLI.
+ *
+ * Long prompt/settings bodies are never inlined. Claude reads files via native
+ * flags; Codex and Cursor have no append-from-file flags, so the shell expands
+ * `$(cat -- path)` at exec time (the typed command stays short).
+ */
+export const buildAgentAutoCommand = ({
+  agent,
+  permissionMode,
+  sessionModel,
+  pendingPrompt,
+  treqBinDir,
+  files,
+}: BuildAgentAutoCommandOptions): string => {
+  let autoCommand: string;
+  const cleanupPaths = [files.promptPath];
+
+  if (agent === "codex") {
+    autoCommand = `codex -c "developer_instructions=${shellCat(files.promptPath)}"`;
+    if (pendingPrompt) {
+      autoCommand = appendAgentPrompt(autoCommand, pendingPrompt);
+    }
+  } else if (agent === "cursor") {
+    const planFlag = permissionMode === "plan" ? " --plan" : "";
+    autoCommand = `cursor-agent${planFlag} -- "${shellCat(files.promptPath)}"`;
+  } else {
+    const permissionModeArg =
+      permissionMode === "plan"
+        ? " --permission-mode plan"
+        : " --permission-mode acceptEdits";
+    autoCommand = `claude${permissionModeArg}`;
+    if (sessionModel) {
+      autoCommand += ` --model=${shellQuote(sessionModel)}`;
+    }
+    if (!files.settingsPath) {
+      throw new Error("Claude auto-command requires a settings file path");
+    }
+    cleanupPaths.push(files.settingsPath);
+    autoCommand += ` --settings ${shellQuote(files.settingsPath)}`;
+    autoCommand += ` --append-system-prompt-file ${shellQuote(files.promptPath)}`;
+    if (pendingPrompt) {
+      autoCommand += ` -- ${shellQuote(pendingPrompt)}`;
+    }
+  }
+
+  autoCommand = wrapWithTempFileCleanup(autoCommand, cleanupPaths);
+
+  if (treqBinDir) {
+    autoCommand = `export PATH=${shellQuote(treqBinDir)}:$PATH; ${autoCommand}`;
+  }
+
+  return autoCommand;
+};

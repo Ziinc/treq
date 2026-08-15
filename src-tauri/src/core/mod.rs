@@ -1,3 +1,4 @@
+pub mod agent_cli;
 pub mod app;
 pub mod changes;
 pub mod commits;
@@ -5,6 +6,7 @@ pub mod repo;
 pub mod resolve;
 pub mod stash;
 pub mod workspaces;
+pub use agent_cli::*;
 pub use app::*;
 pub use changes::*;
 pub use commits::*;
