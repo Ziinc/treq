@@ -25,20 +25,24 @@ const CLAUDE_PEACH = "#e8a87c";
 const CLAUDE_DIM = "#b8845c";
 
 /** Matches the Claude Code startup TUI: peach mono, dashed frame, welcome + prompt. */
-const CLAUDE_TUI = `<div data-testid="marketing-tui-claude" style="${TUI_STYLE};color:${CLAUDE_PEACH};line-height:1.25;font-size:10px">
-<span style="color:${CLAUDE_PEACH}">╭─ Claude Code v2.0.0 ──╮  Recent activity</span>
-<span style="color:${CLAUDE_PEACH}">│                       │  <span style="color:${CLAUDE_DIM}">1m ago</span>  Inspect Home.tsx</span>
-<span style="color:${CLAUDE_PEACH}">│    Welcome back       │  <span style="color:${CLAUDE_DIM}">8m ago</span>  Handle empty events</span>
-<span style="color:${CLAUDE_PEACH}">│                       │  <span style="color:${CLAUDE_DIM}">2d ago</span>  Wire event feed</span>
-<span style="color:${CLAUDE_PEACH}">│       ▄ ▄             │  <span style="color:${CLAUDE_DIM}">1w ago</span>  Add EventBody schema</span>
-<span style="color:${CLAUDE_PEACH}">│      █████            │  <span style="color:${CLAUDE_DIM}">... /resume for more</span></span>
-<span style="color:${CLAUDE_PEACH}">│     █ ███ █           │  ╌ ╌ ╌ ╌ ╌ ╌ ╌ ╌</span>
-<span style="color:${CLAUDE_PEACH}">│                       │  What's new</span>
-<span style="color:${CLAUDE_PEACH}">│  Sonnet 4.5 • Max 20x │  /agents to create subagents</span>
-<span style="color:${CLAUDE_PEACH}">│  ~/event-bus          │  /security-review for review</span>
-<span style="color:${CLAUDE_PEACH}">╰───────────────────────╯  ctrl+b to background bashes</span>
-<span style="color:${CLAUDE_DIM}">────────────────────────────────────────</span>
-<span style="color:${CLAUDE_PEACH}">&gt; </span><span style="background:#f4f4f5;color:#1e1e1e"> </span><span style="color:${CLAUDE_DIM}"> try "edit &lt;filepath&gt; to …"</span>
+const CLAUDE_TUI = `<div data-testid="marketing-tui-claude" style="${TUI_STYLE};color:${CLAUDE_PEACH};line-height:1.2;font-size:10.5px;letter-spacing:0">
+<span style="color:${CLAUDE_PEACH}">+-- Claude Code v2.0.0 -----------+</span>
+<span style="color:${CLAUDE_PEACH}">|                                 |</span>
+<span style="color:${CLAUDE_PEACH}">|         Welcome back            |</span>
+<span style="color:${CLAUDE_PEACH}">|                                 |</span>
+<span style="color:${CLAUDE_PEACH}">|             .^.                 |</span>
+<span style="color:${CLAUDE_PEACH}">|            /# #\\                |</span>
+<span style="color:${CLAUDE_PEACH}">|             '#'                 |</span>
+<span style="color:${CLAUDE_PEACH}">|                                 |</span>
+<span style="color:${CLAUDE_PEACH}">|      Sonnet 4.5 • Max 20x       |</span>
+<span style="color:${CLAUDE_PEACH}">|      ~/event-bus                |</span>
+<span style="color:${CLAUDE_PEACH}">+---------------------------------+</span>
+<span style="color:${CLAUDE_DIM}">  Recent activity</span>
+<span style="color:${CLAUDE_DIM}">  1m ago   Inspect Home.tsx</span>
+<span style="color:${CLAUDE_DIM}">  8m ago   Handle empty events</span>
+<span style="color:${CLAUDE_DIM}">  ... /resume for more</span>
+<span style="color:${CLAUDE_PEACH}">-----------------------------------</span>
+<span style="color:${CLAUDE_PEACH}">&gt; </span><span style="background:#f4f4f5;color:#1e1e1e"> </span><span style="color:${CLAUDE_DIM}">try "edit &lt;filepath&gt; to ..."</span>
 </div>`;
 
 const CODEX_TUI = `<div data-testid="marketing-tui-codex" style="${TUI_STYLE}">
