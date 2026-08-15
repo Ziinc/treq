@@ -225,12 +225,12 @@ pub fn move_commit_to_existing_workspace(
 /// * `commit_change_id`  - The short change-id of the commit to abandon
 ///
 /// # Returns
-/// `Ok(())` on success, or an error string.
+/// The operation id of the abandon, for toast undo.
 pub fn abandon_commit(
   repo_path: &str,
   workspace_id: i64,
   commit_change_id: &str,
-) -> Result<(), String> {
+) -> Result<String, String> {
   let workspace = local_db::get_workspace_by_id(repo_path, workspace_id)
     .map_err(|e| format!("Failed to get workspace: {}", e))?
     .ok_or_else(|| format!("Workspace not found: {}", workspace_id))?;
@@ -243,13 +243,39 @@ pub fn abandon_commit(
     .to_str()
     .ok_or("Failed to convert workspace path to string")?;
 
-  jj::jj_abandon(workspace_dir_str, commit_change_id)
+  let op_id = jj::jj_abandon(workspace_dir_str, commit_change_id)
     .map_err(|e| format!("Failed to abandon commit: {}", e))?;
 
   jj::update_stale_workspace(workspace_dir_str)
     .map_err(|e| format!("Failed to update workspace working copy: {}", e))?;
 
-  Ok(())
+  Ok(op_id)
+}
+
+/// Undo a repository operation identified by `operation_id` (hex).
+/// The operation must still be the current head.
+pub fn undo_repo_operation(
+  repo_path: &str,
+  workspace_id: Option<i64>,
+  operation_id: &str,
+) -> Result<String, String> {
+  let workspace_dir = match workspace_id {
+    Some(id) => {
+      let workspace = local_db::get_workspace_by_id(repo_path, id)
+        .map_err(|e| format!("Failed to get workspace: {}", e))?
+        .ok_or_else(|| format!("Workspace not found: {}", id))?;
+      Path::new(repo_path)
+        .join(".treq")
+        .join("workspaces")
+        .join(&workspace.workspace_path)
+        .to_str()
+        .ok_or("Failed to convert workspace path to string")?
+        .to_string()
+    }
+    None => repo_path.to_string(),
+  };
+  jj::jj_undo_operation(&workspace_dir, operation_id)
+    .map_err(|e| format!("Failed to undo operation: {}", e))
 }
 
 /// Returns the full (multi-line) description of a specific commit.

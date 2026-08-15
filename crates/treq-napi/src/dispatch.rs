@@ -704,8 +704,8 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
       let repo_path = get_str(&args, "repoPath")?;
       let workspace_id: i64 = get_i64(&args, "workspaceId")?;
       let commit_change_id = get_str(&args, "commitChangeId")?;
-      treq_lib::core::abandon_commit(&repo_path, workspace_id, &commit_change_id)?;
-      Ok(Value::Null)
+      let op_id = treq_lib::core::abandon_commit(&repo_path, workspace_id, &commit_change_id)?;
+      Ok(Value::String(op_id))
     }
 
     "get_commit_description" => {
@@ -737,6 +737,14 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
       let workspace_path = get_str(&args, "workspacePath")?;
       let snapshot_id = get_str(&args, "snapshotId")?;
       let result = treq_lib::core::restore_working_copy_snapshot(&workspace_path, &snapshot_id)?;
+      Ok(Value::String(result))
+    }
+
+    "undo_repo_operation" => {
+      let repo_path = get_str(&args, "repoPath")?;
+      let workspace_id = opt_i64(&args, "workspaceId");
+      let operation_id = get_str(&args, "operationId")?;
+      let result = treq_lib::core::undo_repo_operation(&repo_path, workspace_id, &operation_id)?;
       Ok(Value::String(result))
     }
 

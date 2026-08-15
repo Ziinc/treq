@@ -60,7 +60,7 @@ it("captures the discard-all confirmation dialog in the Changes tab", async () =
 	await captureDocument(document, {
 		name: "discard-all-confirmation-02-dialog-open",
 		expectations: [
-			'A confirmation dialog titled "Discard all changes?" is open, warning the action cannot be undone.',
+			'A confirmation dialog titled "Discard all changes?" is open, and it tells you that you can restore from the Undo button on the toast that follows.',
 			'The dialog has a "Cancel" button and a red/destructive-colored "Discard all changes" button.',
 		],
 	});

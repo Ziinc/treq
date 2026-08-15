@@ -32,6 +32,7 @@ import {
   type JjRevisionDiff,
   listCommits,
   stashCommit,
+  undoRepoOperation,
 } from "../lib/api";
 import { getLanguageFromPath, highlightCode } from "../lib/syntax-highlight";
 import {
@@ -429,7 +430,11 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
         if (!confirmed) return;
 
         try {
-          await abandonCommit(repoPath, workspaceId, commit.change_id);
+          const operationId = await abandonCommit(
+            repoPath,
+            workspaceId,
+            commit.change_id,
+          );
           setRemovingCommitIds((prev) => new Set(prev).add(commit.commit_id));
 
           window.setTimeout(() => {
@@ -446,6 +451,47 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
             title: "Commit deleted",
             description: `Abandoned commit ${commit.short_id}`,
             type: "success",
+            action: {
+              label: "Undo",
+              onClick: () => {
+                void (async () => {
+                  try {
+                    await undoRepoOperation(repoPath, workspaceId, operationId);
+                    setRemovedCommitIds((prev) => {
+                      const next = new Set(prev);
+                      next.delete(commit.commit_id);
+                      return next;
+                    });
+                    setRemovingCommitIds((prev) => {
+                      const next = new Set(prev);
+                      next.delete(commit.commit_id);
+                      return next;
+                    });
+                    await queryClient.invalidateQueries({
+                      queryKey: [
+                        "commit-diff-viewer-commits",
+                        repoPath,
+                        workspaceId,
+                      ],
+                    });
+                    addToast({
+                      title: "Restored",
+                      description: `Restored commit ${commit.short_id}`,
+                      type: "success",
+                    });
+                  } catch (undoErr) {
+                    addToast({
+                      title: "Undo Failed",
+                      description:
+                        undoErr instanceof Error
+                          ? undoErr.message
+                          : String(undoErr),
+                      type: "error",
+                    });
+                  }
+                })();
+              },
+            },
           });
         } catch (err) {
           const errorMsg = err instanceof Error ? err.message : String(err);
@@ -456,7 +502,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
           });
         }
       },
-      [repoPath, workspaceId, onCommitAbandoned, addToast],
+      [repoPath, workspaceId, onCommitAbandoned, addToast, queryClient],
     );
 
     const handleStashCommit = useCallback(

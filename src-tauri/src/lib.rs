@@ -516,6 +516,7 @@ pub fn run() {
             commands::jj_restore_all,
             commands::jj_snapshot_working_copy,
             commands::jj_restore_snapshot,
+            commands::undo_repo_operation,
             commands::create_commit,
             commands::list_commits,
             commands::jj_split,

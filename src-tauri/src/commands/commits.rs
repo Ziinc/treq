@@ -72,6 +72,19 @@ pub async fn jj_restore_snapshot(
 }
 
 #[tauri::command]
+pub async fn undo_repo_operation(
+  repo_path: String,
+  workspace_id: Option<i64>,
+  operation_id: String,
+) -> Result<String, String> {
+  tauri::async_runtime::spawn_blocking(move || {
+    crate::core::undo_repo_operation(&repo_path, workspace_id, &operation_id)
+  })
+  .await
+  .map_err(|e| format!("Failed to join undo_repo_operation task: {}", e))?
+}
+
+#[tauri::command]
 pub async fn create_commit(
   repo_path: String,
   workspace_id: Option<i64>,

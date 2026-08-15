@@ -262,8 +262,8 @@ export function FileSidebar({
             <AlertDialogTitle>Discard all changes?</AlertDialogTitle>
             <AlertDialogDescription>
               This will discard all {unstagedFiles.length} unsaved{" "}
-              {unstagedFiles.length === 1 ? "change" : "changes"}. This action
-              cannot be undone.
+              {unstagedFiles.length === 1 ? "change" : "changes"}. You can
+              restore them from the Undo button on the toast that follows.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
