@@ -20,13 +20,7 @@ import { Button } from "../ui/button";
 import { Kbd, KbdGroup } from "../ui/kbd";
 import { cn } from "../../lib/utils";
 import { ptyClose, setSessionModel } from "../../lib/api";
-import {
-  ArrowDownToLine,
-  Loader2,
-  RotateCw,
-  Search,
-  X,
-} from "lucide-react";
+import { ArrowDownToLine, Loader2, RotateCw, Search, X } from "lucide-react";
 import { AgentIcon } from "../icons/AgentIcons";
 import { ModelSelector } from "../ModelSelector";
 import { useToast } from "../ui/toast";
