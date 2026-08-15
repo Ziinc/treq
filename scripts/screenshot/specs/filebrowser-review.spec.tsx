@@ -74,7 +74,7 @@ it("captures adding review comments across two files in the FileBrowser", async 
 		name: "filebrowser-review-02-first-comment",
 		expectations: [
 			'The same header row as the "Back" button also reads "1 comment pending" with Discard and Finish review controls, all in one row.',
-			'The comment "Please double check this function signature." renders inline as a card directly under the line it\'s attached to, like the Review tab (not floating separately).',
+			'The comment "Please double check this function signature." renders inline as a card directly under the line it\'s attached to, like the Changes tab (not floating separately).',
 			"app.ts's row in the file tree shows a small comment-count badge reading 1.",
 		],
 	});
@@ -104,7 +104,7 @@ it("captures adding review comments across two files in the FileBrowser", async 
 	});
 
 	// Delete the helper.ts comment via its inline card to prove the shared
-	// FileCommentSection component (from the Review tab) is fully wired, not
+	// FileCommentSection component (from the Changes tab) is fully wired, not
 	// just rendering read-only.
 	await user.click(screen.getByTitle("Delete comment"));
 	await fileBrowser.findByText("1 comment pending");

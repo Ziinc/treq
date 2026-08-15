@@ -62,8 +62,8 @@ it("clears Conflicts UI when markers are resolved in the working copy", async ()
 	render(<Dashboard />);
 	await screen.findByTestId(`workspace-conflict-indicator-${workspaceId}`);
 	await user.click(await findSidebarBranchElement(BRANCH_NAME));
-	await user.click(await screen.findByRole("tab", { name: /^Review/ }));
-	await screen.findByRole("tab", { name: /^Review/, selected: true });
+	await user.click(await screen.findByRole("tab", { name: /^Changes/ }));
+	await screen.findByRole("tab", { name: /^Changes/, selected: true });
 	await screen.findByRole("button", { name: "Conflicts" });
 	await screen.findByRole("button", { name: /Resolve conflicts/i });
 	expect(screen.getByTestId("review-change-count").className).toMatch(

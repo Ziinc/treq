@@ -1,7 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "../../test/test-utils";
-import userEvent from "@testing-library/user-event";
-import type { ParsedFileChange } from "../lib/git-utils";
 import type { Workspace, WorkspaceStatus } from "../lib/api";
 import * as api from "../lib/api";
 import { ShowWorkspace } from "./ShowWorkspace";
@@ -14,16 +12,12 @@ vi.mock("./LinearCommitHistory", () => ({
   LinearCommitHistory: () => <div data-testid="linear-commit-history" />,
 }));
 
-let onChangedFilesChange: ((files: ParsedFileChange[]) => void) | undefined;
-
 vi.mock("./ChangesDiffViewer", () => ({
-  ChangesDiffViewer: (props: {
-    onChangedFilesChange?: (files: ParsedFileChange[]) => void;
-  }) => {
-    const { onChangedFilesChange: changedFilesCb } = props;
-    onChangedFilesChange = changedFilesCb;
-    return <div data-testid="changes-viewer" />;
-  },
+  ChangesDiffViewer: () => <div data-testid="changes-viewer" />,
+}));
+
+vi.mock("./CommitDiffViewer", () => ({
+  CommitDiffViewer: () => <div data-testid="commit-diff-viewer" />,
 }));
 
 vi.mock("./TargetBranchSelector", () => ({
@@ -64,21 +58,6 @@ vi.mock("../lib/api", async () => {
     listCommits: vi.fn().mockResolvedValue({
       commits: [
         {
-          commit_id: "wc",
-          short_id: "wc",
-          change_id: "wc",
-          description: "",
-          author_name: "Test",
-          timestamp: new Date().toISOString(),
-          parent_ids: [],
-          is_working_copy: true,
-          bookmarks: [],
-          is_immutable: false,
-          insertions: 0,
-          deletions: 0,
-          on_target_only: false,
-        },
-        {
           commit_id: "c1",
           short_id: "c1",
           change_id: "c1",
@@ -92,6 +71,7 @@ vi.mock("../lib/api", async () => {
           insertions: 1,
           deletions: 0,
           on_target_only: false,
+          has_conflicts: false,
         },
       ],
       target_branch: "main",
@@ -128,32 +108,23 @@ function status(overrides: Partial<WorkspaceStatus> = {}): WorkspaceStatus {
   };
 }
 
-function jjFile(path: string, statusCode = "M") {
-  return {
-    path,
-    status: statusCode,
-    changed_line_count: 1,
-    diff_deferred: false,
-  };
+function commitsTab() {
+  return screen.getByRole("tab", { name: /commits/i });
 }
 
-async function openReviewTab() {
-  const user = userEvent.setup();
-  const tab = await screen.findByRole("tab", { name: /changes/i });
-  await user.click(tab);
-  await screen.findByTestId("changes-viewer");
-  return user;
+function commitsCountPill() {
+  return commitsTab().querySelector('[data-testid="commits-tab-count"]');
 }
 
-function reviewPill() {
-  const tab = screen.getByRole("tab", { name: /changes/i });
-  return tab.querySelector('[data-testid="review-change-count"]');
+function commitsConflictIcon() {
+  return commitsTab().querySelector(
+    '[data-testid="commits-tab-conflict-icon"]',
+  );
 }
 
-describe("ShowWorkspace Changes tab pill colors", () => {
+describe("ShowWorkspace Commits tab label", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    onChangedFilesChange = undefined;
     vi.mocked(api.getWorkspaceStatus).mockResolvedValue(status());
     vi.mocked(api.getWorkspaceDiff).mockResolvedValue({
       uncommitted_files: [],
@@ -165,68 +136,23 @@ describe("ShowWorkspace Changes tab pill colors", () => {
     vi.mocked(api.getWorkspaceChangedFiles).mockResolvedValue([]);
   });
 
-  it("shows a yellow pill for uncommitted changes", async () => {
-    vi.mocked(api.getWorkspaceStatus).mockResolvedValue(
-      status({ has_changes: true }),
-    );
-    vi.mocked(api.getWorkspaceDiff).mockResolvedValue({
-      uncommitted_files: [jjFile("a.txt")],
-      committed_files: [],
-      hunks_by_file: [],
-      too_large_to_render: false,
-      render_block_reason: null,
-    });
-
-    render(
-      <ShowWorkspace
-        repositoryPath={workspace.repo_path}
-        workspace={workspace}
-        mainRepoBranch="main"
-        initialSelectedFile={null}
-      />,
-    );
-
-    await openReviewTab();
-    await waitFor(() => expect(onChangedFilesChange).toBeDefined());
-
-    onChangedFilesChange?.([
-      {
-        path: "a.txt",
-        stagedStatus: " ",
-        workspaceStatus: "M",
-      },
-    ]);
-
-    await waitFor(() => {
-      const pill = reviewPill();
-      expect(pill).toBeTruthy();
-      expect(pill).toHaveTextContent("1");
-      expect(pill?.className).toContain("bg-yellow-500");
-      expect(pill?.className).not.toContain("bg-destructive");
-      expect(pill?.className).not.toContain("bg-muted");
-    });
-  });
-
-  it("shows a grey pill for committed changes only", async () => {
+  it("shows a grey commit-count pill on a workspace with commits", async () => {
     vi.mocked(api.getWorkspaceStatus).mockResolvedValue(
       status({
-        has_changes: false,
         commits_ahead_of_target: [
           {
             hash: "abc",
             timestamp: new Date().toISOString(),
             message: "feat",
           },
+          {
+            hash: "def",
+            timestamp: new Date().toISOString(),
+            message: "more",
+          },
         ],
       }),
     );
-    vi.mocked(api.getWorkspaceDiff).mockResolvedValue({
-      uncommitted_files: [],
-      committed_files: [jjFile("committed.txt")],
-      hunks_by_file: [],
-      too_large_to_render: false,
-      render_block_reason: null,
-    });
 
     render(
       <ShowWorkspace
@@ -238,21 +164,20 @@ describe("ShowWorkspace Changes tab pill colors", () => {
     );
 
     await waitFor(() => {
-      const pill = reviewPill();
+      const pill = commitsCountPill();
       expect(pill).toBeTruthy();
-      expect(pill).toHaveTextContent("1");
+      expect(pill).toHaveTextContent("2");
       expect(pill?.className).toContain("bg-muted");
-      expect(pill?.className).not.toContain("bg-yellow-500");
       expect(pill?.className).not.toContain("bg-destructive");
     });
+    expect(commitsConflictIcon()).toBeNull();
   });
 
-  it("shows a red pill when there are conflicts", async () => {
+  it("shows a red commit-count pill when the workspace has conflicts", async () => {
     vi.mocked(api.getWorkspaceStatus).mockResolvedValue(
       status({
         has_conflicts: true,
-        has_changes: true,
-        conflicted_files: ["shared.txt"],
+        conflicted_files: ["conflict.txt"],
         commits_ahead_of_target: [
           {
             hash: "abc",
@@ -262,13 +187,6 @@ describe("ShowWorkspace Changes tab pill colors", () => {
         ],
       }),
     );
-    vi.mocked(api.getWorkspaceDiff).mockResolvedValue({
-      uncommitted_files: [jjFile("shared.txt")],
-      committed_files: [],
-      hunks_by_file: [],
-      too_large_to_render: false,
-      render_block_reason: null,
-    });
 
     render(
       <ShowWorkspace
@@ -279,60 +197,66 @@ describe("ShowWorkspace Changes tab pill colors", () => {
       />,
     );
 
-    await openReviewTab();
-    await waitFor(() => expect(onChangedFilesChange).toBeDefined());
-
-    onChangedFilesChange?.([
-      {
-        path: "shared.txt",
-        stagedStatus: " ",
-        workspaceStatus: "M",
-      },
-    ]);
-
     await waitFor(() => {
-      const pill = reviewPill();
+      const pill = commitsCountPill();
       expect(pill).toBeTruthy();
-      expect(pill?.className).toContain("bg-destructive/20");
-      expect(pill?.className).toContain("text-destructive");
-      expect(pill?.className).not.toContain("bg-yellow-500");
+      expect(pill).toHaveTextContent("1");
+      expect(pill?.className).toContain("bg-destructive");
     });
   });
 
-  it("uses the stable unique review change count for the number", async () => {
+  it("hides the count pill on the home repo", async () => {
     vi.mocked(api.getWorkspaceStatus).mockResolvedValue(
       status({
-        has_changes: false,
-        commits_ahead_of_target: [
-          {
-            hash: "abc",
-            timestamp: new Date().toISOString(),
-            message: "feat",
-          },
-        ],
+        commits_ahead_of_target: [],
       }),
     );
-    vi.mocked(api.getWorkspaceDiff).mockResolvedValue({
-      uncommitted_files: [],
-      committed_files: [jjFile("a.ts"), jjFile("b.ts", "A"), jjFile("c.ts")],
-      hunks_by_file: [],
-      too_large_to_render: false,
-      render_block_reason: null,
+    vi.mocked(api.listCommits).mockResolvedValue({
+      commits: [],
+      target_branch: "main",
+      workspace_branch: "main",
     });
 
     render(
       <ShowWorkspace
         repositoryPath={workspace.repo_path}
-        workspace={workspace}
+        workspace={null}
+        mainRepoBranch="main"
+        initialSelectedFile={null}
+      />,
+    );
+
+    await screen.findByRole("tab", { name: /commits/i });
+    expect(commitsCountPill()).toBeNull();
+    expect(commitsConflictIcon()).toBeNull();
+  });
+
+  it("shows a conflict warning icon on the home Commits tab when home has conflicts", async () => {
+    vi.mocked(api.getWorkspaceStatus).mockResolvedValue(
+      status({
+        has_conflicts: true,
+        conflicted_files: ["home.txt"],
+        commits_ahead_of_target: [],
+      }),
+    );
+    vi.mocked(api.listCommits).mockResolvedValue({
+      commits: [],
+      target_branch: "main",
+      workspace_branch: "main",
+    });
+
+    render(
+      <ShowWorkspace
+        repositoryPath={workspace.repo_path}
+        workspace={null}
         mainRepoBranch="main"
         initialSelectedFile={null}
       />,
     );
 
     await waitFor(() => {
-      const pill = reviewPill();
-      expect(pill).toHaveTextContent("3");
-      expect(pill?.className).toContain("bg-muted");
+      expect(commitsConflictIcon()).toBeTruthy();
     });
+    expect(commitsCountPill()).toBeNull();
   });
 });

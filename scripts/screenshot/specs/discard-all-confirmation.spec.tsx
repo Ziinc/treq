@@ -13,7 +13,7 @@ import { render, screen, waitFor } from "../../../test/test-utils";
 import { Dashboard } from "../../../src/components/Dashboard";
 import { captureDocument } from "../capture";
 
-it("captures the discard-all confirmation dialog in the Review tab", async () => {
+it("captures the discard-all confirmation dialog in the Changes tab", async () => {
 	const branchName = "feat/discard-all-test";
 	const { repoPath } = createTestRepo(false);
 	openRepo(repoPath);
@@ -34,9 +34,9 @@ it("captures the discard-all confirmation dialog in the Review tab", async () =>
 	render(<Dashboard />);
 
 	await user.click(await findSidebarBranchElement(branchName));
-	const reviewTab = await screen.findByRole("tab", { name: /^Review/ });
+	const reviewTab = await screen.findByRole("tab", { name: /^Changes/ });
 	await user.click(reviewTab);
-	await screen.findByRole("tab", { name: /^Review/, selected: true });
+	await screen.findByRole("tab", { name: /^Changes/, selected: true });
 
 	await waitFor(() =>
 		expect(screen.getAllByText("discard-test.txt").length).toBeGreaterThan(0),

@@ -7,6 +7,7 @@ import {
   ArrowRightLeft,
   ChevronRight,
   FileText,
+  GitMerge,
   Loader2,
   Pencil,
   Plus,
@@ -42,7 +43,9 @@ import {
 } from "../lib/utils";
 import { CommentInput } from "./CommentInput";
 import { EditCommitDescriptionDialog } from "./EditCommitDescriptionDialog";
+import { ResolveConflictsDialog } from "./ResolveConflictsDialog";
 import { Button } from "./ui/button";
+import type { SessionCreationInfo } from "../types/sessions";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -83,6 +86,8 @@ interface CommitDiffViewerProps {
   onViewTentativeChanges?: () => void;
   /** Called when the tentative working copy should be discarded */
   onDeleteTentativeChanges?: () => void;
+  /** Start an agent session (used by Resolve conflicts…). */
+  onSessionCreated?: (session: SessionCreationInfo) => void;
 }
 
 interface DayGroup {
@@ -167,6 +172,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
     onMoveCommitToExistingWorkspace,
     onViewTentativeChanges,
     onDeleteTentativeChanges,
+    onSessionCreated,
   }) => {
     const isHomeRepo = workspaceId == null;
     const [removedCommitIds, setRemovedCommitIds] = useState<Set<string>>(
@@ -294,6 +300,29 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
         baseCommits.filter((commit) => !removedCommitIds.has(commit.commit_id)),
       [baseCommits, removedCommitIds],
     );
+
+    const conflictedCommits = useMemo(
+      () =>
+        commits.filter(
+          (commit) => commit.has_conflicts && !commit.on_target_only,
+        ),
+      [commits],
+    );
+
+    const [resolveDialogOpen, setResolveDialogOpen] = useState(false);
+    const [resolveChangeIds, setResolveChangeIds] = useState<string[] | null>(
+      null,
+    );
+
+    const openResolveAll = useCallback(() => {
+      setResolveChangeIds(null);
+      setResolveDialogOpen(true);
+    }, []);
+
+    const openResolveOne = useCallback((commit: JjLogCommit) => {
+      setResolveChangeIds([commit.change_id]);
+      setResolveDialogOpen(true);
+    }, []);
 
     const handleMoveToNew = useCallback(
       (commit: JjLogCommit) => {
@@ -664,6 +693,35 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
       <>
         <div ref={containerRef} className="h-full overflow-auto">
           <div className="p-4">
+            {conflictedCommits.length > 0 && (
+              <div
+                className="mb-4 flex items-center justify-between gap-3 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2"
+                data-testid="resolve-conflicts-banner"
+                role="alert"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-destructive">
+                    {conflictedCommits.length} conflicted commit
+                    {conflictedCommits.length === 1 ? "" : "s"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Resolve in place via a short-lived resolve workspace — no
+                    extra commit.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="destructive"
+                  className="shrink-0 gap-1.5"
+                  onClick={openResolveAll}
+                  data-testid="resolve-conflicts-button"
+                >
+                  <GitMerge className="h-4 w-4" />
+                  Resolve conflicts…
+                </Button>
+              </div>
+            )}
             <div className="relative">
               <div
                 className="absolute left-[7px] top-2 bottom-2 w-0.5 bg-border"
@@ -761,6 +819,9 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
                           onAbandon={handleAbandon}
                           onStash={handleStashCommit}
                           onEditDescription={handleEditDescription}
+                          onResolveConflict={
+                            onSessionCreated ? openResolveOne : undefined
+                          }
                           onCreateAgentWithComment={onCreateAgentWithComment}
                           onLoadDeferredFileDiff={(filePath) =>
                             loadCommitFileDiff(commit.commit_id, filePath).then(
@@ -928,6 +989,16 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
             onSuccess={handleDescriptionEdited}
           />
         )}
+        {onSessionCreated && (
+          <ResolveConflictsDialog
+            open={resolveDialogOpen}
+            onOpenChange={setResolveDialogOpen}
+            repoPath={repoPath}
+            workspaceId={workspaceId}
+            changeIds={resolveChangeIds}
+            onSessionCreated={onSessionCreated}
+          />
+        )}
       </>
     );
   },
@@ -954,6 +1025,7 @@ interface CommitWithDiffProps {
   onAbandon: (commit: JjLogCommit) => void;
   onStash: (commit: JjLogCommit) => void;
   onEditDescription: (commit: JjLogCommit) => void;
+  onResolveConflict?: (commit: JjLogCommit) => void;
   onViewTentativeChanges?: () => void;
   onDeleteTentativeChanges?: () => void;
   onCreateAgentWithComment?: (
@@ -981,6 +1053,7 @@ function CommitWithDiff({
   onAbandon,
   onStash,
   onEditDescription,
+  onResolveConflict,
   onViewTentativeChanges,
   onDeleteTentativeChanges,
   onCreateAgentWithComment,
@@ -989,6 +1062,7 @@ function CommitWithDiff({
 }: CommitWithDiffProps) {
   const firstLine = getCommitHeadline(commit);
   const hasStats = commit.insertions > 0 || commit.deletions > 0;
+  const isConflicted = Boolean(commit.has_conflicts);
 
   const handleAgentComment = useCallback(
     (
@@ -1054,6 +1128,14 @@ function CommitWithDiff({
             </div>
           </div>
           <div className="flex items-center gap-2 mt-0.5 pl-5">
+            {isConflicted && (
+              <span
+                className="px-1.5 py-0.5 rounded-full bg-destructive/10 text-destructive border border-destructive/30 font-medium"
+                data-testid={`commit-conflict-badge-${commit.change_id}`}
+              >
+                Conflict
+              </span>
+            )}
             {commit.is_immutable && (
               <span className="px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground border border-border font-medium">
                 Immutable
@@ -1125,6 +1207,18 @@ function CommitWithDiff({
               </>
             ) : (
               <>
+                {isConflicted && onResolveConflict && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => onResolveConflict(commit)}
+                    data-testid={`resolve-commit-${commit.change_id}`}
+                  >
+                    <GitMerge className="w-4 h-4" />
+                    Resolve…
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   size="sm"

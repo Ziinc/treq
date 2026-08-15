@@ -22,7 +22,7 @@ import {
 } from "../../../src/lib/api";
 import { captureDocument } from "../capture";
 
-it("captures deleted file placeholder in the Review tab", async () => {
+it("captures deleted file placeholder in the Changes tab", async () => {
 	const { repoPath } = createTestRepo(false);
 	openRepo(repoPath);
 
@@ -47,8 +47,8 @@ it("captures deleted file placeholder in the Review tab", async () => {
 	const user = userEvent.setup();
 	render(<Dashboard />);
 	await user.click(await findSidebarBranchElement("feat/deleted-file-qa"));
-	await user.click(await screen.findByRole("tab", { name: /^Review/ }));
-	await screen.findByRole("tab", { name: /^Review/, selected: true });
+	await user.click(await screen.findByRole("tab", { name: /^Changes/ }));
+	await screen.findByRole("tab", { name: /^Changes/, selected: true });
 
 	await waitFor(() => {
 		expect(screen.getAllByText("doomed.txt").length).toBeGreaterThan(0);
@@ -66,7 +66,7 @@ it("captures deleted file placeholder in the Review tab", async () => {
 	});
 }, 60000);
 
-it("captures delete/modify conflict deleted-side card in the Review tab", async () => {
+it("captures delete/modify conflict deleted-side card in the Changes tab", async () => {
 	const { repoPath } = createTestRepo(false);
 	openRepo(repoPath);
 
@@ -100,9 +100,9 @@ it("captures delete/modify conflict deleted-side card in the Review tab", async 
 	await screen.findByTestId(`workspace-conflict-indicator-${workspaceId}`);
 
 	await user.click(await findSidebarBranchElement("feat/delete-modify-qa"));
-	const reviewTab = await screen.findByRole("tab", { name: /^Review/ });
+	const reviewTab = await screen.findByRole("tab", { name: /^Changes/ });
 	await user.click(reviewTab);
-	await screen.findByRole("tab", { name: /^Review/, selected: true });
+	await screen.findByRole("tab", { name: /^Changes/, selected: true });
 
 	const conflictsToggle = await screen.findByRole("button", {
 		name: "Conflicts",

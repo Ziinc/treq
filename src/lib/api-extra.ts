@@ -9,6 +9,8 @@ import type {
   PrCiStatus,
   PrInfo,
   PromptHistoryEntry,
+  ResolveCommitResult,
+  ResolveConflictsSession,
   Session,
   StashEntry,
   JjRevisionDiff,
@@ -17,6 +19,37 @@ import type {
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
+
+export const startResolveConflicts = (
+  repoPath: string,
+  workspaceId: number | null,
+  changeIds?: string[] | null,
+): Promise<ResolveConflictsSession> =>
+  invoke("start_resolve_conflicts", {
+    repoPath,
+    workspaceId,
+    changeIds: changeIds ?? null,
+  });
+
+export const buildResolveAgentPrompt = (
+  userPrompt: string,
+  session: ResolveConflictsSession,
+): Promise<string> =>
+  invoke("build_resolve_agent_prompt", {
+    userPrompt,
+    session,
+  });
+
+export const resolveCommit = (
+  repoPath: string,
+  revision: string,
+  sides: string[],
+): Promise<ResolveCommitResult> =>
+  invoke("resolve_commit", {
+    repoPath,
+    revision,
+    sides,
+  });
 
 export const ptyCreateSession = (
   sessionId: string,

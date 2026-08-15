@@ -65,9 +65,9 @@ describe("ShowWorkspace - committed diff dedupe integration", () => {
     render(<Dashboard />);
     await user.click(await findSidebarBranchElement(fixture.branchName));
 
-    const reviewTab = await screen.findByRole("tab", { name: /^Review/ });
+    const reviewTab = await screen.findByRole("tab", { name: /^Changes/ });
     await user.click(reviewTab);
-    await screen.findByRole("tab", { name: /^Review/, selected: true });
+    await screen.findByRole("tab", { name: /^Changes/, selected: true });
 
     await waitFor(() => {
       expect(screen.getAllByText("shared.txt").length).toBeGreaterThanOrEqual(

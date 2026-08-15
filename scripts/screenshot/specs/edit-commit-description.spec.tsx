@@ -63,7 +63,7 @@ it("captures editing an existing commit's description from the Commits tab", asy
 		"Workspace commit 2",
 	);
 
-	await user.click(await screen.findByRole("tab", { name: "Commits" }));
+	await user.click(await screen.findByRole("tab", { name: /^Commits/ }));
 	await screen.findByText("Workspace commit 2");
 	const commitRow = await screen.findByText("Original description");
 

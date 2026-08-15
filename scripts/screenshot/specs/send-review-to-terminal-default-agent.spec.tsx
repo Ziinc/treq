@@ -36,7 +36,7 @@ it("send review to terminal opens a codex terminal when repo default_agent=codex
 	const workspace = workspaces.find((w) => w.branch_name === BRANCH_NAME);
 	if (!workspace) throw new Error(`workspace ${BRANCH_NAME} not found`);
 
-	// Write an uncommitted file so the Review tab has a diff to show.
+	// Write an uncommitted file so the Changes tab has a diff to show.
 	writeWorkspaceFile(
 		resolveWorkspacePath(repoPath, workspace.workspace_path),
 		"example.ts",
@@ -50,8 +50,8 @@ it("send review to terminal opens a codex terminal when repo default_agent=codex
 	await user.click(await screen.findByText(BRANCH_NAME));
 	await screen.findByTestId("show-workspace-header");
 
-	// Open the Review tab.
-	await user.click(await screen.findByRole("tab", { name: /^Review/i }));
+	// Open the Changes tab.
+	await user.click(await screen.findByRole("tab", { name: /^Changes/i }));
 	// The file appears in both sidebar and diff header — wait for any occurrence.
 	await screen.findAllByText("example.ts");
 

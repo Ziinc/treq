@@ -200,6 +200,25 @@
             }
           ]
         },
+        "resolve": {
+          "description": "Resolve conflicts for a commit in a short-lived resolve workspace",
+          "args": [
+            {
+              "name": "commit_id",
+              "index": 1,
+              "takesValue": true,
+              "required": true,
+              "description": "Change or commit id to resolve"
+            },
+            {
+              "name": "sides",
+              "index": 2,
+              "takesValue": true,
+              "multiple": true,
+              "description": "Conflict sides: 1, 2, base, ours, theirs, both"
+            }
+          ]
+        },
         "send": {
           "description": "Send a file or stdin content to the Treq UI for preview",
           "args": [

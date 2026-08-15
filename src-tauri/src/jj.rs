@@ -640,6 +640,9 @@ fn build_log_commit(
     })
     .collect();
   let is_immutable_val = is_immutable(commit.id()).unwrap_or(false);
+  let has_conflicts = tree_override
+    .map(|tree| tree.has_conflict())
+    .unwrap_or_else(|| commit.tree().has_conflict());
   let parent_ids: Vec<String> = commit
     .parent_ids()
     .iter()
@@ -669,6 +672,7 @@ fn build_log_commit(
         insertions: cached.insertions,
         deletions: cached.deletions,
         on_target_only: false,
+        has_conflicts,
       }
     }
     _ => {
@@ -711,6 +715,7 @@ fn build_log_commit(
         insertions,
         deletions,
         on_target_only: false,
+        has_conflicts,
       }
     }
   }
@@ -846,6 +851,9 @@ pub struct JjLogCommit {
   /// True when this commit is on the target branch but not the current branch (target is ahead).
   #[serde(default)]
   pub on_target_only: bool,
+  /// True when this commit's tree still contains unresolved jj conflicts.
+  #[serde(default)]
+  pub has_conflicts: bool,
 }
 
 /// The full log response including metadata
@@ -1575,6 +1583,390 @@ pub fn create_workspace(
   Ok(sanitized_name)
 }
 
+/// Create a short-lived resolve workspace checked out in *edit* mode on a
+/// conflicted commit (so `@` *is* that commit). No bookmark is created.
+///
+/// Layout: `{repo}/.treq/resolve/{workspace_slug}/{change_id}/`
+///
+/// Returns `(jj_workspace_name, absolute_workspace_path)`.
+pub fn create_resolve_workspace(
+  repo_path: &str,
+  revision: &str,
+  workspace_slug: &str,
+) -> Result<(String, String), JjError> {
+  if !is_jj_workspace(repo_path) {
+    return Err(JjError::NotGitRepository);
+  }
+
+  let loaded_home = load_workspace_repo(repo_path)?;
+  let target_commit = resolve_commit_by_revision(&loaded_home, revision)?;
+  if !target_commit.tree().has_conflict() {
+    return Err(JjError::IoError(format!(
+      "Revision '{}' has no unresolved conflicts",
+      revision
+    )));
+  }
+  let target_commit_id = target_commit.id().clone();
+  let change_id = HexPrefix::from_id(target_commit.change_id()).reverse_hex();
+  let short_change = &change_id[..12.min(change_id.len())];
+  let conflict_paths: Vec<String> = collect_conflict_paths_from_tree(&target_commit.tree());
+  drop(loaded_home);
+
+  let slug = sanitize_workspace_name(workspace_slug);
+  let slug = if slug.is_empty() {
+    "home".to_string()
+  } else {
+    slug
+  };
+  // jj workspace names must stay unique and discoverable as resolve sandboxes.
+  let mut jj_name = sanitize_workspace_name(&format!("_resolve-{slug}-{short_change}"));
+  if jj_name.len() > 80 {
+    jj_name = format!("_resolve-{short_change}");
+  }
+  let workspace_dir = Path::new(repo_path)
+    .join(".treq")
+    .join("resolve")
+    .join(&slug)
+    .join(short_change);
+
+  if workspace_dir.exists() && workspace_dir.join(".jj").exists() {
+    // Reuse an existing resolve workspace for this change.
+    let full = workspace_dir.to_string_lossy().to_string();
+    return Ok((jj_name, full));
+  }
+
+  if workspace_dir.join(".jj").exists() {
+    let workspace_dir_str = workspace_dir.to_string_lossy();
+    remove_workspace_directory_only(&workspace_dir_str).map_err(|e| {
+      JjError::GitWorkspaceError(format!("Failed to remove orphaned resolve dir: {}", e))
+    })?;
+  }
+  if !workspace_dir.exists() {
+    fs::create_dir_all(&workspace_dir).map_err(|e| {
+      JjError::GitWorkspaceError(format!("Failed to create resolve workspace dir: {}", e))
+    })?;
+  }
+
+  let settings = create_user_settings(repo_path)?;
+  let parent_workspace = Workspace::load(
+    &settings,
+    Path::new(repo_path),
+    &StoreFactories::default(),
+    &default_working_copy_factories(),
+  )
+  .map_err(|e| JjError::GitWorkspaceError(format!("Failed to load parent workspace: {}", e)))?;
+  let parent_repo = block_on(parent_workspace.repo_loader().load_at_head())
+    .map_err(|e| JjError::GitWorkspaceError(format!("Failed to load repo: {}", e)))?;
+
+  let new_ws_name: WorkspaceNameBuf = jj_name.clone().into();
+  let wc_factory = default_working_copy_factory();
+  let (mut new_workspace, new_repo) = block_on(Workspace::init_workspace_with_existing_repo(
+    &workspace_dir,
+    parent_workspace.repo_path(),
+    &parent_repo,
+    &*wc_factory,
+    new_ws_name.clone(),
+  ))
+  .map_err(|e| JjError::GitWorkspaceError(format!("Failed to init resolve workspace: {}", e)))?;
+
+  // Re-fetch from the new repo's store to keep MergedTree store pointers aligned.
+  let target_commit = new_repo
+    .store()
+    .get_commit(&target_commit_id)
+    .map_err(|e| {
+      JjError::GitWorkspaceError(format!(
+        "Failed to load conflicted commit in resolve workspace: {}",
+        e
+      ))
+    })?;
+
+  // Sparse-checkout only conflicted paths when possible.
+  if !conflict_paths.is_empty() {
+    if let Ok(patterns) = parse_sparse_patterns(&conflict_paths) {
+      let mut locked_ws = new_workspace.start_working_copy_mutation().map_err(|e| {
+        JjError::GitWorkspaceError(format!("Failed to lock resolve working copy: {}", e))
+      })?;
+      block_on(locked_ws.locked_wc().set_sparse_patterns(patterns)).map_err(|e| {
+        JjError::GitWorkspaceError(format!("Failed to set resolve sparse patterns: {}", e))
+      })?;
+      let op_id = locked_ws.locked_wc().old_operation_id().clone();
+      block_on(locked_ws.finish(op_id)).map_err(|e| {
+        JjError::GitWorkspaceError(format!("Failed to finish resolve sparse patterns: {}", e))
+      })?;
+    }
+  }
+
+  let mut tx = new_repo.start_transaction();
+  // Edit the conflicted commit directly — no child WC commit, no bookmark.
+  block_on(tx.repo_mut().edit(new_ws_name.clone(), &target_commit)).map_err(|e| {
+    JjError::GitWorkspaceError(format!(
+      "Failed to edit conflicted commit in resolve WC: {}",
+      e
+    ))
+  })?;
+  block_on(tx.repo_mut().rebase_descendants()).map_err(|e| {
+    JjError::GitWorkspaceError(format!(
+      "Failed to rebase descendants after resolve edit: {}",
+      e
+    ))
+  })?;
+  let _ = git::export_refs(tx.repo_mut());
+  let committed = block_on(tx.commit("create_resolve_workspace")).map_err(|e| {
+    JjError::GitWorkspaceError(format!("Failed to commit resolve workspace tx: {}", e))
+  })?;
+
+  block_on(new_workspace.check_out(committed.op_id().clone(), None, &target_commit)).map_err(
+    |e| JjError::GitWorkspaceError(format!("Failed to checkout resolve workspace: {}", e)),
+  )?;
+
+  Ok((jj_name, workspace_dir.to_string_lossy().to_string()))
+}
+
+/// Snapshot the resolve working copy (rewriting the edited conflicted commit in place).
+pub fn jj_snapshot_resolve_workspace(workspace_path: &str) -> Result<(), JjError> {
+  if !Path::new(workspace_path).exists() {
+    return Ok(());
+  }
+  let mut loaded = load_workspace_repo_for_history_edit(workspace_path)?;
+  snapshot_loaded_working_copy(&mut loaded, workspace_path)?;
+  Ok(())
+}
+
+/// Move a resolve workspace `@` to a new empty child of the current tip so
+/// forgetting the workspace cannot hide the resolved change.
+pub fn jj_detach_resolve_workspace_wc(workspace_path: &str) -> Result<(), JjError> {
+  if !Path::new(workspace_path).exists() {
+    return Ok(());
+  }
+  let mut loaded = load_workspace_repo_for_history_edit(workspace_path)?;
+  snapshot_loaded_working_copy(&mut loaded, workspace_path)?;
+  let ws_name = loaded.workspace.workspace_name().to_owned();
+  let wc_commit = match get_workspace_wc_commit(&loaded)? {
+    Some(commit) => commit,
+    None => return Ok(()),
+  };
+  let tree = wc_commit.tree();
+  let mut tx = loaded.repo.start_transaction();
+  let detached = block_on(
+    tx.repo_mut()
+      .new_commit(vec![wc_commit.id().clone()], tree)
+      .write(),
+  )
+  .map_err(|e| JjError::IoError(format!("Failed to create detach WC for resolve: {}", e)))?;
+  block_on(tx.repo_mut().edit(ws_name, &detached))
+    .map_err(|e| JjError::IoError(format!("Failed to detach resolve WC: {}", e)))?;
+  block_on(tx.repo_mut().rebase_descendants())
+    .map_err(|e| JjError::IoError(format!("Failed to rebase after resolve detach: {}", e)))?;
+  let new_repo = block_on(tx.commit("detach resolve workspace"))
+    .map_err(|e| JjError::IoError(format!("Failed to commit resolve detach: {}", e)))?;
+  update_workspace_after_history_edit(
+    &mut loaded,
+    &new_repo,
+    Some(&wc_commit),
+    CheckoutMode::Immediate,
+  )?;
+  Ok(())
+}
+
+/// Resolve conflicted paths in an edit-mode workspace by taking conflict sides.
+///
+/// Side indexes: 1 = left/add0, 2 = right/add1, 0 = base/remove0.
+/// Multiple sides concatenate textual content in the given order ("both").
+pub fn jj_resolve_conflict_sides(workspace_path: &str, sides: &[u8]) -> Result<(), JjError> {
+  if sides.is_empty() {
+    return Err(JjError::IoError(
+      "At least one conflict side is required".to_string(),
+    ));
+  }
+
+  let mut loaded = load_workspace_repo_for_history_edit(workspace_path)?;
+  snapshot_loaded_working_copy(&mut loaded, workspace_path)?;
+  let ws_name = loaded.workspace.workspace_name().to_owned();
+  let wc_commit = get_workspace_wc_commit(&loaded)?
+    .ok_or_else(|| JjError::IoError("Resolve workspace has no working-copy commit".to_string()))?;
+  let tree = wc_commit.tree();
+  if !tree.has_conflict() {
+    return Ok(());
+  }
+
+  if sides.len() == 1 {
+    let side = sides[0];
+    let mut builder = MergedTreeBuilder::new(tree.clone());
+    for (path, value_res) in tree.conflicts() {
+      let conflict = value_res.map_err(|e| {
+        JjError::IoError(format!(
+          "Failed to read conflict at '{}': {}",
+          path.as_internal_file_string(),
+          e
+        ))
+      })?;
+      let chosen = match side {
+        0 => conflict.get_remove(0).cloned().flatten(),
+        n => conflict
+          .get_add((n as usize).saturating_sub(1))
+          .cloned()
+          .flatten(),
+      };
+      use jj_lib::merge::Merge;
+      builder.set_or_remove(
+        path,
+        match chosen {
+          Some(tv) => Merge::normal(tv),
+          None => Merge::absent(),
+        },
+      );
+    }
+    let resolved_tree = block_on(builder.write_tree())
+      .map_err(|e| JjError::IoError(format!("Failed to write resolved tree: {}", e)))?;
+    let mut tx = loaded.repo.start_transaction();
+    let rewritten = block_on(
+      tx.repo_mut()
+        .rewrite_commit(&wc_commit)
+        .set_tree(resolved_tree)
+        .write(),
+    )
+    .map_err(|e| JjError::IoError(format!("Failed to rewrite resolved commit: {}", e)))?;
+    block_on(tx.repo_mut().edit(ws_name, &rewritten))
+      .map_err(|e| JjError::IoError(format!("Failed to edit after resolve: {}", e)))?;
+    block_on(tx.repo_mut().rebase_descendants())
+      .map_err(|e| JjError::IoError(format!("Failed to rebase after resolve: {}", e)))?;
+    let new_repo = block_on(tx.commit("resolve conflict sides"))
+      .map_err(|e| JjError::IoError(format!("Failed to commit resolve: {}", e)))?;
+    update_workspace_after_history_edit(
+      &mut loaded,
+      &new_repo,
+      Some(&wc_commit),
+      CheckoutMode::Immediate,
+    )?;
+    return Ok(());
+  }
+
+  // Multi-side: materialize markers, pick textual sides, write files, snapshot.
+  let marker_style = ConflictMarkerStyle::Git;
+  let merge_options = MergeOptions::from_settings(&loaded.settings)
+    .map_err(|e| JjError::IoError(format!("Failed to load merge options: {}", e)))?;
+  let labels = ConflictLabels::unlabeled();
+  for (path, value_res) in tree.conflicts() {
+    let conflict = value_res.map_err(|e| {
+      JjError::IoError(format!(
+        "Failed to read conflict at '{}': {}",
+        path.as_internal_file_string(),
+        e
+      ))
+    })?;
+    let materialized = block_on(jj_lib::conflicts::materialize_tree_value(
+      loaded.repo.store().as_ref(),
+      path.as_ref(),
+      conflict,
+      &labels,
+    ))
+    .map_err(|e| {
+      JjError::IoError(format!(
+        "Failed to materialize conflict at '{}': {}",
+        path.as_internal_file_string(),
+        e
+      ))
+    })?;
+    let Some(bytes) = block_on(materialized_value_to_bytes(
+      path.as_ref(),
+      materialized,
+      marker_style,
+      Some(&merge_options),
+    )) else {
+      continue;
+    };
+    let text = String::from_utf8_lossy(&bytes);
+    let regions =
+      crate::conflict_markers::parse_conflict_markers(&text, path.as_internal_file_string());
+    let resolved_text = if regions.is_empty() {
+      text.into_owned()
+    } else {
+      apply_sides_to_conflict_text(&text, &regions, sides)
+    };
+    let abs = Path::new(workspace_path).join(path.as_internal_file_string());
+    if let Some(parent) = abs.parent() {
+      let _ = fs::create_dir_all(parent);
+    }
+    fs::write(&abs, resolved_text.as_bytes()).map_err(|e| {
+      JjError::IoError(format!(
+        "Failed to write resolved '{}': {}",
+        path.as_internal_file_string(),
+        e
+      ))
+    })?;
+  }
+  snapshot_loaded_working_copy(&mut loaded, workspace_path)?;
+  Ok(())
+}
+
+fn apply_sides_to_conflict_text(
+  content: &str,
+  regions: &[crate::conflict_markers::ConflictRegionView],
+  sides: &[u8],
+) -> String {
+  let lines: Vec<&str> = content.split('\n').collect();
+  let mut out = String::new();
+  let mut cursor = 0usize;
+
+  for region in regions {
+    let start = region.start_line.saturating_sub(1);
+    let end = region.end_line.min(lines.len());
+    if start > cursor {
+      out.push_str(&lines[cursor..start].join("\n"));
+      if !out.is_empty() && !out.ends_with('\n') {
+        out.push('\n');
+      }
+    }
+    let mut pieces = Vec::new();
+    for side in sides {
+      let indexes = match side {
+        0 => &region.comparison.base_line_indexes,
+        1 => &region.comparison.left_line_indexes,
+        _ => &region.comparison.right_line_indexes,
+      };
+      let mut chunk = String::new();
+      for &idx in indexes {
+        if let Some(line) = region.lines.get(idx) {
+          if !chunk.is_empty() {
+            chunk.push('\n');
+          }
+          chunk.push_str(&line.raw);
+        }
+      }
+      if !chunk.is_empty() {
+        pieces.push(chunk);
+      }
+    }
+    let joined = pieces.join("\n");
+    if !joined.is_empty() {
+      out.push_str(&joined);
+      out.push('\n');
+    }
+    cursor = end;
+  }
+  if cursor < lines.len() {
+    out.push_str(&lines[cursor..].join("\n"));
+  }
+  out
+}
+
+/// Write path→content replacements into a resolve workspace and snapshot.
+pub fn jj_apply_resolve_replacements(
+  workspace_path: &str,
+  files: &std::collections::HashMap<String, String>,
+) -> Result<(), JjError> {
+  for (rel, content) in files {
+    let abs = Path::new(workspace_path).join(rel);
+    if let Some(parent) = abs.parent() {
+      fs::create_dir_all(parent)
+        .map_err(|e| JjError::IoError(format!("Failed to create parent for '{}': {}", rel, e)))?;
+    }
+    fs::write(&abs, content.as_bytes())
+      .map_err(|e| JjError::IoError(format!("Failed to write '{}': {}", rel, e)))?;
+  }
+  jj_snapshot_resolve_workspace(workspace_path)
+}
+
 /// Reload the operation head after creation. JJ reconciles concurrent operation
 /// heads during this load, so verification must use this repo rather than the
 /// transaction's returned snapshot.
@@ -1689,6 +2081,10 @@ fn list_registered_workspaces(repo_path: &str) -> Result<Vec<RegisteredWorkspace
   let mut workspaces = Vec::new();
   for (workspace_name, wc_commit_id) in repo.view().wc_commit_ids() {
     if workspace_name.as_str() == "default" {
+      continue;
+    }
+    // Short-lived conflict-resolve sandboxes are not product workspaces.
+    if workspace_name.as_str().starts_with("_resolve-") {
       continue;
     }
 
@@ -2366,7 +2762,7 @@ fn reconcile_single_workspace(workspace_path: &str) -> Result<(), JjError> {
 ///
 /// Errors from individual workspaces are logged but do not abort the loop — one bad
 /// workspace must not block reconciliation of the others.
-fn reconcile_all_workspaces_after_rewrite(
+pub fn reconcile_all_workspaces_after_rewrite(
   repo_path: &str,
   skip_workspace_name: Option<&str>,
 ) -> Result<(), JjError> {

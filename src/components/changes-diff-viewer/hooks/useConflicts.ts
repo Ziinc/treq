@@ -5,7 +5,7 @@ import type { FileHunksData } from "../types";
 interface UseConflictsParams {
   allFileHunks: Map<string, FileHunksData>;
   /**
-   * Hunks for committed changes. The Review tab shows committed changes by
+   * Hunks for committed changes. The Changes tab shows committed changes by
    * default, and a conflict produced by a rebase lives in a committed change —
    * so these have to be searched too or the inline conflict card never renders.
    */

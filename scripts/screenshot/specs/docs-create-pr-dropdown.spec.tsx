@@ -74,8 +74,8 @@ it("captures Create PR dropdown open for docs", async () => {
 		"feature.txt",
 		"feature content\n",
 	);
-	await user.click(await screen.findByRole("tab", { name: /^Review/ }));
-	await screen.findByRole("tab", { name: /^Review/, selected: true });
+	await user.click(await screen.findByRole("tab", { name: /^Changes/ }));
+	await screen.findByRole("tab", { name: /^Changes/, selected: true });
 	await user.type(await screen.findByPlaceholderText("Message"), "Add feature");
 	await user.click(await screen.findByRole("button", { name: /^commit\b/i }));
 	await user.click(await screen.findByRole("tab", { name: /^Code/ }));

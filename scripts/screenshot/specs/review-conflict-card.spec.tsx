@@ -21,9 +21,9 @@ import { captureDocument } from "../capture";
 
 // The inline conflict card only appears once the backend's conflict regions
 // survive the trip to the frontend. This drives the real flow -- treq's own
-// auto-rebase onto a diverged default branch, open the Review tab, pick the
+// auto-rebase onto a diverged default branch, open the Changes tab, pick the
 // conflicted file -- so the card is rendered from real jj conflict markers.
-it("captures the inline conflict card in the Review tab", async () => {
+it("captures the inline conflict card in the Changes tab", async () => {
 	const { repoPath, defaultBranch } = createTestRepo(false);
 	openRepo(repoPath);
 
@@ -54,9 +54,9 @@ it("captures the inline conflict card in the Review tab", async () => {
 	await screen.findByTestId(`workspace-conflict-indicator-${workspaceId}`);
 
 	await user.click(await findSidebarBranchElement("feat/conflict-card"));
-	const reviewTab = await screen.findByRole("tab", { name: /^Review/ });
+	const reviewTab = await screen.findByRole("tab", { name: /^Changes/ });
 	await user.click(reviewTab);
-	await screen.findByRole("tab", { name: /^Review/, selected: true });
+	await screen.findByRole("tab", { name: /^Changes/, selected: true });
 
 	const conflictsToggle = await screen.findByRole("button", {
 		name: "Conflicts",

@@ -15,11 +15,11 @@ import { captureDocument } from "../capture";
 const BRANCH_NAME = "feat/commit-draft-persistence";
 const DRAFT_TEXT = "Draft message that must survive a tab switch";
 
-// Scenario: the user starts typing a commit message on the Review tab, then
-// switches to the Code tab and back without committing. The Review tab's
+// Scenario: the user starts typing a commit message on the Changes tab, then
+// switches to the Code tab and back without committing. The Changes tab's
 // content (including CommitInput) fully unmounts on tab switch, so the draft
 // must be persisted outside of CommitInput's own React state or it is lost.
-it("keeps the commit message draft after switching away from and back to the Review tab", async () => {
+it("keeps the commit message draft after switching away from and back to the Changes tab", async () => {
 	const { repoPath } = createTestRepo(false);
 	openRepo(repoPath);
 
@@ -52,7 +52,7 @@ it("keeps the commit message draft after switching away from and back to the Rev
 		"a line to make the workspace show changed files\n",
 	);
 
-	await user.click(await screen.findByRole("tab", { name: /^Review/ }));
+	await user.click(await screen.findByRole("tab", { name: /^Changes/ }));
 	await screen.findAllByText("draft-fixture.txt");
 
 	await user.type(await screen.findByPlaceholderText("Message"), DRAFT_TEXT);
@@ -63,7 +63,7 @@ it("keeps the commit message draft after switching away from and back to the Rev
 	await captureDocument(document, {
 		name: "commit-draft-survives-tab-switch-01-typed-in-review",
 		expectations: [
-			"The Review tab is active, and the commit message box in the left sidebar contains the text 'Draft message that must survive a tab switch'.",
+			"The Changes tab is active, and the commit message box in the left sidebar contains the text 'Draft message that must survive a tab switch'.",
 			"draft-fixture.txt is listed as a changed file in the sidebar.",
 		],
 	});
@@ -74,12 +74,12 @@ it("keeps the commit message draft after switching away from and back to the Rev
 	await captureDocument(document, {
 		name: "commit-draft-survives-tab-switch-02-code-tab",
 		expectations: [
-			"The Code tab is now active instead of Review -- the file sidebar and commit message box from the Review tab are no longer shown.",
+			"The Code tab is now active instead of Review -- the file sidebar and commit message box from the Changes tab are no longer shown.",
 		],
 	});
 
-	await user.click(await screen.findByRole("tab", { name: /^Review/ }));
-	await screen.findByRole("tab", { name: /^Review/, selected: true });
+	await user.click(await screen.findByRole("tab", { name: /^Changes/ }));
+	await screen.findByRole("tab", { name: /^Changes/, selected: true });
 
 	const restoredTextarea = await screen.findByPlaceholderText("Message");
 	expect(restoredTextarea).toHaveValue(DRAFT_TEXT);
@@ -87,7 +87,7 @@ it("keeps the commit message draft after switching away from and back to the Rev
 	await captureDocument(document, {
 		name: "commit-draft-survives-tab-switch-03-review-restored",
 		expectations: [
-			"The Review tab is active again, and the commit message box still contains 'Draft message that must survive a tab switch' even though the tab was switched away and back.",
+			"The Changes tab is active again, and the commit message box still contains 'Draft message that must survive a tab switch' even though the tab was switched away and back.",
 		],
 	});
 }, 60000);

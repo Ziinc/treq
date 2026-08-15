@@ -27,8 +27,8 @@ it("captures the Commits tab for the README", async () => {
 
   await user.click(await findSidebarBranchElement(MARKETING_BRANCH));
   await screen.findByTestId("show-workspace-header");
-  await user.click(await screen.findByRole("tab", { name: "Commits" }));
-  await screen.findByRole("tab", { name: "Commits", selected: true });
+  await user.click(await screen.findByRole("tab", { name: /^Commits/ }));
+  await screen.findByRole("tab", { name: /^Commits/, selected: true });
 
   const commitTitle = await screen.findByText(
     "feat: handle empty event messages",

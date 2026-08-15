@@ -34,9 +34,9 @@ it("captures stash-all from Changes and the dual-pane stash modal", async () => 
   render(<Dashboard />);
 
   await user.click(await findSidebarBranchElement(branchName));
-  const reviewTab = await screen.findByRole("tab", { name: /^Review/ });
+  const reviewTab = await screen.findByRole("tab", { name: /^Changes/ });
   await user.click(reviewTab);
-  await screen.findByRole("tab", { name: /^Review/, selected: true });
+  await screen.findByRole("tab", { name: /^Changes/, selected: true });
 
   await waitFor(() =>
     expect(screen.getAllByText("stash-demo.txt").length).toBeGreaterThan(0),

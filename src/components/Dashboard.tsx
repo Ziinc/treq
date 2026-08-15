@@ -171,6 +171,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         pendingPrompt?: string;
         permissionMode?: "plan" | "acceptEdits";
         agent?: "claude" | "codex" | "cursor";
+        workspacePath?: string | null;
       }
     >
   >(new Map());
@@ -778,6 +779,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     (sessionData: {
       sessionId: number;
       workspaceId?: number | null;
+      workspacePath?: string | null;
       pendingPrompt?: string;
       permissionMode?: "plan" | "acceptEdits";
       agent?: "claude" | "codex" | "cursor";
@@ -787,7 +789,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
       if (
         sessionData.pendingPrompt ||
         sessionData.permissionMode ||
-        sessionData.agent
+        sessionData.agent ||
+        sessionData.workspacePath
       ) {
         setPendingSessionData((prev) => {
           const next = new Map(prev);
@@ -795,6 +798,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             pendingPrompt: sessionData.pendingPrompt,
             permissionMode: sessionData.permissionMode,
             agent: sessionData.agent,
+            workspacePath: sessionData.workspacePath,
           });
           return next;
         });
@@ -1369,9 +1373,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
         sessionId: session.id,
         sessionName: session.name,
         ptySessionId: `session-${session.id}`,
-        workspacePath: sessionWorkspace
-          ? getFullWorkspacePath(sessionWorkspace)
-          : null,
+        workspacePath:
+          pending?.workspacePath ??
+          (sessionWorkspace ? getFullWorkspacePath(sessionWorkspace) : null),
         repoPath: sessionWorkspace?.repo_path ?? repoPath,
         workspaceName: sessionWorkspace?.branch_name ?? null,
         ...(pending && {

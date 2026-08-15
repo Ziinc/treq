@@ -46,6 +46,20 @@ Selecting a commit changes the visible diff in the review interface. Comments at
 
 Conflict state belongs to the workspace, not a single commit. A commit view can explain where a conflicting change came from, while the workspace diff shows the conflict that must be resolved.
 
+## Resolve commit conflicts inplace
+
+When a rebase leaves one or more commits conflicted, open the **Commits** tab and choose **Resolve conflicts…**. Treq prepares a short-lived resolve root at `.treq/resolve/<workspace-slug>/`, with one subdirectory per conflicted change id.
+
+Give the agent one prompt describing how to resolve the conflicts. The agent starts in that resolve root. It can edit conflict markers in each change-id directory, or run:
+
+```bash
+treq resolve <change-id> [1|2|base|both]
+```
+
+You can also pipe JSON path-to-content replacements into `treq resolve <change-id>`.
+
+A successful resolve rewrites that conflicted commit in place. It does not create a follow-up "remove markers" commit, and it does not dirty the product workspace working copy. When a change is clean, Treq deletes its change-id directory. The agent is done when no change-id directories remain under the resolve root.
+
 ## Manipulation Model
 
 Commit operations update the workspace history. Treq then refreshes derived state such as changed files, divergence from the target, and the visible review diff.
@@ -69,5 +83,6 @@ Pending changes can prevent Treq from synchronizing a working copy after a rebas
 - [Committing Changes](/docs/tutorials/committing-changes)
 - [Code Review Workflow](/docs/tutorials/code-review-workflow)
 - [Changes and Reviews](/docs/concepts/changes-and-reviews)
+- [CLI `treq resolve`](/docs/reference/cli#treq-resolve)
 - [Workspaces](/docs/concepts/workspaces)
 - [Under the Hood](/docs/under-the-hood)

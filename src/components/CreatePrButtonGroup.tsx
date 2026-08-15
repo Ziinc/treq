@@ -60,7 +60,7 @@ export function CreatePrButtonGroup({
   );
   const body = workspace.description ?? "";
 
-  // Shared across surfaces (this button and the Review tab's "Commit and
+  // Shared across surfaces (this button and the Changes tab's "Commit and
   // create PR" dropdown item) so either one's in-flight PR creation shows
   // as pending here too.
   const createPrMutation = useMutation({

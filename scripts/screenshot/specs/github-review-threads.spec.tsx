@@ -10,7 +10,7 @@
  * The GitHub side (remote info / PR lookup / review threads) all shell out
  * to a real `gh` CLI the desktop harness can't reach, so those three API
  * calls are stubbed -- same pattern as merge-queue-tab.spec.tsx. Everything
- * else (the real jj repo, the Review tab, the diff, the comment pipeline) is
+ * else (the real jj repo, the Changes tab, the diff, the comment pipeline) is
  * the real app.
  */
 
@@ -132,7 +132,7 @@ const THREADS: GhReviewThread[] = [
 	},
 ];
 
-it("captures GitHub review comment threads in the Review tab", async () => {
+it("captures GitHub review comment threads in the Changes tab", async () => {
 	const { repoPath } = createTestRepo(false);
 	openRepo(repoPath);
 
@@ -158,7 +158,7 @@ it("captures GitHub review comment threads in the Review tab", async () => {
 
 	await user.click(await screen.findByText(BRANCH_NAME));
 	await screen.findByTestId("show-workspace-header");
-	await user.click(await screen.findByRole("tab", { name: /^Review/i }));
+	await user.click(await screen.findByRole("tab", { name: /^Changes/i }));
 	await screen.findAllByText("example.ts");
 
 	// Unresolved thread renders inline, expanded, with its comment visible.
