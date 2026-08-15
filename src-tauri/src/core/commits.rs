@@ -319,6 +319,66 @@ pub fn describe_commit(
   Ok(())
 }
 
+/// Shift a mutable commit's author timestamp, then repair descendant timestamps
+/// on this workspace's first-parent lineage so history stays strictly ordered.
+pub fn shift_commit_timestamp(
+  repo_path: &str,
+  workspace_id: i64,
+  commit_change_id: &str,
+  days: i64,
+  hours: i64,
+  minutes: i64,
+  to_day: Option<&str>,
+) -> Result<(), String> {
+  let workspace = local_db::get_workspace_by_id(repo_path, workspace_id)
+    .map_err(|e| format!("Failed to get workspace: {}", e))?
+    .ok_or_else(|| format!("Workspace not found: {}", workspace_id))?;
+
+  let workspace_dir = Path::new(repo_path)
+    .join(".treq")
+    .join("workspaces")
+    .join(&workspace.workspace_path);
+  let workspace_dir_str = workspace_dir
+    .to_str()
+    .ok_or("Failed to convert workspace path to string")?;
+
+  let default_branch = jj::get_default_branch(repo_path)
+    .map_err(|e| format!("Failed to resolve default branch: {}", e))?;
+  let target_branch = workspace
+    .target_branch
+    .as_deref()
+    .unwrap_or(&default_branch);
+
+  let shift = match to_day {
+    Some(day) => {
+      if days != 0 || hours != 0 || minutes != 0 {
+        return Err("Provide either a day or a duration offset, not both".to_string());
+      }
+      let (year, month, day) =
+        crate::commit_timestamps::parse_day(day).map_err(|e| e.to_string())?;
+      crate::commit_timestamps::TimestampShift::ToDay { year, month, day }
+    }
+    None => {
+      if days == 0 && hours == 0 && minutes == 0 {
+        return Err("No timestamp change specified".to_string());
+      }
+      crate::commit_timestamps::TimestampShift::Offset {
+        days,
+        hours,
+        minutes,
+      }
+    }
+  };
+
+  jj::jj_shift_commit_timestamps(workspace_dir_str, commit_change_id, target_branch, &shift)
+    .map_err(|e| format!("Failed to shift commit timestamps: {}", e))?;
+
+  jj::update_stale_workspace(workspace_dir_str)
+    .map_err(|e| format!("Failed to update workspace working copy: {}", e))?;
+
+  Ok(())
+}
+
 /// Returns the diff for a specific commit in a workspace.
 ///
 /// # Arguments

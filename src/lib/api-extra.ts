@@ -424,6 +424,27 @@ export const describeCommit = (
     description,
   });
 
+export const shiftCommitTimestamp = (
+  repoPath: string,
+  workspaceId: number,
+  commitChangeId: string,
+  shift: {
+    days?: number;
+    hours?: number;
+    minutes?: number;
+    toDay?: string | null;
+  },
+): Promise<void> =>
+  invoke("shift_commit_timestamp", {
+    repoPath,
+    workspaceId,
+    commitChangeId,
+    days: shift.days ?? 0,
+    hours: shift.hours ?? 0,
+    minutes: shift.minutes ?? 0,
+    toDay: shift.toDay ?? null,
+  });
+
 export const getTreqBinDir = (): Promise<string> => invoke("get_treq_bin_dir");
 
 /**

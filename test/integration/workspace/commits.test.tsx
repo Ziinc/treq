@@ -374,3 +374,54 @@ describe("ShowWorkspace - Commits tab tentative working copy", () => {
     expect(screen.queryByText("wc000")).not.toBeInTheDocument();
   });
 });
+
+describe("ShowWorkspace - Commits tab timestamp edit", () => {
+  it("shifts a mutable commit forward by days from the Commits tab", async () => {
+    const { repoPath } = createTestRepo(false);
+    openRepo(repoPath);
+    const user = userEvent.setup();
+    const workspace = await createWorkspaceRef(repoPath, "feat/edit-timestamp");
+    await commitWorkspaceFile(
+      repoPath,
+      workspace,
+      "ts-a.txt",
+      "a",
+      "Timestamp commit A",
+    );
+    await commitWorkspaceFile(
+      repoPath,
+      workspace,
+      "ts-b.txt",
+      "b",
+      "Timestamp commit B",
+    );
+
+    await openWorkspaceCommitsTab(user, "feat/edit-timestamp");
+    const commitA = await screen.findByText("Timestamp commit A");
+    await user.click(commitA);
+    await user.click(
+      await screen.findByRole("button", { name: "Edit timestamp" }),
+    );
+
+    const daysInput = await screen.findByLabelText("Days");
+    await user.clear(daysInput);
+    await user.type(daysInput, "2");
+    await user.click(screen.getByRole("button", { name: "Apply" }));
+
+    await screen.findByRole("button", { name: "Edit timestamp" });
+    const logs = await api.listCommits(repoPath, workspace.id);
+    const older = logs.commits.find(
+      (commit) => commit.description === "Timestamp commit A",
+    );
+    const newer = logs.commits.find(
+      (commit) => commit.description === "Timestamp commit B",
+    );
+    expect(older).toBeTruthy();
+    expect(newer).toBeTruthy();
+    const olderMs = Date.parse(older!.timestamp);
+    const newerMs = Date.parse(newer!.timestamp);
+    expect(newerMs).toBeGreaterThan(olderMs);
+    expect(olderMs).toBeGreaterThan(Date.now() + 24 * 60 * 60 * 1000);
+
+  });
+});

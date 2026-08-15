@@ -2670,6 +2670,169 @@ pub fn jj_describe(
   Ok(String::new())
 }
 
+/// Rewrite author timestamps for a mutable commit and descendants on the
+/// current workspace first-parent lineage toward `@`.
+pub fn jj_shift_commit_timestamps(
+  workspace_path: &str,
+  change_id: &str,
+  target_branch: &str,
+  shift: &crate::commit_timestamps::TimestampShift,
+) -> Result<(), JjError> {
+  if !Path::new(workspace_path).exists() {
+    return Ok(());
+  }
+  if change_id.starts_with('-') || change_id.contains('\0') || change_id.is_empty() {
+    return Err(JjError::IoError("Invalid change id".to_string()));
+  }
+  validate_branch_name(target_branch, "target")?;
+
+  let loaded = load_workspace_repo(workspace_path)?;
+  let target = resolve_commit_by_revision(&loaded, change_id)?;
+  let workspace_name = loaded.workspace.workspace_name().to_owned();
+  let Some(wc_commit_id) = loaded
+    .repo
+    .view()
+    .get_wc_commit_id(&workspace_name)
+    .cloned()
+  else {
+    return Err(JjError::IoError(
+      "Workspace has no working-copy commit".to_string(),
+    ));
+  };
+  let wc_commit = loaded
+    .repo
+    .store()
+    .get_commit(&wc_commit_id)
+    .map_err(|e| JjError::IoError(format!("Failed to load working-copy commit: {}", e)))?;
+
+  let lineage = first_parent_lineage_from_target_to_wc(&target, &wc_commit)?;
+  let immutable_ref = resolve_target_branch_symbol(&loaded, workspace_path, target_branch)
+    .unwrap_or_else(|_| target_branch.to_string());
+  let immutable_revset = evaluate_revset(
+    &loaded,
+    &format!("::{}", format_revset_symbol(&immutable_ref)),
+  )?;
+  let is_immutable = immutable_revset.containing_fn();
+
+  if is_immutable(target.id()).unwrap_or(false) {
+    return Err(JjError::IoError(
+      "Cannot edit timestamps of an immutable commit".to_string(),
+    ));
+  }
+
+  let mut mutable_lineage = Vec::new();
+  for commit in &lineage {
+    if is_immutable(commit.id()).unwrap_or(false) {
+      break;
+    }
+    mutable_lineage.push(commit.clone());
+  }
+  if mutable_lineage.is_empty() {
+    return Err(JjError::IoError(
+      "No mutable commits found on this lineage".to_string(),
+    ));
+  }
+
+  let original_millis: Vec<i64> = mutable_lineage
+    .iter()
+    .map(|commit| commit.author().timestamp.timestamp.0)
+    .collect();
+  let parent_millis = {
+    let parents = block_on(target.parents())
+      .map_err(|e| JjError::IoError(format!("Failed to load commit parents: {}", e)))?;
+    parents
+      .first()
+      .map(|parent| parent.author().timestamp.timestamp.0)
+  };
+  let new_target = crate::commit_timestamps::apply_shift_to_millis(
+    original_millis[0],
+    target.author().timestamp.tz_offset,
+    shift,
+  )
+  .map_err(JjError::IoError)?;
+  if let Some(parent) = parent_millis {
+    if new_target <= parent {
+      return Err(JjError::IoError(
+        "New timestamp would be at or before the parent commit. Choose a later time.".to_string(),
+      ));
+    }
+  }
+  let planned =
+    crate::commit_timestamps::plan_lineage_timestamps(&original_millis, new_target, parent_millis);
+
+  if let Some(next_immutable) = lineage.get(mutable_lineage.len()) {
+    let next_millis = next_immutable.author().timestamp.timestamp.0;
+    if let Some(last_planned) = planned.last() {
+      if *last_planned >= next_millis {
+        return Err(JjError::IoError(
+          "Shifting this commit would place it after an immutable descendant".to_string(),
+        ));
+      }
+    }
+  }
+
+  drop(is_immutable);
+  drop(immutable_revset);
+
+  let mut tx = loaded.repo.start_transaction();
+  for (commit, new_millis) in mutable_lineage.iter().zip(planned.iter()).rev() {
+    if *new_millis == commit.author().timestamp.timestamp.0
+      && *new_millis == commit.committer().timestamp.timestamp.0
+    {
+      continue;
+    }
+    let mut author = commit.author().clone();
+    author.timestamp.timestamp = jj_lib::backend::MillisSinceEpoch(*new_millis);
+    let mut committer = commit.committer().clone();
+    committer.timestamp.timestamp = jj_lib::backend::MillisSinceEpoch(*new_millis);
+    block_on(
+      tx.repo_mut()
+        .rewrite_commit(commit)
+        .set_author(author)
+        .set_committer(committer)
+        .write(),
+    )
+    .map_err(|e| JjError::IoError(format!("Failed to write commit: {}", e)))?;
+  }
+  block_on(tx.repo_mut().rebase_descendants())
+    .map_err(|e| JjError::InitFailed(format!("Failed to rebase descendants: {}", e)))?;
+  block_on(tx.commit("shift commit timestamps"))
+    .map_err(|e| JjError::InitFailed(format!("Failed to shift commit timestamps: {}", e)))?;
+
+  let repo_path =
+    derive_repo_path_from_workspace(workspace_path).unwrap_or_else(|| workspace_path.to_string());
+  let _ = reconcile_all_workspaces_after_rewrite(&repo_path, None);
+  Ok(())
+}
+
+fn first_parent_lineage_from_target_to_wc(
+  target: &Commit,
+  wc_commit: &Commit,
+) -> Result<Vec<Commit>, JjError> {
+  let mut chain = Vec::new();
+  let mut current = wc_commit.clone();
+  loop {
+    chain.push(current.clone());
+    if current.id() == target.id() {
+      chain.reverse();
+      return Ok(chain);
+    }
+    let parents = block_on(current.parents())
+      .map_err(|e| JjError::IoError(format!("Failed to load commit parents: {}", e)))?;
+    let Some(parent) = parents.first() else {
+      return Err(JjError::IoError(
+        "Commit is not on the current workspace lineage".to_string(),
+      ));
+    };
+    current = parent.clone();
+    if chain.len() > 10_000 {
+      return Err(JjError::IoError(
+        "Commit is not on the current workspace lineage".to_string(),
+      ));
+    }
+  }
+}
+
 /// Get the list of files changed in a specific commit.
 /// Runs: jj diff --summary -r <change_id>
 /// Returns file paths (added/modified/removed) from the commit.

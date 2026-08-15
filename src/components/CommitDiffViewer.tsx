@@ -11,6 +11,7 @@ import {
   Loader2,
   Pencil,
   Plus,
+  Clock,
   Trash2,
 } from "lucide-react";
 import {
@@ -43,6 +44,7 @@ import {
 } from "../lib/utils";
 import { CommentInput } from "./CommentInput";
 import { EditCommitDescriptionDialog } from "./EditCommitDescriptionDialog";
+import { EditCommitTimestampDialog } from "./EditCommitTimestampDialog";
 import { ResolveConflictsDialog } from "./ResolveConflictsDialog";
 import { Button } from "./ui/button";
 import type { SessionCreationInfo } from "../types/sessions";
@@ -201,9 +203,16 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
     const [editingCommit, setEditingCommit] = useState<JjLogCommit | null>(
       null,
     );
+    const [timestampCommit, setTimestampCommit] = useState<JjLogCommit | null>(
+      null,
+    );
 
     const handleEditDescription = useCallback((commit: JjLogCommit) => {
       setEditingCommit(commit);
+    }, []);
+
+    const handleEditTimestamp = useCallback((commit: JjLogCommit) => {
+      setTimestampCommit(commit);
     }, []);
 
     const handleDescriptionEdited = useCallback(() => {
@@ -751,6 +760,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
                       onAbandon={handleAbandon}
                       onStash={handleStashCommit}
                       onEditDescription={() => {}}
+                      onEditTimestamp={() => {}}
                       onCreateAgentWithComment={onCreateAgentWithComment}
                       onLoadDeferredFileDiff={(filePath) =>
                         loadCommitFileDiff(
@@ -819,6 +829,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
                           onAbandon={handleAbandon}
                           onStash={handleStashCommit}
                           onEditDescription={handleEditDescription}
+                          onEditTimestamp={handleEditTimestamp}
                           onResolveConflict={
                             onSessionCreated ? openResolveOne : undefined
                           }
@@ -916,6 +927,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
                               onAbandon={() => {}}
                               onStash={() => {}}
                               onEditDescription={() => {}}
+                              onEditTimestamp={() => {}}
                               onCreateAgentWithComment={
                                 onCreateAgentWithComment
                               }
@@ -989,6 +1001,18 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
             onSuccess={handleDescriptionEdited}
           />
         )}
+        {workspaceId != null && (
+          <EditCommitTimestampDialog
+            open={timestampCommit != null}
+            onOpenChange={(open) => {
+              if (!open) setTimestampCommit(null);
+            }}
+            repoPath={repoPath}
+            workspaceId={workspaceId}
+            commit={timestampCommit}
+            onSuccess={handleDescriptionEdited}
+          />
+        )}
         {onSessionCreated && (
           <ResolveConflictsDialog
             open={resolveDialogOpen}
@@ -1025,6 +1049,7 @@ interface CommitWithDiffProps {
   onAbandon: (commit: JjLogCommit) => void;
   onStash: (commit: JjLogCommit) => void;
   onEditDescription: (commit: JjLogCommit) => void;
+  onEditTimestamp: (commit: JjLogCommit) => void;
   onResolveConflict?: (commit: JjLogCommit) => void;
   onViewTentativeChanges?: () => void;
   onDeleteTentativeChanges?: () => void;
@@ -1053,12 +1078,14 @@ function CommitWithDiff({
   onAbandon,
   onStash,
   onEditDescription,
+  onEditTimestamp,
   onResolveConflict,
   onViewTentativeChanges,
   onDeleteTentativeChanges,
   onCreateAgentWithComment,
   onLoadDeferredFileDiff,
   tentativeWorkspaceLabel,
+  canAction,
 }: CommitWithDiffProps) {
   const firstLine = getCommitHeadline(commit);
   const hasStats = commit.insertions > 0 || commit.deletions > 0;
@@ -1228,6 +1255,17 @@ function CommitWithDiff({
                   <Pencil className="w-4 h-4" />
                   Edit description
                 </Button>
+                {canAction && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => onEditTimestamp(commit)}
+                  >
+                    <Clock className="w-4 h-4" />
+                    Edit timestamp
+                  </Button>
+                )}
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline" size="sm" className="gap-1.5">
