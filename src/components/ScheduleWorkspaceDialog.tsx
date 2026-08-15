@@ -8,6 +8,7 @@ import {
   addHours,
   defaultScheduleDate,
   followingMondayAtNine,
+  isWorkspaceHidden,
   nextWeekdayAt,
 } from "../lib/workspace-utils";
 import { Button } from "./ui/button";
@@ -29,6 +30,8 @@ interface ScheduleWorkspaceDialogProps {
   workspaceIds: number[];
   /** Existing schedule for the first workspace, if any. */
   currentHiddenUntil?: string | null;
+  /** True when any targeted workspace is currently scheduled. */
+  canRemoveSchedule?: boolean;
   mode: "workspace" | "stack";
 }
 
@@ -93,6 +96,7 @@ export const ScheduleWorkspaceDialog: React.FC<
   repoPath,
   workspaceIds,
   currentHiddenUntil,
+  canRemoveSchedule = false,
   mode,
 }) => {
   const [selected, setSelected] = useState<Date>(defaultScheduleDate());
@@ -138,13 +142,13 @@ export const ScheduleWorkspaceDialog: React.FC<
     }
   };
 
-  const handleShowNow = async () => {
+  const handleRemoveSchedule = async () => {
     setLoading(true);
     setError("");
     try {
       await scheduleWorkspaces(repoPath, workspaceIds, null);
       addToast({
-        title: mode === "stack" ? "Stack visible" : "Workspace visible",
+        title: mode === "stack" ? "Stack unscheduled" : "Workspace unscheduled",
         description: "Shown in the sidebar again.",
         type: "success",
       });
@@ -156,6 +160,10 @@ export const ScheduleWorkspaceDialog: React.FC<
       setLoading(false);
     }
   };
+
+  const showRemove =
+    canRemoveSchedule ||
+    isWorkspaceHidden({ hidden_until: currentHiddenUntil });
 
   const now = useMemo(() => new Date(), [open]);
   const count = workspaceIds.length;
@@ -218,13 +226,14 @@ export const ScheduleWorkspaceDialog: React.FC<
           {error && <div className="text-sm text-destructive">{error}</div>}
         </div>
         <div className="flex justify-end gap-2">
-          {currentHiddenUntil && (
+          {showRemove && (
             <Button
               variant="outline"
-              onClick={() => void handleShowNow()}
+              onClick={() => void handleRemoveSchedule()}
               disabled={loading}
+              data-testid="remove-schedule-button"
             >
-              Show now
+              Remove schedule
             </Button>
           )}
           <Button

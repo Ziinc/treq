@@ -80,6 +80,7 @@ import {
 } from "../lib/commitsTabLabel";
 import { cn, getFullWorkspacePath, resolveReadmeImageSrc } from "../lib/utils";
 import { sumWorkspaceLocFromLog } from "../lib/workspace-stack";
+import { isWorkspaceHidden } from "../lib/workspace-utils";
 import type { SessionCreationInfo } from "../types/sessions";
 import {
   ChangesDiffViewer,
@@ -261,6 +262,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
       mode: "workspace" | "stack";
       workspaceIds: number[];
       currentHiddenUntil?: string | null;
+      canRemoveSchedule?: boolean;
     } | null>(null);
     const [detailsOpen, setDetailsOpen] = useState(false);
     const [resolvingBookmarkConflict, setResolvingBookmarkConflict] =
@@ -1311,8 +1313,12 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
                           setScheduleDialog({
                             mode: "stack",
                             workspaceIds: stackWorkspaces.map((ws) => ws.id),
-                            currentHiddenUntil:
-                              stackWorkspaces[0]?.hidden_until,
+                            currentHiddenUntil: stackWorkspaces.find((ws) =>
+                              isWorkspaceHidden(ws),
+                            )?.hidden_until,
+                            canRemoveSchedule: stackWorkspaces.some((ws) =>
+                              isWorkspaceHidden(ws),
+                            ),
                           })
                         }
                       />
@@ -1621,6 +1627,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
                               mode: "workspace",
                               workspaceIds: [workspace.id],
                               currentHiddenUntil: workspace.hidden_until,
+                              canRemoveSchedule: isWorkspaceHidden(workspace),
                             })
                           }
                           data-testid="schedule-workspace-button"
@@ -2158,6 +2165,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
             repoPath={effectiveRepoPath}
             workspaceIds={scheduleDialog?.workspaceIds ?? [workspace.id]}
             currentHiddenUntil={scheduleDialog?.currentHiddenUntil}
+            canRemoveSchedule={scheduleDialog?.canRemoveSchedule}
             mode={scheduleDialog?.mode ?? "workspace"}
           />
         )}

@@ -99,4 +99,76 @@ describe("workspace scheduling", () => {
       expect(within(sidebarRoot).queryByText("feat/beta")).toBeNull();
     });
   });
+
+  it("removes a schedule from the dialog so the workspace is visible again", async () => {
+    await createWorkspace(repoPath, "feat/alpha");
+    await createWorkspace(repoPath, "feat/beta");
+    render(<Dashboard />);
+
+    await user.click(await findSidebarBranchElement("feat/alpha"));
+    const header = await screen.findByTestId("show-workspace-header");
+    await user.click(
+      await within(header).findByTestId("schedule-workspace-button"),
+    );
+    const dialog = await screen.findByTestId("schedule-workspace-dialog");
+    await user.click(within(dialog).getByTestId("schedule-preset-1h"));
+    await user.click(within(dialog).getByRole("button", { name: "Schedule" }));
+
+    await waitFor(() => {
+      const sidebarRoot = document.querySelector(
+        `.${CSS.escape("group/sidebar")}`,
+      ) as HTMLElement;
+      expect(within(sidebarRoot).queryByText("feat/alpha")).toBeNull();
+    });
+
+    await user.click(
+      await screen.findByTestId("show-hidden-workspaces-toggle"),
+    );
+    await user.click(await findSidebarBranchElement("feat/alpha"));
+
+    const headerAgain = await screen.findByTestId("show-workspace-header");
+    await user.click(
+      await within(headerAgain).findByTestId("schedule-workspace-button"),
+    );
+    const rescheduleDialog = await screen.findByTestId(
+      "schedule-workspace-dialog",
+    );
+    await user.click(
+      within(rescheduleDialog).getByTestId("remove-schedule-button"),
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("hidden-workspace-count")).toBeNull();
+    });
+    expect(await findSidebarBranchElement("feat/alpha")).toBeTruthy();
+    await user.click(
+      await screen.findByTestId("show-hidden-workspaces-toggle"),
+    );
+    expect(await findSidebarBranchElement("feat/alpha")).toBeTruthy();
+  });
+
+  it("removes a schedule from the sidebar context menu", async () => {
+    await createWorkspace(repoPath, "feat/alpha");
+    const workspaces = await getWorkspaces(repoPath);
+    const alpha = workspaces.find((ws) => ws.branch_name === "feat/alpha");
+    if (!alpha) throw new Error("expected feat/alpha");
+    await scheduleWorkspaces(
+      repoPath,
+      [alpha.id],
+      new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    );
+
+    render(<Dashboard />);
+    await user.click(
+      await screen.findByTestId("show-hidden-workspaces-toggle"),
+    );
+    const alphaElement = await findSidebarBranchElement("feat/alpha");
+    await user.pointer({ keys: "[MouseRight]", target: alphaElement });
+    await user.click(await screen.findByTestId("remove-schedule-menu-item"));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("hidden-workspace-count")).toBeNull();
+    });
+    expect(await findSidebarBranchElement("feat/alpha")).toBeTruthy();
+  });
 });

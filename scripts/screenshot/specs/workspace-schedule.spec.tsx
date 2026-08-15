@@ -73,4 +73,37 @@ it("captures scheduling a workspace hidden from the sidebar", async () => {
 			"feat/visible is still listed.",
 		],
 	});
+
+	await user.click(await findSidebarBranchElement("feat/scheduled"));
+	const headerAgain = await screen.findByTestId("show-workspace-header");
+	await user.click(
+		await within(headerAgain).findByTestId("schedule-workspace-button"),
+	);
+	const rescheduleDialog = await screen.findByTestId("schedule-workspace-dialog");
+	await within(rescheduleDialog).findByTestId("remove-schedule-button");
+
+	await captureDocument(document, {
+		name: "workspace-schedule-05-remove-schedule",
+		expectations: [
+			"The Schedule workspace dialog includes a Remove schedule button next to Cancel.",
+			"feat/scheduled remains listed in the sidebar while hidden workspaces are shown.",
+		],
+	});
+
+	await user.click(
+		within(rescheduleDialog).getByTestId("remove-schedule-button"),
+	);
+	await waitFor(() => {
+		expect(screen.queryByTestId("hidden-workspace-count")).toBeNull();
+	});
+	await findSidebarBranchElement("feat/scheduled");
+
+	await captureDocument(document, {
+		name: "workspace-schedule-06-unscheduled",
+		expectations: [
+			"feat/scheduled is listed in the sidebar without needing the show-hidden toggle.",
+			"The calendar toggle has no count pip.",
+			"The schedule dialog is closed.",
+		],
+	});
 }, 60000);
