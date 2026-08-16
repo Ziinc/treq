@@ -28,9 +28,9 @@ import {
 } from "../ui/carousel";
 import { Button } from "../ui/button";
 
-const IMAGE_ZOOM_MIN = 0.5;
-const IMAGE_ZOOM_MAX = 4;
-const IMAGE_ZOOM_STEP = 0.25;
+const IMAGE_ZOOM_MIN = 1;
+const IMAGE_ZOOM_MAX = 2;
+const IMAGE_ZOOM_STEP = 1;
 const IMAGE_ZOOM_DEFAULT = 1;
 /**
  * Fallback display width as a fraction of the viewport when natural size is
@@ -360,6 +360,88 @@ function SendAssetLightbox({
     );
   };
 
+  const toggleImageZoom = () => {
+    setImageZoom((currentZoom) =>
+      currentZoom === IMAGE_ZOOM_DEFAULT ? IMAGE_ZOOM_MAX : IMAGE_ZOOM_DEFAULT,
+    );
+  };
+
+  const lightboxControls = (
+    <div
+      className="flex shrink-0 items-center gap-1 rounded-full border border-white/15 bg-black/40 p-1 shadow-lg backdrop-blur"
+      onClick={(event) => event.stopPropagation()}
+    >
+      {showingImage && (
+        <>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            className="h-8 w-8 text-white hover:bg-white/15 hover:text-white"
+            aria-label="Zoom out"
+            data-testid="treq-send-zoom-out"
+            disabled={imageZoom <= IMAGE_ZOOM_MIN}
+            onClick={zoomOut}
+          >
+            <ZoomOut className="h-4 w-4" />
+          </Button>
+          <span
+            data-testid="treq-send-zoom-level"
+            className="min-w-10 px-1 text-center text-xs tabular-nums text-white/80"
+          >
+            {Math.round(imageZoom * 100)}%
+          </span>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-xs"
+            className="h-8 w-8 text-white hover:bg-white/15 hover:text-white"
+            aria-label="Zoom in"
+            data-testid="treq-send-zoom-in"
+            disabled={imageZoom >= IMAGE_ZOOM_MAX}
+            onClick={zoomIn}
+          >
+            <ZoomIn className="h-4 w-4" />
+          </Button>
+          <span aria-hidden className="mx-0.5 h-4 w-px bg-white/20" />
+        </>
+      )}
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-xs"
+        className="h-8 w-8 text-white hover:bg-white/15 hover:text-white"
+        aria-label="Copy asset"
+        data-testid="treq-send-copy"
+        onClick={copyCurrentAsset}
+      >
+        <Copy className="h-4 w-4" />
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-xs"
+        className="h-8 w-8 text-white hover:bg-white/15 hover:text-white"
+        aria-label={revealLabel}
+        data-testid="treq-send-reveal"
+        onClick={revealCurrentAsset}
+      >
+        <FolderOpen className="h-4 w-4" />
+      </Button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-xs"
+        className="h-8 w-8 text-white hover:bg-white/15 hover:text-white"
+        aria-label="Close preview"
+        data-testid="treq-send-close"
+        onClick={onClose}
+      >
+        <X className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+
   return (
     <div
       data-testid="treq-send-preview-lightbox"
@@ -367,89 +449,21 @@ function SendAssetLightbox({
       onClick={onClose}
     >
       <div
-        className="absolute right-4 top-4 z-20 flex items-center gap-1 rounded-full border border-white/15 bg-black/40 p-1 shadow-lg backdrop-blur"
-        onClick={(event) => event.stopPropagation()}
-      >
-        {showingImage && (
-          <>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              className="h-8 w-8 text-white hover:bg-white/15 hover:text-white"
-              aria-label="Zoom out"
-              data-testid="treq-send-zoom-out"
-              disabled={imageZoom <= IMAGE_ZOOM_MIN}
-              onClick={zoomOut}
-            >
-              <ZoomOut className="h-4 w-4" />
-            </Button>
-            <span
-              data-testid="treq-send-zoom-level"
-              className="min-w-10 px-1 text-center text-xs tabular-nums text-white/80"
-            >
-              {Math.round(imageZoom * 100)}%
-            </span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon-xs"
-              className="h-8 w-8 text-white hover:bg-white/15 hover:text-white"
-              aria-label="Zoom in"
-              data-testid="treq-send-zoom-in"
-              disabled={imageZoom >= IMAGE_ZOOM_MAX}
-              onClick={zoomIn}
-            >
-              <ZoomIn className="h-4 w-4" />
-            </Button>
-            <span aria-hidden className="mx-0.5 h-4 w-px bg-white/20" />
-          </>
-        )}
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          className="h-8 w-8 text-white hover:bg-white/15 hover:text-white"
-          aria-label="Copy asset"
-          data-testid="treq-send-copy"
-          onClick={copyCurrentAsset}
-        >
-          <Copy className="h-4 w-4" />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          className="h-8 w-8 text-white hover:bg-white/15 hover:text-white"
-          aria-label={revealLabel}
-          data-testid="treq-send-reveal"
-          onClick={revealCurrentAsset}
-        >
-          <FolderOpen className="h-4 w-4" />
-        </Button>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          className="h-8 w-8 text-white hover:bg-white/15 hover:text-white"
-          aria-label="Close preview"
-          data-testid="treq-send-close"
-          onClick={onClose}
-        >
-          <X className="h-4 w-4" />
-        </Button>
-      </div>
-
-      <div
         data-testid="treq-send-preview-carousel-shell"
         className="relative min-w-[75vw] w-[90vw] px-14"
         onClick={(event) => event.stopPropagation()}
       >
-        {current && (
-          <p className="mb-3 truncate text-center text-sm text-white/80">
-            {current.title}
-          </p>
-        )}
+        <div
+          data-testid="treq-send-preview-header"
+          className="mb-3 flex items-center justify-end gap-3"
+        >
+          {current && (
+            <p className="min-w-0 truncate text-sm text-white/80">
+              {current.title}
+            </p>
+          )}
+          {lightboxControls}
+        </div>
         <Carousel
           key={`send-carousel-${initialIndex}-${assets.map((a) => a.id).join(":")}`}
           setApi={setApi}
@@ -460,20 +474,39 @@ function SendAssetLightbox({
             {assets.map((asset) => (
               <CarouselItem
                 key={asset.id}
-                className="flex items-center justify-center"
+                className="flex min-h-0 items-stretch justify-center"
               >
                 {asset.mediaType === "image" ? (
-                  <div className="flex max-h-[80vh] max-w-full items-center justify-center overflow-auto">
-                    <img
-                      src={treqSendFileSrc(asset.path)}
-                      alt={asset.title}
-                      className="object-contain"
-                      style={imageSizeStyle(asset.id)}
-                      onLoad={(event) =>
-                        rememberFittedBaseSize(asset.id, event.currentTarget)
-                      }
-                      draggable={false}
-                    />
+                  <div
+                    data-testid={
+                      asset.id === current?.id
+                        ? "treq-send-image-scroll"
+                        : undefined
+                    }
+                    className="max-h-[80vh] w-full max-w-full overflow-auto"
+                  >
+                    <div className="flex min-h-full min-w-full items-center justify-center">
+                      <img
+                        src={treqSendFileSrc(asset.path)}
+                        alt={asset.title}
+                        className={cn(
+                          "object-contain",
+                          asset.id === current?.id && showingImage
+                            ? imageZoom === IMAGE_ZOOM_DEFAULT
+                              ? "cursor-zoom-in"
+                              : "cursor-zoom-out"
+                            : undefined,
+                        )}
+                        style={imageSizeStyle(asset.id)}
+                        onLoad={(event) =>
+                          rememberFittedBaseSize(asset.id, event.currentTarget)
+                        }
+                        onClick={
+                          asset.id === current?.id ? toggleImageZoom : undefined
+                        }
+                        draggable={false}
+                      />
+                    </div>
                   </div>
                 ) : (
                   <pre

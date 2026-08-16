@@ -110,6 +110,7 @@ describe("TerminalSendPreviews", () => {
     await user.click(screen.getByRole("button", { name: "Inject image" }));
     const thumb = await screen.findByTestId("terminal-send-preview-send-2");
     const attachment = thumb.closest('[data-slot="attachment"]');
+    expect(attachment?.className).toMatch(/h-24/);
     const img = attachment?.querySelector("img");
     expect(img?.getAttribute("src")).toBe(
       "asset://localhost/tmp/repo/shot.png",
@@ -192,10 +193,64 @@ describe("TerminalSendPreviews", () => {
     expect(image.style.width).toBe("75vw");
 
     await user.click(zoomIn);
-    expect(image.style.width).toBe("93.75vw");
+    expect(screen.getByTestId("treq-send-zoom-level").textContent).toBe("200%");
+    expect(image.style.width).toBe("150vw");
 
     await user.click(zoomOut);
+    expect(screen.getByTestId("treq-send-zoom-level").textContent).toBe("100%");
     expect(image.style.width).toBe("75vw");
+  });
+
+  it("toggles one zoom level when the lightbox image is clicked", async () => {
+    const user = userEvent.setup();
+    renderSend(<SendHarness ptySessionId="session-1" />);
+    await user.click(screen.getByRole("button", { name: "Inject image" }));
+    await user.click(await screen.findByTestId("terminal-send-preview-send-2"));
+    await screen.findByTestId("treq-send-preview-lightbox");
+
+    const image = screen
+      .getByTestId("treq-send-preview-lightbox")
+      .querySelector('img[alt="shot.png"]') as HTMLImageElement;
+    expect(screen.getByTestId("treq-send-zoom-level").textContent).toBe("100%");
+
+    await user.click(image);
+    expect(screen.getByTestId("treq-send-zoom-level").textContent).toBe("200%");
+    expect(image.style.width).toBe("150vw");
+    expect(screen.getByTestId("treq-send-preview-lightbox")).toBeTruthy();
+
+    await user.click(image);
+    expect(screen.getByTestId("treq-send-zoom-level").textContent).toBe("100%");
+    expect(image.style.width).toBe("75vw");
+  });
+
+  it("keeps lightbox controls next to the file name", async () => {
+    const user = userEvent.setup();
+    renderSend(<SendHarness ptySessionId="session-1" />);
+    await user.click(screen.getByRole("button", { name: "Inject image" }));
+    await user.click(await screen.findByTestId("terminal-send-preview-send-2"));
+    const header = await screen.findByTestId("treq-send-preview-header");
+    expect(header.textContent).toContain("shot.png");
+    expect(header.querySelector('[data-testid="treq-send-zoom-in"]')).toBeTruthy();
+    expect(header.querySelector('[data-testid="treq-send-copy"]')).toBeTruthy();
+    expect(header.querySelector('[data-testid="treq-send-close"]')).toBeTruthy();
+    expect(
+      screen
+        .getByTestId("treq-send-preview-lightbox")
+        .querySelector(":scope > .absolute.right-4.top-4"),
+    ).toBeNull();
+  });
+
+  it("uses a scrollable image frame so tall zoomed photos are not cropped at the top", async () => {
+    const user = userEvent.setup();
+    renderSend(<SendHarness ptySessionId="session-1" />);
+    await user.click(screen.getByRole("button", { name: "Inject image" }));
+    await user.click(await screen.findByTestId("terminal-send-preview-send-2"));
+    await screen.findByTestId("treq-send-preview-lightbox");
+
+    const frame = screen.getByTestId("treq-send-image-scroll");
+    expect(frame.className).toMatch(/overflow-auto/);
+    expect(frame.className).not.toMatch(/items-center/);
+    expect(frame.querySelector(".min-h-full")).toBeTruthy();
   });
 
   it("hides zoom controls for text assets", async () => {

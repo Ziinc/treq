@@ -22,7 +22,7 @@ const attachmentVariants = cva(
       variant: {
         default: "",
         thumbnail:
-          "h-14 w-14 min-w-14 flex-col flex-nowrap items-stretch justify-stretch gap-0 overflow-visible rounded-md border-white/15 bg-[#2a2a2a] p-0 text-zinc-300 shadow-md transition hover:border-white/40 has-[>a,>button]:hover:bg-[#2a2a2a] has-data-[slot=attachment-content]:p-0 has-data-[slot=attachment-content]:w-auto has-data-[slot=attachment-media]:p-0 focus-within:ring-1 focus-within:ring-white/30",
+          "h-24 w-24 min-w-24 flex-col flex-nowrap items-stretch justify-stretch gap-0 overflow-visible rounded-md border-white/15 bg-[#2a2a2a] p-0 text-zinc-300 shadow-md transition hover:border-white/40 has-[>a,>button]:hover:bg-[#2a2a2a] has-data-[slot=attachment-content]:p-0 has-data-[slot=attachment-content]:w-auto has-data-[slot=attachment-media]:p-0 focus-within:ring-1 focus-within:ring-white/30",
       },
     },
     defaultVariants: {
