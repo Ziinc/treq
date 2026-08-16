@@ -168,7 +168,7 @@ it("captures treq send attachment thumbs and lightbox carousel previews", async 
 	await captureDocument(document, {
 		name: "treq-send-03-image-lightbox",
 		expectations: [
-			"At 100% zoom the blue SVG fills most of the viewport width (about three-quarters or more) — readable without zooming in.",
+			"At 100% zoom the blue SVG is large in the carousel (not a postage-stamp thumbnail).",
 			"The carousel/content area spans at least three-quarters of the viewport; no small centered postage-stamp image.",
 			"Filename preview-shot.svg sits immediately left of zoom/copy/reveal/close controls on the same header row (right side of the carousel, not a floating top-right corner toolbar).",
 		],

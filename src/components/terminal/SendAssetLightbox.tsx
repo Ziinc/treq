@@ -27,8 +27,8 @@ const IMAGE_ZOOM_MIN = 1;
 const IMAGE_ZOOM_MAX = 2;
 const IMAGE_ZOOM_STEP = 1;
 const IMAGE_ZOOM_DEFAULT = 1;
-/** Fallback width as vw when natural size is unknown (jsdom / slow decode). */
-const IMAGE_ZOOM_FALLBACK_VIEWPORT_FRACTION = 0.75;
+/** Fallback height as vh when natural size is unknown (jsdom / slow decode). */
+const IMAGE_ZOOM_FALLBACK_VIEWPORT_FRACTION = 0.8;
 
 function clampImageZoom(value: number): number {
   return Math.min(
@@ -37,11 +37,11 @@ function clampImageZoom(value: number): number {
   );
 }
 
-function fallbackImageWidth(zoomFactor: number): string {
-  const vw =
+function fallbackImageHeight(zoomFactor: number): string {
+  const vh =
     Math.round(IMAGE_ZOOM_FALLBACK_VIEWPORT_FRACTION * zoomFactor * 10000) /
     100;
-  return `${vw}vw`;
+  return `${vh}vh`;
 }
 
 interface SendAssetLightboxProps {
@@ -121,8 +121,8 @@ export function SendAssetLightbox({
       };
     }
     return {
-      width: fallbackImageWidth(zoomFactor),
-      height: "auto",
+      height: fallbackImageHeight(zoomFactor),
+      width: "auto",
       maxWidth: "none",
       maxHeight: "none",
     };

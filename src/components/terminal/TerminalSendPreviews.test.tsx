@@ -171,7 +171,8 @@ describe("TerminalSendPreviews", () => {
       .getByTestId("treq-send-preview-lightbox")
       .querySelector('img[alt="shot.png"]') as HTMLImageElement;
     expect(image).toBeTruthy();
-    expect(image.style.width).toBe("75vw");
+    expect(image.style.height).toBe("80vh");
+    expect(image.style.width).toBe("auto");
   });
 
   it("zooms image assets in and out from the lightbox toolbar", async () => {
@@ -190,15 +191,15 @@ describe("TerminalSendPreviews", () => {
       .getByTestId("treq-send-preview-lightbox")
       .querySelector('img[alt="shot.png"]') as HTMLImageElement;
     expect(image).toBeTruthy();
-    expect(image.style.width).toBe("75vw");
+    expect(image.style.height).toBe("80vh");
 
     await user.click(zoomIn);
     expect(screen.getByTestId("treq-send-zoom-level").textContent).toBe("200%");
-    expect(image.style.width).toBe("150vw");
+    expect(image.style.height).toBe("160vh");
 
     await user.click(zoomOut);
     expect(screen.getByTestId("treq-send-zoom-level").textContent).toBe("100%");
-    expect(image.style.width).toBe("75vw");
+    expect(image.style.height).toBe("80vh");
   });
 
   it("toggles one zoom level when the lightbox image is clicked", async () => {
@@ -215,12 +216,12 @@ describe("TerminalSendPreviews", () => {
 
     await user.click(image);
     expect(screen.getByTestId("treq-send-zoom-level").textContent).toBe("200%");
-    expect(image.style.width).toBe("150vw");
+    expect(image.style.height).toBe("160vh");
     expect(screen.getByTestId("treq-send-preview-lightbox")).toBeTruthy();
 
     await user.click(image);
     expect(screen.getByTestId("treq-send-zoom-level").textContent).toBe("100%");
-    expect(image.style.width).toBe("75vw");
+    expect(image.style.height).toBe("80vh");
   });
 
   it("keeps lightbox controls next to the file name", async () => {
