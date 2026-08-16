@@ -75,6 +75,7 @@ import {
   type ParsedFileChange,
 } from "../lib/git-utils";
 import { reviewChangeCountQueryKey } from "../lib/review-change-count";
+import { REFRESH_WORKSPACE_CHANGES_EVENT } from "../lib/change-file-drag";
 import { getReviewTabPill, reviewTabPillClassName } from "../lib/reviewTabPill";
 import {
   commitsTabCountClassName,
@@ -589,6 +590,19 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
       },
     });
 
+    const invalidateWorkspaceFileQueries = useCallback(() => {
+      if (workspace?.id === undefined || !effectiveRepoPath) return;
+      void queryClient.invalidateQueries({
+        queryKey: ["workspace-status", effectiveRepoPath, workspace.id],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["workspace-statuses", effectiveRepoPath],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: reviewChangeCountQueryKey(effectiveRepoPath, workspace.id),
+      });
+    }, [workspace?.id, effectiveRepoPath, queryClient]);
+
     useEffect(() => {
       if (workspace?.id === undefined || !effectiveRepoPath) return;
       const workspaceId = workspace.id;
@@ -599,21 +613,23 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
           // WC edits (including conflict-marker resolves) must refresh status so
           // Review pill tone, Conflicts section props, and Code-tab alerts clear
           // in the same turn as the refreshed diff.
-          void queryClient.invalidateQueries({
-            queryKey: ["workspace-status", effectiveRepoPath, workspaceId],
-          });
-          void queryClient.invalidateQueries({
-            queryKey: ["workspace-statuses", effectiveRepoPath],
-          });
-          void queryClient.invalidateQueries({
-            queryKey: reviewChangeCountQueryKey(effectiveRepoPath, workspaceId),
-          });
+          invalidateWorkspaceFileQueries();
         },
       );
       return () => {
         void unlisten.then((fn) => fn());
       };
-    }, [workspace?.id, effectiveRepoPath, queryClient]);
+    }, [workspace?.id, effectiveRepoPath, invalidateWorkspaceFileQueries]);
+
+    useEffect(() => {
+      const handler = () => {
+        invalidateWorkspaceFileQueries();
+      };
+      window.addEventListener(REFRESH_WORKSPACE_CHANGES_EVENT, handler);
+      return () => {
+        window.removeEventListener(REFRESH_WORKSPACE_CHANGES_EVENT, handler);
+      };
+    }, [invalidateWorkspaceFileQueries]);
 
     useEffect(() => {
       if (!workspaceStatusData) return;

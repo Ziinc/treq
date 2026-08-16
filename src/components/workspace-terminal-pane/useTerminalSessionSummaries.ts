@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { dispatchRefreshWorkspaceChanges } from "../../lib/change-file-drag";
 import { formatTerminalPreview } from "../terminal-mission-control/formatTerminalPreview";
 import { type TerminalSessionSummary } from "../terminal/types";
 import { type TerminalEntry } from "./types";
@@ -117,13 +118,18 @@ export function useTerminalSessionSummaries({
   }, []);
 
   const handleTerminalIdlePulse = useCallback((id: string) => {
+    let becameIdle = false;
     setActivity((prev) => {
       const existing = prev.get(id);
       if (!existing || !existing.isStreaming) return prev;
+      becameIdle = true;
       const next = new Map(prev);
       next.set(id, { ...existing, isStreaming: false });
       return next;
     });
+    // Agents often write files without a reliable watcher event. Re-scan
+    // the working copy when process output stops.
+    if (becameIdle) dispatchRefreshWorkspaceChanges();
   }, []);
 
   const terminalSummaries = useMemo<TerminalSessionSummary[]>(
