@@ -230,9 +230,13 @@ describe("TerminalSendPreviews", () => {
     await user.click(await screen.findByTestId("terminal-send-preview-send-2"));
     const header = await screen.findByTestId("treq-send-preview-header");
     expect(header.textContent).toContain("shot.png");
-    expect(header.querySelector('[data-testid="treq-send-zoom-in"]')).toBeTruthy();
+    expect(
+      header.querySelector('[data-testid="treq-send-zoom-in"]'),
+    ).toBeTruthy();
     expect(header.querySelector('[data-testid="treq-send-copy"]')).toBeTruthy();
-    expect(header.querySelector('[data-testid="treq-send-close"]')).toBeTruthy();
+    expect(
+      header.querySelector('[data-testid="treq-send-close"]'),
+    ).toBeTruthy();
     expect(
       screen
         .getByTestId("treq-send-preview-lightbox")
@@ -251,6 +255,10 @@ describe("TerminalSendPreviews", () => {
     expect(frame.className).toMatch(/overflow-auto/);
     expect(frame.className).not.toMatch(/items-center/);
     expect(frame.querySelector(".min-h-full")).toBeTruthy();
+
+    await user.click(screen.getByTestId("treq-send-zoom-in"));
+    expect(frame.className).toMatch(/h-\[80vh\]/);
+    expect(frame.querySelector(".items-start")).toBeTruthy();
   });
 
   it("hides zoom controls for text assets", async () => {

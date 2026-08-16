@@ -194,6 +194,18 @@ it("captures treq send attachment thumbs and lightbox carousel previews", async 
 		expect(screen.queryByTestId("treq-send-preview-lightbox")).toBeNull();
 	});
 
+	await user.hover(
+		screen
+			.getByTestId("terminal-send-preview-qa-send-image")
+			.closest('[data-slot="attachment"]') as HTMLElement,
+	);
+	await user.click(screen.getByTestId("terminal-send-dismiss-qa-send-image"));
+	await waitFor(() => {
+		expect(
+			screen.queryByTestId("terminal-send-preview-qa-send-image"),
+		).toBeNull();
+	});
+
 	sendCallback({
 		payload: {
 			kind: "send",
@@ -230,12 +242,6 @@ it("captures treq send attachment thumbs and lightbox carousel previews", async 
 		expect(screen.queryByTestId("treq-send-preview-lightbox")).toBeNull();
 	});
 
-	await user.hover(
-		screen
-			.getByTestId("terminal-send-preview-qa-send-image")
-			.closest('[data-slot="attachment"]') as HTMLElement,
-	);
-	await user.click(screen.getByTestId("terminal-send-dismiss-qa-send-image"));
 	await user.hover(
 		screen
 			.getByTestId("terminal-send-preview-qa-send-tall")
