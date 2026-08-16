@@ -36,6 +36,7 @@ export function useTerminalSessionSummaries({
   const [activity, setActivity] = useState<Map<string, TerminalActivity>>(
     new Map(),
   );
+  const streamingIdsRef = useRef(new Set<string>());
 
   // Seed a fresh activity entry for every newly-mounted terminal, and prune
   // entries for terminals that have been closed. Single source of truth so
@@ -59,6 +60,7 @@ export function useTerminalSessionSummaries({
       for (const id of next.keys()) {
         if (!liveIds.has(id)) {
           next.delete(id);
+          streamingIdsRef.current.delete(id);
           changed = true;
         }
       }
@@ -79,6 +81,8 @@ export function useTerminalSessionSummaries({
         const isStreaming = fromProcess
           ? true
           : (existing?.isStreaming ?? false);
+        if (fromProcess) streamingIdsRef.current.add(id);
+        else if (!isStreaming) streamingIdsRef.current.delete(id);
 
         const lastUserInputAt = existing?.lastUserInputAt ?? 0;
         if (
@@ -118,18 +122,18 @@ export function useTerminalSessionSummaries({
   }, []);
 
   const handleTerminalIdlePulse = useCallback((id: string) => {
-    let becameIdle = false;
+    const wasStreaming = streamingIdsRef.current.has(id);
+    streamingIdsRef.current.delete(id);
     setActivity((prev) => {
       const existing = prev.get(id);
       if (!existing || !existing.isStreaming) return prev;
-      becameIdle = true;
       const next = new Map(prev);
       next.set(id, { ...existing, isStreaming: false });
       return next;
     });
     // Agents often write files without a reliable watcher event. Re-scan
     // the working copy when process output stops.
-    if (becameIdle) dispatchRefreshWorkspaceChanges();
+    if (wasStreaming) dispatchRefreshWorkspaceChanges();
   }, []);
 
   const terminalSummaries = useMemo<TerminalSessionSummary[]>(
