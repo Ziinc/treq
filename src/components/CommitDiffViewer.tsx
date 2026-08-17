@@ -36,6 +36,7 @@ import {
   stashCommit,
   undoRepoOperation,
 } from "../lib/api";
+import { resolvableConflictedCommits } from "../lib/resolvable-conflicted-commits";
 import { getLanguageFromPath, highlightCode } from "../lib/syntax-highlight";
 import {
   cn,
@@ -344,12 +345,19 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
       [baseCommits, removedCommitIds],
     );
 
+    const isDefaultWorkspaceBranch =
+      !isHomeRepo &&
+      workspaceBranch != null &&
+      targetBranchCommitsBranch != null &&
+      workspaceBranch === targetBranchCommitsBranch;
+
     const conflictedCommits = useMemo(
       () =>
-        commits.filter(
-          (commit) => commit.has_conflicts && !commit.on_target_only,
+        resolvableConflictedCommits(
+          [...commits, ...targetBranchCommits],
+          !isHomeRepo && !isDefaultWorkspaceBranch,
         ),
-      [commits],
+      [commits, isDefaultWorkspaceBranch, isHomeRepo, targetBranchCommits],
     );
 
     const [resolveDialogOpen, setResolveDialogOpen] = useState(false);
@@ -358,9 +366,9 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
     );
 
     const openResolveAll = useCallback(() => {
-      setResolveChangeIds(null);
+      setResolveChangeIds(conflictedCommits.map((commit) => commit.change_id));
       setResolveDialogOpen(true);
-    }, []);
+    }, [conflictedCommits]);
 
     const openResolveOne = useCallback((commit: JjLogCommit) => {
       setResolveChangeIds([commit.change_id]);
@@ -750,11 +758,6 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
       () => groupCommitsByDay(targetBranchCommits),
       [targetBranchCommits],
     );
-    const isDefaultWorkspaceBranch =
-      !isHomeRepo &&
-      workspaceBranch != null &&
-      targetBranchCommitsBranch != null &&
-      workspaceBranch === targetBranchCommitsBranch;
     const showTargetBranchSection =
       !isHomeRepo &&
       !isDefaultWorkspaceBranch &&
@@ -951,7 +954,13 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
                           onEditDescription={handleEditDescription}
                           onEditTimestamp={handleEditTimestamp}
                           onResolveConflict={
-                            onSessionCreated ? openResolveOne : undefined
+                            onSessionCreated &&
+                            conflictedCommits.some(
+                              (candidate) =>
+                                candidate.change_id === commit.change_id,
+                            )
+                              ? openResolveOne
+                              : undefined
                           }
                           onCreateAgentWithComment={onCreateAgentWithComment}
                           onLoadDeferredFileDiff={(filePath) =>

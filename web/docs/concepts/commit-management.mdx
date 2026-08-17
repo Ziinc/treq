@@ -50,6 +50,8 @@ Conflict state belongs to the workspace, not a single commit. A commit view can 
 
 When a rebase leaves one or more commits conflicted, open the **Commits** tab and choose **Resolve conflicts…**. Treq prepares a short-lived resolve root at `.treq/resolve/<workspace-slug>/`, with one subdirectory per conflicted change id.
 
+Immutable commits can be resolved from this tab only when every conflicted commit is on the workspace branch. Conflicted commits that exist only on the target branch stay read-only. The home repository and the default-branch workspace do not rewrite immutable history this way.
+
 Give the agent one prompt describing how to resolve the conflicts. The agent starts in that resolve root. It can edit conflict markers in each change-id directory, or run:
 
 ```bash
