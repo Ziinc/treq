@@ -5,6 +5,7 @@ on:
     paths:
       - "src/**"
       - "src-tauri/**"
+      - "crates/tauri-test-macros/**"
       - "supabase/**"
       - "web/**"
       - "test/**"
@@ -84,12 +85,13 @@ jobs:
       # cache on subsequent runs. execute_install_scripts is required so dpkg
       # postinst (ldconfig, alternatives) still runs on restore.
       - name: install dependencies (ubuntu only)
-        # WebKit/GTK is only needed to *link* treq/tauri (NAPI miss, verify, rust).
+        # WebKit/GTK is needed to *link* treq/tauri (verify, rust, NAPI miss) and
+        # to *dlopen* libtreq_lib.so in integration tests even on a NAPI cache hit.
         if: >
           matrix.platform == 'ubuntu-22.04' && (
             matrix.kind == 'rust' ||
             matrix.kind == 'verify' ||
-            (matrix.task == 'test:integration' && steps.napi-cache.outputs.cache-hit != 'true')
+            matrix.task == 'test:integration'
           )
         uses: awalsh128/cache-apt-pkgs-action@v1.6.1
         with:
