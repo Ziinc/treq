@@ -8,6 +8,7 @@ import {
   isChangeFilesDrag,
   type ChangeFilesMoveRequest,
 } from "../lib/change-file-drag";
+import { cn } from "../lib/utils";
 import { Button } from "./ui/button";
 import {
   ContextMenu,
@@ -59,7 +60,7 @@ export function HomeRepoSidebarRow({
               <SidebarMenuButton
                 asChild
                 isActive={isHomeSelected}
-                className="h-auto py-1"
+                className={cn("h-auto py-1", isHomeSelected && "bg-primary/20")}
               >
                 <div
                   data-testid="home-repo-row"
