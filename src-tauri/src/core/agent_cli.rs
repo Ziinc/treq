@@ -234,7 +234,9 @@ mod tests {
       .pointer("/sandbox/filesystem/allowWrite")
       .and_then(Value::as_array)
       .unwrap();
-    assert!(allow_write.iter().any(|p| p.as_str() == Some(files.skill_dir.as_str())));
+    assert!(allow_write
+      .iter()
+      .any(|p| p.as_str() == Some(files.skill_dir.as_str())));
 
     let skill_md = Path::new(&files.skill_dir).join("skills/treq/SKILL.md");
     let body = fs::read_to_string(skill_md).expect("read skill");
