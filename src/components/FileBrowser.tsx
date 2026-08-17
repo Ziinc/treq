@@ -17,7 +17,11 @@ import {
   Send,
   X,
 } from "lucide-react";
-import { List, type ListImperativeAPI } from "react-window";
+import {
+  List,
+  type ListImperativeAPI,
+  type RowComponentProps,
+} from "react-window";
 import {
   type DirectoryEntry,
   type Workspace,
@@ -304,6 +308,155 @@ const CodeLine = memo(
     </div>
   ),
 );
+
+interface FileBrowserListRowProps {
+  rows: FileBrowserRow[];
+  lines: string[];
+  lineNumberWidth: number;
+  fileHunks: Map<number, "add" | "modify" | "delete">;
+  deletionMarkers: Set<number>;
+  linesWithComments: Set<number>;
+  commentsByEndLine: Map<number, LineComment[]>;
+  showCommentInput: boolean;
+  pendingComment: {
+    startLine: number;
+    endLine: number;
+    lineContent: string[];
+  } | null;
+  editingCommentId: string | null;
+  commentDraft: string;
+  onCommentDraftChange: (text: string) => void;
+  onSubmitComment: (text: string) => void;
+  onCancelComment: () => void;
+  onStartEditComment: (commentId: string) => void;
+  onCancelEditComment: () => void;
+  onSaveEditComment: (commentId: string, text: string) => void;
+  onDeleteComment: (commentId: string) => void;
+  fontSize: number;
+  hoveredLine: number | null;
+  isSelecting: boolean;
+  searchQuery: string;
+  searchMatches: SearchMatch[];
+  currentMatchIndex: number;
+  onSetHoveredLine: (lineNum: number | null) => void;
+  onLineMouseDown: (
+    e: React.MouseEvent,
+    lineNum: number,
+    lineContent: string,
+  ) => void;
+  onLineMouseEnter: (lineNum: number) => void;
+  onLineMouseUp: () => void;
+  isLineSelected: (lineNum: number) => boolean;
+  onAddComment: (lineNum?: number) => void;
+}
+
+function FileBrowserListRow({
+  index,
+  style,
+  rows,
+  lines,
+  lineNumberWidth,
+  fileHunks,
+  deletionMarkers,
+  linesWithComments,
+  commentsByEndLine,
+  showCommentInput,
+  pendingComment,
+  editingCommentId,
+  commentDraft,
+  onCommentDraftChange,
+  onSubmitComment,
+  onCancelComment,
+  onStartEditComment,
+  onCancelEditComment,
+  onSaveEditComment,
+  onDeleteComment,
+  fontSize,
+  hoveredLine,
+  isSelecting,
+  searchQuery,
+  searchMatches,
+  currentMatchIndex,
+  onSetHoveredLine,
+  onLineMouseDown,
+  onLineMouseEnter,
+  onLineMouseUp,
+  isLineSelected,
+  onAddComment,
+}: RowComponentProps<FileBrowserListRowProps>): React.ReactElement | null {
+  const row = rows[index];
+  if (!row) return null;
+
+  if (row.type === "comment") {
+    const { lineNum } = row;
+    const showInputHere =
+      showCommentInput &&
+      pendingComment !== null &&
+      pendingComment.endLine === lineNum;
+    return (
+      <div style={style}>
+        <FileCommentSection
+          comments={commentsByEndLine.get(lineNum) ?? []}
+          editingCommentId={editingCommentId}
+          showInput={showInputHere}
+          onSubmit={onSubmitComment}
+          onCancel={onCancelComment}
+          onStartEdit={onStartEditComment}
+          onCancelEdit={onCancelEditComment}
+          onSaveEdit={onSaveEditComment}
+          onDelete={onDeleteComment}
+          commentDraft={commentDraft}
+          onCommentDraftChange={onCommentDraftChange}
+        />
+      </div>
+    );
+  }
+
+  const { lineNum } = row;
+  const lineIndex = lineNum - 1;
+  let line = lines[lineIndex];
+  const diffStatus = fileHunks.get(lineNum);
+  const hasDeletionMarker = deletionMarkers.has(lineNum);
+
+  if (searchQuery) {
+    const lineMatches = searchMatches.filter((m) => m.lineNumber === lineIndex);
+    if (lineMatches.length > 0) {
+      const firstMatchGlobalIndex = searchMatches.findIndex(
+        (m) => m.lineNumber === lineIndex,
+      );
+      const isCurrentMatchOnLine =
+        searchMatches[currentMatchIndex]?.lineNumber === lineIndex;
+      const currentMatchOffset = isCurrentMatchOnLine
+        ? currentMatchIndex - firstMatchGlobalIndex
+        : -1;
+
+      const result = highlightInHtml(line, searchQuery, currentMatchOffset);
+      line = result.html;
+    }
+  }
+
+  return (
+    <CodeLine
+      lineNum={lineNum}
+      htmlContent={line}
+      diffStatus={diffStatus}
+      hasDeletionMarker={hasDeletionMarker}
+      hasComment={linesWithComments.has(lineNum)}
+      lineNumberWidth={lineNumberWidth}
+      onMouseEnter={() => onSetHoveredLine(lineNum)}
+      onMouseLeave={() => onSetHoveredLine(null)}
+      style={style}
+      fontSize={fontSize}
+      hoveredLine={hoveredLine}
+      isLineSelected={isLineSelected(lineNum)}
+      isSelecting={isSelecting}
+      onLineMouseDown={onLineMouseDown}
+      onLineMouseEnter={onLineMouseEnter}
+      onLineMouseUp={onLineMouseUp}
+      onAddComment={onAddComment}
+    />
+  );
+}
 
 // FileContentView component - memoized file content panel
 interface FileContentViewProps {
@@ -605,98 +758,39 @@ const FileContentView = memo(
                 listRef={listRef}
                 rowCount={rows.length}
                 rowHeight={getItemHeight}
-                rowComponent={({
-                  index,
-                  style,
-                }: {
-                  index: number;
-                  style: React.CSSProperties;
-                }) => {
-                  const row = rows[index];
-                  if (!row) return null;
-
-                  if (row.type === "comment") {
-                    const { lineNum } = row;
-                    const showInputHere =
-                      showCommentInput &&
-                      pendingComment !== null &&
-                      pendingComment.endLine === lineNum;
-                    return (
-                      <div style={style}>
-                        <FileCommentSection
-                          comments={commentsByEndLine.get(lineNum) ?? []}
-                          editingCommentId={editingCommentId}
-                          showInput={showInputHere}
-                          onSubmit={onSubmitComment}
-                          onCancel={onCancelComment}
-                          onStartEdit={onStartEditComment}
-                          onCancelEdit={onCancelEditComment}
-                          onSaveEdit={onSaveEditComment}
-                          onDelete={onDeleteComment}
-                          commentDraft={commentDraft}
-                          onCommentDraftChange={onCommentDraftChange}
-                        />
-                      </div>
-                    );
-                  }
-
-                  const { lineNum } = row;
-                  const lineIndex = lineNum - 1;
-                  let line = lines[lineIndex];
-                  const diffStatus = fileHunks.get(lineNum);
-                  const hasDeletionMarker = deletionMarkers.has(lineNum);
-
-                  // Apply search highlighting if there's a query
-                  if (searchQuery) {
-                    // Find which global match index corresponds to this line
-                    const lineMatches = searchMatches.filter(
-                      (m) => m.lineNumber === lineIndex,
-                    );
-                    if (lineMatches.length > 0) {
-                      // Find global index of first match on this line
-                      const firstMatchGlobalIndex = searchMatches.findIndex(
-                        (m) => m.lineNumber === lineIndex,
-                      );
-                      const isCurrentMatchOnLine =
-                        searchMatches[currentMatchIndex]?.lineNumber ===
-                        lineIndex;
-                      const currentMatchOffset = isCurrentMatchOnLine
-                        ? currentMatchIndex - firstMatchGlobalIndex
-                        : -1;
-
-                      const result = highlightInHtml(
-                        line,
-                        searchQuery,
-                        currentMatchOffset,
-                      );
-                      line = result.html;
-                    }
-                  }
-
-                  return (
-                    <CodeLine
-                      lineNum={lineNum}
-                      htmlContent={line}
-                      diffStatus={diffStatus}
-                      hasDeletionMarker={hasDeletionMarker}
-                      hasComment={linesWithComments.has(lineNum)}
-                      lineNumberWidth={lineNumberWidth}
-                      onMouseEnter={() => onSetHoveredLine(lineNum)}
-                      onMouseLeave={() => onSetHoveredLine(null)}
-                      style={style}
-                      fontSize={fontSize}
-                      hoveredLine={hoveredLine}
-                      isLineSelected={isLineSelected(lineNum)}
-                      isSelecting={isSelecting}
-                      onLineMouseDown={onLineMouseDown}
-                      onLineMouseEnter={onLineMouseEnter}
-                      onLineMouseUp={onLineMouseUp}
-                      onAddComment={onAddComment}
-                    />
-                  );
+                rowComponent={FileBrowserListRow}
+                rowProps={{
+                  rows,
+                  lines,
+                  lineNumberWidth,
+                  fileHunks,
+                  deletionMarkers,
+                  linesWithComments,
+                  commentsByEndLine,
+                  showCommentInput,
+                  pendingComment,
+                  editingCommentId,
+                  commentDraft,
+                  onCommentDraftChange,
+                  onSubmitComment,
+                  onCancelComment,
+                  onStartEditComment,
+                  onCancelEditComment,
+                  onSaveEditComment,
+                  onDeleteComment,
+                  fontSize,
+                  hoveredLine,
+                  isSelecting,
+                  searchQuery,
+                  searchMatches,
+                  currentMatchIndex,
+                  onSetHoveredLine,
+                  onLineMouseDown,
+                  onLineMouseEnter,
+                  onLineMouseUp,
+                  isLineSelected,
+                  onAddComment,
                 }}
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                rowProps={{} as any}
               />
               {/* Search overlay */}
               <SearchOverlay

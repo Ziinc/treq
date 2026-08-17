@@ -104,8 +104,8 @@ describe("FileBrowser polling", () => {
     await waitFor(() => {
       expect(api.readFile.mock.calls.length).toBeGreaterThan(1);
     });
-    expect(
-      await screen.findByPlaceholderText("Add a comment..."),
-    ).toHaveValue("keep this draft");
+    expect(await screen.findByPlaceholderText("Add a comment...")).toHaveValue(
+      "keep this draft",
+    );
   });
 });
