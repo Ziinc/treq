@@ -37,6 +37,16 @@ it("captures treq send attachment thumbs and lightbox carousel previews", async 
 	);
 
 	const imagePath = path.join(repoPath, "preview-shot.svg");
+	const tallPath = path.join(repoPath, "preview-tall.svg");
+	fs.writeFileSync(
+		tallPath,
+		`<svg xmlns="http://www.w3.org/2000/svg" width="80" height="640">
+  <rect width="80" height="640" fill="#0f766e"/>
+  <text x="40" y="40" text-anchor="middle" fill="#ecfdf5" font-size="18">TOP</text>
+  <text x="40" y="620" text-anchor="middle" fill="#ecfdf5" font-size="18">BOT</text>
+</svg>
+`,
+	);
 	fs.writeFileSync(
 		imagePath,
 		`<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128">
@@ -114,8 +124,8 @@ it("captures treq send attachment thumbs and lightbox carousel previews", async 
 	await captureDocument(document, {
 		name: "treq-send-01-square-previews",
 		expectations: [
-			"Two dark h-14 square thumbnails sit at the top-left of the terminal in a horizontal row.",
-			"The image thumb shows a blue square with a white circle; the text thumb shows a file icon and title.",
+			"Two dark landscape thumbnails (wider than tall, ~80x144) sit at the top-left of the terminal in a horizontal row.",
+			"The image thumb shows a blue square with a white circle letterboxed (object-fit contain) inside the landscape card; the text thumb shows a file icon and title.",
 			"Dismiss X controls are hidden until a thumbnail is hovered.",
 		],
 	});
@@ -158,22 +168,23 @@ it("captures treq send attachment thumbs and lightbox carousel previews", async 
 	await captureDocument(document, {
 		name: "treq-send-03-image-lightbox",
 		expectations: [
-			"At 100% zoom the blue SVG fills most of the viewport width (about three-quarters or more) — readable without zooming in.",
+			"At 100% zoom the blue SVG is large in the carousel (not a postage-stamp thumbnail).",
 			"The carousel/content area spans at least three-quarters of the viewport; no small centered postage-stamp image.",
-			"Top-right toolbar shows zoom out, 100%, zoom in, plus copy, reveal, and close on a blurred backdrop.",
+			"Centered above the image: filename preview-shot.svg on its own line, with the zoom/copy/reveal/close toolbar centered under it.",
 		],
 	});
 
-	await user.click(screen.getByTestId("treq-send-zoom-in"));
-	await user.click(screen.getByTestId("treq-send-zoom-in"));
-	await user.click(screen.getByTestId("treq-send-zoom-in"));
-	await user.click(screen.getByTestId("treq-send-zoom-in"));
+	await user.click(
+		document.querySelector(
+			'[data-testid="treq-send-preview-lightbox"] img',
+		) as HTMLElement,
+	);
 	expect(screen.getByTestId("treq-send-zoom-level").textContent).toBe("200%");
 
 	await captureDocument(document, {
 		name: "treq-send-03b-image-zoomed",
 		expectations: [
-			"Toolbar zoom label reads 200% after zooming in from the 100% state.",
+			"Toolbar zoom label reads 200% after clicking the image once to zoom.",
 			"The blue SVG still fills the carousel frame (scrollable when larger than the shell).",
 		],
 	});
@@ -183,7 +194,60 @@ it("captures treq send attachment thumbs and lightbox carousel previews", async 
 		expect(screen.queryByTestId("treq-send-preview-lightbox")).toBeNull();
 	});
 
+	await user.hover(
+		screen
+			.getByTestId("terminal-send-preview-qa-send-image")
+			.closest('[data-slot="attachment"]') as HTMLElement,
+	);
 	await user.click(screen.getByTestId("terminal-send-dismiss-qa-send-image"));
+	await waitFor(() => {
+		expect(
+			screen.queryByTestId("terminal-send-preview-qa-send-image"),
+		).toBeNull();
+	});
+
+	sendCallback({
+		payload: {
+			kind: "send",
+			request_id: "qa-send-tall",
+			repo: repoPath,
+			pty_session_id: ptySessionId!,
+			media_type: "image",
+			path: tallPath,
+			title: "preview-tall.svg",
+		},
+	});
+	await user.click(
+		await screen.findByTestId("terminal-send-preview-qa-send-tall"),
+	);
+	expect(await screen.findByTestId("treq-send-preview-lightbox")).toBeTruthy();
+	await user.click(
+		document.querySelector(
+			'[data-testid="treq-send-preview-lightbox"] img[alt="preview-tall.svg"]',
+		) as HTMLElement,
+	);
+	expect(screen.getByTestId("treq-send-zoom-level").textContent).toBe("200%");
+	screen.getByTestId("treq-send-image-scroll").scrollTop = 0;
+
+	await captureDocument(document, {
+		name: "treq-send-03c-tall-zoomed",
+		expectations: [
+			"A tall teal photo is zoomed to 200% and the TOP label at the top of the image is visible (not cropped).",
+			"The image is scrollable in the lightbox; preview-tall.svg is centered above the toolbar.",
+		],
+	});
+
+	await user.click(screen.getByTestId("treq-send-close"));
+	await waitFor(() => {
+		expect(screen.queryByTestId("treq-send-preview-lightbox")).toBeNull();
+	});
+
+	await user.hover(
+		screen
+			.getByTestId("terminal-send-preview-qa-send-tall")
+			.closest('[data-slot="attachment"]') as HTMLElement,
+	);
+	await user.click(screen.getByTestId("terminal-send-dismiss-qa-send-tall"));
 	await waitFor(() => {
 		expect(
 			screen.queryByTestId("terminal-send-preview-qa-send-image"),
@@ -220,7 +284,7 @@ it("captures treq send attachment thumbs and lightbox carousel previews", async 
 		expectations: [
 			"A blurred backdrop shows the text asset alone without a modal frame.",
 			"The selectable text includes 'Selectable preview text from treq send'.",
-			"Top-right shows copy, reveal, and close — no zoom controls for text.",
+			"Copy, reveal, and close sit in a centered toolbar under the filename — no zoom controls for text.",
 		],
 	});
 }, 60000);

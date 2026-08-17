@@ -22,7 +22,7 @@ const attachmentVariants = cva(
       variant: {
         default: "",
         thumbnail:
-          "h-14 w-14 min-w-14 flex-col flex-nowrap items-stretch justify-stretch gap-0 overflow-visible rounded-md border-white/15 bg-[#2a2a2a] p-0 text-zinc-300 shadow-md transition hover:border-white/40 has-[>a,>button]:hover:bg-[#2a2a2a] has-data-[slot=attachment-content]:p-0 has-data-[slot=attachment-content]:w-auto has-data-[slot=attachment-media]:p-0 focus-within:ring-1 focus-within:ring-white/30",
+          "h-20 w-36 min-w-36 flex-col flex-nowrap items-stretch justify-stretch gap-0 overflow-visible rounded-md border-white/15 bg-[#2a2a2a] p-0 text-zinc-300 shadow-md transition hover:border-white/40 has-[>a,>button]:hover:bg-[#2a2a2a] has-data-[slot=attachment-content]:p-0 has-data-[slot=attachment-content]:w-auto has-data-[slot=attachment-media]:p-0 focus-within:ring-1 focus-within:ring-white/30",
       },
     },
     defaultVariants: {
@@ -75,7 +75,7 @@ const attachmentMediaVariants = cva(
       variant: {
         icon: "group-data-[variant=thumbnail]/attachment:flex-col group-data-[variant=thumbnail]/attachment:gap-1 group-data-[variant=thumbnail]/attachment:px-1",
         image:
-          "opacity-60 group-data-[state=done]/attachment:opacity-100 group-data-[state=idle]/attachment:opacity-100 *:[img]:aspect-square *:[img]:size-full *:[img]:object-cover group-data-[variant=thumbnail]/attachment:opacity-100 group-data-[variant=thumbnail]/attachment:*:[img]:aspect-auto group-data-[variant=thumbnail]/attachment:*:[img]:rounded-[3px]",
+          "opacity-60 group-data-[state=done]/attachment:opacity-100 group-data-[state=idle]/attachment:opacity-100 *:[img]:aspect-square *:[img]:size-full *:[img]:object-cover group-data-[variant=thumbnail]/attachment:opacity-100 group-data-[variant=thumbnail]/attachment:*:[img]:aspect-auto group-data-[variant=thumbnail]/attachment:*:[img]:object-contain group-data-[variant=thumbnail]/attachment:*:[img]:rounded-[3px]",
       },
     },
     defaultVariants: {
