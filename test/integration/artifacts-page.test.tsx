@@ -1,7 +1,7 @@
 import * as React from "react";
 import fs from "node:fs";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import userEvent from "@testing-library/user-event";
 import { createTestRepo, openRepo } from "../utils";
 import { render, screen } from "../test-utils";
@@ -36,6 +36,12 @@ function seedSendManifest(
 }
 
 describe("artifacts page", () => {
+  let user: ReturnType<typeof userEvent.setup>;
+
+  beforeEach(() => {
+    user = userEvent.setup();
+  });
+
   it("opens from the sidebar button and shows a thumbnail grid", async () => {
     const { repoPath } = createTestRepo(false);
     openRepo(repoPath);
@@ -56,12 +62,9 @@ describe("artifacts page", () => {
       },
     ]);
 
-    const user = userEvent.setup();
     render(<Dashboard />);
 
-    await user.click(
-      await screen.findByRole("button", { name: "Artifacts" }),
-    );
+    await user.click(await screen.findByRole("button", { name: "Artifacts" }));
 
     expect(await screen.findByTestId("artifacts-grid")).toBeTruthy();
     expect(screen.getByTestId("artifact-thumb-send-200")).toBeTruthy();
@@ -69,18 +72,17 @@ describe("artifacts page", () => {
     expect(window.location.hash).toContain(ARTIFACTS_BASE_PATH);
 
     await user.click(screen.getByTestId("artifact-thumb-send-100"));
-    expect(await screen.findByTestId("treq-send-preview-lightbox")).toBeTruthy();
+    expect(
+      await screen.findByTestId("treq-send-preview-lightbox"),
+    ).toBeTruthy();
   });
 
   it("shows an empty state when nothing has been sent", async () => {
     const { repoPath } = createTestRepo(false);
     openRepo(repoPath);
-    const user = userEvent.setup();
     render(<Dashboard />);
 
-    await user.click(
-      await screen.findByRole("button", { name: "Artifacts" }),
-    );
+    await user.click(await screen.findByRole("button", { name: "Artifacts" }));
     expect(await screen.findByTestId("artifacts-empty")).toBeTruthy();
     expect(screen.getByText("No artifacts yet")).toBeTruthy();
   });

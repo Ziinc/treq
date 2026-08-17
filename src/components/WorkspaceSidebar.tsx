@@ -1,6 +1,6 @@
 import { DragDropContext, Droppable, type DropResult } from "@hello-pangea/dnd";
 import { useQuery } from "@tanstack/react-query";
-import { Archive, CalendarClock, Github, Images, Search, Settings } from "lucide-react";
+import { Archive, CalendarClock, Github, Search } from "lucide-react";
 import { memo, useCallback, useMemo, useState } from "react";
 import {
   useGitRemoteInfo,
@@ -29,6 +29,7 @@ import {
 } from "../lib/workspace-tree";
 import { isWorkspaceHidden } from "../lib/workspace-utils";
 import { HomeRepoSidebarRow } from "./HomeRepoSidebarRow";
+import { WorkspaceSidebarHeaderActions } from "./WorkspaceSidebarHeaderActions";
 import { RenameWorkspaceDialog } from "./RenameWorkspaceDialog";
 import { TerminalSessionsSidebar } from "./TerminalSessionsSidebar";
 import { type TerminalSessionSummary } from "./terminal/types";
@@ -301,57 +302,11 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                 <Kbd>⌘ + K</Kbd>
               </KbdGroup>
             </button>
-            {onOpenArtifacts && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    data-testid="artifacts-sidebar-button"
-                    onClick={onOpenArtifacts}
-                    className={`h-9 w-9 rounded-lg hover:bg-muted flex items-center justify-center transition-colors border border-border ${
-                      currentPage === "artifacts"
-                        ? "bg-primary/20"
-                        : "bg-muted/50"
-                    }`}
-                    aria-label="Artifacts"
-                  >
-                    <Images
-                      className={`w-4 h-4 ${
-                        currentPage === "artifacts"
-                          ? "text-primary"
-                          : "text-muted-foreground"
-                      }`}
-                    />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Artifacts</TooltipContent>
-              </Tooltip>
-            )}
-            {openSettings && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={() => openSettings("application")}
-                    className={`h-9 w-9 rounded-lg hover:bg-muted flex items-center justify-center transition-colors border border-border ${
-                      currentPage === "settings"
-                        ? "bg-primary/20"
-                        : "bg-muted/50"
-                    }`}
-                    aria-label="Settings"
-                  >
-                    <Settings
-                      className={`w-4 h-4 ${
-                        currentPage === "settings"
-                          ? "text-primary"
-                          : "text-muted-foreground"
-                      }`}
-                    />
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Settings</TooltipContent>
-              </Tooltip>
-            )}
+            <WorkspaceSidebarHeaderActions
+              currentPage={currentPage}
+              onOpenArtifacts={onOpenArtifacts}
+              openSettings={openSettings}
+            />
           </div>
 
           <div

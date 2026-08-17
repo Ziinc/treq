@@ -15,16 +15,6 @@ export interface Workspace {
   hidden_until?: string | null;
 }
 
-export interface SendArtifactRecord {
-  id: string;
-  repo: string;
-  pty_session_id?: string | null;
-  media_type: string;
-  path: string;
-  title?: string | null;
-  received_at: number;
-}
-
 export type RemoteSyncStatus =
   | { type: "NotOnRemote" }
   | { type: "InSync" }
