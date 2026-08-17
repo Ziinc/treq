@@ -22,7 +22,7 @@ import "./setup.common";
 
 // tauri-test invoke runs on spawn_blocking; the default 5s async util timeout
 // flakes under CI load when waiting for Changes file lists.
-configure({ asyncUtilTimeout: 30_000 });
+configure({ asyncUtilTimeout: 60_000 });
 
 // Keep integration tests deterministic: avoid background auto-rebase races
 // during commit creation in Rust core.
