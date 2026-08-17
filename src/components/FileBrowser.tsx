@@ -226,11 +226,11 @@ const CodeLine = memo(
     onLineMouseUp,
     onAddComment,
   }: CodeLineProps) => (
-    <div style={{ ...style, fontSize }}>
+    <div style={{ ...style, fontSize, overflow: "hidden" }}>
       <div
         data-testid="code-line"
         className={cn(
-          "flex items-center group relative hover:bg-muted/30 transition-colors text-sm font-mono leading-normal",
+          "flex items-center group relative overflow-hidden hover:bg-muted/30 transition-colors text-sm font-mono leading-normal",
           diffStatus === "add" && "bg-emerald-500/10",
           isLineSelected && "!bg-blue-500/20",
         )}
@@ -297,7 +297,7 @@ const CodeLine = memo(
         {/* Code content */}
         <span
           data-testid="code-line-content"
-          className="whitespace-pre-wrap break-words font-mono"
+          className="whitespace-pre font-mono min-w-0 flex-1 overflow-x-auto"
           dangerouslySetInnerHTML={{ __html: htmlContent }}
         />
       </div>
