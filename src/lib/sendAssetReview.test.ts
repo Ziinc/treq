@@ -15,7 +15,9 @@ describe("sendAssetReview", () => {
         mediaType: "text",
         generalComment: "Please tighten this copy",
       }),
-    ).toBe("Review of note.txt\n\nFile: /tmp/note.txt\n\nPlease tighten this copy\n");
+    ).toBe(
+      "Review of note.txt\n\nFile: /tmp/note.txt\n\nPlease tighten this copy\n",
+    );
   });
 
   it("includes highlight comments and annotated image path", () => {
@@ -33,7 +35,9 @@ describe("sendAssetReview", () => {
         },
       ],
     });
-    expect(prompt).toContain("Annotated image with highlighted regions: /tmp/.treq/send/shot-review.png");
+    expect(prompt).toContain(
+      "Annotated image with highlighted regions: /tmp/.treq/send/shot-review.png",
+    );
     expect(prompt).toContain("1. Region 10%,20% 30%×15%: Move this button");
     expect(prompt).toContain("Header is too loud");
   });
@@ -78,7 +82,11 @@ describe("sendAssetReview", () => {
       hasUnsentSendAssetReview({
         generalComment: "",
         highlights: [
-          { id: "h1", rect: { x: 0.1, y: 0.1, width: 0.2, height: 0.2 }, comment: "" },
+          {
+            id: "h1",
+            rect: { x: 0.1, y: 0.1, width: 0.2, height: 0.2 },
+            comment: "",
+          },
         ],
         lineComments: [],
       }),
@@ -87,7 +95,11 @@ describe("sendAssetReview", () => {
 
   it("builds a normalized rect from a drag", () => {
     expect(
-      rectFromDrag({ x: 80, y: 60 }, { x: 20, y: 20 }, { width: 100, height: 100 }),
+      rectFromDrag(
+        { x: 80, y: 60 },
+        { x: 20, y: 20 },
+        { width: 100, height: 100 },
+      ),
     ).toEqual({ x: 0.2, y: 0.2, width: 0.6, height: 0.4 });
     expect(
       clampNormalizedRect({ x: -0.2, y: 0.9, width: 2, height: 0.5 }),

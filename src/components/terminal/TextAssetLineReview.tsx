@@ -58,7 +58,13 @@ export function TextAssetLineReview({
         : `lc-${Date.now()}`;
     onCommentsChange([
       ...comments,
-      { id, startLine: start, endLine: end, lineContent, text: pending.text.trim() },
+      {
+        id,
+        startLine: start,
+        endLine: end,
+        lineContent,
+        text: pending.text.trim(),
+      },
     ]);
     setPending(null);
   };

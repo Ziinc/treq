@@ -18,16 +18,9 @@ import {
   hasUnsentSendAssetReview,
   renderHighlightedImageBlob,
 } from "../../lib/sendAssetReview";
-import { copyTextToClipboard, cn } from "../../lib/utils";
+import { copyTextToClipboard } from "../../lib/utils";
 import { useToast } from "../ui/toast";
-import {
-  type CarouselApi,
-  Carousel,
-  CarouselContent,
-  CarouselItem,
-  CarouselNext,
-  CarouselPrevious,
-} from "../ui/carousel";
+import { type CarouselApi } from "../ui/carousel";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import {
@@ -40,37 +33,18 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "../ui/alert-dialog";
-import { ImageHighlightLayer } from "./ImageHighlightLayer";
-import { TextAssetLineReview } from "./TextAssetLineReview";
+import {
+  IMAGE_ZOOM_DEFAULT,
+  IMAGE_ZOOM_MAX,
+  IMAGE_ZOOM_MIN,
+  IMAGE_ZOOM_STEP,
+  SendAssetLightboxCarousel,
+  clampImageZoom,
+  fallbackImageHeight,
+  revealInFileManagerLabel,
+} from "./SendAssetLightboxCarousel";
 
-/** OS-aware label for revealing a path in the desktop file manager. */
-export function revealInFileManagerLabel(): string {
-  const ua = navigator.userAgent.toLowerCase();
-  if (ua.includes("mac")) return "Show in Finder";
-  if (ua.includes("win")) return "Show in Explorer";
-  return "Show in file manager";
-}
-
-const IMAGE_ZOOM_MIN = 1;
-const IMAGE_ZOOM_MAX = 2;
-const IMAGE_ZOOM_STEP = 1;
-const IMAGE_ZOOM_DEFAULT = 1;
-/** Fallback height as vh when natural size is unknown (jsdom / slow decode). */
-const IMAGE_ZOOM_FALLBACK_VIEWPORT_FRACTION = 0.8;
-
-function clampImageZoom(value: number): number {
-  return Math.min(
-    IMAGE_ZOOM_MAX,
-    Math.max(IMAGE_ZOOM_MIN, Math.round(value * 100) / 100),
-  );
-}
-
-function fallbackImageHeight(zoomFactor: number): string {
-  const vh =
-    Math.round(IMAGE_ZOOM_FALLBACK_VIEWPORT_FRACTION * zoomFactor * 10000) /
-    100;
-  return `${vh}vh`;
-}
+export { revealInFileManagerLabel } from "./SendAssetLightboxCarousel";
 
 interface SendAssetLightboxProps {
   assets: TreqSendAsset[];
@@ -90,7 +64,6 @@ export function SendAssetLightbox({
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [textByPath, setTextByPath] = useState<Record<string, string>>({});
   const [imageZoom, setImageZoom] = useState(IMAGE_ZOOM_DEFAULT);
-  /** Fitted display size at 100% zoom, keyed by asset id (from natural size on load). */
   const [baseSizeById, setBaseSizeById] = useState<
     Record<string, { width: number; height: number }>
   >({});
@@ -139,12 +112,10 @@ export function SendAssetLightbox({
   const rememberFittedBaseSize = (assetId: string, img: HTMLImageElement) => {
     if (img.naturalWidth <= 0 || img.naturalHeight <= 0) return;
     const maxH = window.innerHeight * 0.8;
-    // Fit to at least ~75vw of the viewport (carousel is min 75vw / typically 90vw).
     const maxW = Math.min(
       window.innerWidth * 0.9,
       Math.max(img.parentElement?.clientWidth || 0, window.innerWidth * 0.75),
     );
-    // Allow upscaling so small assets fill the lightbox on initial load.
     const fitScale = Math.min(
       maxW / img.naturalWidth,
       maxH / img.naturalHeight,
@@ -160,7 +131,6 @@ export function SendAssetLightbox({
     });
   };
 
-  /** Explicit width so zoom grows layout (transform/scale does not; CSS zoom won't serialize in jsdom captures). */
   const imageSizeStyle = (assetId: string): CSSProperties => {
     const zoomFactor = assetId === current?.id ? imageZoom : IMAGE_ZOOM_DEFAULT;
     const base = baseSizeById[assetId];
@@ -323,8 +293,7 @@ export function SendAssetLightbox({
         } catch (error) {
           addToast({
             title: "Could not attach highlighted image",
-            description:
-              error instanceof Error ? error.message : String(error),
+            description: error instanceof Error ? error.message : String(error),
             type: "error",
           });
         }
@@ -478,134 +447,56 @@ export function SendAssetLightbox({
           )}
           {lightboxControls}
         </div>
-        <Carousel
-          key={`send-carousel-${initialIndex}-${assets.map((a) => a.id).join(":")}`}
+        <SendAssetLightboxCarousel
+          assets={assets}
+          initialIndex={initialIndex}
+          current={current}
+          showingImage={showingImage}
+          imageZoom={imageZoom}
+          highlights={highlights}
+          lineComments={lineComments}
+          activeHighlightId={activeHighlightId}
+          textByPath={textByPath}
           setApi={setApi}
-          opts={{ startIndex: initialIndex, loop: false }}
-          className="w-full"
-        >
-          <CarouselContent>
-            {assets.map((asset) => (
-              <CarouselItem
-                key={asset.id}
-                className="flex min-h-0 items-stretch justify-center"
-              >
-                {asset.mediaType === "image" ? (
-                  <div
-                    data-testid={
-                      asset.id === current?.id
-                        ? "treq-send-image-scroll"
-                        : undefined
-                    }
-                    className={cn(
-                      "w-full max-w-full overflow-auto",
-                      asset.id === current?.id && imageZoom > IMAGE_ZOOM_DEFAULT
-                        ? "h-[80vh]"
-                        : "max-h-[80vh]",
-                    )}
-                  >
-                    <div
-                      className={cn(
-                        "flex min-h-full min-w-full justify-center",
-                        asset.id === current?.id &&
-                          imageZoom > IMAGE_ZOOM_DEFAULT
-                          ? "items-start"
-                          : "items-center",
-                      )}
-                    >
-                      <ImageHighlightLayer
-                        highlights={
-                          asset.id === current?.id ? highlights : []
-                        }
-                        activeId={
-                          asset.id === current?.id ? activeHighlightId : null
-                        }
-                        onActiveIdChange={setActiveHighlightId}
-                        onHighlightsChange={(next) => {
-                          if (!current || asset.id !== current.id) return;
-                          setHighlightsById((prev) => ({
-                            ...prev,
-                            [current.id]: next,
-                          }));
-                        }}
-                        onClickWithoutDrag={
-                          asset.id === current?.id ? toggleImageZoom : undefined
-                        }
-                      >
-                        <img
-                          src={treqSendFileSrc(asset.path)}
-                          alt={asset.title}
-                          className={cn(
-                            "object-contain",
-                            asset.id === current?.id && showingImage
-                              ? imageZoom === IMAGE_ZOOM_DEFAULT
-                                ? "cursor-zoom-in"
-                                : "cursor-zoom-out"
-                              : undefined,
-                          )}
-                          style={imageSizeStyle(asset.id)}
-                          onLoad={(event) =>
-                            rememberFittedBaseSize(
-                              asset.id,
-                              event.currentTarget,
-                            )
-                          }
-                          draggable={false}
-                        />
-                      </ImageHighlightLayer>
-                    </div>
-                  </div>
-                ) : (
-                  <TextAssetLineReview
-                    content={textByPath[asset.path] ?? "Loading…"}
-                    comments={
-                      asset.id === current?.id ? lineComments : []
-                    }
-                    onCommentsChange={(next) => {
-                      if (!current || asset.id !== current.id) return;
-                      setLineCommentsById((prev) => ({
-                        ...prev,
-                        [current.id]: next,
-                      }));
-                    }}
-                    onUnsavedComposerChange={
-                      asset.id === current?.id
-                        ? setLineComposerOpen
-                        : undefined
-                    }
-                  />
-                )}
-              </CarouselItem>
-            ))}
-          </CarouselContent>
-          <CarouselPrevious className="fixed left-3 top-1/2 h-16 w-16 border-white/20 bg-black/40 text-white hover:bg-black/60 hover:text-white [&_svg]:size-8" />
-          <CarouselNext className="fixed right-3 top-1/2 h-16 w-16 border-white/20 bg-black/40 text-white hover:bg-black/60 hover:text-white [&_svg]:size-8" />
-        </Carousel>
+          imageSizeStyle={imageSizeStyle}
+          rememberFittedBaseSize={rememberFittedBaseSize}
+          onActiveHighlightIdChange={setActiveHighlightId}
+          onHighlightsChange={(next) => {
+            if (!current) return;
+            setHighlightsById((prev) => ({ ...prev, [current.id]: next }));
+          }}
+          onLineCommentsChange={(next) => {
+            if (!current) return;
+            setLineCommentsById((prev) => ({ ...prev, [current.id]: next }));
+          }}
+          onLineComposerChange={setLineComposerOpen}
+          onToggleImageZoom={toggleImageZoom}
+        />
       </div>
       <div onClick={(event) => event.stopPropagation()}>
-      <AlertDialog open={discardOpen} onOpenChange={setDiscardOpen}>
-        <AlertDialogContent
-          data-testid="treq-send-unsaved-dialog"
-          onClick={(event) => event.stopPropagation()}
-        >
-          <AlertDialogHeader>
-            <AlertDialogTitle>Discard unsent comments?</AlertDialogTitle>
-            <AlertDialogDescription>
-              You have review comments that have not been sent to the agent.
-              Close anyway and lose them?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Keep reviewing</AlertDialogCancel>
-            <AlertDialogAction
-              data-testid="treq-send-unsaved-discard"
-              onClick={onClose}
-            >
-              Discard comments
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        <AlertDialog open={discardOpen} onOpenChange={setDiscardOpen}>
+          <AlertDialogContent
+            data-testid="treq-send-unsaved-dialog"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <AlertDialogHeader>
+              <AlertDialogTitle>Discard unsent comments?</AlertDialogTitle>
+              <AlertDialogDescription>
+                You have review comments that have not been sent to the agent.
+                Close anyway and lose them?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Keep reviewing</AlertDialogCancel>
+              <AlertDialogAction
+                data-testid="treq-send-unsaved-discard"
+                onClick={onClose}
+              >
+                Discard comments
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );

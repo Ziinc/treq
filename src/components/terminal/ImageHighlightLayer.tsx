@@ -1,4 +1,8 @@
-import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import {
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import { X } from "lucide-react";
 import {
   type ImageHighlightComment,
@@ -105,9 +109,7 @@ export function ImageHighlightLayer({
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
       />
-      {draft && (
-        <HighlightBox rect={draft} className="border-red-500/70" />
-      )}
+      {draft && <HighlightBox rect={draft} className="border-red-500/70" />}
       {highlights.map((highlight) => (
         <HighlightBox
           key={highlight.id}

@@ -314,10 +314,7 @@ fn decode_base64(input: &str) -> Result<Vec<u8>, String> {
   for (i, b) in TABLE.iter().enumerate() {
     lookup[*b as usize] = i as u8;
   }
-  let cleaned: Vec<u8> = input
-    .bytes()
-    .filter(|b| !b.is_ascii_whitespace())
-    .collect();
+  let cleaned: Vec<u8> = input.bytes().filter(|b| !b.is_ascii_whitespace()).collect();
   if cleaned.len() % 4 != 0 {
     return Err("invalid image data".to_string());
   }
@@ -528,11 +525,14 @@ mod tests {
   fn writes_review_png_under_treq_send() {
     let temp = tempfile::TempDir::new().expect("temp");
     let repo = temp.path().to_string_lossy().to_string();
-    let path = write_send_review_image(&repo, "shot review.png", "iVBORw0KGgo=")
-      .expect("write");
+    let path = write_send_review_image(&repo, "shot review.png", "iVBORw0KGgo=").expect("write");
     assert_eq!(
       path,
-      temp.path().join(".treq").join("send").join("shot-review.png")
+      temp
+        .path()
+        .join(".treq")
+        .join("send")
+        .join("shot-review.png")
     );
     assert_eq!(
       std::fs::read(&path).unwrap(),
@@ -543,8 +543,8 @@ mod tests {
   #[test]
   fn rejects_empty_review_image() {
     let temp = tempfile::TempDir::new().expect("temp");
-    let err = write_send_review_image(temp.path().to_str().unwrap(), "a.png", "")
-      .expect_err("empty");
+    let err =
+      write_send_review_image(temp.path().to_str().unwrap(), "a.png", "").expect_err("empty");
     assert!(err.contains("invalid") || err.contains("empty"));
   }
 

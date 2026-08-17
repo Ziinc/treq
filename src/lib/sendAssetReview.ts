@@ -60,14 +60,20 @@ function pct(value: number): string {
   return `${Math.round(value * 100)}%`;
 }
 
-function formatHighlightLine(highlight: ImageHighlightComment, index: number): string {
+function formatHighlightLine(
+  highlight: ImageHighlightComment,
+  index: number,
+): string {
   const { rect, comment } = highlight;
   const location = `${pct(rect.x)},${pct(rect.y)} ${pct(rect.width)}×${pct(rect.height)}`;
   const body = comment.trim() ? comment.trim() : "(no comment)";
   return `${index + 1}. Region ${location}: ${body}`;
 }
 
-function formatLineComment(comment: AssetLineComment, fileTitle: string): string {
+function formatLineComment(
+  comment: AssetLineComment,
+  fileTitle: string,
+): string {
   const lineRef =
     comment.startLine === comment.endLine
       ? `${fileTitle}:${comment.startLine}`
@@ -109,7 +115,9 @@ export function formatSendAssetReviewPrompt(params: {
   const lines: string[] = [`Review of ${params.title}`];
   lines.push("");
   if (params.annotatedImagePath) {
-    lines.push(`Annotated image with highlighted regions: ${params.annotatedImagePath}`);
+    lines.push(
+      `Annotated image with highlighted regions: ${params.annotatedImagePath}`,
+    );
     lines.push("");
   } else {
     lines.push(`File: ${params.path}`);
@@ -133,8 +141,8 @@ export function formatSendAssetReviewPrompt(params: {
     lines.push("");
   }
 
-  const lineComments = (params.lineComments ?? []).filter(
-    (comment) => comment.text.trim(),
+  const lineComments = (params.lineComments ?? []).filter((comment) =>
+    comment.text.trim(),
   );
   if (lineComments.length > 0) {
     lines.push("Inline comments:");
@@ -145,7 +153,7 @@ export function formatSendAssetReviewPrompt(params: {
     }
   }
 
-  return lines.join("\n").trim() + "\n";
+  return `${lines.join("\n").trim()}\n`;
 }
 
 const HIGHLIGHT_STROKE = "#ef4444";
@@ -164,7 +172,10 @@ export async function renderHighlightedImageBlob(
   }
   ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
   ctx.strokeStyle = HIGHLIGHT_STROKE;
-  ctx.lineWidth = Math.max(2, Math.round(Math.min(canvas.width, canvas.height) * 0.006));
+  ctx.lineWidth = Math.max(
+    2,
+    Math.round(Math.min(canvas.width, canvas.height) * 0.006),
+  );
   for (const highlight of highlights) {
     const rect = clampNormalizedRect(highlight.rect);
     ctx.strokeRect(
@@ -185,7 +196,10 @@ function loadHtmlImage(src: string): Promise<HTMLImageElement> {
     image.onerror = fail;
     image.src = src;
     if (typeof image.decode === "function") {
-      image.decode().then(() => resolve(image)).catch(fail);
+      image
+        .decode()
+        .then(() => resolve(image))
+        .catch(fail);
     }
   });
 }

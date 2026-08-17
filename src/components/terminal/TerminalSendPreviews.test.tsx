@@ -103,9 +103,9 @@ describe("TerminalSendPreviews", () => {
       await screen.findByTestId("treq-send-preview-lightbox"),
     ).toBeTruthy();
     await waitFor(() => {
-      expect(screen.getByTestId("treq-send-text-preview").textContent).toContain(
-        "hello from send",
-      );
+      expect(
+        screen.getByTestId("treq-send-text-preview").textContent,
+      ).toContain("hello from send");
     });
     expect(screen.queryByTestId("treq-send-preview-modal")).toBeNull();
     expect(api.readFile).toHaveBeenCalledWith("/tmp/repo/.treq/send/note.txt");
@@ -331,9 +331,7 @@ describe("TerminalSendPreviews", () => {
 
   it("warns when closing the lightbox with unsent comments", async () => {
     const user = userEvent.setup();
-    renderSend(
-      <SendHarness ptySessionId="session-1" onSendReview={vi.fn()} />,
-    );
+    renderSend(<SendHarness ptySessionId="session-1" onSendReview={vi.fn()} />);
     await user.click(screen.getByRole("button", { name: "Inject text" }));
     await user.click(await screen.findByTestId("terminal-send-preview-send-1"));
     await user.type(
@@ -361,16 +359,15 @@ describe("TerminalSendPreviews", () => {
       expect(screen.getByTestId("treq-send-text-line-1")).toBeTruthy();
     });
     await user.click(screen.getByTestId("treq-send-text-line-1"));
-    const composer = await screen.findByTestId("treq-send-line-comment-composer");
+    const composer = await screen.findByTestId(
+      "treq-send-line-comment-composer",
+    );
     await user.type(
       composer.querySelector("textarea") as HTMLTextAreaElement,
       "Rename these",
     );
     await user.click(screen.getByTestId("treq-send-line-comment-save"));
-    await user.type(
-      screen.getByTestId("treq-send-review-input"),
-      "{Enter}",
-    );
+    await user.type(screen.getByTestId("treq-send-review-input"), "{Enter}");
     expect(onSendReview).toHaveBeenCalledWith(
       expect.stringContaining("Rename these"),
     );
