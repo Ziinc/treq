@@ -58,7 +58,17 @@ async function openWorkspaceCodeBrowser(
   await user.click(await findSidebarBranchElement(branchName));
   await user.click(await screen.findByRole("button", { name: fileName }));
   const fileBrowser = await screen.findByTestId("file-browser");
-  return within(fileBrowser);
+  const scoped = within(fileBrowser);
+  await waitFor(
+    () => {
+      const hasCodeLines = scoped.queryAllByTestId("code-line").length > 0;
+      const hasMarkdownTabs = scoped.queryByRole("tab", { name: "Code" });
+      const failed = scoped.queryByText(/failed to load file content/i);
+      expect(hasCodeLines || hasMarkdownTabs || failed).toBeTruthy();
+    },
+    { timeout: 60_000 },
+  );
+  return scoped;
 }
 
 describe("Dashboard - FileBrowser integration", () => {
@@ -128,8 +138,8 @@ describe("Dashboard - FileBrowser integration", () => {
       "guide.md",
     );
 
-    const codeTab = fileBrowser.getByRole("tab", { name: "Code" });
-    const previewTab = fileBrowser.getByRole("tab", { name: "Preview" });
+    const codeTab = await fileBrowser.findByRole("tab", { name: "Code" });
+    const previewTab = await fileBrowser.findByRole("tab", { name: "Preview" });
     expect(codeTab).toHaveAttribute("aria-selected", "true");
     expect(previewTab).toHaveAttribute("aria-selected", "false");
     expect(
