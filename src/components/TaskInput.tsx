@@ -487,6 +487,7 @@ export const TaskInput: React.FC<TaskInputProps> = ({
         onOpenChange={setFilePickerOpen}
         repoPath={repoPath}
         workspaceId={workspaceId}
+        workspacePath={workingDirectory}
         onFileSelect={handleFileSelect}
       />
     </>
