@@ -75,7 +75,7 @@ export function TerminalSendPreviews({
                       <img
                         src={treqSendFileSrc(asset.path)}
                         alt={asset.title}
-                        className="h-full w-full object-cover"
+                        className="h-full w-full object-contain"
                         draggable={false}
                       />
                     ) : (

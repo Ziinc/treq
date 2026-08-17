@@ -75,7 +75,7 @@ const attachmentMediaVariants = cva(
       variant: {
         icon: "group-data-[variant=thumbnail]/attachment:flex-col group-data-[variant=thumbnail]/attachment:gap-1 group-data-[variant=thumbnail]/attachment:px-1",
         image:
-          "opacity-60 group-data-[state=done]/attachment:opacity-100 group-data-[state=idle]/attachment:opacity-100 *:[img]:aspect-square *:[img]:size-full *:[img]:object-cover group-data-[variant=thumbnail]/attachment:opacity-100 group-data-[variant=thumbnail]/attachment:*:[img]:aspect-auto group-data-[variant=thumbnail]/attachment:*:[img]:rounded-[3px]",
+          "opacity-60 group-data-[state=done]/attachment:opacity-100 group-data-[state=idle]/attachment:opacity-100 *:[img]:aspect-square *:[img]:size-full *:[img]:object-cover group-data-[variant=thumbnail]/attachment:opacity-100 group-data-[variant=thumbnail]/attachment:*:[img]:aspect-auto group-data-[variant=thumbnail]/attachment:*:[img]:object-contain group-data-[variant=thumbnail]/attachment:*:[img]:rounded-[3px]",
       },
     },
     defaultVariants: {

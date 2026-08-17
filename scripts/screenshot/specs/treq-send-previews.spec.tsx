@@ -125,7 +125,7 @@ it("captures treq send attachment thumbs and lightbox carousel previews", async 
 		name: "treq-send-01-square-previews",
 		expectations: [
 			"Two dark landscape thumbnails (wider than tall, ~80x144) sit at the top-left of the terminal in a horizontal row.",
-			"The image thumb shows a blue square with a white circle; the text thumb shows a file icon and title.",
+			"The image thumb shows a blue square with a white circle letterboxed (object-fit contain) inside the landscape card; the text thumb shows a file icon and title.",
 			"Dismiss X controls are hidden until a thumbnail is hovered.",
 		],
 	});

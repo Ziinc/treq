@@ -113,6 +113,7 @@ describe("TerminalSendPreviews", () => {
     expect(attachment?.className).toMatch(/h-20/);
     expect(attachment?.className).toMatch(/w-36/);
     const img = attachment?.querySelector("img");
+    expect(img?.className).toMatch(/object-contain/);
     expect(img?.getAttribute("src")).toBe(
       "asset://localhost/tmp/repo/shot.png",
     );
