@@ -1,34 +1,34 @@
+import { ArrowDownToLine, Loader2, RotateCw, Search, X } from "lucide-react";
 import React, {
-  type KeyboardEvent as ReactKeyboardEvent,
   memo,
+  type KeyboardEvent as ReactKeyboardEvent,
   useCallback,
   useEffect,
   useRef,
   useState,
 } from "react";
+import { useAgentMessageQueue } from "../../hooks/useAgentMessageQueue";
+import { ptyClose, setSessionModel } from "../../lib/api";
+import { cn } from "../../lib/utils";
 import {
   ConsolidatedTerminal,
   type ConsolidatedTerminalHandle,
 } from "../ConsolidatedTerminal";
+import { AgentIcon } from "../icons/AgentIcons";
+import { ModelSelector } from "../ModelSelector";
+import { Button } from "../ui/button";
+import { Kbd, KbdGroup } from "../ui/kbd";
+import { useToast } from "../ui/toast";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "../ui/tooltip";
-import { Button } from "../ui/button";
-import { Kbd, KbdGroup } from "../ui/kbd";
-import { cn } from "../../lib/utils";
-import { ptyClose, setSessionModel } from "../../lib/api";
-import { ArrowDownToLine, Loader2, RotateCw, Search, X } from "lucide-react";
-import { AgentIcon } from "../icons/AgentIcons";
-import { ModelSelector } from "../ModelSelector";
-import { useToast } from "../ui/toast";
-import { useAgentMessageQueue } from "../../hooks/useAgentMessageQueue";
-import { type ClaudeSessionData } from "./types";
 import { AgentMessageQueue } from "./AgentMessageQueue";
 import { TerminalSearchOverlay } from "./TerminalSearchOverlay";
 import { TerminalSendPreviews } from "./TerminalSendPreviews";
+import type { ClaudeSessionData } from "./types";
 import { useAgentAutoCommand } from "./useAgentAutoCommand";
 
 export interface AgentTerminalPanelProps {
@@ -71,8 +71,13 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
     const [isChangingModel, setIsChangingModel] = useState(false);
     const [terminalInstanceKey, setTerminalInstanceKey] = useState(0);
     const [pendingModelReset, setPendingModelReset] = useState(false);
-    const { sessionModel, setSessionModelState, isModelLoaded, autoCommand } =
-      useAgentAutoCommand(sessionData);
+    const {
+      sessionModel,
+      setSessionModelState,
+      isModelLoaded,
+      autoCommand,
+      prepareError,
+    } = useAgentAutoCommand(sessionData);
 
     const terminalId = `claude-${sessionData.sessionId}`;
     const isHidden = collapsed;
@@ -384,7 +389,11 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
               />
             )}
 
-            {isModelLoaded && autoCommand ? (
+            {prepareError ? (
+              <div className="flex flex-1 items-center justify-center px-4 text-center text-sm text-muted-foreground">
+                Failed to start agent: {prepareError}
+              </div>
+            ) : isModelLoaded && autoCommand ? (
               <>
                 <TerminalSendPreviews
                   ptySessionId={sessionData.ptySessionId}

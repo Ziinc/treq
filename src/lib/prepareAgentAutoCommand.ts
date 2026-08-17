@@ -1,4 +1,3 @@
-import { cleanupAgentCliFiles, readFile, writeAgentCliFiles } from "./api";
 import {
   type AgentKind,
   buildAgentAutoCommand,
@@ -8,6 +7,7 @@ import {
   cursorPromptFileContents,
   mergeClaudeLocalSettings,
 } from "./agentCommand";
+import { cleanupAgentCliFiles, readFile, writeAgentCliFiles } from "./api";
 
 export const parseJsonObject = (
   raw: string,
@@ -39,7 +39,11 @@ export const prepareAgentAutoCommand = async ({
   permissionMode?: string | null;
   pendingPrompt?: string | null;
   treqBinDir: string | null;
-}): Promise<{ command: string; filePaths: string[] }> => {
+}): Promise<{
+  command: string;
+  filePaths: string[];
+  skillWriteWarning?: string;
+}> => {
   const cwd = workspacePath || repoPath;
   const agentPathContext = { workspacePath, repoPath };
   const systemPrompt = buildTreqAgentSystemPrompt(agentPathContext);
@@ -65,7 +69,18 @@ export const prepareAgentAutoCommand = async ({
     );
   }
 
-  const files = await writeAgentCliFiles(promptContents, settingsJson, cwd);
+  let skippedProjectSkills = false;
+  const files = await writeAgentCliFiles(
+    promptContents,
+    settingsJson,
+    cwd,
+  ).catch((error) => {
+    if (!cwd) {
+      throw error;
+    }
+    skippedProjectSkills = true;
+    return writeAgentCliFiles(promptContents, settingsJson, null);
+  });
   const filePaths = [
     files.promptPath,
     files.settingsPath,
@@ -73,6 +88,12 @@ export const prepareAgentAutoCommand = async ({
     files.agentsSkillPath,
     files.claudeSkillPath,
   ].filter((path): path is string => !!path);
+
+  const skillWriteWarning =
+    files.skillWriteWarning ??
+    (skippedProjectSkills
+      ? "Could not write Treq skills into the workspace. The session still has the bundled copy."
+      : undefined);
 
   return {
     command: buildAgentAutoCommand({
@@ -84,6 +105,7 @@ export const prepareAgentAutoCommand = async ({
       files,
     }),
     filePaths,
+    skillWriteWarning,
   };
 };
 

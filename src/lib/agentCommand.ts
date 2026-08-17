@@ -58,7 +58,7 @@ export const buildClaudeSandboxSettings = ({
 }: AgentPathContext) => ({
   sandbox: {
     enabled: true,
-    failIfUnavailable: true,
+    failIfUnavailable: false,
     allowUnsandboxedCommands: false,
     filesystem: workspacePath
       ? {
