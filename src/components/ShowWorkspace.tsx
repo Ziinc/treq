@@ -629,6 +629,22 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
           activeTab,
           showFileBrowser: showFileBrowserInCode,
         });
+        if (target === "changes-diff" && workspace?.id !== undefined) {
+          // Diff reload is handled by ChangesDiffViewer; refresh status metadata
+          // so the Review pill tone and overview conflict alerts stay in sync.
+          void queryClient.invalidateQueries({
+            queryKey: ["workspace-status", effectiveRepoPath, workspace.id],
+          });
+          void queryClient.invalidateQueries({
+            queryKey: ["workspace-statuses", effectiveRepoPath],
+          });
+          void queryClient.invalidateQueries({
+            queryKey: reviewChangeCountQueryKey(
+              effectiveRepoPath,
+              workspace.id,
+            ),
+          });
+        }
         if (target === "commits-list") {
           void queryClient.invalidateQueries({
             queryKey: [
