@@ -46,12 +46,12 @@ const ALLOWED_JJ_COMMANDS = new Set([
 ]);
 
 vi.mock("@tauri-apps/api/core", () => ({
-  invoke: (cmd: string, args?: Record<string, unknown>) => {
+  invoke: vi.fn((cmd: string, args?: Record<string, unknown>) => {
     if (cmd.startsWith("jj_") && !ALLOWED_JJ_COMMANDS.has(cmd)) {
       jjCalls.push(cmd);
     }
     return tauriTest.invoke(cmd, args ?? {});
-  },
+  }),
 }));
 
 afterEach(() => {

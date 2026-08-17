@@ -124,7 +124,7 @@ describe("ShowWorkspace - Create PR", () => {
     const createPr = await within(header).findByRole("button", {
       name: /^create pr$/i,
     });
-    const moreOptions = within(header).getByRole("button", {
+    const moreOptions = await within(header).findByRole("button", {
       name: /more create pr options/i,
     });
 

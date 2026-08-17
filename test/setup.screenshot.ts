@@ -35,12 +35,12 @@ const tauriTest = require("../src-tauri/target") as {
 const jjCalls: string[] = [];
 
 vi.mock("@tauri-apps/api/core", () => ({
-  invoke: (cmd: string, args?: Record<string, unknown>) => {
+  invoke: vi.fn((cmd: string, args?: Record<string, unknown>) => {
     if (cmd.startsWith("jj_")) {
       jjCalls.push(cmd);
     }
     return tauriTest.invoke(cmd, args ?? {});
-  },
+  }),
   convertFileSrc: (filePath: string) => `file://${filePath}`,
 }));
 

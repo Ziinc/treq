@@ -110,8 +110,11 @@ describe("ShowWorkspace - Reviews integration", () => {
     const { repoPath, workspace } = await openReviewWithChange(branchName);
     await openReviewTab(user, branchName);
 
-    await user.type(screen.getByPlaceholderText("Message"), commitMessage);
-    await user.click(screen.getByRole("button", { name: /^commit$/i }));
+    await user.type(
+      await screen.findByPlaceholderText("Message"),
+      commitMessage,
+    );
+    await user.click(await screen.findByRole("button", { name: /^commit$/i }));
     await expectCommitCreated(repoPath, workspace.id, commitMessage);
   });
 

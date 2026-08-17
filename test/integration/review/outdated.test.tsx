@@ -79,23 +79,10 @@ describe("Outdated comments - persisted comment with non-existent hunk", () => {
 
     await openReviewTab(user, branchName);
 
-    await waitFor(
-      () => {
-        expect(
-          screen.queryByRole("button", { name: /finish review/i }),
-        ).toBeInTheDocument();
-      },
-      { timeout: 5000 },
-    );
+    await screen.findByRole("button", { name: /finish review/i });
 
-    await waitFor(() => {
-      expect(screen.getAllByText(/test\.txt/).length).toBeGreaterThan(0);
-    });
+    await screen.findAllByText(/test\.txt/);
 
-    await waitFor(() => {
-      expect(
-        screen.getAllByRole("button", { name: /^discard$/i }).length,
-      ).toBeGreaterThan(0);
-    });
+    await screen.findAllByRole("button", { name: /^discard$/i });
   });
 });

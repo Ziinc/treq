@@ -48,7 +48,7 @@ describe("ShowWorkspace - header", () => {
     await user.click(branchButton);
 
     const modal = await screen.findByTestId("modal");
-    expect(within(modal).getByText("feat/alpha")).toBeTruthy();
+    expect(await within(modal).findByText("feat/alpha")).toBeTruthy();
     expect(within(modal).getByText("feat/beta")).toBeTruthy();
 
     await user.click(within(modal).getByText("feat/alpha"));
@@ -142,7 +142,7 @@ describe("ShowWorkspace - header", () => {
     const searchInput =
       await screen.findByPlaceholderText("Search branches...");
     const popover = searchInput.closest('[data-state="open"]') as HTMLElement;
-    expect(within(popover).getByText(defaultBranch)).toBeTruthy();
+    expect(await within(popover).findByText(defaultBranch)).toBeTruthy();
     expect(within(popover).getByText("feat/beta")).toBeTruthy();
   });
 
