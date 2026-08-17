@@ -36,8 +36,8 @@ pub fn write_agent_cli_files(
     Some(path) => {
       let cwd = Path::new(path);
       (
-        install_project_treq_skill(cwd, AGENTS_SKILL_RELATIVE)?,
-        install_project_treq_skill(cwd, CLAUDE_SKILL_RELATIVE)?,
+        install_project_treq_skill(cwd, AGENTS_SKILL_RELATIVE),
+        install_project_treq_skill(cwd, CLAUDE_SKILL_RELATIVE),
       )
     }
     None => (None, None),
@@ -118,17 +118,18 @@ fn write_treq_skill_pack(temp_dir: &Path, id: &uuid::Uuid) -> Result<PathBuf, St
   Ok(skill_dir)
 }
 
-fn install_project_treq_skill(cwd: &Path, relative: &str) -> Result<Option<String>, String> {
+fn install_project_treq_skill(cwd: &Path, relative: &str) -> Option<String> {
   let skill_dir = cwd.join(relative);
   let marker = skill_dir.join(PROJECT_SKILL_MARKER);
   if skill_dir.exists() && !marker.exists() {
-    return Ok(None);
+    return None;
   }
-  fs::create_dir_all(&skill_dir).map_err(|e| format!("Failed to create {relative}: {e}"))?;
-  fs::write(skill_dir.join("SKILL.md"), TREQ_SKILL_MD)
-    .map_err(|e| format!("Failed to write Treq skill at {relative}: {e}"))?;
-  fs::write(&marker, "treq\n").map_err(|e| format!("Failed to write Treq skill marker: {e}"))?;
-  Ok(Some(path_to_string(&skill_dir)))
+  // Workspace trees can be read-only (os error 30). The temp skill pack is
+  // enough for the CLI; skip project copies instead of failing agent start.
+  fs::create_dir_all(&skill_dir).ok()?;
+  fs::write(skill_dir.join("SKILL.md"), TREQ_SKILL_MD).ok()?;
+  fs::write(&marker, "treq\n").ok()?;
+  Some(path_to_string(&skill_dir))
 }
 
 fn is_safe_project_skill_dir(canonical: &Path) -> bool {
@@ -317,6 +318,28 @@ mod tests {
       fs::read_to_string(claude_dir.join("SKILL.md")).expect("read claude"),
       "user claude skill\n"
     );
+    cleanup_agent_cli_files(&[files.prompt_path, files.skill_dir]).expect("cleanup");
+  }
+
+  #[test]
+  fn skips_project_skills_when_cwd_is_not_writable() {
+    let cwd = tempfile::TempDir::new().expect("cwd");
+    let cwd_path = cwd.path().to_path_buf();
+    let mut perms = fs::metadata(&cwd_path).expect("metadata").permissions();
+    perms.set_readonly(true);
+    fs::set_permissions(&cwd_path, perms).expect("chmod");
+
+    let result = write_agent_cli_files("prompt", None, cwd_path.to_str());
+
+    let mut perms = fs::metadata(&cwd_path).expect("metadata").permissions();
+    perms.set_readonly(false);
+    let _ = fs::set_permissions(&cwd_path, perms);
+
+    let files = result.expect("agent CLI files should still be written");
+    assert!(files.agents_skill_path.is_none());
+    assert!(files.claude_skill_path.is_none());
+    assert!(Path::new(&files.prompt_path).exists());
+    assert!(Path::new(&files.skill_dir).is_dir());
     cleanup_agent_cli_files(&[files.prompt_path, files.skill_dir]).expect("cleanup");
   }
 }
