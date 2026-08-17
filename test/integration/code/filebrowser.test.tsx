@@ -269,4 +269,26 @@ describe("Dashboard - FileBrowser integration", () => {
 
     expect(await navigator.clipboard.readText()).toBe(selectedText);
   });
+
+  it("copies the selected file path and shows copied icon feedback", async () => {
+    await setupWorkspace("feat/filebrowser-copy-path-test", {
+      "copy-me.ts": "export const value = 1;\n",
+    });
+
+    const fileBrowser = await openWorkspaceCodeBrowser(
+      user,
+      "feat/filebrowser-copy-path-test",
+      "copy-me.ts",
+    );
+
+    const copyButton = await fileBrowser.findByRole("button", {
+      name: "Copy file path",
+    });
+    await user.click(copyButton);
+
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith("copy-me.ts");
+    expect(
+      await fileBrowser.findByRole("button", { name: "File path copied" }),
+    ).toBeTruthy();
+  });
 });
