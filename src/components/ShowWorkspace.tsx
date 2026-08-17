@@ -617,8 +617,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 
     useEffect(() => {
       const handler = (event: Event) => {
-        const detail = (event as CustomEvent<WorkspaceChangesRefreshDetail>)
-          .detail;
+        const { detail } = event as CustomEvent<WorkspaceChangesRefreshDetail>;
         if (
           detail?.workspaceId !== undefined &&
           workspace?.id !== undefined &&

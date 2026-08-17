@@ -1498,10 +1498,7 @@ export const FileBrowser = memo(
     }, [rootEntries, initialSelectedFile]);
 
     const loadDirectory = useCallback(
-      async (
-        path: string,
-        force = false,
-      ): Promise<DirectoryEntry[]> => {
+      async (path: string, force = false): Promise<DirectoryEntry[]> => {
         if (!force && directoryCacheRef.current.has(path)) {
           return directoryCacheRef.current.get(path)!;
         }
@@ -1548,8 +1545,7 @@ export const FileBrowser = memo(
 
     useEffect(() => {
       const handler = (event: Event) => {
-        const detail = (event as CustomEvent<WorkspaceChangesRefreshDetail>)
-          .detail;
+        const { detail } = event as CustomEvent<WorkspaceChangesRefreshDetail>;
         if (
           detail?.workspaceId !== undefined &&
           workspace?.id !== undefined &&

@@ -31,7 +31,10 @@ export function pathIsAffected(
     if (changed === targetPath) return true;
     if (changed.startsWith(`${targetPath}/`)) return true;
     if (targetPath.startsWith(`${changed}/`)) return true;
-    if (targetPath.endsWith(`/${changed}`) || changed.endsWith(`/${targetPath}`)) {
+    if (
+      targetPath.endsWith(`/${changed}`) ||
+      changed.endsWith(`/${targetPath}`)
+    ) {
       return true;
     }
     return false;

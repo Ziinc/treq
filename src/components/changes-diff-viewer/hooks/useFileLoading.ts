@@ -443,8 +443,7 @@ export function useFileLoading({
 
   useEffect(() => {
     const handler = (event: Event) => {
-      const detail = (event as CustomEvent<WorkspaceChangesRefreshDetail>)
-        .detail;
+      const { detail } = event as CustomEvent<WorkspaceChangesRefreshDetail>;
       if (
         detail?.workspaceId !== undefined &&
         workspaceId !== undefined &&
