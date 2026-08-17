@@ -2,6 +2,7 @@ import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { useTerminalSessionSummaries } from "./useTerminalSessionSummaries";
 import type { TerminalEntry } from "./types";
+import { REFRESH_WORKSPACE_CHANGES_EVENT } from "../../lib/change-file-drag";
 
 describe("useTerminalSessionSummaries preview output", () => {
   it("stores a formatted preview when terminal output arrives", () => {
@@ -78,5 +79,33 @@ describe("useTerminalSessionSummaries preview output", () => {
     expect(afterEcho[0].lastUserInputAt).toBeGreaterThan(0);
 
     vi.useRealTimers();
+  });
+
+  it("dispatches a filesystem refresh when a streaming terminal goes idle", () => {
+    const onRefresh = vi.fn();
+    window.addEventListener(REFRESH_WORKSPACE_CHANGES_EVENT, onRefresh);
+
+    const allTerminals: TerminalEntry[] = [
+      { type: "shell", data: { id: "shell-1", workingDirectory: "/tmp/ws" } },
+    ];
+    const { result } = renderHook(() =>
+      useTerminalSessionSummaries({ allTerminals }),
+    );
+
+    act(() => {
+      result.current.handleTerminalOutput("shell-1", "agent wrote files\n");
+    });
+    act(() => {
+      result.current.handleTerminalIdlePulse("shell-1");
+    });
+
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      result.current.handleTerminalIdlePulse("shell-1");
+    });
+    expect(onRefresh).toHaveBeenCalledTimes(1);
+
+    window.removeEventListener(REFRESH_WORKSPACE_CHANGES_EVENT, onRefresh);
   });
 });

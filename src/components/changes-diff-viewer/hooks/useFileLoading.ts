@@ -236,16 +236,6 @@ export function useFileLoading({
     };
   }, [workspaceId, loadChangedFiles]);
 
-  useEffect(() => {
-    const handler = () => {
-      void loadChangedFiles();
-    };
-    window.addEventListener(REFRESH_WORKSPACE_CHANGES_EVENT, handler);
-    return () => {
-      window.removeEventListener(REFRESH_WORKSPACE_CHANGES_EVENT, handler);
-    };
-  }, [loadChangedFiles]);
-
   const refreshCommittedChanges = useCallback(async () => {}, []);
 
   useEffect(() => {
@@ -435,6 +425,23 @@ export function useFileLoading({
   const filesRef = useRef(files);
   filesRef.current = files;
 
+  const refreshFromDisk = () => {
+    void loadChangedFilesRef.current();
+    if (filesRef.current.length > 0) {
+      loadAllFileHunksRef.current(filesRef.current);
+    }
+  };
+
+  useEffect(() => {
+    const handler = () => {
+      refreshFromDisk();
+    };
+    window.addEventListener(REFRESH_WORKSPACE_CHANGES_EVENT, handler);
+    return () => {
+      window.removeEventListener(REFRESH_WORKSPACE_CHANGES_EVENT, handler);
+    };
+  }, []);
+
   useEffect(() => {
     if (!workspaceId) return;
     let unlisten: (() => void) | undefined;
@@ -442,10 +449,7 @@ export function useFileLoading({
     getCurrentWindow()
       .onFocusChanged(({ payload: focused }) => {
         if (!focused) return;
-        loadChangedFilesRef.current();
-        if (filesRef.current.length > 0) {
-          loadAllFileHunksRef.current(filesRef.current);
-        }
+        refreshFromDisk();
       })
       .then((fn) => {
         if (cancelled) fn();

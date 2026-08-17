@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { dispatchRefreshWorkspaceChanges } from "../../lib/change-file-drag";
 import { formatTerminalPreview } from "../terminal-mission-control/formatTerminalPreview";
 import { type TerminalSessionSummary } from "../terminal/types";
 import { type TerminalEntry } from "./types";
@@ -35,6 +36,7 @@ export function useTerminalSessionSummaries({
   const [activity, setActivity] = useState<Map<string, TerminalActivity>>(
     new Map(),
   );
+  const streamingIdsRef = useRef(new Set<string>());
 
   // Seed a fresh activity entry for every newly-mounted terminal, and prune
   // entries for terminals that have been closed. Single source of truth so
@@ -58,6 +60,7 @@ export function useTerminalSessionSummaries({
       for (const id of next.keys()) {
         if (!liveIds.has(id)) {
           next.delete(id);
+          streamingIdsRef.current.delete(id);
           changed = true;
         }
       }
@@ -78,6 +81,8 @@ export function useTerminalSessionSummaries({
         const isStreaming = fromProcess
           ? true
           : (existing?.isStreaming ?? false);
+        if (fromProcess) streamingIdsRef.current.add(id);
+        else if (!isStreaming) streamingIdsRef.current.delete(id);
 
         const lastUserInputAt = existing?.lastUserInputAt ?? 0;
         if (
@@ -117,6 +122,8 @@ export function useTerminalSessionSummaries({
   }, []);
 
   const handleTerminalIdlePulse = useCallback((id: string) => {
+    const wasStreaming = streamingIdsRef.current.has(id);
+    streamingIdsRef.current.delete(id);
     setActivity((prev) => {
       const existing = prev.get(id);
       if (!existing || !existing.isStreaming) return prev;
@@ -124,6 +131,9 @@ export function useTerminalSessionSummaries({
       next.set(id, { ...existing, isStreaming: false });
       return next;
     });
+    // Agents often write files without a reliable watcher event. Re-scan
+    // the working copy when process output stops.
+    if (wasStreaming) dispatchRefreshWorkspaceChanges();
   }, []);
 
   const terminalSummaries = useMemo<TerminalSessionSummary[]>(
