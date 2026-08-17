@@ -396,8 +396,8 @@ export function SendAssetLightbox({
               </CarouselItem>
             ))}
           </CarouselContent>
-          <CarouselPrevious className="left-1 border-white/20 bg-black/40 text-white hover:bg-black/60 hover:text-white" />
-          <CarouselNext className="right-1 border-white/20 bg-black/40 text-white hover:bg-black/60 hover:text-white" />
+          <CarouselPrevious className="fixed left-3 top-1/2 h-16 w-16 border-white/20 bg-black/40 text-white hover:bg-black/60 hover:text-white [&_svg]:size-8" />
+          <CarouselNext className="fixed right-3 top-1/2 h-16 w-16 border-white/20 bg-black/40 text-white hover:bg-black/60 hover:text-white [&_svg]:size-8" />
         </Carousel>
       </div>
     </div>
