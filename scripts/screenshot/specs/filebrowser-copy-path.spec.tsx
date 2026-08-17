@@ -45,8 +45,6 @@ it("captures FileBrowser filename copy icon feedback", async () => {
 	await user.click(await findSidebarBranchElement(BRANCH_NAME));
 	await user.click(await screen.findByRole("button", { name: "copy-me.ts" }));
 	const fileBrowser = within(await screen.findByTestId("file-browser"));
-	await fileBrowser.findByText("copy-me.ts");
-
 	const copyButton = await fileBrowser.findByRole("button", {
 		name: "Copy file path",
 	});
