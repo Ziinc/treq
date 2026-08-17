@@ -93,6 +93,7 @@ import {
 } from "./UnifiedWorkspaceDialog";
 import { useToast } from "./ui/toast";
 import { WorkspacePicker } from "./WorkspacePicker";
+import { SidebarInset, SidebarProvider } from "./ui/sidebar";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
 import {
   WorkspaceTerminalPane,
@@ -1428,7 +1429,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   return !repoPath ? (
     <Onboarding onOpenRepo={handleOpenRepository} />
   ) : (
-    <div className="flex h-screen bg-background">
+    <SidebarProvider className="h-screen bg-background">
       <WorkspaceSidebar
         repoPath={repoPath}
         homeRepoDisplayRef={homeRepoDisplayRef}
@@ -1476,7 +1477,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
         }
       />
 
-      <div className="flex-1 relative" style={mainContentStyle}>
+      <SidebarInset
+        className="flex-1 relative min-w-0"
+        style={mainContentStyle}
+      >
         {/* Sessions Layer - ALWAYS RENDERED ONCE */}
         <div
           className="absolute inset-0 flex flex-col workspace-terminal-container overflow-hidden"
@@ -1702,7 +1706,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             />
           )}
         </div>
-      </div>
+      </SidebarInset>
 
       {/* Global Dialogs */}
       {/* Note: MergeDialog removed - git-specific feature */}
@@ -1889,6 +1893,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
         workspaceChangeCounts={undefined}
         onSelect={handleOpenSession}
       />
-    </div>
+    </SidebarProvider>
   );
 };
