@@ -1,7 +1,11 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-const API_FILES = [join("src", "lib", "api.ts"), join("src", "lib", "api-extra.ts")];
+const API_FILES = [
+  join("src", "lib", "api.ts"),
+  join("src", "lib", "api-extra.ts"),
+  join("src", "lib", "api-github.ts"),
+];
 const SRC_DIR = "src";
 const EXTS = new Set([".ts", ".tsx"]);
 const EXPORT_REGEX = /^\s*export const ([A-Za-z_]\w*)\s*=/gm;

@@ -1,5 +1,5 @@
 import * as React from "react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, it } from "vitest";
 import {
   createTestRepo,
   findSidebarBranchElement,
@@ -14,7 +14,7 @@ import {
 } from "../../../src/lib/api";
 import { savePendingReview } from "../../../src/lib/api-extra";
 import type { LineComment } from "../../../src/lib/api-types";
-import { render, screen, waitFor } from "../../test-utils";
+import { render, screen } from "../../test-utils";
 import { Dashboard } from "../../../src/components/Dashboard";
 import userEvent from "@testing-library/user-event";
 
