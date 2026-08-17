@@ -314,7 +314,7 @@ export function SendAssetLightbox({
     >
       <div
         data-testid="treq-send-preview-carousel-shell"
-        className="relative min-w-[75vw] w-[90vw] px-14"
+        className="relative min-w-[75vw] w-[90vw] px-3"
         onClick={(event) => event.stopPropagation()}
       >
         <div
@@ -396,8 +396,8 @@ export function SendAssetLightbox({
               </CarouselItem>
             ))}
           </CarouselContent>
-          <CarouselPrevious className="left-0 border-white/20 bg-black/40 text-white hover:bg-black/60 hover:text-white" />
-          <CarouselNext className="right-0 border-white/20 bg-black/40 text-white hover:bg-black/60 hover:text-white" />
+          <CarouselPrevious className="fixed left-3 top-1/2 h-16 w-16 border-white/20 bg-black/40 text-white hover:bg-black/60 hover:text-white [&_svg]:size-8" />
+          <CarouselNext className="fixed right-3 top-1/2 h-16 w-16 border-white/20 bg-black/40 text-white hover:bg-black/60 hover:text-white [&_svg]:size-8" />
         </Carousel>
       </div>
     </div>
