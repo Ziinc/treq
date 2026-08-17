@@ -99,7 +99,10 @@ describe("agent deep-link integration", () => {
     await waitFor(() =>
       expect(vi.mocked(invoke)).toHaveBeenCalledWith(
         "acknowledge_agent_dispatch",
-        expect.objectContaining({ requestId: "req-missing", status: "rejected" }),
+        expect.objectContaining({
+          requestId: "req-missing",
+          status: "rejected",
+        }),
       ),
     );
   });
