@@ -4,7 +4,7 @@ import {
   discardAgentCliFiles,
   prepareAgentAutoCommand,
 } from "../../lib/prepareAgentAutoCommand";
-import { type ClaudeSessionData } from "./types";
+import type { ClaudeSessionData } from "./types";
 
 export const useAgentAutoCommand = (sessionData: ClaudeSessionData) => {
   const [sessionModel, setSessionModelState] = useState<string | null>(null);
@@ -12,6 +12,7 @@ export const useAgentAutoCommand = (sessionData: ClaudeSessionData) => {
   const [treqBinDir, setTreqBinDir] = useState<string | null>(null);
   const [treqBinDirReady, setTreqBinDirReady] = useState(false);
   const [autoCommand, setAutoCommand] = useState<string | null>(null);
+  const [prepareError, setPrepareError] = useState<string | null>(null);
 
   const pendingPromptRef = useRef(sessionData.pendingPrompt);
   const permissionModeRef = useRef(sessionData.permissionMode);
@@ -41,6 +42,7 @@ export const useAgentAutoCommand = (sessionData: ClaudeSessionData) => {
     if (!isModelLoaded || !treqBinDirReady) return;
 
     let cancelled = false;
+    setPrepareError(null);
 
     prepareAgentAutoCommand({
       agent: sessionData.agent ?? "claude",
@@ -60,6 +62,11 @@ export const useAgentAutoCommand = (sessionData: ClaudeSessionData) => {
       })
       .catch((error) => {
         console.error("Failed to prepare agent CLI files:", error);
+        if (!cancelled) {
+          setPrepareError(
+            error instanceof Error ? error.message : String(error),
+          );
+        }
       });
 
     return () => {
@@ -80,5 +87,6 @@ export const useAgentAutoCommand = (sessionData: ClaudeSessionData) => {
     setSessionModelState,
     isModelLoaded,
     autoCommand,
+    prepareError,
   };
 };

@@ -1,4 +1,3 @@
-import { cleanupAgentCliFiles, readFile, writeAgentCliFiles } from "./api";
 import {
   type AgentKind,
   buildAgentAutoCommand,
@@ -8,6 +7,7 @@ import {
   cursorPromptFileContents,
   mergeClaudeLocalSettings,
 } from "./agentCommand";
+import { cleanupAgentCliFiles, readFile, writeAgentCliFiles } from "./api";
 
 export const parseJsonObject = (
   raw: string,
@@ -65,7 +65,16 @@ export const prepareAgentAutoCommand = async ({
     );
   }
 
-  const files = await writeAgentCliFiles(promptContents, settingsJson, cwd);
+  const files = await writeAgentCliFiles(
+    promptContents,
+    settingsJson,
+    cwd,
+  ).catch((error) => {
+    if (!cwd) {
+      throw error;
+    }
+    return writeAgentCliFiles(promptContents, settingsJson, null);
+  });
   const filePaths = [
     files.promptPath,
     files.settingsPath,
