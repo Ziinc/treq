@@ -263,6 +263,45 @@ describe("Dashboard - FileBrowser integration", () => {
     await screen.findByText("Open in...");
   });
 
+  it("keeps a long changed line on a single row instead of wrapping over neighbors", async () => {
+    const longLine =
+      "export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(({className, ...props}, ref) => <input ref={ref} className={cn('flex h-9 w-full rounded-md border border-zinc-200 bg-white px-3 py-1 text-sm outline-none focus:ring-2 focus:ring-zinc-300', className)} {...props} />);";
+    await setupWorkspace("feat/filebrowser-long-line-wrap-test", {
+      "input.tsx": [
+        "import * as React from 'react';",
+        "import {cn} from '../../lib/utils';",
+        longLine,
+        "Input.displayName = 'Input';",
+        "",
+      ].join("\n"),
+    });
+
+    const fileBrowser = await openWorkspaceCodeBrowser(
+      user,
+      "feat/filebrowser-long-line-wrap-test",
+      "input.tsx",
+    );
+
+    const lines = await fileBrowser.findAllByTestId("code-line");
+    const longRow = lines.find((line) =>
+      (line.textContent ?? "").includes("forwardRef"),
+    );
+    expect(longRow).toBeTruthy();
+    expect(longRow).toHaveClass("overflow-hidden");
+
+    const content = within(longRow as HTMLElement).getByTestId(
+      "code-line-content",
+    );
+    expect(content).toHaveClass("whitespace-pre");
+    expect(content).not.toHaveClass("break-words");
+    expect(content).not.toHaveClass("whitespace-pre-wrap");
+
+    const neighbor = lines.find((line) =>
+      (line.textContent ?? "").includes("displayName"),
+    );
+    expect(neighbor?.textContent).not.toContain("forwardRef");
+  });
+
   it("keeps selected text when pointer moves to another code line before copy", async () => {
     await setupWorkspace("feat/filebrowser-selection-persist-test", {
       "selection-target.ts":
