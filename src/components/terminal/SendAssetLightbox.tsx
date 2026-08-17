@@ -319,16 +319,14 @@ export function SendAssetLightbox({
       >
         <div
           data-testid="treq-send-preview-header"
-          className="mb-3 flex justify-end"
+          className="mb-3 flex flex-col items-center gap-1.5"
         >
-          <div className="flex w-fit max-w-full items-center gap-1.5">
-            {current && (
-              <p className="min-w-0 truncate text-sm text-white/80">
-                {current.title}
-              </p>
-            )}
-            {lightboxControls}
-          </div>
+          {current && (
+            <p className="max-w-full truncate text-center text-sm text-white/80">
+              {current.title}
+            </p>
+          )}
+          {lightboxControls}
         </div>
         <Carousel
           key={`send-carousel-${initialIndex}-${assets.map((a) => a.id).join(":")}`}

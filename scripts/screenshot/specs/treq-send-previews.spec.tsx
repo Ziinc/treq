@@ -170,7 +170,7 @@ it("captures treq send attachment thumbs and lightbox carousel previews", async 
 		expectations: [
 			"At 100% zoom the blue SVG is large in the carousel (not a postage-stamp thumbnail).",
 			"The carousel/content area spans at least three-quarters of the viewport; no small centered postage-stamp image.",
-			"Filename preview-shot.svg sits immediately left of zoom/copy/reveal/close controls on the same header row (right side of the carousel, not a floating top-right corner toolbar).",
+			"Centered above the image: filename preview-shot.svg on its own line, with the zoom/copy/reveal/close toolbar centered under it.",
 		],
 	});
 
@@ -233,7 +233,7 @@ it("captures treq send attachment thumbs and lightbox carousel previews", async 
 		name: "treq-send-03c-tall-zoomed",
 		expectations: [
 			"A tall teal photo is zoomed to 200% and the TOP label at the top of the image is visible (not cropped).",
-			"The image is scrollable in the lightbox; the header still shows preview-tall.svg next to the controls.",
+			"The image is scrollable in the lightbox; preview-tall.svg is centered above the toolbar.",
 		],
 	});
 
@@ -284,7 +284,7 @@ it("captures treq send attachment thumbs and lightbox carousel previews", async 
 		expectations: [
 			"A blurred backdrop shows the text asset alone without a modal frame.",
 			"The selectable text includes 'Selectable preview text from treq send'.",
-			"Copy, reveal, and close sit on the right next to the filename — no zoom controls for text.",
+			"Copy, reveal, and close sit in a centered toolbar under the filename — no zoom controls for text.",
 		],
 	});
 }, 60000);

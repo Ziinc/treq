@@ -225,17 +225,20 @@ describe("TerminalSendPreviews", () => {
     expect(image.style.height).toBe("80vh");
   });
 
-  it("keeps lightbox controls next to the file name", async () => {
+  it("centers the file name above the lightbox toolbar", async () => {
     const user = userEvent.setup();
     renderSend(<SendHarness ptySessionId="session-1" />);
     await user.click(screen.getByRole("button", { name: "Inject image" }));
     await user.click(await screen.findByTestId("terminal-send-preview-send-2"));
     const header = await screen.findByTestId("treq-send-preview-header");
-    expect(header.textContent).toContain("shot.png");
+    expect(header.className).toMatch(/flex-col/);
+    expect(header.className).toMatch(/items-center/);
+    const title = header.querySelector("p");
+    expect(title?.textContent).toBe("shot.png");
+    expect(header.firstElementChild).toBe(title);
     expect(
       header.querySelector('[data-testid="treq-send-zoom-in"]'),
     ).toBeTruthy();
-    expect(header.querySelector('[data-testid="treq-send-copy"]')).toBeTruthy();
     expect(
       header.querySelector('[data-testid="treq-send-close"]'),
     ).toBeTruthy();
