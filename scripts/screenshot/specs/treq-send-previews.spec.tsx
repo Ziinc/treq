@@ -131,6 +131,7 @@ it("captures treq send attachment thumbs and lightbox carousel previews", async 
 		name: "treq-send-01a-hover-dismiss",
 		expectations: [
 			"Hovering the text attachment reveals its grey circular X dismiss control.",
+			"The circular X overhangs the top-right corner of the thumbnail; its edges are not clipped flush with the card.",
 			"The image attachment next to it still hides its X while not hovered.",
 		],
 	});
