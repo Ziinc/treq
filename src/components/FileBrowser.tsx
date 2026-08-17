@@ -350,6 +350,8 @@ interface FileContentViewProps {
   onCancelEditComment: () => void;
   onSaveEditComment: (commentId: string, text: string) => void;
   onDeleteComment: (commentId: string) => void;
+  commentDraft: string;
+  onCommentDraftChange: (text: string) => void;
   listRef: React.RefObject<ListImperativeAPI>;
   // Search props
   isSearchOpen: boolean;
@@ -396,6 +398,8 @@ const FileContentView = memo(
     onCancelEditComment,
     onSaveEditComment,
     onDeleteComment,
+    commentDraft,
+    onCommentDraftChange,
     listRef,
     isSearchOpen,
     searchQuery,
@@ -629,6 +633,8 @@ const FileContentView = memo(
                           onCancelEdit={onCancelEditComment}
                           onSaveEdit={onSaveEditComment}
                           onDelete={onDeleteComment}
+                          commentDraft={commentDraft}
+                          onCommentDraftChange={onCommentDraftChange}
                         />
                       </div>
                     );
@@ -1038,6 +1044,8 @@ export const FileBrowser = memo(
       new Set([basePath]),
     );
     const [selectedFile, setSelectedFile] = useState<string | null>(null);
+    const selectedFileRef = useRef<string | null>(null);
+    selectedFileRef.current = selectedFile;
     const [selectedFileModifiedAt, setSelectedFileModifiedAt] = useState<
       string | null
     >(null);
@@ -1065,6 +1073,7 @@ export const FileBrowser = memo(
     const [isSelecting, setIsSelecting] = useState(false);
     const [selectionAnchor, setSelectionAnchor] = useState<number | null>(null);
     const [showCommentInput, setShowCommentInput] = useState(false);
+    const [commentDraft, setCommentDraft] = useState("");
     const [pendingComment, setPendingComment] = useState<{
       startLine: number;
       endLine: number;
@@ -1228,6 +1237,7 @@ export const FileBrowser = memo(
 
     const handleFileClick = useCallback(
       async (path: string) => {
+        const refreshingSameFile = selectedFileRef.current === path;
         setSelectedFile(path);
         getFileModifiedAt(path)
           .then((modifiedAt) => setSelectedFileModifiedAt(modifiedAt))
@@ -1240,7 +1250,11 @@ export const FileBrowser = memo(
           return;
         }
 
-        setIsLoadingFile(true);
+        // Keep the current view (and comment draft) mounted when reloading the
+        // already-open file. A full-page spinner unmounts CommentInput.
+        if (!refreshingSameFile) {
+          setIsLoadingFile(true);
+        }
         try {
           const content = await readFile(path);
 
@@ -1449,6 +1463,7 @@ export const FileBrowser = memo(
         setShowCommentInput(false);
         setPendingComment(null);
         setLineSelection(null);
+        setCommentDraft("");
       },
       [
         pendingComment,
@@ -1461,6 +1476,7 @@ export const FileBrowser = memo(
     const handleCancelComment = useCallback(() => {
       setShowCommentInput(false);
       setPendingComment(null);
+      setCommentDraft("");
     }, []);
 
     // Auto-select README.md when rootEntries change (switching workspaces)
@@ -1771,6 +1787,8 @@ export const FileBrowser = memo(
         onCancelEditComment={fileBrowserReview.cancelEditComment}
         onSaveEditComment={fileBrowserReview.saveEditComment}
         onDeleteComment={fileBrowserReview.deleteComment}
+        commentDraft={commentDraft}
+        onCommentDraftChange={setCommentDraft}
         listRef={listRef}
         isSearchOpen={isSearchOpen}
         searchQuery={debouncedSearchQuery}

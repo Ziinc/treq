@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import userEvent from "@testing-library/user-event";
-import { act, fireEvent, render, screen } from "../test-utils";
+import { act, fireEvent, render, screen, waitFor } from "../test-utils";
 import * as api from "../../src/lib/api";
 import { FileBrowser } from "../../src/components/FileBrowser";
 
@@ -69,5 +69,43 @@ describe("FileBrowser polling", () => {
     expect(screen.getByPlaceholderText("Add a comment...")).toHaveValue(
       "keep this draft",
     );
+  });
+
+  it("preserves a comment draft when the open file is reloaded", async () => {
+    vi.mocked(api.getWorkspaceChangedFiles).mockResolvedValue([]);
+    vi.mocked(api.listDirectory).mockResolvedValue([
+      {
+        name: "specific.ts",
+        path: "/repo/specific.ts",
+        is_directory: false,
+      },
+    ]);
+    vi.mocked(api.readFile).mockResolvedValue("const value = 1;\n");
+
+    render(
+      <FileBrowser
+        workspace={null}
+        repoPath="/repo"
+        initialSelectedFile="/repo/specific.ts"
+        initialExpandedDir={null}
+      />,
+    );
+
+    const [line] = await screen.findAllByTestId("code-line");
+    fireEvent.mouseEnter(line);
+    await user.click(await screen.findByTitle("Add comment"));
+    const textarea = await screen.findByPlaceholderText("Add a comment...");
+    await user.type(textarea, "keep this draft");
+
+    vi.mocked(api.readFile).mockResolvedValue("const value = 2;\n");
+    const [fileEntry] = await screen.findAllByText("specific.ts");
+    await user.click(fileEntry);
+
+    await waitFor(() => {
+      expect(api.readFile.mock.calls.length).toBeGreaterThan(1);
+    });
+    expect(
+      await screen.findByPlaceholderText("Add a comment..."),
+    ).toHaveValue("keep this draft");
   });
 });

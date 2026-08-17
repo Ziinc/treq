@@ -17,6 +17,9 @@ export interface CommentInputProps {
   onSubmitWithMode?: (text: string, mode: "plan" | "acceptEdits") => void;
   /** When set, shows the quoted text being replied to (e.g. a GitHub review comment). */
   quote?: { text: string; author?: string };
+  /** Controlled draft text. Survives remounts when the parent owns the value. */
+  value?: string;
+  onValueChange?: (text: string) => void;
 }
 
 export const CommentInput: React.FC<CommentInputProps> = memo(
@@ -28,8 +31,22 @@ export const CommentInput: React.FC<CommentInputProps> = memo(
     endLine,
     onSubmitWithMode,
     quote,
+    value,
+    onValueChange,
   }) => {
-    const [text, setText] = useState("");
+    const [uncontrolledText, setUncontrolledText] = useState("");
+    const isControlled = value !== undefined;
+    const text = isControlled ? value : uncontrolledText;
+    const setText = useCallback(
+      (next: string) => {
+        if (isControlled) {
+          onValueChange?.(next);
+        } else {
+          setUncontrolledText(next);
+        }
+      },
+      [isControlled, onValueChange],
+    );
 
     const handleSubmit = useCallback(() => {
       if (text.trim()) {
