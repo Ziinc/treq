@@ -4,6 +4,7 @@ import {
   dequeueOldestAgentMessage,
   enqueueAgentMessage,
   formatAgentMessageForPty,
+  looksLikeAgentUserQuestion,
   removeAgentMessage,
   updateAgentMessage,
 } from "./agentMessageQueue";
@@ -62,5 +63,38 @@ describe("agentMessageQueue", () => {
 
   it("formats message for pty as text plus carriage return", () => {
     expect(formatAgentMessageForPty("hello")).toBe("hello\r");
+  });
+});
+
+describe("looksLikeAgentUserQuestion", () => {
+  it("detects a permission prompt that ends with a question mark", () => {
+    const output = [
+      "Claude wants to run:",
+      "  npm test",
+      "",
+      "Would you like to run the following command?",
+      "❯ 1. Yes",
+      "  2. No, and tell Claude what to do differently",
+    ].join("\n");
+    expect(looksLikeAgentUserQuestion(output)).toBe(true);
+  });
+
+  it("detects a question mark wrapped in ANSI codes", () => {
+    const output = "\x1b[1mAllow this action?\x1b[0m\r\n❯ Yes";
+    expect(looksLikeAgentUserQuestion(output)).toBe(true);
+  });
+
+  it("returns false for idle agent output without a question", () => {
+    const output = [
+      "I'll add the tests next.",
+      "Done. The suite is green.",
+    ].join("\n");
+    expect(looksLikeAgentUserQuestion(output)).toBe(false);
+  });
+
+  it("ignores a question mark buried above the recent tail", () => {
+    const olderQuestion = "What should I do next?\n";
+    const work = "running tests\n".repeat(20) + "All tests passed.\n";
+    expect(looksLikeAgentUserQuestion(olderQuestion + work)).toBe(false);
   });
 });

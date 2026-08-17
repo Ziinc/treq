@@ -118,6 +118,65 @@ describe("useAgentMessageQueue", () => {
     ]);
   });
 
+  it("does not send queued messages when idle on a user question", async () => {
+    const { result } = renderHook(() =>
+      useAgentMessageQueue({ ptySessionId: "pty-1", write }),
+    );
+
+    act(() => {
+      result.current.enqueue("follow-up");
+    });
+    await waitFor(() => expect(result.current.messages).toHaveLength(1));
+
+    act(() => {
+      result.current.markIdle({ awaitingQuestion: true });
+    });
+
+    await waitFor(() => expect(result.current.isBusy).toBe(false));
+    expect(write).not.toHaveBeenCalled();
+    expect(result.current.messages.map((m) => m.text)).toEqual(["follow-up"]);
+  });
+
+  it("does not send immediately when enqueueing while idle on a question", async () => {
+    const { result } = renderHook(() =>
+      useAgentMessageQueue({ ptySessionId: "pty-1", write }),
+    );
+
+    act(() => {
+      result.current.markIdle({ awaitingQuestion: true });
+    });
+
+    act(() => {
+      result.current.enqueue("do not send yet");
+    });
+
+    await waitFor(() => expect(result.current.messages).toHaveLength(1));
+    expect(write).not.toHaveBeenCalled();
+  });
+
+  it("sends after a later idle that is not a user question", async () => {
+    const { result } = renderHook(() =>
+      useAgentMessageQueue({ ptySessionId: "pty-1", write }),
+    );
+
+    act(() => {
+      result.current.enqueue("after-answer");
+      result.current.markIdle({ awaitingQuestion: true });
+    });
+
+    await waitFor(() => expect(result.current.isBusy).toBe(false));
+    expect(write).not.toHaveBeenCalled();
+
+    act(() => {
+      result.current.markBusy();
+      result.current.markIdle();
+    });
+
+    await waitFor(() => {
+      expect(write).toHaveBeenCalledWith("pty-1", "after-answer\r");
+    });
+  });
+
   it("requeues the message at the front when write fails", async () => {
     write.mockRejectedValueOnce(new Error("pty down"));
     const { result } = renderHook(() =>

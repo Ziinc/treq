@@ -60,3 +60,23 @@ export function dequeueOldestAgentMessage(
 export function formatAgentMessageForPty(text: string): string {
   return `${text}\r`;
 }
+
+const ANSI_ESCAPE_RE = /\x1b(?:\[[0-9;?]*[ -/]*[@-~]|].*?(?:\x07|\x1b\\))/g;
+
+/** How many trailing non-empty lines to inspect for a user question. */
+const QUESTION_TAIL_LINES = 15;
+
+/**
+ * True when recent agent output looks like a permission / confirmation prompt.
+ * Those prompts go idle if unanswered; queued follow-ups must not auto-send
+ * into them (that would answer Yes/No with the queued text).
+ */
+export function looksLikeAgentUserQuestion(output: string): boolean {
+  const visible = output.replace(ANSI_ESCAPE_RE, "").replace(/\r/g, "");
+  const lines = visible
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+  if (lines.length === 0) return false;
+  return lines.slice(-QUESTION_TAIL_LINES).some((line) => line.endsWith("?"));
+}

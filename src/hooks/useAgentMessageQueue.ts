@@ -24,12 +24,13 @@ export interface UseAgentMessageQueueResult {
   /** Mark the agent as producing output (busy). */
   markBusy: () => void;
   /** Mark the agent idle and flush the oldest queued message if any. */
-  markIdle: () => void;
+  markIdle: (options?: { awaitingQuestion?: boolean }) => void;
   clear: () => void;
 }
 
 /**
- * Per-agent-terminal message queue. Messages sit until the agent is idle,
+ * Per-agent-terminal message queue. Messages sit until the agent is idle
+ * and not waiting on a user question (permission / confirmation prompt),
  * then the oldest is written to the PTY as typed text + Enter.
  */
 export function useAgentMessageQueue({
@@ -41,6 +42,7 @@ export function useAgentMessageQueue({
   const messagesRef = useRef(messages);
   const isBusyRef = useRef(isBusy);
   const flushingRef = useRef(false);
+  const awaitingQuestionRef = useRef(false);
   const writeRef = useRef(write);
   const ptySessionIdRef = useRef(ptySessionId);
 
@@ -61,7 +63,13 @@ export function useAgentMessageQueue({
   }, [ptySessionId]);
 
   const flushOldest = useCallback(async () => {
-    if (flushingRef.current || isBusyRef.current) return;
+    if (
+      flushingRef.current ||
+      isBusyRef.current ||
+      awaitingQuestionRef.current
+    ) {
+      return;
+    }
     const dequeued = dequeueOldestAgentMessage(messagesRef.current);
     if (!dequeued) return;
 
@@ -120,15 +128,20 @@ export function useAgentMessageQueue({
   }, []);
 
   const markBusy = useCallback(() => {
+    awaitingQuestionRef.current = false;
     setIsBusy(true);
     isBusyRef.current = true;
   }, []);
 
-  const markIdle = useCallback(() => {
-    setIsBusy(false);
-    isBusyRef.current = false;
-    void flushOldest();
-  }, [flushOldest]);
+  const markIdle = useCallback(
+    (options?: { awaitingQuestion?: boolean }) => {
+      awaitingQuestionRef.current = options?.awaitingQuestion === true;
+      setIsBusy(false);
+      isBusyRef.current = false;
+      void flushOldest();
+    },
+    [flushOldest],
+  );
 
   const clear = useCallback(() => {
     setMessages([]);
