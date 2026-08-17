@@ -301,11 +301,14 @@ describe("Review - conflict rendering contract", () => {
       }
     });
 
-    await waitFor(() => {
-      expect(
-        screen.queryByRole("button", { name: "Conflicts" }),
-      ).not.toBeInTheDocument();
-    });
+    await waitFor(
+      () => {
+        expect(
+          screen.queryByRole("button", { name: "Conflicts" }),
+        ).not.toBeInTheDocument();
+      },
+      { timeout: 5000 },
+    );
     expect(
       screen.queryByRole("button", { name: /Resolve conflicts/i }),
     ).not.toBeInTheDocument();

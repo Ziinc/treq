@@ -81,15 +81,16 @@ describe("useTerminalSessionSummaries preview output", () => {
     vi.useRealTimers();
   });
 
-  it("dispatches a filesystem refresh when a streaming terminal goes idle", () => {
+  it("does not dispatch a filesystem refresh when a streaming terminal goes idle", () => {
     const onRefresh = vi.fn();
     window.addEventListener(REFRESH_WORKSPACE_CHANGES_EVENT, onRefresh);
 
     const allTerminals: TerminalEntry[] = [
       { type: "shell", data: { id: "shell-1", workingDirectory: "/tmp/ws" } },
     ];
+    const onTerminalsChange = vi.fn();
     const { result } = renderHook(() =>
-      useTerminalSessionSummaries({ allTerminals }),
+      useTerminalSessionSummaries({ allTerminals, onTerminalsChange }),
     );
 
     act(() => {
@@ -99,12 +100,11 @@ describe("useTerminalSessionSummaries preview output", () => {
       result.current.handleTerminalIdlePulse("shell-1");
     });
 
-    expect(onRefresh).toHaveBeenCalledTimes(1);
-
-    act(() => {
-      result.current.handleTerminalIdlePulse("shell-1");
-    });
-    expect(onRefresh).toHaveBeenCalledTimes(1);
+    expect(onRefresh).not.toHaveBeenCalled();
+    const latest = onTerminalsChange.mock.calls.at(-1)?.[0] as Array<{
+      isStreaming: boolean;
+    }>;
+    expect(latest[0].isStreaming).toBe(false);
 
     window.removeEventListener(REFRESH_WORKSPACE_CHANGES_EVENT, onRefresh);
   });

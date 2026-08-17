@@ -75,7 +75,14 @@ import {
   type ParsedFileChange,
 } from "../lib/git-utils";
 import { reviewChangeCountQueryKey } from "../lib/review-change-count";
-import { REFRESH_WORKSPACE_CHANGES_EVENT } from "../lib/change-file-drag";
+import {
+  REFRESH_WORKSPACE_CHANGES_EVENT,
+  scheduleRefreshWorkspaceChanges,
+} from "../lib/change-file-drag";
+import {
+  type WorkspaceChangesRefreshDetail,
+  visibleWorkspaceRefreshTarget,
+} from "../lib/workspace-refresh";
 import { getReviewTabPill, reviewTabPillClassName } from "../lib/reviewTabPill";
 import {
   commitsTabCountClassName,
@@ -590,46 +597,82 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
       },
     });
 
-    const invalidateWorkspaceFileQueries = useCallback(() => {
-      if (workspace?.id === undefined || !effectiveRepoPath) return;
-      void queryClient.invalidateQueries({
-        queryKey: ["workspace-status", effectiveRepoPath, workspace.id],
-      });
-      void queryClient.invalidateQueries({
-        queryKey: ["workspace-statuses", effectiveRepoPath],
-      });
-      void queryClient.invalidateQueries({
-        queryKey: reviewChangeCountQueryKey(effectiveRepoPath, workspace.id),
-      });
-    }, [workspace?.id, effectiveRepoPath, queryClient]);
-
     useEffect(() => {
       if (workspace?.id === undefined || !effectiveRepoPath) return;
       const workspaceId = workspace.id;
-      const unlisten = listen<{ workspace_id: number }>(
-        "workspace-files-changed",
-        (event) => {
-          if (event.payload.workspace_id !== workspaceId) return;
-          // WC edits (including conflict-marker resolves) must refresh status so
-          // Review pill tone, Conflicts section props, and Code-tab alerts clear
-          // in the same turn as the refreshed diff.
-          invalidateWorkspaceFileQueries();
-        },
-      );
+      const unlisten = listen<{
+        workspace_id: number;
+        changed_paths?: string[];
+      }>("workspace-files-changed", (event) => {
+        if (event.payload.workspace_id !== workspaceId) return;
+        scheduleRefreshWorkspaceChanges({
+          workspaceId,
+          changedPaths: event.payload.changed_paths,
+        });
+      });
       return () => {
         void unlisten.then((fn) => fn());
       };
-    }, [workspace?.id, effectiveRepoPath, invalidateWorkspaceFileQueries]);
+    }, [workspace?.id, effectiveRepoPath]);
 
     useEffect(() => {
-      const handler = () => {
-        invalidateWorkspaceFileQueries();
+      const handler = (event: Event) => {
+        const { detail } = event as CustomEvent<WorkspaceChangesRefreshDetail>;
+        if (
+          detail?.workspaceId !== undefined &&
+          workspace?.id !== undefined &&
+          detail.workspaceId !== workspace.id
+        ) {
+          return;
+        }
+        const target = visibleWorkspaceRefreshTarget({
+          activeTab,
+          showFileBrowser: showFileBrowserInCode,
+        });
+        if (target === "changes-diff" && workspace?.id !== undefined) {
+          // Diff reload is handled by ChangesDiffViewer; refresh status metadata
+          // so the Review pill tone and overview conflict alerts stay in sync.
+          void queryClient.invalidateQueries({
+            queryKey: ["workspace-status", effectiveRepoPath, workspace.id],
+          });
+          void queryClient.invalidateQueries({
+            queryKey: ["workspace-statuses", effectiveRepoPath],
+          });
+          void queryClient.invalidateQueries({
+            queryKey: reviewChangeCountQueryKey(
+              effectiveRepoPath,
+              workspace.id,
+            ),
+          });
+        }
+        if (target === "commits-list") {
+          void queryClient.invalidateQueries({
+            queryKey: [
+              "commit-diff-viewer-commits",
+              effectiveRepoPath,
+              workspace?.id ?? null,
+            ],
+          });
+          void queryClient.invalidateQueries({
+            queryKey: [
+              "workspace-commits",
+              effectiveRepoPath,
+              workspace?.id ?? null,
+            ],
+          });
+        }
       };
       window.addEventListener(REFRESH_WORKSPACE_CHANGES_EVENT, handler);
       return () => {
         window.removeEventListener(REFRESH_WORKSPACE_CHANGES_EVENT, handler);
       };
-    }, [invalidateWorkspaceFileQueries]);
+    }, [
+      activeTab,
+      showFileBrowserInCode,
+      workspace?.id,
+      effectiveRepoPath,
+      queryClient,
+    ]);
 
     useEffect(() => {
       if (!workspaceStatusData) return;

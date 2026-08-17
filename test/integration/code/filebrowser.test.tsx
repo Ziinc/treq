@@ -17,6 +17,7 @@ import {
   resolveWorkspacePath,
   writeWorkspaceFile,
 } from "../../utils";
+import { dispatchRefreshWorkspaceChanges } from "../../../src/lib/change-file-drag";
 
 async function setupWorkspace(
   branchName: string,
@@ -85,6 +86,35 @@ describe("Dashboard - FileBrowser integration", () => {
     expect(appTsLabels.length).toBeGreaterThan(1);
     await fileBrowser.findByText("runApp");
     await screen.findByRole("button", { name: /back/i });
+  });
+
+  it("reloads the open file and directory tree after a scoped filesystem refresh", async () => {
+    const { workspace, workspacePath } = await setupWorkspace(
+      "feat/filebrowser-refresh-test",
+      { "app.ts": "export const before = true;\n" },
+    );
+
+    const fileBrowser = await openWorkspaceCodeBrowser(
+      user,
+      "feat/filebrowser-refresh-test",
+      "app.ts",
+    );
+    await fileBrowser.findByText("before");
+
+    writeWorkspaceFile(workspacePath, "app.ts", "export const after = true;\n");
+    writeWorkspaceFile(
+      workspacePath,
+      "new-file.ts",
+      "export const added = 1;\n",
+    );
+    dispatchRefreshWorkspaceChanges({
+      workspaceId: workspace.id,
+      changedPaths: [`${workspacePath}/app.ts`, `${workspacePath}/new-file.ts`],
+    });
+
+    await fileBrowser.findByText("after");
+    expect(fileBrowser.queryByText("before")).toBeNull();
+    await fileBrowser.findByText("new-file.ts");
   });
 
   it("uses Code and Preview tabs for markdown files and defaults to Code", async () => {

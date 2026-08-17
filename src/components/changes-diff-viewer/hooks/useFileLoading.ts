@@ -11,7 +11,11 @@ import {
   parseJjChangedFiles,
 } from "../../../lib/git-utils";
 import { useCachedWorkspaceChanges } from "../../../hooks/useCachedWorkspaceChanges";
-import { REFRESH_WORKSPACE_CHANGES_EVENT } from "../../../lib/change-file-drag";
+import {
+  REFRESH_WORKSPACE_CHANGES_EVENT,
+  scheduleRefreshWorkspaceChanges,
+} from "../../../lib/change-file-drag";
+import type { WorkspaceChangesRefreshDetail } from "../../../lib/workspace-refresh";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { useToast } from "../../ui/toast";
@@ -228,13 +232,18 @@ export function useFileLoading({
     const unlisten = listen<{ workspace_id: number; changed_paths: string[] }>(
       "workspace-files-changed",
       (event) => {
-        if (event.payload.workspace_id === workspaceId) loadChangedFiles();
+        if (event.payload.workspace_id === workspaceId) {
+          scheduleRefreshWorkspaceChanges({
+            workspaceId,
+            changedPaths: event.payload.changed_paths,
+          });
+        }
       },
     );
     return () => {
       unlisten.then((fn) => fn());
     };
-  }, [workspaceId, loadChangedFiles]);
+  }, [workspaceId]);
 
   const refreshCommittedChanges = useCallback(async () => {}, []);
 
@@ -433,14 +442,22 @@ export function useFileLoading({
   };
 
   useEffect(() => {
-    const handler = () => {
+    const handler = (event: Event) => {
+      const { detail } = event as CustomEvent<WorkspaceChangesRefreshDetail>;
+      if (
+        detail?.workspaceId !== undefined &&
+        workspaceId !== undefined &&
+        detail.workspaceId !== workspaceId
+      ) {
+        return;
+      }
       refreshFromDisk();
     };
     window.addEventListener(REFRESH_WORKSPACE_CHANGES_EVENT, handler);
     return () => {
       window.removeEventListener(REFRESH_WORKSPACE_CHANGES_EVENT, handler);
     };
-  }, []);
+  }, [workspaceId]);
 
   useEffect(() => {
     if (!workspaceId) return;
