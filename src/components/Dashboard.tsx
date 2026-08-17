@@ -618,32 +618,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
           type: "success",
         });
       }),
-      // Menu open in new window
-      listen("menu-open-in-new-window", async () => {
-        const selected = await selectFolder();
-        if (!selected) return;
-
-        try {
-          await initRepo(selected);
-        } catch {
-          addToast({
-            title: "Not a Git Repository",
-            description:
-              "Please select a folder that contains a git repository.",
-            type: "error",
-          });
-          return;
-        }
-
-        const windowLabel = `treq-${Date.now()}`;
-        const newRepoName =
-          selected.split("/").pop() || selected.split("\\").pop() || selected;
-
-        new WebviewWindow(windowLabel, {
-          url: `index.html?repo=${encodeURIComponent(selected)}`,
-          title: `Treq - ${newRepoName}`,
-          width: 1400,
-          height: 900,
+      listen("menu-open-in-new-window-invalid", () => {
+        addToast({
+          title: "Not a Git Repository",
+          description: "Please select a folder that contains a git repository.",
+          type: "error",
         });
       }),
       // Developer menu force rebase for current workspace
