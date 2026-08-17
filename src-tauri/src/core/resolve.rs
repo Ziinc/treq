@@ -268,6 +268,44 @@ fn build_resolve_target(
   })
 }
 
+/// Commits the Commits-tab inplace resolver may rewrite.
+///
+/// Immutable commits are included only when every conflicted commit is on the
+/// workspace branch (`!on_target_only`) and `on_distinct_workspace_branch` is true.
+pub fn resolvable_conflicted_commits(
+  commits: &[jj::JjLogCommit],
+  on_distinct_workspace_branch: bool,
+) -> Vec<jj::JjLogCommit> {
+  let conflicted: Vec<&jj::JjLogCommit> = commits
+    .iter()
+    .filter(|c| c.has_conflicts && !c.is_working_copy)
+    .collect();
+  let all_on_workspace_branch_only = on_distinct_workspace_branch
+    && !conflicted.is_empty()
+    && conflicted.iter().all(|c| !c.on_target_only);
+
+  conflicted
+    .into_iter()
+    .filter(|c| !c.on_target_only && (!c.is_immutable || all_on_workspace_branch_only))
+    .cloned()
+    .collect()
+}
+
+fn listing_is_distinct_workspace_branch(
+  repo_path: &str,
+  workspace_id: Option<i64>,
+) -> Result<bool, String> {
+  let Some(id) = workspace_id else {
+    return Ok(false);
+  };
+  let workspace = local_db::get_workspace_by_id(repo_path, id)
+    .map_err(|e| format!("Failed to get workspace: {}", e))?
+    .ok_or_else(|| format!("Workspace not found: {}", id))?;
+  let default_branch = crate::jj::get_default_branch(repo_path)
+    .map_err(|e| format!("Failed to resolve default branch: {}", e))?;
+  Ok(workspace.branch_name != default_branch)
+}
+
 /// Start short-lived resolve workspaces for conflicted commits.
 ///
 /// When `change_ids` is `None`, every conflicted commit in the workspace (or home)
@@ -277,12 +315,9 @@ pub fn start_resolve_conflicts(
   workspace_id: Option<i64>,
   change_ids: Option<Vec<String>>,
 ) -> Result<ResolveConflictsSession, String> {
-  let log = super::list_commits(repo_path, workspace_id, false, None, None)?;
-  let mut conflicted: Vec<jj::JjLogCommit> = log
-    .commits
-    .into_iter()
-    .filter(|c| c.has_conflicts && !c.on_target_only && !c.is_working_copy)
-    .collect();
+  let log = super::list_commits(repo_path, workspace_id, true, Some(50), None)?;
+  let on_distinct = listing_is_distinct_workspace_branch(repo_path, workspace_id)?;
+  let mut conflicted = resolvable_conflicted_commits(&log.commits, on_distinct);
 
   if let Some(ids) = change_ids {
     conflicted.retain(|c| {
@@ -296,7 +331,10 @@ pub fn start_resolve_conflicts(
   }
 
   if conflicted.is_empty() {
-    return Err("No conflicted commits found to resolve".to_string());
+    return Err(
+      "No conflicted commits found to resolve. Immutable commits can only be resolved when every conflicted commit is on the workspace branch."
+        .to_string(),
+    );
   }
 
   let workspace_slug = resolve_workspace_slug(repo_path, workspace_id);
@@ -502,3 +540,71 @@ pub fn build_resolve_agent_prompt(user_prompt: &str, session: &ResolveConflictsS
   }
   out
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::jj::JjLogCommit;
+
+  fn commit(
+    change_id: &str,
+    has_conflicts: bool,
+    is_immutable: bool,
+    on_target_only: bool,
+  ) -> JjLogCommit {
+    JjLogCommit {
+      commit_id: format!("commit-{change_id}"),
+      short_id: change_id.to_string(),
+      change_id: change_id.to_string(),
+      description: change_id.to_string(),
+      author_name: "Test".to_string(),
+      timestamp: "2024-01-01 00:00:00".to_string(),
+      parent_ids: vec![],
+      is_working_copy: false,
+      workspace_label: None,
+      bookmarks: vec![],
+      is_immutable,
+      insertions: 1,
+      deletions: 0,
+      on_target_only,
+      has_conflicts,
+    }
+  }
+
+  #[test]
+  fn includes_immutable_when_all_conflicted_are_workspace_only() {
+    let commits = vec![commit("ws", true, true, false)];
+    let resolved = resolvable_conflicted_commits(&commits, true);
+    assert_eq!(resolved.len(), 1);
+    assert_eq!(resolved[0].change_id, "ws");
+  }
+
+  #[test]
+  fn excludes_immutable_when_any_conflicted_is_target_only() {
+    let commits = vec![
+      commit("ws", true, true, false),
+      commit("tgt", true, true, true),
+    ];
+    let resolved = resolvable_conflicted_commits(&commits, true);
+    assert!(resolved.is_empty());
+  }
+
+  #[test]
+  fn keeps_mutable_workspace_conflicts_when_target_is_also_conflicted() {
+    let commits = vec![
+      commit("ws", true, false, false),
+      commit("tgt", true, true, true),
+    ];
+    let resolved = resolvable_conflicted_commits(&commits, true);
+    assert_eq!(resolved.len(), 1);
+    assert_eq!(resolved[0].change_id, "ws");
+  }
+
+  #[test]
+  fn excludes_immutable_on_home_or_default_branch() {
+    let commits = vec![commit("main", true, true, false)];
+    let resolved = resolvable_conflicted_commits(&commits, false);
+    assert!(resolved.is_empty());
+  }
+}
+
