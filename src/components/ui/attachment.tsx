@@ -156,7 +156,7 @@ function AttachmentActions({
     <div
       data-slot="attachment-actions"
       className={cn(
-        "relative z-20 flex shrink-0 items-center group-data-[orientation=vertical]/attachment:absolute group-data-[orientation=vertical]/attachment:top-3 group-data-[orientation=vertical]/attachment:right-3 group-data-[orientation=vertical]/attachment:gap-1 group-data-[variant=thumbnail]/attachment:absolute group-data-[variant=thumbnail]/attachment:-right-1.5 group-data-[variant=thumbnail]/attachment:-top-1.5",
+        "relative z-20 flex shrink-0 items-center group-data-[orientation=vertical]/attachment:absolute group-data-[orientation=vertical]/attachment:top-3 group-data-[orientation=vertical]/attachment:right-3 group-data-[orientation=vertical]/attachment:gap-1 group-data-[variant=thumbnail]/attachment:absolute group-data-[variant=thumbnail]/attachment:-right-2 group-data-[variant=thumbnail]/attachment:-top-2",
         className,
       )}
       {...props}

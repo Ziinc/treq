@@ -122,14 +122,16 @@ describe("TerminalSendPreviews", () => {
     await user.click(screen.getByRole("button", { name: "Inject text" }));
     const thumb = await screen.findByTestId("terminal-send-preview-send-1");
     const attachment = thumb.closest('[data-slot="attachment"]') as HTMLElement;
-    const group = thumb.closest('[data-slot="attachment-group"]') as HTMLElement;
+    const group = thumb.closest(
+      '[data-slot="attachment-group"]',
+    ) as HTMLElement;
     const actions = attachment.querySelector(
       '[data-slot="attachment-actions"]',
     ) as HTMLElement;
 
     expect(attachment.className).toMatch(/overflow-visible/);
-    expect(actions.className).toMatch(/-top-1\.5/);
-    expect(actions.className).toMatch(/-right-1\.5/);
+    expect(actions.className).toMatch(/-top-2/);
+    expect(actions.className).toMatch(/-right-2/);
     expect(group.className).toMatch(/pt-2/);
     expect(group.className).toMatch(/pr-2/);
   });
