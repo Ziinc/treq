@@ -110,7 +110,8 @@ describe("TerminalSendPreviews", () => {
     await user.click(screen.getByRole("button", { name: "Inject image" }));
     const thumb = await screen.findByTestId("terminal-send-preview-send-2");
     const attachment = thumb.closest('[data-slot="attachment"]');
-    expect(attachment?.className).toMatch(/h-24/);
+    expect(attachment?.className).toMatch(/h-20/);
+    expect(attachment?.className).toMatch(/w-36/);
     const img = attachment?.querySelector("img");
     expect(img?.getAttribute("src")).toBe(
       "asset://localhost/tmp/repo/shot.png",

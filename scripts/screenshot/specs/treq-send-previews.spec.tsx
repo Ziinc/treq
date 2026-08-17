@@ -124,7 +124,7 @@ it("captures treq send attachment thumbs and lightbox carousel previews", async 
 	await captureDocument(document, {
 		name: "treq-send-01-square-previews",
 		expectations: [
-			"Two dark ~96px (h-24) square thumbnails sit at the top-left of the terminal in a horizontal row.",
+			"Two dark landscape thumbnails (wider than tall, ~80x144) sit at the top-left of the terminal in a horizontal row.",
 			"The image thumb shows a blue square with a white circle; the text thumb shows a file icon and title.",
 			"Dismiss X controls are hidden until a thumbnail is hovered.",
 		],
