@@ -175,6 +175,14 @@ it("captures treq send attachment thumbs and lightbox carousel previews", async 
 		],
 	});
 
+	await captureDocument(document, {
+		name: "treq-send-03a-carousel-nav",
+		expectations: [
+			"Circular previous/next carousel buttons are large (about 48px), not small 32px controls.",
+			"The buttons sit close to the left and right edges of the lightbox, not deeply inset from the viewport.",
+		],
+	});
+
 	await user.click(
 		document.querySelector(
 			'[data-testid="treq-send-preview-lightbox"] img',
