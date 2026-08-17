@@ -119,6 +119,26 @@ describe("TerminalSendPreviews", () => {
     );
   });
 
+  it("lets the dismiss button overhang the thumbnail corner", async () => {
+    const user = userEvent.setup();
+    renderSend(<SendHarness ptySessionId="session-1" />);
+    await user.click(screen.getByRole("button", { name: "Inject text" }));
+    const thumb = await screen.findByTestId("terminal-send-preview-send-1");
+    const attachment = thumb.closest('[data-slot="attachment"]') as HTMLElement;
+    const group = thumb.closest(
+      '[data-slot="attachment-group"]',
+    ) as HTMLElement;
+    const actions = attachment.querySelector(
+      '[data-slot="attachment-actions"]',
+    ) as HTMLElement;
+
+    expect(attachment.className).toMatch(/overflow-visible/);
+    expect(actions.className).toMatch(/-top-2/);
+    expect(actions.className).toMatch(/-right-2/);
+    expect(group.className).toMatch(/pt-2/);
+    expect(group.className).toMatch(/pr-2/);
+  });
+
   it("dismisses a thumbnail when its x button is clicked", async () => {
     const user = userEvent.setup();
     renderSend(<SendHarness ptySessionId="session-1" />);

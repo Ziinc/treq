@@ -54,7 +54,7 @@ export function TerminalSendPreviews({
             className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#1e1e1e] via-[#1e1e1e]/85 to-transparent"
           />
           <div className="pointer-events-auto relative px-3 pb-8 pt-3">
-            <AttachmentGroup className="gap-2 py-0">
+            <AttachmentGroup className="gap-2 overflow-x-auto py-0 pt-2 pr-2">
               {assets.map((asset) => (
                 <Attachment
                   key={asset.id}
