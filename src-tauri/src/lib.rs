@@ -12,6 +12,7 @@ pub mod file_indexer;
 pub mod github;
 pub mod jj;
 pub mod local_db;
+mod open_new_window;
 pub mod pr_status;
 pub mod pty;
 mod send_dispatch;
@@ -44,16 +45,100 @@ pub(crate) struct AppState {
 }
 
 /// Emits an event only to the focused webview window.
-/// Falls back to broadcasting if no focused window is found.
+///
+/// On macOS the menu bar unfocuses every window, so this never broadcasts
+/// globally — a broadcast would run folder pickers in every open webview.
 pub fn emit_to_focused<S: serde::Serialize + Clone>(app: &AppHandle, event: &str, payload: S) {
-  for (label, window) in app.webview_windows() {
-    if window.is_focused().unwrap_or(false) {
-      let _ = app.emit_to(EventTarget::webview_window(&label), event, payload);
-      return;
-    }
+  let windows = app.webview_windows();
+  let focused: Vec<String> = windows
+    .iter()
+    .filter_map(|(label, window)| {
+      if window.is_focused().unwrap_or(false) {
+        Some(label.clone())
+      } else {
+        None
+      }
+    })
+    .collect();
+  let existing: Vec<String> = windows.keys().cloned().collect();
+  let last_focused = app
+    .try_state::<AppState>()
+    .and_then(|state| state.window_last_focused_at.lock().ok().map(|g| g.clone()))
+    .unwrap_or_default();
+  let Some(label) =
+    open_new_window::resolve_menu_event_window_label(&focused, &last_focused, &existing)
+  else {
+    return;
+  };
+  let _ = app.emit_to(EventTarget::webview_window(&label), event, payload);
+}
+
+fn schedule_open_repo_in_new_window(app: AppHandle) {
+  if !open_new_window::OPEN_NEW_WINDOW_GATE.try_begin() {
+    return;
   }
-  // Fallback: emit globally if no focused window found
-  let _ = app.emit(event, payload);
+  // Leave the AppKit menu-tracking run loop before showing NSOpenPanel.
+  // Showing the panel nested in the menu action redelivers the same item
+  // when the new window becomes key, which retriggers the folder picker.
+  std::thread::spawn(move || {
+    let app_for_main = app.clone();
+    if app
+      .run_on_main_thread(move || {
+        pick_folder_and_open_new_window(app_for_main);
+      })
+      .is_err()
+    {
+      open_new_window::OPEN_NEW_WINDOW_GATE.end();
+    }
+  });
+}
+
+fn pick_folder_and_open_new_window(app: AppHandle) {
+  use tauri_plugin_dialog::DialogExt;
+
+  app
+    .dialog()
+    .file()
+    .set_title("Select Folder")
+    .pick_folder(move |folder| {
+      let Some(file_path) = folder else {
+        open_new_window::OPEN_NEW_WINDOW_GATE.end();
+        return;
+      };
+      let path = match file_path.into_path() {
+        Ok(p) => p.to_string_lossy().into_owned(),
+        Err(_) => {
+          open_new_window::OPEN_NEW_WINDOW_GATE.end();
+          return;
+        }
+      };
+      let app_for_init = app.clone();
+      tauri::async_runtime::spawn(async move {
+        let path_for_init = path.clone();
+        let init_ok = tauri::async_runtime::spawn_blocking(move || core::init(&path_for_init))
+          .await
+          .ok()
+          .and_then(Result::ok)
+          .unwrap_or(false);
+        if !init_ok {
+          emit_to_focused(&app_for_init, "menu-open-in-new-window-invalid", ());
+          open_new_window::OPEN_NEW_WINDOW_GATE.end();
+          return;
+        }
+        let label = open_new_window::new_repo_window_label();
+        let url = open_new_window::new_repo_window_url(&path);
+        let title = open_new_window::new_repo_window_title(&path);
+        let _ = tauri::WebviewWindowBuilder::new(
+          &app_for_init,
+          &label,
+          tauri::WebviewUrl::App(url.into()),
+        )
+        .title(&title)
+        .inner_size(1400.0, 900.0)
+        .build();
+        open_new_window::OPEN_NEW_WINDOW_GATE.end();
+      });
+    });
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -447,7 +532,7 @@ pub fn run() {
                 "dashboard" => emit_to_focused(app, "navigate-to-dashboard", ()),
                 "settings" => emit_to_focused(app, "navigate-to-settings", ()),
                 "open" => emit_to_focused(app, "menu-open-repository", ()),
-                "open_new_window" => emit_to_focused(app, "menu-open-in-new-window", ()),
+                "open_new_window" => schedule_open_repo_in_new_window(app.clone()),
                 "open_web_inspector" =>
                 {
                     #[cfg(debug_assertions)]
