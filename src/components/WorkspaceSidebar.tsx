@@ -1,6 +1,6 @@
 import { DragDropContext, Droppable, type DropResult } from "@hello-pangea/dnd";
 import { useQuery } from "@tanstack/react-query";
-import { Archive, CalendarClock, Github, Search, Settings } from "lucide-react";
+import { Archive, CalendarClock, Github, Images, Search, Settings } from "lucide-react";
 import { memo, useCallback, useMemo, useState } from "react";
 import {
   useGitRemoteInfo,
@@ -58,6 +58,7 @@ interface WorkspaceSidebarProps {
   onOpenCommandPalette?: () => void;
   onOpenBranchSwitcher?: () => void;
   onOpenGitHub?: () => void;
+  onOpenArtifacts?: () => void;
   currentPage?: string;
   onAddBefore?: (workspace: Workspace) => void;
   onAddAfter?: (workspace: Workspace) => void;
@@ -92,6 +93,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
     onOpenCommandPalette,
     onOpenBranchSwitcher,
     onOpenGitHub,
+    onOpenArtifacts,
     currentPage,
     onAddAfter,
     onMoveWorkspace,
@@ -273,7 +275,9 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
     // GitHub/Settings are their own nav destinations — don't keep home/workspace
     // selection highlighted alongside them.
     const workspaceSelectionActive =
-      currentPage !== "github" && currentPage !== "settings";
+      currentPage !== "github" &&
+      currentPage !== "settings" &&
+      currentPage !== "artifacts";
     const isHomeSelected =
       workspaceSelectionActive && selectedWorkspaceId === null;
     const activeSelectedWorkspaceId = workspaceSelectionActive
@@ -297,6 +301,32 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                 <Kbd>⌘ + K</Kbd>
               </KbdGroup>
             </button>
+            {onOpenArtifacts && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    data-testid="artifacts-sidebar-button"
+                    onClick={onOpenArtifacts}
+                    className={`h-9 w-9 rounded-lg hover:bg-muted flex items-center justify-center transition-colors border border-border ${
+                      currentPage === "artifacts"
+                        ? "bg-primary/20"
+                        : "bg-muted/50"
+                    }`}
+                    aria-label="Artifacts"
+                  >
+                    <Images
+                      className={`w-4 h-4 ${
+                        currentPage === "artifacts"
+                          ? "text-primary"
+                          : "text-muted-foreground"
+                      }`}
+                    />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Artifacts</TooltipContent>
+              </Tooltip>
+            )}
             {openSettings && (
               <Tooltip>
                 <TooltipTrigger asChild>

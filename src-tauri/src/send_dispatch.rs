@@ -174,6 +174,96 @@ pub fn send_staging_dir(repo_path: &str) -> Result<PathBuf, String> {
   Ok(dir)
 }
 
+pub fn send_manifest_path(repo_path: &str) -> PathBuf {
+  Path::new(repo_path)
+    .join(".treq")
+    .join("send")
+    .join("manifest.jsonl")
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct SendArtifactRecord {
+  pub id: String,
+  pub repo: String,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub pty_session_id: Option<String>,
+  pub media_type: String,
+  pub path: String,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub title: Option<String>,
+  pub received_at: i64,
+}
+
+impl SendArtifactRecord {
+  pub fn from_request(request: &SendDispatchRequest) -> Self {
+    Self {
+      id: request.request_id.clone(),
+      repo: request.repo.clone(),
+      pty_session_id: request.pty_session_id.clone(),
+      media_type: request.media_type.clone(),
+      path: request.path.clone(),
+      title: request.title.clone(),
+      received_at: received_at_from_request_id(&request.request_id),
+    }
+  }
+}
+
+fn received_at_from_request_id(request_id: &str) -> i64 {
+  request_id
+    .strip_prefix("send-")
+    .and_then(|rest| rest.parse::<i64>().ok())
+    .unwrap_or_else(|| chrono::Utc::now().timestamp_millis())
+}
+
+/// Append a send to `<repo>/.treq/send/manifest.jsonl` so the artifacts page
+/// can list history after the live terminal preview is dismissed.
+pub fn record_send_artifact(request: &SendDispatchRequest) -> Result<(), String> {
+  let dir = send_staging_dir(&request.repo)?;
+  let manifest = dir.join("manifest.jsonl");
+  let record = SendArtifactRecord::from_request(request);
+  let mut line = serde_json::to_string(&record).map_err(|e| e.to_string())?;
+  line.push('\n');
+  use std::io::Write;
+  let mut file = std::fs::OpenOptions::new()
+    .create(true)
+    .append(true)
+    .open(&manifest)
+    .map_err(|e| format!("failed to open send manifest: {}", e))?;
+  file
+    .write_all(line.as_bytes())
+    .map_err(|e| format!("failed to write send manifest: {}", e))?;
+  Ok(())
+}
+
+/// Historical `treq send` artifacts for a repo. Missing paths are skipped.
+/// A missing repo path returns an empty list.
+pub fn list_send_artifacts(repo_path: &str) -> Result<Vec<SendArtifactRecord>, String> {
+  if repo_path.is_empty() || !Path::new(repo_path).exists() {
+    return Ok(Vec::new());
+  }
+  let manifest = send_manifest_path(repo_path);
+  if !manifest.exists() {
+    return Ok(Vec::new());
+  }
+  let contents = std::fs::read_to_string(&manifest)
+    .map_err(|e| format!("failed to read send manifest: {}", e))?;
+  let mut artifacts = Vec::new();
+  for line in contents.lines() {
+    let line = line.trim();
+    if line.is_empty() {
+      continue;
+    }
+    let Ok(record) = serde_json::from_str::<SendArtifactRecord>(line) else {
+      continue;
+    };
+    if Path::new(&record.path).is_file() {
+      artifacts.push(record);
+    }
+  }
+  artifacts.sort_by(|a, b| b.received_at.cmp(&a.received_at).then(b.id.cmp(&a.id)));
+  Ok(artifacts)
+}
+
 pub fn pty_session_id_from_env() -> Option<String> {
   std::env::var("TREQ_PTY_SESSION_ID")
     .ok()
@@ -284,6 +374,67 @@ mod tests {
     )
     .expect_err("missing");
     assert!(err.contains("file not found"));
+  }
+
+  #[test]
+  fn records_and_lists_send_artifacts_newest_first() {
+    let temp = tempfile::TempDir::new().expect("temp");
+    let repo = temp.path().to_string_lossy().to_string();
+    let file_a = temp.path().join("a.png");
+    let file_b = temp.path().join("b.txt");
+    std::fs::write(&file_a, b"img").unwrap();
+    std::fs::write(&file_b, b"note").unwrap();
+
+    let mut first = SendDispatchRequest::new(
+      "send-1",
+      &repo,
+      MEDIA_IMAGE,
+      file_a.to_string_lossy().to_string(),
+    );
+    first.title = Some("a.png".into());
+    first.pty_session_id = Some("pty-1".into());
+    record_send_artifact(&first).expect("record first");
+
+    std::thread::sleep(std::time::Duration::from_millis(2));
+
+    let mut second = SendDispatchRequest::new(
+      "send-2",
+      &repo,
+      MEDIA_TEXT,
+      file_b.to_string_lossy().to_string(),
+    );
+    second.title = Some("b.txt".into());
+    record_send_artifact(&second).expect("record second");
+
+    let listed = list_send_artifacts(&repo).expect("list");
+    assert_eq!(
+      listed.iter().map(|a| a.id.as_str()).collect::<Vec<_>>(),
+      vec!["send-2", "send-1"]
+    );
+    assert_eq!(listed[1].media_type, MEDIA_IMAGE);
+    assert_eq!(listed[1].pty_session_id.as_deref(), Some("pty-1"));
+    assert_eq!(listed[0].title.as_deref(), Some("b.txt"));
+  }
+
+  #[test]
+  fn list_send_artifacts_skips_missing_files_and_empty_repo() {
+    let temp = tempfile::TempDir::new().expect("temp");
+    let repo = temp.path().to_string_lossy().to_string();
+    let gone = temp.path().join("gone.txt");
+    std::fs::write(&gone, b"x").unwrap();
+    let mut request = SendDispatchRequest::new(
+      "send-gone",
+      &repo,
+      MEDIA_TEXT,
+      gone.to_string_lossy().to_string(),
+    );
+    request.title = Some("gone.txt".into());
+    record_send_artifact(&request).expect("record");
+    std::fs::remove_file(&gone).unwrap();
+
+    let listed = list_send_artifacts(&repo).expect("list");
+    assert!(listed.is_empty());
+    assert!(list_send_artifacts("/no/such/repo").unwrap().is_empty());
   }
 
   #[test]

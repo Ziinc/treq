@@ -15,6 +15,7 @@ import type {
   PromptHistoryEntry,
   ResolveCommitResult,
   ResolveConflictsSession,
+  SendArtifactRecord,
   Session,
   StashEntry,
 } from "./api-types";
@@ -128,6 +129,11 @@ export const getFileModifiedAt = (path: string): Promise<string | null> =>
 
 export const listDirectory = (path: string): Promise<DirectoryEntry[]> =>
   invoke("list_directory", { path });
+
+export const listSendArtifacts = (
+  repoPath: string,
+): Promise<SendArtifactRecord[]> =>
+  invoke("list_send_artifacts", { repoPath });
 
 export const listDirectoryCached = (
   repoPath: string,
