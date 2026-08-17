@@ -15,9 +15,14 @@ import fs from "fs";
 import { createRequire } from "node:module";
 import { randomUUID } from "crypto";
 import { afterEach, expect, vi } from "vitest";
+import { configure } from "@testing-library/dom";
 
 // Shared DOM polyfills, browser API stubs, Tauri plugin mocks, and hook mocks
 import "./setup.common";
+
+// tauri-test invoke runs on spawn_blocking; the default 5s async util timeout
+// flakes under CI load when waiting for Changes file lists.
+configure({ asyncUtilTimeout: 30_000 });
 
 // Keep integration tests deterministic: avoid background auto-rebase races
 // during commit creation in Rust core.
