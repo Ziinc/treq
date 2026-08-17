@@ -92,7 +92,7 @@ const config: Config = {
   ],
 
   title: 'Treq',
-  tagline: 'The Open Source Graphite Alternative',
+  tagline: 'The open source Graphite alternative',
   favicon: 'img/favicon.svg',
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future
@@ -173,7 +173,7 @@ const config: Config = {
       respectPrefersColorScheme: true,
     },
     navbar: {
-      hideOnScroll: true,
+      hideOnScroll: false,
       logo: {
         alt: 'Treq Logo',
         src: 'assets/combined-horizontal.png',
@@ -247,32 +247,11 @@ const config: Config = {
       style: 'dark',
       links: [
         {
-          title: 'Docs',
+          title: 'Product',
           items: [
             {
               label: 'Installation',
               to: '/docs/getting-started/installation',
-            },
-            {
-              label: 'Learn',
-              to: '/learn',
-            },
-            {
-              label: 'Concepts',
-              to: '/learn/concepts',
-            },
-            {
-              label: 'Security and Privacy',
-              to: '/docs/security-and-privacy',
-            },
-          ],
-        },
-        {
-          title: 'More',
-          items: [
-            {
-              label: 'Skills',
-              to: '/skills',
             },
             {
               label: 'Pricing',
@@ -286,6 +265,32 @@ const config: Config = {
               label: 'Changelog',
               to: '/changelog',
             },
+          ],
+        },
+        {
+          title: 'Docs',
+          items: [
+            {
+              label: 'Learn',
+              to: '/learn',
+            },
+            {
+              label: 'Concepts',
+              to: '/learn/concepts',
+            },
+            {
+              label: 'Security and Privacy',
+              to: '/docs/security-and-privacy',
+            },
+            {
+              label: 'Skills',
+              to: '/skills',
+            },
+          ],
+        },
+        {
+          title: 'Company',
+          items: [
             {
               label: 'GitHub',
               href: 'https://github.com/Ziinc/treq',

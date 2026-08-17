@@ -18,15 +18,14 @@
 .footerBrand img {
   width: 120px;
   height: auto;
+  filter: brightness(0) invert(1);
 }
 
 .footerIntro p {
-  color: var(--ifm-footer-link-color);
+  color: #a3a3a3;
   line-height: 1.6;
   margin: 0;
 }
-
-.footerLinks :global(.footer__links) {
   margin-bottom: 0;
 }
 

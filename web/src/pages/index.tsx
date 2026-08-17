@@ -1,4 +1,4 @@
-import type {ReactNode} from 'react';
+import {useState, type ReactNode} from 'react';
 import clsx from 'clsx';
 import Link from '@docusaurus/Link';
 import Head from '@docusaurus/Head';
@@ -10,16 +10,56 @@ import codeScreenshot from '../../../assets/screenshots/code.png';
 import reviewScreenshot from '../../../assets/screenshots/review.png';
 import styles from './index.module.css';
 
+const DOWNLOAD_HREF = 'https://github.com/Ziinc/treq/releases';
+
+function DownloadIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+      <polyline points="7 10 12 15 17 10"/>
+      <line x1="12" y1="15" x2="12" y2="3"/>
+    </svg>
+  );
+}
+
 function HomepageHeader() {
   return (
     <header className={styles.heroBanner} aria-label="Hero">
       <Head>
-        {/* Preload the LCP element so the browser can discover and fetch it
-            before the JS bundle parses, at the highest network priority. */}
         <link rel="preload" as="image" href={codeScreenshot} fetchPriority="high" />
       </Head>
-      <div className={styles.heroGlow}></div>
       <div className={styles.heroContainer}>
+        <p className={styles.heroEyebrow}>The open source Graphite alternative</p>
+        <Heading as="h1" className={styles.heroTitle}>
+          <span className={styles.heroAccent}>Stacking Agent Development Environment</span>
+          {' '}for teams that run agents in parallel
+        </Heading>
+        <p className={styles.heroLead}>
+          Review, rebase, and ship stacked work without sharing one checkout.
+          Treq keeps each agent in its own workspace and rebases the stack when the base moves.
+        </p>
+        <div className={styles.buttons}>
+          <Link
+            className={clsx('button', styles.primaryButton)}
+            href={DOWNLOAD_HREF}
+            target="_blank"
+            rel="noopener noreferrer">
+            <DownloadIcon />
+            Download for Desktop
+          </Link>
+          <Link
+            className={clsx('button', styles.secondaryButton)}
+            to="/docs/getting-started/installation">
+            Read the docs
+          </Link>
+        </div>
+        <div className={styles.platformsSupported}>
+          <span>Available for</span>
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" className={styles.platformIcon} viewBox="0 0 16 16" aria-label="macOS">
+            <path d="M11.182.008C11.148-.03 9.923.023 8.857 1.18c-1.066 1.156-.902 2.482-.878 2.516s1.52.087 2.475-1.258.762-2.391.728-2.43m3.314 11.733c-.048-.096-2.325-1.234-2.113-3.422s1.675-2.789 1.698-2.854-.597-.79-1.254-1.157a3.7 3.7 0 0 0-1.563-.434c-.108-.003-.483-.095-1.254.116-.508.139-1.653.589-1.968.607-.316.018-1.256-.522-2.267-.665-.647-.125-1.333.131-1.824.328-.49.196-1.422.754-2.074 2.237-.652 1.482-.311 3.83-.067 4.56s.625 1.924 1.273 2.796c.576.984 1.34 1.667 1.659 1.899s1.219.386 1.843.067c.502-.308 1.408-.485 1.766-.472.357.013 1.061.154 1.782.539.571.197 1.111.115 1.652-.105.541-.221 1.324-1.059 2.238-2.758q.52-1.185.473-1.282"/>
+            <path d="M11.182.008C11.148-.03 9.923.023 8.857 1.18c-1.066 1.156-.902 2.482-.878 2.516s1.52.087 2.475-1.258.762-2.391.728-2.43"/>
+          </svg>
+        </div>
         <div className={styles.heroVisual}>
           <img
             className={styles.heroScreenshot}
@@ -27,48 +67,15 @@ function HomepageHeader() {
             alt="Treq code overview screenshot"
             width={2794}
             height={1798}
-            // This is the LCP element: eager, high priority, no lazy-loading.
             loading="eager"
             decoding="async"
             fetchPriority="high"
           />
         </div>
-
-        <div className={styles.heroMain}>
-          <Heading as="h1" className={styles.heroTitle}>
-            <span className={styles.heroAccent}>Stacking Agent Development Environment</span>
-            {' '}for busy developers
-          </Heading>
-          <p className={styles.heroEyebrow}>
-            The Open Source Graphite Alternative
-          </p>
-          <div className={styles.buttons}>
-            <Link
-              className={clsx('button', styles.primaryButton)}
-              href="https://github.com/Ziinc/treq/releases"
-              target="_blank"
-              rel="noopener noreferrer">
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              Download for Desktop
-            </Link>
-            <Link
-              className={clsx('button', styles.secondaryButton)}
-              to="/docs/getting-started/installation">
-              Read the docs
-            </Link>
-          </div>
-          <div className={styles.platformsSupported}>
-            <span>Available for</span>
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" className={styles.platformIcon} viewBox="0 0 16 16" aria-label="macOS">
-              <path d="M11.182.008C11.148-.03 9.923.023 8.857 1.18c-1.066 1.156-.902 2.482-.878 2.516s1.52.087 2.475-1.258.762-2.391.728-2.43m3.314 11.733c-.048-.096-2.325-1.234-2.113-3.422s1.675-2.789 1.698-2.854-.597-.79-1.254-1.157a3.7 3.7 0 0 0-1.563-.434c-.108-.003-.483-.095-1.254.116-.508.139-1.653.589-1.968.607-.316.018-1.256-.522-2.267-.665-.647-.125-1.333.131-1.824.328-.49.196-1.422.754-2.074 2.237-.652 1.482-.311 3.83-.067 4.56s.625 1.924 1.273 2.796c.576.984 1.34 1.667 1.659 1.899s1.219.386 1.843.067c.502-.308 1.408-.485 1.766-.472.357.013 1.061.154 1.782.539.571.197 1.111.115 1.652-.105.541-.221 1.324-1.059 2.238-2.758q.52-1.185.473-1.282"/>
-              <path d="M11.182.008C11.148-.03 9.923.023 8.857 1.18c-1.066 1.156-.902 2.482-.878 2.516s1.52.087 2.475-1.258.762-2.391.728-2.43"/>
-            </svg>
-          </div>
-        </div>
       </div>
 
       <div className={styles.agentsSupported}>
-        <span className={styles.agentsLabel}>Supported Agents</span>
+        <span className={styles.agentsLabel}>Works with your agents</span>
         <div className={styles.agentsIcons}>
           <div className={styles.agentIcon} title="Claude Code">
             <svg xmlns="http://www.w3.org/2000/svg" width="70" height="70" fill="currentColor" className={styles.platformIcon} viewBox="0 0 16 16" aria-hidden="true">
@@ -94,32 +101,117 @@ function HomepageHeader() {
   );
 }
 
-function ProblemSection(): ReactNode {
-  return (
-    <section className={styles.problemSection} aria-label="The problem">
-      <div className={styles.problemContainer}>
-        <Heading as="h2" className={styles.problemHeading}>
-          AI agents write code fast. Managing the output is the hard part.
-        </Heading>
+const SOLUTIONS = [
+  {
+    id: 'workspaces',
+    title: 'Workspaces',
+    subtitle: 'Give each agent its own checkout',
+    body: 'Treq creates an isolated working copy under .treq/workspaces. Agents can write in parallel without colliding on the same files. Delete a workspace when the work is merged or discarded.',
+    href: '/docs/concepts/workspaces',
+  },
+  {
+    id: 'review',
+    title: 'Code review',
+    subtitle: 'Inspect diffs before they leave your machine',
+    body: 'Read the change like a pull request. Leave comments on line ranges and send them back to the agent. Reviews stay local unless you open a GitHub pull request and choose to work with remote threads.',
+    href: '/docs/how-to/creating-and-viewing-pull-requests',
+  },
+  {
+    id: 'stacks',
+    title: 'Stacked workspaces',
+    subtitle: 'Ship a large change as a chain of small PRs',
+    body: 'Split a feature into stacked branches. Treq tracks how they depend on each other and rebases the rest of the stack when you land the base.',
+    href: '/docs/concepts/workspaces',
+  },
+  {
+    id: 'rebase',
+    title: 'Auto-rebase',
+    subtitle: 'Keep dependent workspaces current',
+    body: 'When the target branch moves, Treq rebases dependent workspaces in the background. Send conflicts to the agent instead of resolving them by hand.',
+    href: '/docs/how-to/moving-files-between-workspaces',
+  },
+  {
+    id: 'queue',
+    title: 'Merge queue',
+    subtitle: 'Land stacked PRs in order',
+    body: 'Pro can enqueue workspaces so GitHub merges them in stack order. The desktop app still owns the local review and rebase work.',
+    href: '/docs/how-to/using-the-merge-queue',
+  },
+];
 
-        <div className={styles.problemList}>
-          <div className={styles.problemItem}>
-            You want multiple agents working in parallel, but they&apos;d step on each other&apos;s changes.
+function SolutionsSection(): ReactNode {
+  const [openId, setOpenId] = useState(SOLUTIONS[0].id);
+
+  return (
+    <section className={styles.solutionsSection} aria-label="Solutions">
+      <div className={styles.sectionInner}>
+        <p className={styles.kicker}>Solutions</p>
+        <Heading as="h2" className={styles.sectionHeading}>
+          Get the change reviewed. Get the stack rebased. Ship the PR.
+        </Heading>
+        <p className={styles.sectionLead}>
+          Treq is the desktop environment that sits between your agents and GitHub.
+          You keep the review. The stack stays in sync.
+        </p>
+        <div className={styles.accordion}>
+          {SOLUTIONS.map((item) => {
+            const open = item.id === openId;
+            return (
+              <article key={item.id} className={clsx(styles.accordionItem, open && styles.accordionItemOpen)}>
+                <button
+                  type="button"
+                  className={styles.accordionButton}
+                  aria-expanded={open}
+                  onClick={() => setOpenId(item.id)}>
+                  <span>
+                    <span className={styles.accordionTitle}>{item.title}</span>
+                    <span className={styles.accordionSubtitle}>{item.subtitle}</span>
+                  </span>
+                  <span className={styles.accordionToggle} aria-hidden="true">
+                    {open ? '−' : '+'}
+                  </span>
+                </button>
+                {open && (
+                  <div className={styles.accordionBody}>
+                    <p>{item.body}</p>
+                    <Link to={item.href}>Open the docs</Link>
+                  </div>
+                )}
+              </article>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function StatsSection(): ReactNode {
+  return (
+    <section className={styles.statsSection} aria-label="Product facts">
+      <div className={styles.sectionInner}>
+        <p className={styles.kicker}>Facts</p>
+        <Heading as="h2" className={styles.sectionHeading}>
+          Built to run on your machine
+        </Heading>
+        <div className={styles.statsGrid}>
+          <div className={styles.statCard}>
+            <p className={styles.statValue}>Local</p>
+            <p className={styles.statLabel}>Code, diffs, and comments stay on disk unless you push.</p>
           </div>
-          <div className={styles.problemItem}>
-            Your branches go stale while you&apos;re iterating on reviews, and rebasing is a chore.
+          <div className={styles.statCard}>
+            <p className={styles.statValue}>Apache 2.0</p>
+            <p className={styles.statLabel}>The desktop app is open source. You can read every command it runs.</p>
           </div>
-          <div className={styles.problemItem}>
-            Conflict resolution is grunt work that AI should handle automatically.
+          <div className={styles.statCard}>
+            <p className={styles.statValue}>jj + Git</p>
+            <p className={styles.statLabel}>Git remotes stay Git. Jujutsu supplies the rebase model underneath.</p>
           </div>
-          <div className={styles.problemItem}>
-            A large feature needs to be broken into smaller PRs, but keeping them in sync is painful.
+          <div className={styles.statCard}>
+            <p className={styles.statValue}>macOS</p>
+            <p className={styles.statLabel}>Download the desktop build and open a repo you already have.</p>
           </div>
         </div>
-
-        <p className={styles.problemConclusion}>
-          You need a development workflow built for AI-assisted development.
-        </p>
       </div>
     </section>
   );
@@ -130,19 +222,22 @@ function FeaturesSection(): ReactNode {
     <section className={styles.featuresSection} aria-label="Features">
       <div className={styles.featuresContainer}>
         <div className={styles.sectionHeader}>
+          <p className={styles.kicker}>Product</p>
           <Heading as="h2" className={styles.featuresHeading}>
             Features
           </Heading>
+          <p className={styles.featuresSubheading}>
+            Review the diff. Rebase the stack. Keep agents off the same working tree.
+          </p>
         </div>
 
-        {/* Core Feature: Code reviews */}
         <div className={styles.featureRow}>
           <div className={styles.featureText}>
             <Heading as="h3" className={styles.featureHeading}>
               Code reviews
             </Heading>
             <p className={styles.featureDescription}>
-              Inspect and iterate on every change in a human-in-the-loop agentic workflow. Review diffs like a familiar GitHub PR, annotate code, and send comments back to Claude for changes.
+              Inspect every change in a human-in-the-loop workflow. Read diffs like a GitHub pull request, annotate code, and send comments back to the agent.
             </p>
           </div>
           <div className={styles.featureScreenshot}>
@@ -158,42 +253,14 @@ function FeaturesSection(): ReactNode {
           </div>
         </div>
 
-        {/* Core Feature: Automatic rebasing */}
         <div className={clsx(styles.featureRow, styles.featureRowReverse)}>
           <div className={styles.featureText}>
             <Heading as="h3" className={styles.featureHeading}>
               Auto-rebase and Auto-resolve
             </Heading>
             <p className={styles.featureDescription}>
-              Workspaces are isolated but never go stale. When the underlying code changes, Treq rebases dependent workspaces automatically in the background. Got a conflict? Send it to the agent to handle the grunt work.
+              Workspaces stay isolated and current. When the base moves, Treq rebases dependent workspaces in the background. Send a conflict to the agent instead of resolving it by hand.
             </p>
-            <div className={styles.workspaceDirectoryViz} aria-label="Workspace directory layout">
-              <div className={styles.directoryRow}>
-                <span className={styles.directoryConnector}></span>
-                <span className={styles.directoryIcon}>/</span>
-                <code>src</code>
-              </div>
-              <div className={styles.directoryRow} data-depth="1">
-                <span className={styles.directoryConnector}></span>
-                <span className={styles.directoryIcon}>/</span>
-                <code>components</code>
-              </div>
-              <div className={styles.directoryRow} data-depth="2">
-                <span className={styles.directoryConnector}></span>
-                <span className={styles.directoryIcon}>TS</span>
-                <code>Dashboard.tsx</code>
-              </div>
-              <div className={styles.directoryRow} data-depth="3">
-                <span className={styles.directoryConnector}></span>
-                <span className={styles.directoryIcon}>TS</span>
-                <code>ShowWorkspace.tsx</code>
-              </div>
-              <div className={styles.directoryRow} data-depth="3" data-status="conflict">
-                <span className={styles.directoryConnector}></span>
-                <span className={styles.directoryIcon} aria-hidden="true">!</span>
-                <code>ChangesDiffViewer.tsx</code>
-              </div>
-            </div>
           </div>
           <div className={styles.featureScreenshot}>
             <div className={styles.screenshotWindow} aria-hidden="true">
@@ -225,14 +292,13 @@ function FeaturesSection(): ReactNode {
           </div>
         </div>
 
-        {/* Core Feature: Stacked workspaces */}
         <div className={styles.featureRow}>
           <div className={styles.featureText}>
             <Heading as="h3" className={styles.featureHeading}>
               Stacked workspaces
             </Heading>
             <p className={styles.featureDescription}>
-              Got a large feature but need to break it up for easier review? Split development into stacks, where features are built incrementally over smaller branches and shipped in bite-sized chunks. Treq keeps the entire stack rebased and in sync.
+              Split a large feature into a stack of smaller pull requests. Treq keeps the whole chain rebased so later work sits on what you already shipped.
             </p>
             <div className={styles.inlineStackViz} aria-label="Linear stacked pull requests">
               <div className={styles.inlineStackNode}>main</div>
@@ -284,7 +350,41 @@ function FeaturesSection(): ReactNode {
             </div>
           </div>
         </div>
+      </div>
+    </section>
+  );
+}
 
+function ResourcesSection(): ReactNode {
+  return (
+    <section className={styles.resourcesSection} aria-label="Resources">
+      <div className={styles.sectionInner}>
+        <p className={styles.kicker}>Resources</p>
+        <Heading as="h2" className={styles.sectionHeading}>
+          Stay current on the workflow
+        </Heading>
+        <div className={styles.resourceGrid}>
+          <Link className={styles.resourceCard} to="/docs/getting-started/installation">
+            <span className={styles.resourceKind}>Docs</span>
+            <Heading as="h3" className={styles.resourceTitle}>Install Treq and open a repo</Heading>
+            <p>Download the macOS app, point it at a Git repository, and create your first workspace.</p>
+          </Link>
+          <Link className={styles.resourceCard} to="/learn">
+            <span className={styles.resourceKind}>Learn</span>
+            <Heading as="h3" className={styles.resourceTitle}>Stacked PRs, worktrees, and agents</Heading>
+            <p>Concept articles that explain the workflow Treq is built around.</p>
+          </Link>
+          <Link className={styles.resourceCard} to="/skills">
+            <span className={styles.resourceKind}>Skills</span>
+            <Heading as="h3" className={styles.resourceTitle}>Agent skills catalog</Heading>
+            <p>Reusable instructions you can drop into Claude, Codex, or Cursor sessions.</p>
+          </Link>
+          <Link className={styles.resourceCard} to="/roadmap">
+            <span className={styles.resourceKind}>Roadmap</span>
+            <Heading as="h3" className={styles.resourceTitle}>What ships next</Heading>
+            <p>Public milestones for GitHub integration, merge queue, and desktop work.</p>
+          </Link>
+        </div>
       </div>
     </section>
   );
@@ -295,18 +395,21 @@ function ClosingCTA(): ReactNode {
     <section className={styles.closingCTA} aria-label="Download">
       <div className={styles.closingCTAContainer}>
         <Heading as="h2" className={styles.closingCTAHeading}>
-          Ship AI-generated code with confidence.
+          Run agents in parallel. Keep the review.
         </Heading>
         <p className={styles.closingCTASubheading}>
-          Treq runs entirely on your machine and is fully private by default. Treq was used to build Treq.
+          Treq runs on your machine and is private by default. Treq was used to build Treq.
         </p>
         <div className={styles.closingCTAButtons}>
           <Link
             className={styles.closingCTAButton}
-            href="https://github.com/Ziinc/treq/releases"
+            href={DOWNLOAD_HREF}
             target="_blank"
             rel="noopener noreferrer">
-            Download Treq - Free &amp; Open Source
+            Download Treq
+          </Link>
+          <Link className={styles.closingCTASecondary} to="/pricing">
+            See pricing
           </Link>
         </div>
       </div>
@@ -319,7 +422,7 @@ const SOFTWARE_APP_SCHEMA = {
   '@type': 'SoftwareApplication',
   name: 'Treq',
   description:
-    'Stacking Agent Development Environment (ADE) for busy developers. The Open Source Graphite Alternative.',
+    'Stacking Agent Development Environment (ADE) for teams that run agents in parallel. The open source Graphite alternative.',
   url: 'https://treq.dev',
   applicationCategory: 'DeveloperApplication',
   operatingSystem: 'macOS',
@@ -328,7 +431,7 @@ const SOFTWARE_APP_SCHEMA = {
     price: '0',
     priceCurrency: 'USD',
   },
-  downloadUrl: 'https://github.com/Ziinc/treq/releases',
+  downloadUrl: DOWNLOAD_HREF,
   codeRepository: 'https://github.com/Ziinc/treq',
   license: 'https://www.apache.org/licenses/LICENSE-2.0',
 };
@@ -338,13 +441,15 @@ export default function Home(): ReactNode {
   return (
     <Layout
       title={siteConfig.title}
-      description="The Open Source Graphite Alternative">
+      description="The open source Graphite alternative. Review, rebase, and ship stacked work without sharing one checkout.">
       <Head>
         <script type="application/ld+json">{JSON.stringify(SOFTWARE_APP_SCHEMA)}</script>
       </Head>
       <HomepageHeader />
-      <ProblemSection />
+      <SolutionsSection />
+      <StatsSection />
       <FeaturesSection />
+      <ResourcesSection />
       <ClosingCTA />
     </Layout>
   );

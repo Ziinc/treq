@@ -1,16 +1,16 @@
 .card {
   margin: 1.25rem 0 1.75rem;
   padding: 1rem 1.25rem 1.125rem;
-  background: rgba(59, 156, 255, 0.05);
-  border: 1px solid rgba(59, 156, 255, 0.18);
+  background: #f6f4f2;
+  border: 1px solid #e7e5e4;
   border-left: 3px solid var(--ifm-color-primary);
   border-radius: 10px;
   position: relative;
 }
 
 :global([data-theme='dark']) .card {
-  background: rgba(94, 176, 255, 0.07);
-  border-color: rgba(94, 176, 255, 0.2);
+  background: #1c1c1c;
+  border-color: #2a2a2a;
   border-left-color: var(--ifm-color-primary);
 }
 
