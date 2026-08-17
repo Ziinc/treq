@@ -102,13 +102,14 @@ describe("Dashboard - FileBrowser integration", () => {
     await fileBrowser.findByText("before");
 
     writeWorkspaceFile(workspacePath, "app.ts", "export const after = true;\n");
-    writeWorkspaceFile(workspacePath, "new-file.ts", "export const added = 1;\n");
+    writeWorkspaceFile(
+      workspacePath,
+      "new-file.ts",
+      "export const added = 1;\n",
+    );
     dispatchRefreshWorkspaceChanges({
       workspaceId: workspace.id,
-      changedPaths: [
-        `${workspacePath}/app.ts`,
-        `${workspacePath}/new-file.ts`,
-      ],
+      changedPaths: [`${workspacePath}/app.ts`, `${workspacePath}/new-file.ts`],
     });
 
     await fileBrowser.findByText("after");
