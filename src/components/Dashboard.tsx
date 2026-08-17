@@ -621,8 +621,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       listen("menu-open-in-new-window-invalid", () => {
         addToast({
           title: "Not a Git Repository",
-          description:
-            "Please select a folder that contains a git repository.",
+          description: "Please select a folder that contains a git repository.",
           type: "error",
         });
       }),
