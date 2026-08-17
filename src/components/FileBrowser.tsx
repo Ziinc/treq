@@ -37,6 +37,11 @@ import {
   resolveReadmeImageSrc,
 } from "../lib/utils";
 import { getLanguageFromPath, highlightCode } from "../lib/syntax-highlight";
+import { REFRESH_WORKSPACE_CHANGES_EVENT } from "../lib/change-file-drag";
+import {
+  type WorkspaceChangesRefreshDetail,
+  pathIsAffected,
+} from "../lib/workspace-refresh";
 import { useToast } from "./ui/toast";
 import {
   Tooltip,
@@ -1045,6 +1050,12 @@ export const FileBrowser = memo(
     const [directoryCache, setDirectoryCache] = useState<
       Map<string, DirectoryEntry[]>
     >(new Map());
+    const directoryCacheRef = useRef(directoryCache);
+    directoryCacheRef.current = directoryCache;
+    const expandedDirsRef = useRef(expandedDirs);
+    expandedDirsRef.current = expandedDirs;
+    const selectedFileRef = useRef(selectedFile);
+    selectedFileRef.current = selectedFile;
     const [isLoadingFile, setIsLoadingFile] = useState(false);
     const [isLoadingDir, setIsLoadingDir] = useState(false);
     const [rootEntries, setRootEntries] = useState<DirectoryEntry[]>([]);
@@ -1467,6 +1478,7 @@ export const FileBrowser = memo(
     useEffect(() => {
       if (rootEntries.length === 0) return;
       if (initialSelectedFile) return;
+      if (selectedFileRef.current) return;
 
       // Look for README.md (case-insensitive)
       const readme = rootEntries.find(
@@ -1486,15 +1498,19 @@ export const FileBrowser = memo(
     }, [rootEntries, initialSelectedFile]);
 
     const loadDirectory = useCallback(
-      async (path: string): Promise<DirectoryEntry[]> => {
-        if (directoryCache.has(path)) {
-          return directoryCache.get(path)!;
+      async (
+        path: string,
+        force = false,
+      ): Promise<DirectoryEntry[]> => {
+        if (!force && directoryCacheRef.current.has(path)) {
+          return directoryCacheRef.current.get(path)!;
         }
 
         try {
-          // Use cached version if workspace info is available
           let entries: DirectoryEntry[];
-          if (workspace?.repo_path && workspace?.id !== undefined) {
+          if (force) {
+            entries = await listDirectory(path);
+          } else if (workspace?.repo_path && workspace?.id !== undefined) {
             const cachedEntries = await listDirectoryCached(
               workspace.repo_path,
               workspace.id,
@@ -1514,6 +1530,9 @@ export const FileBrowser = memo(
 
           const filtered = filterHiddenEntries(entries);
           setDirectoryCache((prev) => new Map(prev).set(path, filtered));
+          if (path === basePath) {
+            setRootEntries(filtered);
+          }
           return filtered;
         } catch (error) {
           addToast({
@@ -1524,8 +1543,36 @@ export const FileBrowser = memo(
           return [];
         }
       },
-      [directoryCache, workspace, repoPath, addToast],
+      [workspace, repoPath, addToast, basePath],
     );
+
+    useEffect(() => {
+      const handler = (event: Event) => {
+        const detail = (event as CustomEvent<WorkspaceChangesRefreshDetail>)
+          .detail;
+        if (
+          detail?.workspaceId !== undefined &&
+          workspace?.id !== undefined &&
+          detail.workspaceId !== workspace.id
+        ) {
+          return;
+        }
+        const selected = selectedFileRef.current;
+        if (selected && pathIsAffected(selected, detail?.changedPaths)) {
+          void handleFileClickRef.current(selected);
+        }
+        const dirs = new Set<string>([basePath, ...expandedDirsRef.current]);
+        for (const dir of dirs) {
+          if (pathIsAffected(dir, detail?.changedPaths)) {
+            void loadDirectory(dir, true);
+          }
+        }
+      };
+      window.addEventListener(REFRESH_WORKSPACE_CHANGES_EVENT, handler);
+      return () => {
+        window.removeEventListener(REFRESH_WORKSPACE_CHANGES_EVENT, handler);
+      };
+    }, [workspace?.id, basePath, loadDirectory]);
 
     // Handle initial file selection from external navigation
     useEffect(() => {

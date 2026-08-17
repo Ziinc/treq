@@ -1,3 +1,5 @@
+import type { WorkspaceChangesRefreshDetail } from "./workspace-refresh";
+
 /** MIME type for dragging uncommitted Review-tab files onto a workspace. */
 export const CHANGE_FILES_MIME = "application/x-treq-change-files";
 
@@ -62,26 +64,50 @@ export function isChangeFilesDrag(dataTransfer: DataTransfer): boolean {
   return Array.from(dataTransfer.types).includes(CHANGE_FILES_MIME);
 }
 
-export function dispatchRefreshWorkspaceChanges(): void {
-  window.dispatchEvent(new CustomEvent(REFRESH_WORKSPACE_CHANGES_EVENT));
+export function dispatchRefreshWorkspaceChanges(
+  detail?: WorkspaceChangesRefreshDetail,
+): void {
+  window.dispatchEvent(
+    new CustomEvent<WorkspaceChangesRefreshDetail>(
+      REFRESH_WORKSPACE_CHANGES_EVENT,
+      { detail: detail ?? {} },
+    ),
+  );
 }
 
 /** Trailing debounce for watcher/agent disk bursts. Immediate dispatch stays for user mutations. */
 export const WORKSPACE_CHANGES_REFRESH_DEBOUNCE_MS = 500;
 
 let workspaceChangesRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+let pendingWorkspaceChangesRefresh: WorkspaceChangesRefreshDetail = {};
 
-export function scheduleRefreshWorkspaceChanges(): void {
+export function scheduleRefreshWorkspaceChanges(
+  detail?: WorkspaceChangesRefreshDetail,
+): void {
+  if (detail?.workspaceId !== undefined) {
+    pendingWorkspaceChangesRefresh.workspaceId = detail.workspaceId;
+  }
+  if (detail?.changedPaths && detail.changedPaths.length > 0) {
+    pendingWorkspaceChangesRefresh.changedPaths = [
+      ...new Set([
+        ...(pendingWorkspaceChangesRefresh.changedPaths ?? []),
+        ...detail.changedPaths,
+      ]),
+    ];
+  }
   if (workspaceChangesRefreshTimer !== null) {
     clearTimeout(workspaceChangesRefreshTimer);
   }
   workspaceChangesRefreshTimer = setTimeout(() => {
     workspaceChangesRefreshTimer = null;
-    dispatchRefreshWorkspaceChanges();
+    const pending = pendingWorkspaceChangesRefresh;
+    pendingWorkspaceChangesRefresh = {};
+    dispatchRefreshWorkspaceChanges(pending);
   }, WORKSPACE_CHANGES_REFRESH_DEBOUNCE_MS);
 }
 
 export function cancelScheduledRefreshWorkspaceChanges(): void {
+  pendingWorkspaceChangesRefresh = {};
   if (workspaceChangesRefreshTimer === null) return;
   clearTimeout(workspaceChangesRefreshTimer);
   workspaceChangesRefreshTimer = null;

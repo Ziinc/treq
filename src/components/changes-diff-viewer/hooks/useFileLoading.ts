@@ -15,6 +15,7 @@ import {
   REFRESH_WORKSPACE_CHANGES_EVENT,
   scheduleRefreshWorkspaceChanges,
 } from "../../../lib/change-file-drag";
+import type { WorkspaceChangesRefreshDetail } from "../../../lib/workspace-refresh";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { useToast } from "../../ui/toast";
@@ -232,7 +233,10 @@ export function useFileLoading({
       "workspace-files-changed",
       (event) => {
         if (event.payload.workspace_id === workspaceId) {
-          scheduleRefreshWorkspaceChanges();
+          scheduleRefreshWorkspaceChanges({
+            workspaceId,
+            changedPaths: event.payload.changed_paths,
+          });
         }
       },
     );
@@ -438,14 +442,23 @@ export function useFileLoading({
   };
 
   useEffect(() => {
-    const handler = () => {
+    const handler = (event: Event) => {
+      const detail = (event as CustomEvent<WorkspaceChangesRefreshDetail>)
+        .detail;
+      if (
+        detail?.workspaceId !== undefined &&
+        workspaceId !== undefined &&
+        detail.workspaceId !== workspaceId
+      ) {
+        return;
+      }
       refreshFromDisk();
     };
     window.addEventListener(REFRESH_WORKSPACE_CHANGES_EVENT, handler);
     return () => {
       window.removeEventListener(REFRESH_WORKSPACE_CHANGES_EVENT, handler);
     };
-  }, []);
+  }, [workspaceId]);
 
   useEffect(() => {
     if (!workspaceId) return;

@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import userEvent from "@testing-library/user-event";
 import { render, screen, waitFor } from "../../test/test-utils";
 import type { Workspace, WorkspaceStatus } from "../lib/api";
 import * as api from "../lib/api";
 import { ShowWorkspace } from "./ShowWorkspace";
+import { dispatchRefreshWorkspaceChanges } from "../lib/change-file-drag";
 
 vi.mock("./FileBrowser", () => ({
   FileBrowser: () => <div data-testid="file-browser" />,
@@ -258,5 +260,32 @@ describe("ShowWorkspace Commits tab label", () => {
       expect(commitsConflictIcon()).toBeTruthy();
     });
     expect(commitsCountPill()).toBeNull();
+  });
+
+  it("refetches the commits list when a filesystem refresh fires on the Commits tab", async () => {
+    const user = userEvent.setup();
+    render(
+      <ShowWorkspace
+        repositoryPath={workspace.repo_path}
+        workspace={workspace}
+        mainRepoBranch="main"
+        initialSelectedFile={null}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(api.listCommits).toHaveBeenCalled();
+    });
+    const callsBefore = vi.mocked(api.listCommits).mock.calls.length;
+
+    await user.click(commitsTab());
+    await screen.findByTestId("commit-diff-viewer");
+    dispatchRefreshWorkspaceChanges({ workspaceId: workspace.id });
+
+    await waitFor(() => {
+      expect(vi.mocked(api.listCommits).mock.calls.length).toBeGreaterThan(
+        callsBefore,
+      );
+    });
   });
 });
