@@ -25,6 +25,16 @@ pub fn read_file(path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
+pub fn write_send_review_image(
+  repo_path: String,
+  suggested_name: String,
+  contents_base64: String,
+) -> Result<String, String> {
+  crate::send_dispatch::write_send_review_image(&repo_path, &suggested_name, &contents_base64)
+    .map(|path| path.to_string_lossy().to_string())
+}
+
+#[tauri::command]
 pub fn write_agent_cli_files(
   prompt: String,
   settings_json: Option<String>,

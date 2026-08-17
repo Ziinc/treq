@@ -264,6 +264,93 @@ pub fn list_send_artifacts(repo_path: &str) -> Result<Vec<SendArtifactRecord>, S
   Ok(artifacts)
 }
 
+fn sanitize_review_image_name(suggested_name: &str) -> String {
+  let base = Path::new(suggested_name)
+    .file_name()
+    .and_then(|n| n.to_str())
+    .unwrap_or("review.png");
+  let stem = Path::new(base)
+    .file_stem()
+    .and_then(|n| n.to_str())
+    .unwrap_or("review");
+  let cleaned: String = stem
+    .chars()
+    .map(|c| {
+      if c.is_ascii_alphanumeric() || c == '-' || c == '_' {
+        c
+      } else {
+        '-'
+      }
+    })
+    .collect();
+  let cleaned = if cleaned.is_empty() {
+    "review".to_string()
+  } else {
+    cleaned
+  };
+  format!("{cleaned}.png")
+}
+
+/// Persist a PNG (base64) under `<repo>/.treq/send/` for attachment review.
+pub fn write_send_review_image(
+  repo_path: &str,
+  suggested_name: &str,
+  contents_base64: &str,
+) -> Result<PathBuf, String> {
+  let bytes = decode_base64(contents_base64.trim())?;
+  if bytes.is_empty() {
+    return Err("image data is empty".to_string());
+  }
+  let dir = send_staging_dir(repo_path)?;
+  let filename = sanitize_review_image_name(suggested_name);
+  let path = dir.join(filename);
+  std::fs::write(&path, &bytes).map_err(|e| format!("failed to write review image: {e}"))?;
+  Ok(path)
+}
+
+fn decode_base64(input: &str) -> Result<Vec<u8>, String> {
+  const TABLE: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  let mut lookup = [0xffu8; 256];
+  for (i, b) in TABLE.iter().enumerate() {
+    lookup[*b as usize] = i as u8;
+  }
+  let cleaned: Vec<u8> = input
+    .bytes()
+    .filter(|b| !b.is_ascii_whitespace())
+    .collect();
+  if cleaned.len() % 4 != 0 {
+    return Err("invalid image data".to_string());
+  }
+  let mut out = Vec::with_capacity(cleaned.len() / 4 * 3);
+  for chunk in cleaned.chunks_exact(4) {
+    let pad = chunk.iter().filter(|b| **b == b'=').count();
+    let mut vals = [0u8; 4];
+    for i in 0..4 {
+      if chunk[i] == b'=' {
+        vals[i] = 0;
+      } else {
+        let v = lookup[chunk[i] as usize];
+        if v == 0xff {
+          return Err("invalid image data".to_string());
+        }
+        vals[i] = v;
+      }
+    }
+    let n = (u32::from(vals[0]) << 18)
+      | (u32::from(vals[1]) << 12)
+      | (u32::from(vals[2]) << 6)
+      | u32::from(vals[3]);
+    out.push(((n >> 16) & 0xff) as u8);
+    if pad < 2 {
+      out.push(((n >> 8) & 0xff) as u8);
+    }
+    if pad < 1 {
+      out.push((n & 0xff) as u8);
+    }
+  }
+  Ok(out)
+}
+
 pub fn pty_session_id_from_env() -> Option<String> {
   std::env::var("TREQ_PTY_SESSION_ID")
     .ok()
@@ -435,6 +522,30 @@ mod tests {
     let listed = list_send_artifacts(&repo).expect("list");
     assert!(listed.is_empty());
     assert!(list_send_artifacts("/no/such/repo").unwrap().is_empty());
+  }
+
+  #[test]
+  fn writes_review_png_under_treq_send() {
+    let temp = tempfile::TempDir::new().expect("temp");
+    let repo = temp.path().to_string_lossy().to_string();
+    let path = write_send_review_image(&repo, "shot review.png", "iVBORw0KGgo=")
+      .expect("write");
+    assert_eq!(
+      path,
+      temp.path().join(".treq").join("send").join("shot-review.png")
+    );
+    assert_eq!(
+      std::fs::read(&path).unwrap(),
+      [0x89, b'P', b'N', b'G', 0x0d, 0x0a, 0x1a, 0x0a]
+    );
+  }
+
+  #[test]
+  fn rejects_empty_review_image() {
+    let temp = tempfile::TempDir::new().expect("temp");
+    let err = write_send_review_image(temp.path().to_str().unwrap(), "a.png", "")
+      .expect_err("empty");
+    assert!(err.contains("invalid") || err.contains("empty"));
   }
 
   #[test]

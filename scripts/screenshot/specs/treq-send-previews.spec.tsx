@@ -171,7 +171,7 @@ it("captures treq send attachment thumbs and lightbox carousel previews", async 
 		expectations: [
 			"At 100% zoom the blue SVG is large in the carousel (not a postage-stamp thumbnail).",
 			"The carousel/content area spans at least three-quarters of the viewport; no small centered postage-stamp image.",
-			"Centered above the image: filename preview-shot.svg on its own line, with the zoom/copy/reveal/close toolbar centered under it.",
+			"Centered above the image: filename preview-shot.svg, the zoom/copy/reveal/close toolbar, and a review comment input beside the toolbar.",
 		],
 	});
 
@@ -183,11 +183,7 @@ it("captures treq send attachment thumbs and lightbox carousel previews", async 
 		],
 	});
 
-	await user.click(
-		document.querySelector(
-			'[data-testid="treq-send-preview-lightbox"] img',
-		) as HTMLElement,
-	);
+	await user.click(screen.getByTestId("treq-send-highlight-surface"));
 	expect(screen.getByTestId("treq-send-zoom-level").textContent).toBe("200%");
 
 	await captureDocument(document, {

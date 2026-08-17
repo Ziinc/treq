@@ -102,6 +102,17 @@ export const ptyListen = (
 export const readFile = (path: string): Promise<string> =>
   invoke("read_file", { path });
 
+export const writeSendReviewImage = (
+  repoPath: string,
+  suggestedName: string,
+  contentsBase64: string,
+): Promise<string> =>
+  invoke("write_send_review_image", {
+    repoPath,
+    suggestedName,
+    contentsBase64,
+  });
+
 export const writeAgentCliFiles = (
   prompt: string,
   settingsJson?: string | null,
