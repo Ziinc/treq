@@ -49,9 +49,13 @@ async function openReviewTab(
 ) {
   render(<Dashboard />);
   await user.click(await findSidebarBranchElement(branchName));
-  const reviewTab = await screen.findByRole("tab", {
-    name: /^Changes/,
-  }, { timeout: 15_000 });
+  const reviewTab = await screen.findByRole(
+    "tab",
+    {
+      name: /^Changes/,
+    },
+    { timeout: 15_000 },
+  );
   await user.click(reviewTab);
   await screen.findByRole("tab", { name: /^Changes/, selected: true });
 }
