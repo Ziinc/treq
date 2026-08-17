@@ -23,9 +23,11 @@ export default defineConfig({
     globals: true,
     pool: "forks",
     fileParallelism: true,
-    // Each fork loads the large NAPI addon; keep this modest to avoid RAM thrash.
-    maxWorkers: Math.min(4, os.cpus().length),
-    testTimeout: 30000,
-    hookTimeout: 60000,
+    // Each fork loads the ~500MB debug NAPI addon and talks to jj-lib.
+    // Four workers starve spawn_blocking invokes: Changes file lists never
+    // appear (empty dashboard snapshot) and jj working-copy asserts fire.
+    maxWorkers: Math.min(2, os.cpus().length),
+    testTimeout: 60_000,
+    hookTimeout: 60_000,
   },
 });
