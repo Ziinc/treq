@@ -61,7 +61,22 @@ export function formatAgentMessageForPty(text: string): string {
   return `${text}\r`;
 }
 
-const ANSI_ESCAPE_RE = /\x1b(?:\[[0-9;?]*[ -/]*[@-~]|].*?(?:\x07|\x1b\\))/g;
+// Built via fromCharCode so the patterns avoid control chars in regex literals
+// (eslint no-control-regex).
+const ESC = String.fromCharCode(0x1b);
+const BEL = String.fromCharCode(0x07);
+const OSC_SEQUENCE = new RegExp(
+  `${ESC}\\][^${BEL}${ESC}]*(?:${BEL}|${ESC}\\\\)`,
+  "g",
+);
+const CSI_OR_ESC_SEQUENCE = new RegExp(
+  `${ESC}(?:[@-Z\\\\-_]|\\[[0-?]*[ -/]*[@-~])`,
+  "g",
+);
+
+function stripAnsiEscapes(output: string): string {
+  return output.replace(OSC_SEQUENCE, "").replace(CSI_OR_ESC_SEQUENCE, "");
+}
 
 /** How many trailing non-empty lines to inspect for a user question. */
 const QUESTION_TAIL_LINES = 15;
@@ -72,7 +87,7 @@ const QUESTION_TAIL_LINES = 15;
  * into them (that would answer Yes/No with the queued text).
  */
 export function looksLikeAgentUserQuestion(output: string): boolean {
-  const visible = output.replace(ANSI_ESCAPE_RE, "").replace(/\r/g, "");
+  const visible = stripAnsiEscapes(output).replace(/\r/g, "");
   const lines = visible
     .split("\n")
     .map((line) => line.trim())

@@ -94,7 +94,7 @@ describe("looksLikeAgentUserQuestion", () => {
 
   it("ignores a question mark buried above the recent tail", () => {
     const olderQuestion = "What should I do next?\n";
-    const work = "running tests\n".repeat(20) + "All tests passed.\n";
-    expect(looksLikeAgentUserQuestion(olderQuestion + work)).toBe(false);
+    const work = `${"running tests\n".repeat(20)}All tests passed.\n`;
+    expect(looksLikeAgentUserQuestion(`${olderQuestion}${work}`)).toBe(false);
   });
 });
