@@ -1,61 +1,61 @@
 {
-  "generatedAt": "2026-08-10T07:21:04.662Z",
+  "generatedAt": "2026-08-17T06:42:15.196Z",
   "sources": [
     {
       "id": "anthropic",
       "name": "Anthropic",
       "url": "https://github.com/anthropics/skills",
       "skillCount": 17,
-      "stars": 167301
+      "stars": 169814
     },
     {
       "id": "openai",
       "name": "OpenAI",
       "url": "https://github.com/openai/skills",
       "skillCount": 44,
-      "stars": 24677
+      "stars": 25001
     },
     {
       "id": "mattpocock",
       "name": "Matt Pocock",
       "url": "https://github.com/mattpocock/skills",
       "skillCount": 35,
-      "stars": 211659
+      "stars": 219577
     },
     {
       "id": "vercel",
       "name": "Vercel",
       "url": "https://github.com/vercel-labs/agent-browser",
       "skillCount": 1,
-      "stars": 40307
+      "stars": 40748
     },
     {
       "id": "microsoft",
       "name": "Microsoft",
       "url": "https://github.com/microsoft/azure-skills",
-      "skillCount": 34,
-      "stars": 1364
+      "skillCount": 35,
+      "stars": 1386
     },
     {
       "id": "superpowers",
       "name": "Superpowers",
       "url": "https://github.com/obra/superpowers",
       "skillCount": 14,
-      "stars": 269886
+      "stars": 272910
     },
     {
       "id": "caveman",
       "name": "Caveman",
       "url": "https://github.com/JuliusBrussee/caveman",
-      "skillCount": 7,
-      "stars": 97131
+      "skillCount": 20,
+      "stars": 98575
     },
     {
       "id": "prisma",
       "name": "Prisma",
       "url": "https://github.com/prisma/skills",
       "skillCount": 9,
-      "stars": 51
+      "stars": 53
     }
   ],
   "skills": [
@@ -745,7 +745,7 @@
         },
         {
           "path": "SKILL.md",
-          "size": 72716,
+          "size": 74327,
           "binary": false,
           "githubUrl": "https://github.com/anthropics/skills/blob/main/skills/claude-api/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/anthropics/skills/main/skills/claude-api/SKILL.md"
@@ -1116,7 +1116,7 @@
         },
         {
           "path": "shared/model-migration.md",
-          "size": 175673,
+          "size": 175868,
           "binary": false,
           "githubUrl": "https://github.com/anthropics/skills/blob/main/skills/claude-api/shared/model-migration.md",
           "rawUrl": "https://raw.githubusercontent.com/anthropics/skills/main/skills/claude-api/shared/model-migration.md"
@@ -1134,6 +1134,13 @@
           "binary": false,
           "githubUrl": "https://github.com/anthropics/skills/blob/main/skills/claude-api/shared/platform-availability.md",
           "rawUrl": "https://raw.githubusercontent.com/anthropics/skills/main/skills/claude-api/shared/platform-availability.md"
+        },
+        {
+          "path": "shared/prompt-audit.md",
+          "size": 32954,
+          "binary": false,
+          "githubUrl": "https://github.com/anthropics/skills/blob/main/skills/claude-api/shared/prompt-audit.md",
+          "rawUrl": "https://raw.githubusercontent.com/anthropics/skills/main/skills/claude-api/shared/prompt-audit.md"
         },
         {
           "path": "shared/prompt-caching.md",
@@ -1868,7 +1875,7 @@
       "files": [
         {
           "path": "README.md",
-          "size": 3043,
+          "size": 2873,
           "binary": false,
           "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/cavecrew/README.md",
           "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/cavecrew/README.md"
@@ -1896,14 +1903,14 @@
       "files": [
         {
           "path": "README.md",
-          "size": 1898,
+          "size": 1902,
           "binary": false,
           "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/caveman/README.md",
           "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/caveman/README.md"
         },
         {
           "path": "SKILL.md",
-          "size": 6216,
+          "size": 6788,
           "binary": false,
           "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/caveman/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/caveman/SKILL.md"
@@ -1952,7 +1959,7 @@
       "files": [
         {
           "path": "README.md",
-          "size": 5573,
+          "size": 5480,
           "binary": false,
           "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/caveman-compress/README.md",
           "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/caveman-compress/README.md"
@@ -2015,10 +2022,87 @@
         },
         {
           "path": "scripts/validate.py",
-          "size": 6094,
+          "size": 8813,
           "binary": false,
           "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/caveman-compress/scripts/validate.py",
           "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/caveman-compress/scripts/validate.py"
+        }
+      ]
+    },
+    {
+      "id": "caveman/caveman-discover",
+      "name": "caveman-discover",
+      "description": "Find every LLM workflow in the current repository and label it, so Caveman Cloud groups spend by what the code actually does (support-reply, nightly-digest) instead of one anonymous bucket. Use when the user pastes the Caveman discovery prompt, says \"discover workflows\", or asks to break LLM spend down by workflow. The repo should already route through the Caveman gateway (the caveman-setup skill does that part).",
+      "source": "caveman",
+      "category": null,
+      "license": "MIT",
+      "proprietary": false,
+      "path": "skills/caveman-discover",
+      "url": "https://github.com/JuliusBrussee/caveman/tree/main/skills/caveman-discover",
+      "route": "/skills/caveman/caveman-discover",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "size": 5513,
+          "binary": false,
+          "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/caveman-discover/SKILL.md",
+          "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/caveman-discover/SKILL.md"
+        }
+      ]
+    },
+    {
+      "id": "caveman/caveman-evidence-review",
+      "name": "caveman-evidence-review",
+      "description": "Review Caveman Cloud evidence read-only: costs, Cave Score, Cave Plan, workflows, traces, latency, errors, compression, routing, and verified savings. Use when the user asks what Caveman found, where LLM spend goes, why cost or quality changed, which workflows need attention, or asks for a trace or analytics review. Prefer Caveman MCP tools; fall back to CLI JSON.",
+      "source": "caveman",
+      "category": null,
+      "license": "MIT",
+      "proprietary": false,
+      "path": "skills/caveman-evidence-review",
+      "url": "https://github.com/JuliusBrussee/caveman/tree/main/skills/caveman-evidence-review",
+      "route": "/skills/caveman/caveman-evidence-review",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "size": 3930,
+          "binary": false,
+          "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/caveman-evidence-review/SKILL.md",
+          "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/caveman-evidence-review/SKILL.md"
+        }
+      ]
+    },
+    {
+      "id": "caveman/caveman-explore",
+      "name": "caveman-explore",
+      "description": "Read-only repository explorer. Use PROACTIVELY for cold-start exploration, broad cross-file localization, or when a direct search has failed and you need to find where something lives. Skip it when the issue already names the exact file or symbol, or a previous turn already returned usable file:line evidence. Returns only compact path:line citations; its reads and greps never enter the main conversation.",
+      "source": "caveman",
+      "category": null,
+      "license": "MIT",
+      "proprietary": false,
+      "path": "skills/caveman-explore",
+      "url": "https://github.com/JuliusBrussee/caveman/tree/main/skills/caveman-explore",
+      "route": "/skills/caveman/caveman-explore",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "size": 2131,
+          "binary": false,
+          "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/caveman-explore/SKILL.md",
+          "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/caveman-explore/SKILL.md"
+        },
+        {
+          "path": "package.json",
+          "size": 329,
+          "binary": false,
+          "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/caveman-explore/package.json",
+          "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/caveman-explore/package.json"
+        },
+        {
+          "path": "tests/skill-file.test.mjs",
+          "size": 2157,
+          "binary": false,
+          "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/caveman-explore/tests/skill-file.test.mjs",
+          "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/caveman-explore/tests/skill-file.test.mjs"
         }
       ]
     },
@@ -2043,10 +2127,101 @@
         },
         {
           "path": "SKILL.md",
-          "size": 2353,
+          "size": 2300,
           "binary": false,
           "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/caveman-help/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/caveman-help/SKILL.md"
+        }
+      ]
+    },
+    {
+      "id": "caveman/caveman-learn",
+      "name": "caveman-learn",
+      "description": "Close the loop on a Caveman learn report — review the ranked token sinks and apply cost-lowering fixes (trim config, offload recurring context to cavemem) with per-edit consent. Use when the user runs \"caveman learn\", asks to lower their agent's token cost, wants to trim a heavy CLAUDE.md, or wants to offload context they re-paste every session into cavemem.",
+      "source": "caveman",
+      "category": null,
+      "license": "MIT",
+      "proprietary": false,
+      "path": "skills/caveman-learn",
+      "url": "https://github.com/JuliusBrussee/caveman/tree/main/skills/caveman-learn",
+      "route": "/skills/caveman/caveman-learn",
+      "files": [
+        {
+          "path": "CLAUDE.md",
+          "size": 1879,
+          "binary": false,
+          "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/caveman-learn/CLAUDE.md",
+          "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/caveman-learn/CLAUDE.md"
+        },
+        {
+          "path": "README.md",
+          "size": 1367,
+          "binary": false,
+          "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/caveman-learn/README.md",
+          "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/caveman-learn/README.md"
+        },
+        {
+          "path": "SKILL.md",
+          "size": 4375,
+          "binary": false,
+          "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/caveman-learn/SKILL.md",
+          "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/caveman-learn/SKILL.md"
+        },
+        {
+          "path": "package.json",
+          "size": 505,
+          "binary": false,
+          "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/caveman-learn/package.json",
+          "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/caveman-learn/package.json"
+        },
+        {
+          "path": "tests/skill-file.test.mjs",
+          "size": 1973,
+          "binary": false,
+          "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/caveman-learn/tests/skill-file.test.mjs",
+          "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/caveman-learn/tests/skill-file.test.mjs"
+        }
+      ]
+    },
+    {
+      "id": "caveman/caveman-manage",
+      "name": "caveman-manage",
+      "description": "Inspect Caveman Cloud's eval-gated experiment lifecycle and block unsafe execution. Use when the user asks to start, approve, cancel, promote, or roll back a Caveman experiment, or asks what action an experiment's evidence supports. Read evidence first; do not execute lifecycle mutations until server-authoritative transition and evidence gates ship.",
+      "source": "caveman",
+      "category": null,
+      "license": "MIT",
+      "proprietary": false,
+      "path": "skills/caveman-manage",
+      "url": "https://github.com/JuliusBrussee/caveman/tree/main/skills/caveman-manage",
+      "route": "/skills/caveman/caveman-manage",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "size": 4114,
+          "binary": false,
+          "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/caveman-manage/SKILL.md",
+          "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/caveman-manage/SKILL.md"
+        }
+      ]
+    },
+    {
+      "id": "caveman/caveman-optimize",
+      "name": "caveman-optimize",
+      "description": "Turn Caveman's exact report-only repository observations into an operator-chosen optimization candidate with a paired baseline/candidate evaluation. Use when the user asks to inspect an optimization observation, evaluate a candidate change, or act on the current Caveman optimization report. Require a logged-in Caveman CLI connection and explicit approval; never infer money or actuation from a profile.",
+      "source": "caveman",
+      "category": null,
+      "license": "MIT",
+      "proprietary": false,
+      "path": "skills/caveman-optimize",
+      "url": "https://github.com/JuliusBrussee/caveman/tree/main/skills/caveman-optimize",
+      "route": "/skills/caveman/caveman-optimize",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "size": 4931,
+          "binary": false,
+          "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/caveman-optimize/SKILL.md",
+          "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/caveman-optimize/SKILL.md"
         }
       ]
     },
@@ -2079,6 +2254,27 @@
       ]
     },
     {
+      "id": "caveman/caveman-setup",
+      "name": "caveman-setup",
+      "description": "Wire the current repository through the Caveman Cloud gateway so every LLM request is measured — cost, tokens, latency — with zero behavior change. Use when the user pastes the Caveman setup prompt, says \"set up caveman\", or wants LLM spend observability added to an app. Requires the gateway URL and a Cave API key (the setup prompt carries both).",
+      "source": "caveman",
+      "category": null,
+      "license": "MIT",
+      "proprietary": false,
+      "path": "skills/caveman-setup",
+      "url": "https://github.com/JuliusBrussee/caveman/tree/main/skills/caveman-setup",
+      "route": "/skills/caveman/caveman-setup",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "size": 10710,
+          "binary": false,
+          "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/caveman-setup/SKILL.md",
+          "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/caveman-setup/SKILL.md"
+        }
+      ]
+    },
+    {
       "id": "caveman/caveman-stats",
       "name": "caveman-stats",
       "description": "Show real token usage and estimated savings for the current session. Reads directly from the Claude Code session log — no AI estimation. Triggers on /caveman-stats. Output is injected by the mode-tracker hook; the model itself does not compute the numbers.",
@@ -2103,6 +2299,174 @@
           "binary": false,
           "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/caveman-stats/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/caveman-stats/SKILL.md"
+        }
+      ]
+    },
+    {
+      "id": "caveman/investigate-first",
+      "name": "investigate-first",
+      "description": "Diagnose ambiguous failures before editing. Use for unknown causes, intermittent behavior, performance regressions, or investigations needing evidence-ranked hypotheses.",
+      "source": "caveman",
+      "category": null,
+      "license": "MIT",
+      "proprietary": false,
+      "path": "skills/investigate-first",
+      "url": "https://github.com/JuliusBrussee/caveman/tree/main/skills/investigate-first",
+      "route": "/skills/caveman/investigate-first",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "size": 688,
+          "binary": false,
+          "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/investigate-first/SKILL.md",
+          "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/investigate-first/SKILL.md"
+        },
+        {
+          "path": "agents/openai.yaml",
+          "size": 202,
+          "binary": false,
+          "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/investigate-first/agents/openai.yaml",
+          "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/investigate-first/agents/openai.yaml"
+        }
+      ]
+    },
+    {
+      "id": "caveman/lean-build",
+      "name": "lean-build",
+      "description": "Build feature work with high overbuilding risk. Use for new behavior, product slices, or integrations where repository reuse, strict scope, and an explicit stop condition matter.",
+      "source": "caveman",
+      "category": null,
+      "license": "MIT",
+      "proprietary": false,
+      "path": "skills/lean-build",
+      "url": "https://github.com/JuliusBrussee/caveman/tree/main/skills/lean-build",
+      "route": "/skills/caveman/lean-build",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "size": 1090,
+          "binary": false,
+          "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/lean-build/SKILL.md",
+          "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/lean-build/SKILL.md"
+        },
+        {
+          "path": "agents/openai.yaml",
+          "size": 190,
+          "binary": false,
+          "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/lean-build/agents/openai.yaml",
+          "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/lean-build/agents/openai.yaml"
+        }
+      ]
+    },
+    {
+      "id": "caveman/migration",
+      "name": "migration",
+      "description": "Implement reversible compatibility-safe transitions. Use for schema, data, API, protocol, configuration, or dependency migrations requiring rollback and preservation proof.",
+      "source": "caveman",
+      "category": null,
+      "license": "MIT",
+      "proprietary": false,
+      "path": "skills/migration",
+      "url": "https://github.com/JuliusBrussee/caveman/tree/main/skills/migration",
+      "route": "/skills/caveman/migration",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "size": 784,
+          "binary": false,
+          "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/migration/SKILL.md",
+          "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/migration/SKILL.md"
+        },
+        {
+          "path": "agents/openai.yaml",
+          "size": 203,
+          "binary": false,
+          "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/migration/agents/openai.yaml",
+          "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/migration/agents/openai.yaml"
+        }
+      ]
+    },
+    {
+      "id": "caveman/safe-refactor",
+      "name": "safe-refactor",
+      "description": "Restructure code while preserving behavior. Use for extraction, consolidation, ownership moves, or cleanup where verification must bracket structural edits.",
+      "source": "caveman",
+      "category": null,
+      "license": "MIT",
+      "proprietary": false,
+      "path": "skills/safe-refactor",
+      "url": "https://github.com/JuliusBrussee/caveman/tree/main/skills/safe-refactor",
+      "route": "/skills/caveman/safe-refactor",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "size": 705,
+          "binary": false,
+          "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/safe-refactor/SKILL.md",
+          "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/safe-refactor/SKILL.md"
+        },
+        {
+          "path": "agents/openai.yaml",
+          "size": 201,
+          "binary": false,
+          "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/safe-refactor/agents/openai.yaml",
+          "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/safe-refactor/agents/openai.yaml"
+        }
+      ]
+    },
+    {
+      "id": "caveman/surgical-patch",
+      "name": "surgical-patch",
+      "description": "Fix bugs and small behavior changes at the narrowest responsible layer. Use when regression proof, preserved surrounding behavior, and task-relevant tests matter.",
+      "source": "caveman",
+      "category": null,
+      "license": "MIT",
+      "proprietary": false,
+      "path": "skills/surgical-patch",
+      "url": "https://github.com/JuliusBrussee/caveman/tree/main/skills/surgical-patch",
+      "route": "/skills/caveman/surgical-patch",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "size": 664,
+          "binary": false,
+          "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/surgical-patch/SKILL.md",
+          "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/surgical-patch/SKILL.md"
+        },
+        {
+          "path": "agents/openai.yaml",
+          "size": 194,
+          "binary": false,
+          "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/surgical-patch/agents/openai.yaml",
+          "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/surgical-patch/agents/openai.yaml"
+        }
+      ]
+    },
+    {
+      "id": "caveman/verify-and-stop",
+      "name": "verify-and-stop",
+      "description": "Prove existing work meets acceptance conditions without expanding scope. Use for validation-only tasks, completion checks, focused gate runs, and last-mile proof.",
+      "source": "caveman",
+      "category": null,
+      "license": "MIT",
+      "proprietary": false,
+      "path": "skills/verify-and-stop",
+      "url": "https://github.com/JuliusBrussee/caveman/tree/main/skills/verify-and-stop",
+      "route": "/skills/caveman/verify-and-stop",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "size": 704,
+          "binary": false,
+          "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/verify-and-stop/SKILL.md",
+          "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/verify-and-stop/SKILL.md"
+        },
+        {
+          "path": "agents/openai.yaml",
+          "size": 197,
+          "binary": false,
+          "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/verify-and-stop/agents/openai.yaml",
+          "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/verify-and-stop/agents/openai.yaml"
         }
       ]
     },
@@ -2155,7 +2519,7 @@
       "files": [
         {
           "path": "SKILL.md",
-          "size": 6634,
+          "size": 6649,
           "binary": false,
           "githubUrl": "https://github.com/mattpocock/skills/blob/main/skills/engineering/code-review/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/mattpocock/skills/main/skills/engineering/code-review/SKILL.md"
@@ -2225,7 +2589,7 @@
       "files": [
         {
           "path": "SKILL.md",
-          "size": 8969,
+          "size": 8614,
           "binary": false,
           "githubUrl": "https://github.com/mattpocock/skills/blob/main/skills/engineering/diagnosing-bugs/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/mattpocock/skills/main/skills/engineering/diagnosing-bugs/SKILL.md"
@@ -2249,7 +2613,7 @@
     {
       "id": "mattpocock/engineering/domain-modeling",
       "name": "domain-modeling",
-      "description": "Build and sharpen a project's domain model. Use when the user wants to pin down domain terminology or a ubiquitous language, record an architectural decision, or when another skill needs to maintain the domain model.",
+      "description": "Build and sharpen a project's domain model. Use when discussing codebase terminology, writing or editing a CONTEXT.md, or recording or editing an ADR.",
       "source": "mattpocock",
       "category": "Engineering",
       "license": "MIT",
@@ -2274,7 +2638,7 @@
         },
         {
           "path": "SKILL.md",
-          "size": 3427,
+          "size": 3361,
           "binary": false,
           "githubUrl": "https://github.com/mattpocock/skills/blob/main/skills/engineering/domain-modeling/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/mattpocock/skills/main/skills/engineering/domain-modeling/SKILL.md"
@@ -2302,7 +2666,7 @@
       "files": [
         {
           "path": "SKILL.md",
-          "size": 245,
+          "size": 247,
           "binary": false,
           "githubUrl": "https://github.com/mattpocock/skills/blob/main/skills/engineering/grill-with-docs/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/mattpocock/skills/main/skills/engineering/grill-with-docs/SKILL.md"
@@ -2365,7 +2729,7 @@
         },
         {
           "path": "SKILL.md",
-          "size": 6009,
+          "size": 6049,
           "binary": false,
           "githubUrl": "https://github.com/mattpocock/skills/blob/main/skills/engineering/improve-codebase-architecture/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/mattpocock/skills/main/skills/engineering/improve-codebase-architecture/SKILL.md"
@@ -2554,7 +2918,7 @@
       "files": [
         {
           "path": "SKILL.md",
-          "size": 3568,
+          "size": 3578,
           "binary": false,
           "githubUrl": "https://github.com/mattpocock/skills/blob/main/skills/engineering/tdd/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/mattpocock/skills/main/skills/engineering/tdd/SKILL.md"
@@ -2596,7 +2960,7 @@
       "files": [
         {
           "path": "SKILL.md",
-          "size": 3035,
+          "size": 3050,
           "binary": false,
           "githubUrl": "https://github.com/mattpocock/skills/blob/main/skills/engineering/to-spec/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/mattpocock/skills/main/skills/engineering/to-spec/SKILL.md"
@@ -2624,7 +2988,7 @@
       "files": [
         {
           "path": "SKILL.md",
-          "size": 5707,
+          "size": 5722,
           "binary": false,
           "githubUrl": "https://github.com/mattpocock/skills/blob/main/skills/engineering/to-tickets/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/mattpocock/skills/main/skills/engineering/to-tickets/SKILL.md"
@@ -2666,7 +3030,7 @@
         },
         {
           "path": "SKILL.md",
-          "size": 6582,
+          "size": 6604,
           "binary": false,
           "githubUrl": "https://github.com/mattpocock/skills/blob/main/skills/engineering/triage/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/mattpocock/skills/main/skills/engineering/triage/SKILL.md"
@@ -2694,7 +3058,7 @@
       "files": [
         {
           "path": "SKILL.md",
-          "size": 11887,
+          "size": 12056,
           "binary": false,
           "githubUrl": "https://github.com/mattpocock/skills/blob/main/skills/engineering/wayfinder/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/mattpocock/skills/main/skills/engineering/wayfinder/SKILL.md"
@@ -2757,7 +3121,7 @@
       "files": [
         {
           "path": "SKILL.md",
-          "size": 1286,
+          "size": 1301,
           "binary": false,
           "githubUrl": "https://github.com/mattpocock/skills/blob/main/skills/in-progress/claude-handoff/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/mattpocock/skills/main/skills/in-progress/claude-handoff/SKILL.md"
@@ -2813,7 +3177,7 @@
       "files": [
         {
           "path": "SKILL.md",
-          "size": 7602,
+          "size": 7612,
           "binary": false,
           "githubUrl": "https://github.com/mattpocock/skills/blob/main/skills/in-progress/setup-ts-deep-modules/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/mattpocock/skills/main/skills/in-progress/setup-ts-deep-modules/SKILL.md"
@@ -3051,7 +3415,7 @@
       "files": [
         {
           "path": "SKILL.md",
-          "size": 147,
+          "size": 157,
           "binary": false,
           "githubUrl": "https://github.com/mattpocock/skills/blob/main/skills/productivity/grill-me/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/mattpocock/skills/main/skills/productivity/grill-me/SKILL.md"
@@ -3079,7 +3443,7 @@
       "files": [
         {
           "path": "SKILL.md",
-          "size": 1872,
+          "size": 1857,
           "binary": false,
           "githubUrl": "https://github.com/mattpocock/skills/blob/main/skills/productivity/grilling/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/mattpocock/skills/main/skills/productivity/grilling/SKILL.md"
@@ -3107,7 +3471,7 @@
       "files": [
         {
           "path": "SKILL.md",
-          "size": 879,
+          "size": 894,
           "binary": false,
           "githubUrl": "https://github.com/mattpocock/skills/blob/main/skills/productivity/handoff/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/mattpocock/skills/main/skills/productivity/handoff/SKILL.md"
@@ -5122,6 +5486,20 @@
           "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-diagnostics/scripts/containerapp-diagnostics.sh"
         },
         {
+          "path": "scripts/run-ig.ps1",
+          "size": 5690,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-diagnostics/scripts/run-ig.ps1",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-diagnostics/scripts/run-ig.ps1"
+        },
+        {
+          "path": "scripts/run-ig.sh",
+          "size": 6664,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-diagnostics/scripts/run-ig.sh",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-diagnostics/scripts/run-ig.sh"
+        },
+        {
           "path": "scripts/test-messaging-connectivity.ps1",
           "size": 6491,
           "binary": false,
@@ -5137,7 +5515,7 @@
         },
         {
           "path": "troubleshooting/aks/aks-troubleshooting.md",
-          "size": 5428,
+          "size": 5431,
           "binary": false,
           "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-diagnostics/troubleshooting/aks/aks-troubleshooting.md",
           "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-diagnostics/troubleshooting/aks/aks-troubleshooting.md"
@@ -5165,21 +5543,21 @@
         },
         {
           "path": "troubleshooting/aks/networking.md",
-          "size": 5666,
+          "size": 5597,
           "binary": false,
           "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-diagnostics/troubleshooting/aks/networking.md",
           "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-diagnostics/troubleshooting/aks/networking.md"
         },
         {
           "path": "troubleshooting/aks/node-issues.md",
-          "size": 4768,
+          "size": 4833,
           "binary": false,
           "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-diagnostics/troubleshooting/aks/node-issues.md",
           "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-diagnostics/troubleshooting/aks/node-issues.md"
         },
         {
           "path": "troubleshooting/aks/pod-failures.md",
-          "size": 7927,
+          "size": 7774,
           "binary": false,
           "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-diagnostics/troubleshooting/aks/pod-failures.md",
           "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-diagnostics/troubleshooting/aks/pod-failures.md"
@@ -5193,14 +5571,14 @@
         },
         {
           "path": "troubleshooting/aks/references/command-flows.md",
-          "size": 3523,
+          "size": 3532,
           "binary": false,
           "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-diagnostics/troubleshooting/aks/references/command-flows.md",
           "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-diagnostics/troubleshooting/aks/references/command-flows.md"
         },
         {
           "path": "troubleshooting/aks/references/inspektor-gadget.md",
-          "size": 7166,
+          "size": 7812,
           "binary": false,
           "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-diagnostics/troubleshooting/aks/references/inspektor-gadget.md",
           "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-diagnostics/troubleshooting/aks/references/inspektor-gadget.md"
@@ -5676,7 +6054,7 @@
       "files": [
         {
           "path": "SKILL.md",
-          "size": 10537,
+          "size": 10896,
           "binary": false,
           "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/SKILL.md"
@@ -7909,7 +8287,7 @@
         },
         {
           "path": "SKILL.md",
-          "size": 26097,
+          "size": 26128,
           "binary": false,
           "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/microsoft-foundry/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/microsoft-foundry/SKILL.md"
@@ -7958,7 +8336,7 @@
         },
         {
           "path": "foundry-agent/azd-guidance/azd-guidance.md",
-          "size": 1138,
+          "size": 1230,
           "binary": false,
           "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/microsoft-foundry/foundry-agent/azd-guidance/azd-guidance.md",
           "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/microsoft-foundry/foundry-agent/azd-guidance/azd-guidance.md"
@@ -7979,7 +8357,7 @@
         },
         {
           "path": "foundry-agent/create/create-hosted.md",
-          "size": 30097,
+          "size": 30432,
           "binary": false,
           "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/microsoft-foundry/foundry-agent/create/create-hosted.md",
           "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/microsoft-foundry/foundry-agent/create/create-hosted.md"
@@ -7993,7 +8371,7 @@
         },
         {
           "path": "foundry-agent/create/quick-start-hosted.md",
-          "size": 20253,
+          "size": 22677,
           "binary": false,
           "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/microsoft-foundry/foundry-agent/create/quick-start-hosted.md",
           "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/microsoft-foundry/foundry-agent/create/quick-start-hosted.md"
@@ -8004,6 +8382,13 @@
           "binary": false,
           "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/microsoft-foundry/foundry-agent/create/references/enable-incoming-a2a.md",
           "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/microsoft-foundry/foundry-agent/create/references/enable-incoming-a2a.md"
+        },
+        {
+          "path": "foundry-agent/create/references/foundry-model.md",
+          "size": 1459,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/microsoft-foundry/foundry-agent/create/references/foundry-model.md",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/microsoft-foundry/foundry-agent/create/references/foundry-model.md"
         },
         {
           "path": "foundry-agent/create/references/foundry-tool-catalog.md",
@@ -8039,6 +8424,13 @@
           "binary": false,
           "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/microsoft-foundry/foundry-agent/create/references/local-run.md",
           "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/microsoft-foundry/foundry-agent/create/references/local-run.md"
+        },
+        {
+          "path": "foundry-agent/create/references/re-host.md",
+          "size": 2683,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/microsoft-foundry/foundry-agent/create/references/re-host.md",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/microsoft-foundry/foundry-agent/create/references/re-host.md"
         },
         {
           "path": "foundry-agent/create/references/sdk-operations.md",
@@ -8168,14 +8560,14 @@
         },
         {
           "path": "foundry-agent/create/scripts/check-copilot-app-entry.ps1",
-          "size": 1609,
+          "size": 5586,
           "binary": false,
           "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/microsoft-foundry/foundry-agent/create/scripts/check-copilot-app-entry.ps1",
           "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/microsoft-foundry/foundry-agent/create/scripts/check-copilot-app-entry.ps1"
         },
         {
           "path": "foundry-agent/create/scripts/check-copilot-app-entry.sh",
-          "size": 1703,
+          "size": 4295,
           "binary": false,
           "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/microsoft-foundry/foundry-agent/create/scripts/check-copilot-app-entry.sh",
           "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/microsoft-foundry/foundry-agent/create/scripts/check-copilot-app-entry.sh"
@@ -8210,7 +8602,7 @@
         },
         {
           "path": "foundry-agent/deploy/deploy.md",
-          "size": 20126,
+          "size": 20193,
           "binary": false,
           "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/microsoft-foundry/foundry-agent/deploy/deploy.md",
           "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/microsoft-foundry/foundry-agent/deploy/deploy.md"
@@ -8720,13 +9112,6 @@
           "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/microsoft-foundry/references/auth-best-practices.md"
         },
         {
-          "path": "references/sdk/foundry-sdk-py.md",
-          "size": 8688,
-          "binary": false,
-          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/microsoft-foundry/references/sdk/foundry-sdk-py.md",
-          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/microsoft-foundry/references/sdk/foundry-sdk-py.md"
-        },
-        {
           "path": "references/standard-agent-setup.md",
           "size": 4290,
           "binary": false,
@@ -8949,6 +9334,314 @@
           "binary": false,
           "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/python-appservice-deploy/scripts/retry-az-create.sh",
           "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/python-appservice-deploy/scripts/retry-az-create.sh"
+        }
+      ]
+    },
+    {
+      "id": "microsoft/azure-kubernetes/azure-kubernetes-app-deploy",
+      "name": "azure-kubernetes-app-deploy",
+      "description": "Use when deploying an existing web application or API to an already-running Azure Kubernetes Service cluster. Detects the framework, generates a Dockerfile and Kubernetes manifests, validates against AKS Deployment Safeguards, and deploys with verification. WHEN: deploy app to AKS, deploy to existing AKS cluster, containerize app for Kubernetes, generate K8s manifests for Azure, set up CI/CD for AKS, my AKS deployment is failing safeguard checks, I have a Django/Express/Spring Boot app to run on AKS. DO NOT USE FOR: creating or provisioning an AKS cluster (use azure-kubernetes), assessing migration to AKS Automatic (use azure-kubernetes-automatic-readiness), or deploying to non-AKS targets like Web Apps, Container Apps, or Functions.",
+      "source": "microsoft",
+      "category": "Azure Kubernetes",
+      "license": "MIT",
+      "proprietary": false,
+      "path": "skills/azure-kubernetes/azure-kubernetes-app-deploy",
+      "url": "https://github.com/microsoft/azure-skills/tree/main/skills/azure-kubernetes/azure-kubernetes-app-deploy",
+      "route": "/skills/microsoft/azure-kubernetes/azure-kubernetes-app-deploy",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "size": 2012,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/SKILL.md",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/SKILL.md"
+        },
+        {
+          "path": "knowledge-packs/frameworks/aspnet-core.md",
+          "size": 7432,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/knowledge-packs/frameworks/aspnet-core.md",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/knowledge-packs/frameworks/aspnet-core.md"
+        },
+        {
+          "path": "knowledge-packs/frameworks/django.md",
+          "size": 6142,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/knowledge-packs/frameworks/django.md",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/knowledge-packs/frameworks/django.md"
+        },
+        {
+          "path": "knowledge-packs/frameworks/express.md",
+          "size": 6811,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/knowledge-packs/frameworks/express.md",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/knowledge-packs/frameworks/express.md"
+        },
+        {
+          "path": "knowledge-packs/frameworks/fastapi.md",
+          "size": 5947,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/knowledge-packs/frameworks/fastapi.md",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/knowledge-packs/frameworks/fastapi.md"
+        },
+        {
+          "path": "knowledge-packs/frameworks/flask.md",
+          "size": 6322,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/knowledge-packs/frameworks/flask.md",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/knowledge-packs/frameworks/flask.md"
+        },
+        {
+          "path": "knowledge-packs/frameworks/go.md",
+          "size": 6997,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/knowledge-packs/frameworks/go.md",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/knowledge-packs/frameworks/go.md"
+        },
+        {
+          "path": "knowledge-packs/frameworks/nestjs.md",
+          "size": 6845,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/knowledge-packs/frameworks/nestjs.md",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/knowledge-packs/frameworks/nestjs.md"
+        },
+        {
+          "path": "knowledge-packs/frameworks/nextjs.md",
+          "size": 7318,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/knowledge-packs/frameworks/nextjs.md",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/knowledge-packs/frameworks/nextjs.md"
+        },
+        {
+          "path": "knowledge-packs/frameworks/spring-boot.md",
+          "size": 6157,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/knowledge-packs/frameworks/spring-boot.md",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/knowledge-packs/frameworks/spring-boot.md"
+        },
+        {
+          "path": "phases/quick-deploy.md",
+          "size": 8017,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/phases/quick-deploy.md",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/phases/quick-deploy.md"
+        },
+        {
+          "path": "references/base-images.md",
+          "size": 3666,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/references/base-images.md",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/references/base-images.md"
+        },
+        {
+          "path": "references/detection.md",
+          "size": 3623,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/references/detection.md",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/references/detection.md"
+        },
+        {
+          "path": "references/rollback.md",
+          "size": 2048,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/references/rollback.md",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/references/rollback.md"
+        },
+        {
+          "path": "references/safeguards.md",
+          "size": 2999,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/references/safeguards.md",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/references/safeguards.md"
+        },
+        {
+          "path": "references/workload-identity.md",
+          "size": 7566,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/references/workload-identity.md",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/references/workload-identity.md"
+        },
+        {
+          "path": "templates/dockerfiles/dotnet.Dockerfile",
+          "size": 2618,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/dockerfiles/dotnet.Dockerfile",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/dockerfiles/dotnet.Dockerfile"
+        },
+        {
+          "path": "templates/dockerfiles/dotnet.dockerignore",
+          "size": 125,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/dockerfiles/dotnet.dockerignore",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/dockerfiles/dotnet.dockerignore"
+        },
+        {
+          "path": "templates/dockerfiles/go.Dockerfile",
+          "size": 2177,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/dockerfiles/go.Dockerfile",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/dockerfiles/go.Dockerfile"
+        },
+        {
+          "path": "templates/dockerfiles/go.dockerignore",
+          "size": 128,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/dockerfiles/go.dockerignore",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/dockerfiles/go.dockerignore"
+        },
+        {
+          "path": "templates/dockerfiles/java.Dockerfile",
+          "size": 3120,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/dockerfiles/java.Dockerfile",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/dockerfiles/java.Dockerfile"
+        },
+        {
+          "path": "templates/dockerfiles/java.dockerignore",
+          "size": 156,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/dockerfiles/java.dockerignore",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/dockerfiles/java.dockerignore"
+        },
+        {
+          "path": "templates/dockerfiles/node.Dockerfile",
+          "size": 3063,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/dockerfiles/node.Dockerfile",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/dockerfiles/node.Dockerfile"
+        },
+        {
+          "path": "templates/dockerfiles/node.dockerignore",
+          "size": 173,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/dockerfiles/node.dockerignore",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/dockerfiles/node.dockerignore"
+        },
+        {
+          "path": "templates/dockerfiles/python.Dockerfile",
+          "size": 2562,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/dockerfiles/python.Dockerfile",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/dockerfiles/python.Dockerfile"
+        },
+        {
+          "path": "templates/dockerfiles/python.dockerignore",
+          "size": 201,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/dockerfiles/python.dockerignore",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/dockerfiles/python.dockerignore"
+        },
+        {
+          "path": "templates/dockerfiles/rust.Dockerfile",
+          "size": 3227,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/dockerfiles/rust.Dockerfile",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/dockerfiles/rust.Dockerfile"
+        },
+        {
+          "path": "templates/dockerfiles/rust.dockerignore",
+          "size": 87,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/dockerfiles/rust.dockerignore",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/dockerfiles/rust.dockerignore"
+        },
+        {
+          "path": "templates/github-actions/deploy.yml",
+          "size": 7623,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/github-actions/deploy.yml",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/github-actions/deploy.yml"
+        },
+        {
+          "path": "templates/k8s/configmap.yaml",
+          "size": 1054,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/k8s/configmap.yaml",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/k8s/configmap.yaml"
+        },
+        {
+          "path": "templates/k8s/deployment.yaml",
+          "size": 3458,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/k8s/deployment.yaml",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/k8s/deployment.yaml"
+        },
+        {
+          "path": "templates/k8s/gateway.yaml",
+          "size": 1543,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/k8s/gateway.yaml",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/k8s/gateway.yaml"
+        },
+        {
+          "path": "templates/k8s/hpa.yaml",
+          "size": 1418,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/k8s/hpa.yaml",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/k8s/hpa.yaml"
+        },
+        {
+          "path": "templates/k8s/httproute.yaml",
+          "size": 1339,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/k8s/httproute.yaml",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/k8s/httproute.yaml"
+        },
+        {
+          "path": "templates/k8s/ingress.yaml",
+          "size": 1959,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/k8s/ingress.yaml",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/k8s/ingress.yaml"
+        },
+        {
+          "path": "templates/k8s/namespace.yaml",
+          "size": 734,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/k8s/namespace.yaml",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/k8s/namespace.yaml"
+        },
+        {
+          "path": "templates/k8s/networkpolicy.yaml",
+          "size": 1627,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/k8s/networkpolicy.yaml",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/k8s/networkpolicy.yaml"
+        },
+        {
+          "path": "templates/k8s/pdb.yaml",
+          "size": 758,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/k8s/pdb.yaml",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/k8s/pdb.yaml"
+        },
+        {
+          "path": "templates/k8s/service.yaml",
+          "size": 864,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/k8s/service.yaml",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/k8s/service.yaml"
+        },
+        {
+          "path": "templates/k8s/serviceaccount.yaml",
+          "size": 1476,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/k8s/serviceaccount.yaml",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/k8s/serviceaccount.yaml"
+        },
+        {
+          "path": "templates/mermaid/architecture-diagram.md",
+          "size": 1663,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/mermaid/architecture-diagram.md",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/mermaid/architecture-diagram.md"
+        },
+        {
+          "path": "templates/mermaid/summary-dashboard.md",
+          "size": 1785,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/mermaid/summary-dashboard.md",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-kubernetes/azure-kubernetes-app-deploy/templates/mermaid/summary-dashboard.md"
         }
       ]
     },
@@ -16141,7 +16834,7 @@
       "files": [
         {
           "path": "SKILL.md",
-          "size": 10047,
+          "size": 15456,
           "binary": false,
           "githubUrl": "https://github.com/obra/superpowers/blob/main/skills/brainstorming/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/obra/superpowers/main/skills/brainstorming/SKILL.md"
@@ -16190,7 +16883,7 @@
         },
         {
           "path": "visual-companion.md",
-          "size": 13298,
+          "size": 13383,
           "binary": false,
           "githubUrl": "https://github.com/obra/superpowers/blob/main/skills/brainstorming/visual-companion.md",
           "rawUrl": "https://raw.githubusercontent.com/obra/superpowers/main/skills/brainstorming/visual-companion.md"
@@ -16253,7 +16946,7 @@
       "files": [
         {
           "path": "SKILL.md",
-          "size": 7022,
+          "size": 7781,
           "binary": false,
           "githubUrl": "https://github.com/obra/superpowers/blob/main/skills/finishing-a-development-branch/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/obra/superpowers/main/skills/finishing-a-development-branch/SKILL.md"
@@ -16302,7 +16995,7 @@
         },
         {
           "path": "code-reviewer.md",
-          "size": 5213,
+          "size": 5669,
           "binary": false,
           "githubUrl": "https://github.com/obra/superpowers/blob/main/skills/requesting-code-review/code-reviewer.md",
           "rawUrl": "https://raw.githubusercontent.com/obra/superpowers/main/skills/requesting-code-review/code-reviewer.md"
@@ -16323,21 +17016,21 @@
       "files": [
         {
           "path": "SKILL.md",
-          "size": 28077,
+          "size": 32339,
           "binary": false,
           "githubUrl": "https://github.com/obra/superpowers/blob/main/skills/subagent-driven-development/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/obra/superpowers/main/skills/subagent-driven-development/SKILL.md"
         },
         {
           "path": "implementer-prompt.md",
-          "size": 5717,
+          "size": 6335,
           "binary": false,
           "githubUrl": "https://github.com/obra/superpowers/blob/main/skills/subagent-driven-development/implementer-prompt.md",
           "rawUrl": "https://raw.githubusercontent.com/obra/superpowers/main/skills/subagent-driven-development/implementer-prompt.md"
         },
         {
           "path": "re-review-prompt.md",
-          "size": 4300,
+          "size": 4756,
           "binary": false,
           "githubUrl": "https://github.com/obra/superpowers/blob/main/skills/subagent-driven-development/re-review-prompt.md",
           "rawUrl": "https://raw.githubusercontent.com/obra/superpowers/main/skills/subagent-driven-development/re-review-prompt.md"
@@ -16365,7 +17058,7 @@
         },
         {
           "path": "task-reviewer-prompt.md",
-          "size": 7816,
+          "size": 9021,
           "binary": false,
           "githubUrl": "https://github.com/obra/superpowers/blob/main/skills/subagent-driven-development/task-reviewer-prompt.md",
           "rawUrl": "https://raw.githubusercontent.com/obra/superpowers/main/skills/subagent-driven-development/task-reviewer-prompt.md"
@@ -16526,7 +17219,7 @@
       "files": [
         {
           "path": "SKILL.md",
-          "size": 3063,
+          "size": 3108,
           "binary": false,
           "githubUrl": "https://github.com/obra/superpowers/blob/main/skills/using-superpowers/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/obra/superpowers/main/skills/using-superpowers/SKILL.md"
@@ -16540,7 +17233,7 @@
         },
         {
           "path": "references/codex-tools.md",
-          "size": 1774,
+          "size": 4762,
           "binary": false,
           "githubUrl": "https://github.com/obra/superpowers/blob/main/skills/using-superpowers/references/codex-tools.md",
           "rawUrl": "https://raw.githubusercontent.com/obra/superpowers/main/skills/using-superpowers/references/codex-tools.md"
@@ -16551,6 +17244,13 @@
           "binary": false,
           "githubUrl": "https://github.com/obra/superpowers/blob/main/skills/using-superpowers/references/gemini-tools.md",
           "rawUrl": "https://raw.githubusercontent.com/obra/superpowers/main/skills/using-superpowers/references/gemini-tools.md"
+        },
+        {
+          "path": "references/hermes-tools.md",
+          "size": 1964,
+          "binary": false,
+          "githubUrl": "https://github.com/obra/superpowers/blob/main/skills/using-superpowers/references/hermes-tools.md",
+          "rawUrl": "https://raw.githubusercontent.com/obra/superpowers/main/skills/using-superpowers/references/hermes-tools.md"
         },
         {
           "path": "references/pi-tools.md",
@@ -16596,7 +17296,7 @@
       "files": [
         {
           "path": "SKILL.md",
-          "size": 6907,
+          "size": 7053,
           "binary": false,
           "githubUrl": "https://github.com/obra/superpowers/blob/main/skills/writing-plans/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/obra/superpowers/main/skills/writing-plans/SKILL.md"
@@ -16659,7 +17359,7 @@
         },
         {
           "path": "render-graphs.js",
-          "size": 4857,
+          "size": 4968,
           "binary": false,
           "githubUrl": "https://github.com/obra/superpowers/blob/main/skills/writing-skills/render-graphs.js",
           "rawUrl": "https://raw.githubusercontent.com/obra/superpowers/main/skills/writing-skills/render-graphs.js"
