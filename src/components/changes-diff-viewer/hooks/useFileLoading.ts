@@ -11,7 +11,10 @@ import {
   parseJjChangedFiles,
 } from "../../../lib/git-utils";
 import { useCachedWorkspaceChanges } from "../../../hooks/useCachedWorkspaceChanges";
-import { REFRESH_WORKSPACE_CHANGES_EVENT } from "../../../lib/change-file-drag";
+import {
+  REFRESH_WORKSPACE_CHANGES_EVENT,
+  scheduleRefreshWorkspaceChanges,
+} from "../../../lib/change-file-drag";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { useToast } from "../../ui/toast";
@@ -228,13 +231,15 @@ export function useFileLoading({
     const unlisten = listen<{ workspace_id: number; changed_paths: string[] }>(
       "workspace-files-changed",
       (event) => {
-        if (event.payload.workspace_id === workspaceId) loadChangedFiles();
+        if (event.payload.workspace_id === workspaceId) {
+          scheduleRefreshWorkspaceChanges();
+        }
       },
     );
     return () => {
       unlisten.then((fn) => fn());
     };
-  }, [workspaceId, loadChangedFiles]);
+  }, [workspaceId]);
 
   const refreshCommittedChanges = useCallback(async () => {}, []);
 

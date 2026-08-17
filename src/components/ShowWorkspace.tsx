@@ -75,7 +75,10 @@ import {
   type ParsedFileChange,
 } from "../lib/git-utils";
 import { reviewChangeCountQueryKey } from "../lib/review-change-count";
-import { REFRESH_WORKSPACE_CHANGES_EVENT } from "../lib/change-file-drag";
+import {
+  REFRESH_WORKSPACE_CHANGES_EVENT,
+  scheduleRefreshWorkspaceChanges,
+} from "../lib/change-file-drag";
 import { getReviewTabPill, reviewTabPillClassName } from "../lib/reviewTabPill";
 import {
   commitsTabCountClassName,
@@ -612,8 +615,9 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
           if (event.payload.workspace_id !== workspaceId) return;
           // WC edits (including conflict-marker resolves) must refresh status so
           // Review pill tone, Conflicts section props, and Code-tab alerts clear
-          // in the same turn as the refreshed diff.
-          invalidateWorkspaceFileQueries();
+          // in the same turn as the refreshed diff. Coalesce bursts from the
+          // watcher so a running process cannot invalidate on every write.
+          scheduleRefreshWorkspaceChanges();
         },
       );
       return () => {

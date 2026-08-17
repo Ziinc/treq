@@ -65,3 +65,24 @@ export function isChangeFilesDrag(dataTransfer: DataTransfer): boolean {
 export function dispatchRefreshWorkspaceChanges(): void {
   window.dispatchEvent(new CustomEvent(REFRESH_WORKSPACE_CHANGES_EVENT));
 }
+
+/** Trailing debounce for watcher/agent disk bursts. Immediate dispatch stays for user mutations. */
+export const WORKSPACE_CHANGES_REFRESH_DEBOUNCE_MS = 500;
+
+let workspaceChangesRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+export function scheduleRefreshWorkspaceChanges(): void {
+  if (workspaceChangesRefreshTimer !== null) {
+    clearTimeout(workspaceChangesRefreshTimer);
+  }
+  workspaceChangesRefreshTimer = setTimeout(() => {
+    workspaceChangesRefreshTimer = null;
+    dispatchRefreshWorkspaceChanges();
+  }, WORKSPACE_CHANGES_REFRESH_DEBOUNCE_MS);
+}
+
+export function cancelScheduledRefreshWorkspaceChanges(): void {
+  if (workspaceChangesRefreshTimer === null) return;
+  clearTimeout(workspaceChangesRefreshTimer);
+  workspaceChangesRefreshTimer = null;
+}
