@@ -31,6 +31,7 @@ import {
 } from "../lib/api";
 import {
   cn,
+  copyTextToClipboard,
   formatFullTimestamp,
   formatRelativeTime,
   getFullWorkspacePath,
@@ -439,9 +440,7 @@ const FileContentView = memo(
     const handleCopy = useCallback(async () => {
       if (!fileContentData) return;
       try {
-        await navigator.clipboard.writeText(
-          fileContentData.rawLines.join("\n"),
-        );
+        await copyTextToClipboard(fileContentData.rawLines.join("\n"));
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
       } catch (error) {
@@ -452,7 +451,7 @@ const FileContentView = memo(
     const handleCopyPath = useCallback(async () => {
       if (!relativePath) return;
       try {
-        await navigator.clipboard.writeText(relativePath);
+        await copyTextToClipboard(relativePath);
         setCopiedPath(true);
         setTimeout(() => setCopiedPath(false), 2000);
       } catch (error) {
@@ -508,11 +507,15 @@ const FileContentView = memo(
                 <TooltipTrigger asChild>
                   <button
                     type="button"
+                    aria-label={
+                      copiedPath ? "File path copied" : "Copy file path"
+                    }
+                    title={copiedPath ? "Copied" : "Copy file path"}
                     onClick={handleCopyPath}
                     className="p-1 hover:bg-muted rounded transition-colors text-muted-foreground hover:text-foreground"
                   >
                     {copiedPath ? (
-                      <Check className="w-4 h-4" />
+                      <Check className="w-4 h-4 text-green-500" />
                     ) : (
                       <Copy className="w-4 h-4" />
                     )}
@@ -568,11 +571,15 @@ const FileContentView = memo(
                 <TooltipTrigger asChild>
                   <button
                     type="button"
+                    aria-label={
+                      copied ? "File contents copied" : "Copy file contents"
+                    }
+                    title={copied ? "Copied" : "Copy file contents"}
                     onClick={handleCopy}
                     className="p-1 hover:bg-muted rounded border border-border/50 transition-colors text-muted-foreground hover:text-foreground"
                   >
                     {copied ? (
-                      <Check className="w-4 h-4" />
+                      <Check className="w-4 h-4 text-green-500" />
                     ) : (
                       <Copy className="w-4 h-4" />
                     )}
@@ -744,7 +751,7 @@ const FileTreeContextMenu = memo(
             onClick={async () => {
               try {
                 const relativePath = getRelativePath(entry.path);
-                await navigator.clipboard.writeText(relativePath);
+                await copyTextToClipboard(relativePath);
                 addToast({
                   title: "Copied",
                   description: `Copied relative path: ${relativePath}`,
@@ -767,7 +774,7 @@ const FileTreeContextMenu = memo(
             data-testid="copy-full-path"
             onClick={async () => {
               try {
-                await navigator.clipboard.writeText(entry.path);
+                await copyTextToClipboard(entry.path);
                 addToast({
                   title: "Copied",
                   description: `Copied full path: ${entry.path}`,
