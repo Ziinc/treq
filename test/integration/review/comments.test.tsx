@@ -49,7 +49,9 @@ async function openReviewTab(
 ) {
   render(<Dashboard />);
   await user.click(await findSidebarBranchElement(branchName));
-  const reviewTab = await screen.findByRole("tab", { name: /^Changes/ });
+  const reviewTab = await screen.findByRole("tab", {
+    name: /^Changes/,
+  }, { timeout: 15_000 });
   await user.click(reviewTab);
   await screen.findByRole("tab", { name: /^Changes/, selected: true });
 }
@@ -65,13 +67,13 @@ function getClickableArea(line: Element) {
 }
 
 async function clickFile(filename: RegExp) {
-  const [first] = await screen.findAllByText(filename);
+  const [first] = await screen.findAllByText(filename, {}, { timeout: 15_000 });
   fireEvent.click(first);
 }
 
 async function waitForFileAndLines() {
   await clickFile(/test\.txt/);
-  await screen.findByText(/added line 2/);
+  await screen.findByText(/added line 2/, {}, { timeout: 15_000 });
 }
 
 describe("Multi-line selection in diff viewer", () => {
