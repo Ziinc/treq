@@ -83,7 +83,7 @@ describe("buildClaudeSandboxSettings", () => {
     ).toEqual({
       sandbox: {
         enabled: true,
-        failIfUnavailable: true,
+        failIfUnavailable: false,
         allowUnsandboxedCommands: false,
         filesystem: {
           denyRead: ["/repos/treq"],
@@ -103,7 +103,7 @@ describe("buildClaudeSandboxSettings", () => {
     ).toEqual({
       sandbox: {
         enabled: true,
-        failIfUnavailable: true,
+        failIfUnavailable: false,
         allowUnsandboxedCommands: false,
         filesystem: {
           allowRead: ["/repos/treq"],

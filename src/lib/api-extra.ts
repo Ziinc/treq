@@ -1,9 +1,13 @@
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { open } from "@tauri-apps/plugin-dialog";
 import type {
   CachedDirectoryEntry,
   DiffCacheEntry,
   DirectoryEntry,
   FileBrowserPendingReview,
   FileSearchResult,
+  JjRevisionDiff,
   LineComment,
   PendingReview,
   PrCiStatus,
@@ -13,12 +17,7 @@ import type {
   ResolveConflictsSession,
   Session,
   StashEntry,
-  JjRevisionDiff,
 } from "./api-types";
-
-import { invoke } from "@tauri-apps/api/core";
-import { listen } from "@tauri-apps/api/event";
-import { open } from "@tauri-apps/plugin-dialog";
 
 export const setGitSubmoduleSynced = (
   repoPath: string,
@@ -113,6 +112,7 @@ export const writeAgentCliFiles = (
   skillDir: string;
   agentsSkillPath?: string;
   claudeSkillPath?: string;
+  skillWriteWarning?: string;
 }> =>
   invoke("write_agent_cli_files", {
     prompt,

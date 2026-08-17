@@ -50,7 +50,7 @@ describe("prepareAgentAutoCommand", () => {
       )
       .mockResolvedValueOnce(writtenFiles);
 
-    const { command } = await prepareAgentAutoCommand({
+    const { command, skillWriteWarning } = await prepareAgentAutoCommand({
       agent: "claude",
       workspacePath: "/ws",
       repoPath: "/repo",
@@ -62,5 +62,25 @@ describe("prepareAgentAutoCommand", () => {
     expect(vi.mocked(api.writeAgentCliFiles).mock.calls[0]?.[2]).toBe("/ws");
     expect(vi.mocked(api.writeAgentCliFiles).mock.calls[1]?.[2]).toBeNull();
     expect(command).toContain("--append-system-prompt-file");
+    expect(skillWriteWarning).toMatch(/Could not write Treq skills/);
+  });
+
+  it("forwards a skill write warning from a successful write", async () => {
+    vi.mocked(api.writeAgentCliFiles).mockResolvedValueOnce({
+      ...writtenFiles,
+      skillWriteWarning:
+        "Failed to create .agents/skills/treq: Read-only file system",
+    });
+
+    const { skillWriteWarning } = await prepareAgentAutoCommand({
+      agent: "claude",
+      workspacePath: "/ws",
+      repoPath: "/repo",
+      sessionModel: null,
+      treqBinDir: null,
+    });
+
+    expect(api.writeAgentCliFiles).toHaveBeenCalledTimes(1);
+    expect(skillWriteWarning).toMatch(/Read-only file system/);
   });
 });

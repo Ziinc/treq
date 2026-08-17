@@ -4,9 +4,11 @@ import {
   discardAgentCliFiles,
   prepareAgentAutoCommand,
 } from "../../lib/prepareAgentAutoCommand";
+import { useToast } from "../ui/toast";
 import type { ClaudeSessionData } from "./types";
 
 export const useAgentAutoCommand = (sessionData: ClaudeSessionData) => {
+  const { addToast } = useToast();
   const [sessionModel, setSessionModelState] = useState<string | null>(null);
   const [isModelLoaded, setIsModelLoaded] = useState(false);
   const [treqBinDir, setTreqBinDir] = useState<string | null>(null);
@@ -53,12 +55,19 @@ export const useAgentAutoCommand = (sessionData: ClaudeSessionData) => {
       pendingPrompt: pendingPromptRef.current,
       treqBinDir,
     })
-      .then(async ({ command, filePaths }) => {
+      .then(async ({ command, filePaths, skillWriteWarning }) => {
         if (cancelled) {
           await discardAgentCliFiles(filePaths);
           return;
         }
         setAutoCommand(command);
+        if (skillWriteWarning) {
+          addToast({
+            type: "warning",
+            title: "Could not write Treq skills",
+            description: skillWriteWarning,
+          });
+        }
       })
       .catch((error) => {
         console.error("Failed to prepare agent CLI files:", error);
@@ -80,6 +89,7 @@ export const useAgentAutoCommand = (sessionData: ClaudeSessionData) => {
     sessionData.repoPath,
     sessionModel,
     treqBinDir,
+    addToast,
   ]);
 
   return {

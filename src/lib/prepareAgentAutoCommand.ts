@@ -39,7 +39,11 @@ export const prepareAgentAutoCommand = async ({
   permissionMode?: string | null;
   pendingPrompt?: string | null;
   treqBinDir: string | null;
-}): Promise<{ command: string; filePaths: string[] }> => {
+}): Promise<{
+  command: string;
+  filePaths: string[];
+  skillWriteWarning?: string;
+}> => {
   const cwd = workspacePath || repoPath;
   const agentPathContext = { workspacePath, repoPath };
   const systemPrompt = buildTreqAgentSystemPrompt(agentPathContext);
@@ -65,6 +69,7 @@ export const prepareAgentAutoCommand = async ({
     );
   }
 
+  let skippedProjectSkills = false;
   const files = await writeAgentCliFiles(
     promptContents,
     settingsJson,
@@ -73,6 +78,7 @@ export const prepareAgentAutoCommand = async ({
     if (!cwd) {
       throw error;
     }
+    skippedProjectSkills = true;
     return writeAgentCliFiles(promptContents, settingsJson, null);
   });
   const filePaths = [
@@ -82,6 +88,12 @@ export const prepareAgentAutoCommand = async ({
     files.agentsSkillPath,
     files.claudeSkillPath,
   ].filter((path): path is string => !!path);
+
+  const skillWriteWarning =
+    files.skillWriteWarning ??
+    (skippedProjectSkills
+      ? "Could not write Treq skills into the workspace. The session still has the bundled copy."
+      : undefined);
 
   return {
     command: buildAgentAutoCommand({
@@ -93,6 +105,7 @@ export const prepareAgentAutoCommand = async ({
       files,
     }),
     filePaths,
+    skillWriteWarning,
   };
 };
 
