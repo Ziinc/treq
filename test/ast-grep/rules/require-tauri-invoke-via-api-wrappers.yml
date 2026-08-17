@@ -10,6 +10,7 @@ files:
 ignores:
   - "src/lib/api.ts"
   - "src/lib/api-extra.ts"
+  - "src/lib/api-github.ts"
 rule:
   all:
     - pattern: invoke($CMD, $$$)
