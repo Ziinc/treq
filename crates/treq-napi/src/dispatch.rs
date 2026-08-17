@@ -749,7 +749,35 @@ pub fn dispatch(command: &str, args: Value) -> Result<Value, String> {
       Ok(Value::Null)
     }
 
-    // ── Commits ───────────────────────────────────────────────────────
+    "shift_commit_timestamp" => {
+      let repo_path = get_str(&args, "repoPath")?;
+      let workspace_id: i64 = get_i64(&args, "workspaceId")?;
+      let commit_change_id = get_str(&args, "commitChangeId")?;
+      let days = opt_i64(&args, "days").unwrap_or(0);
+      let hours = opt_i64(&args, "hours").unwrap_or(0);
+      let minutes = opt_i64(&args, "minutes").unwrap_or(0);
+      let to_day = args
+        .get("toDay")
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
+      treq_lib::core::shift_commit_timestamp(
+        &repo_path,
+        workspace_id,
+        &commit_change_id,
+        days,
+        hours,
+        minutes,
+        to_day.as_deref(),
+      )?;
+      Ok(Value::Null)
+    }
+
+    "shift_mutable_commits_to_now" => {
+      let repo_path = get_str(&args, "repoPath")?;
+      let workspace_id: i64 = get_i64(&args, "workspaceId")?;
+      treq_lib::core::shift_mutable_commits_to_now(&repo_path, workspace_id)?;
+      Ok(Value::Null)
+    }
     "jj_snapshot_working_copy" => {
       let workspace_path = get_str(&args, "workspacePath")?;
       let result = treq_lib::core::snapshot_working_copy(&workspace_path)?;

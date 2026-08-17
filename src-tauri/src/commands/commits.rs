@@ -313,6 +313,68 @@ pub async fn describe_commit(
   result
 }
 
+/// Edit timestamps of a mutable commit and repair descendant order on its lineage.
+#[tauri::command]
+pub async fn shift_commit_timestamp(
+  repo_path: String,
+  workspace_id: i64,
+  commit_change_id: String,
+  days: Option<i64>,
+  hours: Option<i64>,
+  minutes: Option<i64>,
+  to_day: Option<String>,
+) -> Result<(), String> {
+  let started_at = Instant::now();
+  let result = tauri::async_runtime::spawn_blocking({
+    let repo_path = repo_path.clone();
+    let commit_change_id = commit_change_id.clone();
+    let to_day = to_day.clone();
+    move || {
+      core::shift_commit_timestamp(
+        &repo_path,
+        workspace_id,
+        &commit_change_id,
+        days.unwrap_or(0),
+        hours.unwrap_or(0),
+        minutes.unwrap_or(0),
+        to_day.as_deref(),
+      )
+    }
+  })
+  .await
+  .map_err(|e| format!("Failed to join shift_commit_timestamp task: {}", e))?;
+  log::debug!(
+    "shift_commit_timestamp(repo_path={}, workspace_id={}, commit_change_id={}) completed in {:?}",
+    repo_path,
+    workspace_id,
+    commit_change_id,
+    started_at.elapsed()
+  );
+  result
+}
+
+/// Shift the workspace's mutable commits so the newest real commit is now.
+#[tauri::command]
+pub async fn shift_mutable_commits_to_now(
+  repo_path: String,
+  workspace_id: i64,
+) -> Result<(), String> {
+  let started_at = Instant::now();
+  let result = tauri::async_runtime::spawn_blocking({
+    let repo_path = repo_path.clone();
+    move || core::shift_mutable_commits_to_now(&repo_path, workspace_id)
+  })
+  .await
+  .map_err(|e| format!("Failed to join shift_mutable_commits_to_now task: {}", e))?;
+  log::debug!(
+    "shift_mutable_commits_to_now(repo_path={}, workspace_id={}) completed in {:?}",
+    repo_path,
+    workspace_id,
+    started_at.elapsed()
+  );
+  result
+}
+
 #[tauri::command]
 pub async fn start_resolve_conflicts(
   repo_path: String,

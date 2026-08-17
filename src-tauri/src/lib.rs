@@ -4,6 +4,7 @@ pub mod auto_rebase;
 pub mod binary_paths;
 mod cli;
 mod commands;
+mod commit_timestamps;
 pub mod conflict_markers;
 pub mod core;
 pub mod db;
@@ -535,6 +536,8 @@ pub fn run() {
             commands::switch_repo_branch,
             commands::get_commit_description,
             commands::describe_commit,
+            commands::shift_commit_timestamp,
+            commands::shift_mutable_commits_to_now,
             commands::start_resolve_conflicts,
             commands::build_resolve_agent_prompt,
             commands::resolve_commit,

@@ -1,7 +1,7 @@
 import * as React from "react";
 import { beforeEach, describe, expect, it } from "vitest";
 import userEvent from "@testing-library/user-event";
-import { render, screen, within } from "../../test-utils";
+import { render, screen, waitFor, within } from "../../test-utils";
 import {
   commitRepoFile,
   commitWorkspaceFile,
@@ -372,5 +372,104 @@ describe("ShowWorkspace - Commits tab tentative working copy", () => {
       within(commitsList).getByText("- feat/tentative-working-copy"),
     ).toBeInTheDocument();
     expect(screen.queryByText("wc000")).not.toBeInTheDocument();
+  });
+});
+
+describe("ShowWorkspace - Commits tab timestamp edit", () => {
+  let user: ReturnType<typeof userEvent.setup>;
+
+  beforeEach(() => {
+    user = userEvent.setup();
+  });
+
+  it("shifts a mutable commit forward by days from the Commits tab", async () => {
+    const { repoPath } = createTestRepo(false);
+    openRepo(repoPath);
+    const workspace = await createWorkspaceRef(repoPath, "feat/edit-timestamp");
+    await commitWorkspaceFile(
+      repoPath,
+      workspace,
+      "ts-a.txt",
+      "a",
+      "Timestamp commit A",
+    );
+    await commitWorkspaceFile(
+      repoPath,
+      workspace,
+      "ts-b.txt",
+      "b",
+      "Timestamp commit B",
+    );
+
+    await openWorkspaceCommitsTab(user, "feat/edit-timestamp");
+    const commitA = await screen.findByTitle("Timestamp commit A");
+    await user.click(commitA.closest("button") ?? commitA);
+    await screen.findByRole("button", { name: "Edit description" });
+    await user.click(await screen.findByTestId(/edit-timestamp-/));
+
+    const daysInput = await screen.findByLabelText("Days");
+    await user.clear(daysInput);
+    await user.type(daysInput, "2");
+    await user.click(screen.getByRole("button", { name: "Apply" }));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("modal")).not.toBeInTheDocument();
+    });
+    await screen.findByText("Timestamp updated");
+    const logs = await api.listCommits(repoPath, workspace.id);
+    const older = logs.commits.find(
+      (commit) => commit.description === "Timestamp commit A",
+    );
+    const newer = logs.commits.find(
+      (commit) => commit.description === "Timestamp commit B",
+    );
+    expect(older).toBeTruthy();
+    expect(newer).toBeTruthy();
+    const olderMs = Date.parse(older!.timestamp);
+    const newerMs = Date.parse(newer!.timestamp);
+    expect(newerMs).toBeGreaterThan(olderMs);
+    expect(olderMs).toBeGreaterThan(Date.now() + 24 * 60 * 60 * 1000);
+  });
+
+  it("shifts the newest mutable commits to now", async () => {
+    const { repoPath } = createTestRepo(false);
+    openRepo(repoPath);
+    const workspace = await createWorkspaceRef(repoPath, "feat/shift-to-now");
+    await commitWorkspaceFile(
+      repoPath,
+      workspace,
+      "now-a.txt",
+      "a",
+      "Now commit A",
+    );
+    await commitWorkspaceFile(
+      repoPath,
+      workspace,
+      "now-b.txt",
+      "b",
+      "Now commit B",
+    );
+
+    const before = await api.listCommits(repoPath, workspace.id);
+    const older = before.commits.find(
+      (commit) => commit.description === "Now commit A",
+    );
+    expect(older).toBeTruthy();
+    await api.shiftCommitTimestamp(repoPath, workspace.id, older!.change_id, {
+      days: 2,
+    });
+
+    await openWorkspaceCommitsTab(user, "feat/shift-to-now");
+    await user.click(await screen.findByTestId("shift-commits-to-now"));
+    await screen.findByText("Timestamps updated");
+
+    const after = await api.listCommits(repoPath, workspace.id);
+    const newer = after.commits.find(
+      (commit) => commit.description === "Now commit B",
+    );
+    expect(newer).toBeTruthy();
+    expect(Math.abs(Date.parse(newer!.timestamp) - Date.now())).toBeLessThan(
+      10_000,
+    );
   });
 });
