@@ -357,12 +357,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
           [...commits, ...targetBranchCommits],
           !isHomeRepo && !isDefaultWorkspaceBranch,
         ),
-      [
-        commits,
-        isDefaultWorkspaceBranch,
-        isHomeRepo,
-        targetBranchCommits,
-      ],
+      [commits, isDefaultWorkspaceBranch, isHomeRepo, targetBranchCommits],
     );
 
     const [resolveDialogOpen, setResolveDialogOpen] = useState(false);
