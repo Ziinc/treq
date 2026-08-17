@@ -79,6 +79,12 @@ describe("FilePicker in a workspace", () => {
       "export const Button = () => {};",
       "add Button",
     );
+    await gitCommitRepoFile(
+      repoPath,
+      "src/components/Modal.tsx",
+      "export const Modal = () => {};",
+      "add Modal",
+    );
     await createWorkspace(repoPath, "feat/search");
     openRepo(repoPath);
     user = userEvent.setup();
@@ -92,7 +98,16 @@ describe("FilePicker in a workspace", () => {
 
     await user.keyboard("{Control>}p{/Control}");
 
-    await screen.findByPlaceholderText("Search files...");
+    const input = await screen.findByPlaceholderText("Search files...");
     await screen.findByText(/Button\.tsx/);
+    await screen.findByText(/Modal\.tsx/);
+
+    await user.clear(input);
+    await user.type(input, "Button");
+
+    await screen.findByText(/Button\.tsx/);
+    await waitFor(() => {
+      expect(screen.queryByText(/Modal\.tsx/)).not.toBeInTheDocument();
+    });
   });
 });

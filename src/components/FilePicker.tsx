@@ -123,11 +123,13 @@ export const FilePicker: React.FC<FilePickerProps> = ({
         </div>
 
         <Command.List className="max-h-[300px] overflow-y-auto py-2">
-          <Command.Empty>
-            <div className="px-4 py-8 text-center text-muted-foreground text-sm">
-              {query.trim() ? "No files found" : "Type to search files..."}
-            </div>
-          </Command.Empty>
+          {results.length === 0 && (
+            <Command.Empty>
+              <div className="px-4 py-8 text-center text-muted-foreground text-sm">
+                {query.trim() ? "No files found" : "Type to search files..."}
+              </div>
+            </Command.Empty>
+          )}
 
           {results.map((file) => (
             <Command.Item
