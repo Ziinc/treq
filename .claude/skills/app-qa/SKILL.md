@@ -42,9 +42,9 @@ Good candidates — hand these off:
 - **Locating selectors and wiring.** The `data-testid`, accessible role, or button
   label to drive; which component renders a given piece of copy; which UI flow a
   changed `src-tauri/` or `src/lib/` file actually backs.
-- **Tracing dispatch gaps.** When a flow hits a `not_implemented` stub, have a
-  subagent find the corresponding `treq_lib::jj::*` / `core::*` function and the
-  nearest existing `dispatch.rs` case to model the new one on.
+- **Tracing command gaps.** When a flow fails inside `invoke`, have a subagent
+  find the corresponding `#[tauri::command]` and `core::*` function. `tauri-test`
+  dispatches the real command; there is no separate `dispatch.rs` match table.
 - **Mechanical sweeps.** Reading a batch of `<name>.json` manifests, chasing down
   which spec produced which capture, diffing a spec against the one you're copying.
 
@@ -87,7 +87,7 @@ part of the scenario being verified.
 
 ## How the harness works
 
-1. `createTestRepo()` (from `test/utils`, backed by the `treq-napi` addon) creates a
+1. `createTestRepo()` (from `test/utils`, backed by the `tauri-test` addon) creates a
    real jj repository on disk, exactly like an integration test.
 2. `render(<Dashboard/>)` (from `test/test-utils`) mounts the real React tree in
    jsdom, with Tauri's `invoke` replaced by real Rust dispatch
@@ -106,15 +106,9 @@ difference: `test/integration/**` fails a run the moment any still-un-migrated `
 command is invoked (an ongoing tracker for code that should call `core::*` instead).
 The screenshot harness exists to show current real behavior, debt included, so it
 only logs which `jj_*` commands fired instead of failing the spec. If driving a real
-flow hits a command the NAPI bridge has stubbed out as `not_implemented` (see the
-bucket of commands in `crates/treq-napi/src/dispatch.rs` marked "Direct jj::*
-commands"), that's a genuine gap in the test bridge, not a reason to fall back to an
-API-helper workaround — implement the missing dispatch case for real (it's almost
-always a thin call into an existing `treq_lib::jj::*` or `core::*` function; see the
-`set_workspace_target_branch`, `jj_git_fetch_background`, and `jj_check_branch_exists`
-cases in `dispatch.rs` for the pattern). That's a test-bridge-only change
-(`crates/treq-napi/`), not a production Rust change — treat touching production
-command code as a separate, bigger decision and check with the user first.
+flow hits an unknown command, that command is missing from `generate_handler!` or
+from a `#[tauri::command]` the `tauri-test` setup scan can see — add the real
+command, not a test-only stub.
 
 ## Steps
 
@@ -198,7 +192,7 @@ command code as a separate, bigger decision and check with the user first.
    across the two.
 
 4. **Run it.**
-   - First run in a session, or after touching `src-tauri` / `crates/treq-napi`, or
+   - First run in a session, or after touching `src-tauri`, or
      adding new Tailwind classes: `npm run screenshot` (rebuilds the NAPI addon,
      recompiles CSS, runs every spec — slow but complete).
    - Fast iteration on one spec once the addon/CSS are already built:

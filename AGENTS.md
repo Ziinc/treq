@@ -19,13 +19,12 @@ treq/
 │   ├── src/
 │   │   ├── commands/       # Tauri command handlers (thin layer)
 │   │   ├── core/           # Business logic (workspaces, commits, repo, changes)
+│   │   ├── tauri_test_bridge.rs  # N-API test helpers (feature `tauri-test`)
 │   │   ├── jj.rs           # Jujutsu VCS integration
 │   │   ├── db.rs           # SQLite via rusqlite
 │   │   └── pty.rs          # Terminal management (portable-pty)
 │   ├── benches/            # Criterion performance benchmarks
 │   └── tests/              # Rust integration test helpers
-├── crates/
-│   └── treq-napi/          # NAPI bridge — exposes Rust to Node for tests
 └── test/                   # Frontend test suite
     ├── integration/        # Full-stack integration tests (real Rust backend)
     ├── factories/          # Test data factories
@@ -84,7 +83,7 @@ struct AppState {
 
 ### NAPI Bridge
 
-`crates/treq-napi` compiles the Rust backend to a `.node` native addon. Tests import this instead of the real Tauri runtime, so integration tests exercise actual Rust code without launching a desktop window.
+The `src-tauri` library is compiled with the `tauri-test` feature to a native addon. Tests `require("../src-tauri/target")` so `invoke` runs real Rust commands without launching a desktop window.
 
 ---
 
@@ -108,7 +107,7 @@ npm test
 # Frontend tests only (requires prior napi build)
 npm run test:run
 
-# Rebuild NAPI addon (required after any Rust change)
+# Rebuild the tauri-test addon (required after any Rust change)
 npm run build:napi
 
 # Rust unit tests

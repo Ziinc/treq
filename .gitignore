@@ -54,7 +54,8 @@ src-tauri/gen/
 !/certs/.env
 
 # treq-napi
-crates/treq-napi/treq-napi.*.node
+# tauri-test writes a Node loader next to the cdylib
+src-tauri/target/index.js
 
 # screenshot harness output (compiled CSS, HTML snapshots, PNGs)
 scripts/screenshot/.generated/
@@ -65,3 +66,6 @@ scripts/service-qa/.generated/
 storybook-static
 scripts/storybook/.generated/
 .cursor-artifacts/
+.jj*/
+.agents/skills/treq*/
+.claude/skills/treq*/

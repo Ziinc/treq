@@ -30,6 +30,15 @@ import type {
 } from "./api-types";
 
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+
+function currentWindowLabel(): string {
+  try {
+    return getCurrentWindow()?.label ?? "main";
+  } catch {
+    return "main";
+  }
+}
 
 export * from "./api-extra";
 export * from "./api-types";
@@ -100,10 +109,13 @@ export const setRepoSetting = (
 ): Promise<void> => invoke("set_repo_setting", { repoPath, key, value });
 
 export const setWindowRepoPath = (repoPath: string): Promise<void> =>
-  invoke("set_window_repo_path", { repoPath });
+  invoke("set_window_repo_path", {
+    repoPath,
+    windowLabel: currentWindowLabel(),
+  });
 
 export const getWindowRepoPath = (): Promise<string | null> =>
-  invoke("get_window_repo_path");
+  invoke("get_window_repo_path", { windowLabel: currentWindowLabel() });
 
 export const detectEditorApps = (): Promise<EditorAppsResponse> =>
   invoke("detect_editor_apps");

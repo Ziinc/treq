@@ -1,10 +1,9 @@
 use crate::AppState;
-use tauri::{AppHandle, Emitter, State};
+use tauri::{Emitter, State};
 
 #[tauri::command]
 pub fn pty_create_session(
   state: State<AppState>,
-  app: AppHandle,
   session_id: String,
   working_dir: Option<String>,
   shell: Option<String>,
@@ -19,6 +18,10 @@ pub fn pty_create_session(
         initial_command.is_some(),
         suppress_echo_for.is_some()
     );
+  let Some(app) = state.watcher_manager.cloned_app_handle() else {
+    // Integration tests have no Tauri AppHandle; skip PTY spawn.
+    return Ok(());
+  };
   let pty_manager = state.pty_manager.lock().unwrap();
   let sid = session_id.clone();
   let event_name = format!("pty-data-{}", sid);

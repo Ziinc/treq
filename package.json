@@ -35,7 +35,7 @@
     "clean": "cd src-tauri && cargo clean",
     "test:run": "npm run test:unit && npm run test:integration",
     "test:ui": "vitest --ui",
-    "build:napi": "cd crates/treq-napi && npm run build:debug",
+    "build:napi": "cargo build --manifest-path src-tauri/Cargo.toml --lib --features tauri-test",
     "test:unit": "DEBUG_PRINT_LIMIT=50 vitest run --config vitest.unit.config.ts",
     "test:integration:run": "DEBUG_PRINT_LIMIT=50 vitest run --config vitest.integration.config.ts",
     "test:integration": "npm run build:napi --silent && npm run test:integration:run",

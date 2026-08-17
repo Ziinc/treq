@@ -31,6 +31,19 @@ use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 use tauri::{AppHandle, Emitter, EventTarget, Manager};
 use tauri_plugin_log::{Target, TargetKind};
 
+#[cfg(feature = "tauri-test")]
+extern crate self as treq_lib;
+
+#[cfg(feature = "tauri-test")]
+mod e2e_test_helpers;
+
+#[cfg(feature = "tauri-test")]
+mod tauri_test_bridge;
+
+#[cfg(feature = "tauri-test")]
+#[tauri_test::setup(init = tauri_test_bridge::init_test_state)]
+pub struct TauriTestApp;
+
 pub(crate) struct AppState {
   db: Mutex<Database>,
   pty_manager: Mutex<PtyManager>,
@@ -42,6 +55,30 @@ pub(crate) struct AppState {
   dispatch_endpoint: String,
   // Held for its Drop guards (file writer + provider shutdown).
   _telemetry: telemetry::TelemetryGuards,
+}
+
+impl AppState {
+  pub(crate) fn new(
+    db: Database,
+    pty_manager: PtyManager,
+    watcher_manager: WatcherManager,
+    dispatch_instance_id: String,
+    dispatch_started_at: u64,
+    dispatch_endpoint: String,
+    telemetry: telemetry::TelemetryGuards,
+  ) -> Self {
+    Self {
+      db: Mutex::new(db),
+      pty_manager: Mutex::new(pty_manager),
+      watcher_manager,
+      window_repo_paths: Mutex::new(HashMap::new()),
+      window_last_focused_at: Mutex::new(HashMap::new()),
+      dispatch_instance_id,
+      dispatch_started_at,
+      dispatch_endpoint,
+      _telemetry: telemetry,
+    }
+  }
 }
 
 /// Emits an event only to the focused webview window.
@@ -273,17 +310,15 @@ pub fn run() {
             let (dispatch_listener, dispatch_endpoint) = agent_dispatch::bind_ephemeral_listener()?;
             let dispatch_instance_id = uuid::Uuid::new_v4().to_string();
             let dispatch_started_at = agent_dispatch::now_millis();
-            let app_state = AppState {
-                db: Mutex::new(db),
-                pty_manager: Mutex::new(pty_manager),
+            let app_state = AppState::new(
+                db,
+                pty_manager,
                 watcher_manager,
-                window_repo_paths: Mutex::new(HashMap::new()),
-                window_last_focused_at: Mutex::new(HashMap::new()),
                 dispatch_instance_id,
                 dispatch_started_at,
                 dispatch_endpoint,
-                _telemetry: telemetry,
-            };
+                telemetry,
+            );
 
             app.manage(app_state);
             start_agent_ipc_listener(app.handle().clone(), dispatch_listener);

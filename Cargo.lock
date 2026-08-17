@@ -4120,6 +4120,7 @@ dependencies = [
  "once_cell",
  "serde",
  "serde_json",
+ "tokio",
 ]
 
 [[package]]
@@ -6658,6 +6659,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "tauri-test"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "583321ea4ea9f3d41adc69fca9792f6914517ef444f97ecea35e8dac8e8d5a85"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-test-macros",
+]
+
+[[package]]
+name = "tauri-test-macros"
+version = "0.2.1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.117",
+ "toml 0.8.2",
+]
+
+[[package]]
 name = "tauri-utils"
 version = "2.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7161,6 +7184,9 @@ dependencies = [
  "jj-lib",
  "log",
  "mockall",
+ "napi",
+ "napi-build",
+ "napi-derive",
  "notify",
  "notify-debouncer-full",
  "opentelemetry",
@@ -7181,26 +7207,13 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-log",
  "tauri-plugin-opener",
+ "tauri-test",
  "tempfile",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
  "urlencoding",
  "uuid",
-]
-
-[[package]]
-name = "treq-napi"
-version = "0.1.0"
-dependencies = [
- "chrono",
- "napi",
- "napi-build",
- "napi-derive",
- "serde",
- "serde_json",
- "tempfile",
- "treq",
 ]
 
 [[package]]

@@ -202,6 +202,7 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 vi.mock("@tauri-apps/api/window", () => ({
   getCurrentWindow: vi.fn(() => ({
+    label: "main",
     setTitle: vi.fn(),
     onFocusChanged: vi.fn(() => Promise.resolve(() => {})),
   })),
