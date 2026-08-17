@@ -14,6 +14,8 @@ interface FileCommentSectionProps {
   onCancelEdit: () => void;
   onSaveEdit: (commentId: string, text: string) => void;
   onDelete: (commentId: string) => void;
+  commentDraft?: string;
+  onCommentDraftChange?: (text: string) => void;
 }
 
 const FileCommentSection: React.FC<FileCommentSectionProps> = ({
@@ -26,6 +28,8 @@ const FileCommentSection: React.FC<FileCommentSectionProps> = ({
   onCancelEdit,
   onSaveEdit,
   onDelete,
+  commentDraft,
+  onCommentDraftChange,
 }) => (
   <div className="border-b border-border bg-muted/20 px-4 py-3 space-y-3">
     {comments.map((comment) => {
@@ -68,7 +72,14 @@ const FileCommentSection: React.FC<FileCommentSectionProps> = ({
         </div>
       );
     })}
-    {showInput && <CommentInput onSubmit={onSubmit} onCancel={onCancel} />}
+    {showInput && (
+      <CommentInput
+        onSubmit={onSubmit}
+        onCancel={onCancel}
+        value={commentDraft}
+        onValueChange={onCommentDraftChange}
+      />
+    )}
   </div>
 );
 FileCommentSection.displayName = "FileCommentSection";
