@@ -1457,7 +1457,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 onReset={handleReturnToDashboard}
               >
                 <ShowWorkspace
-                  key={selectedWorkspace?.id ?? "home"}
                   repositoryPath={repoPath}
                   workspace={selectedWorkspace}
                   onActiveTabChange={setShowWorkspaceActiveTab}
