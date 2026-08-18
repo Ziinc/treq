@@ -20,11 +20,6 @@ describe("Inline comment editing — save", () => {
     await setupWorkspaceWithDiff(branchName);
     await openReviewTab(user, branchName);
     await clickChangedFile("test.txt");
-    await screen.findAllByRole(
-      "button",
-      { name: /add comment/i },
-      { timeout: 60_000 },
-    );
     await addSingleReviewComment(user, comment);
   }
 

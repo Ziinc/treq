@@ -64,7 +64,7 @@ async function findChangedFileElement(fileName: string): Promise<HTMLElement> {
   return waitFor(
     () => {
       const row = document.querySelector(
-        `[data-testid="file-row-${CSS.escape(fileName)}"]`,
+        `[data-testid="file-row-${fileName}"]`,
       );
       if (row) return row as HTMLElement;
       const [sidebarMatch] = screen.queryAllByText(fileName);
@@ -118,18 +118,32 @@ export async function addSingleReviewComment(
   user: ReturnType<typeof userEvent.setup>,
   comment: string,
 ) {
-  await user.click(
-    (await screen.findAllByRole("button", { name: /add comment/i }))[0],
+  const gutterButton = await waitFor(
+    () => {
+      const button = document.querySelector(
+        "[data-comment-button]",
+      ) as HTMLElement | null;
+      if (!button) {
+        throw new Error("waiting for comment gutter button");
+      }
+      return button;
+    },
+    { timeout: 60_000 },
   );
-  await user.type(
-    await screen.findByPlaceholderText(/add a comment/i),
-    comment,
-  );
-  const submit = screen
-    .getAllByRole("button", { name: /add comment/i })
-    .find((btn) => btn.textContent === "Add Comment");
-  expect(submit).toBeTruthy();
-  await user.click(submit!);
+  fireEvent.click(gutterButton);
+  const input = await screen.findByPlaceholderText(/add a comment/i);
+  await user.type(input, comment);
+  const submit = await waitFor(() => {
+    const button = screen
+      .getAllByRole("button", { name: /add comment/i, hidden: true })
+      .find((el) => el.textContent?.trim() === "Add Comment");
+    if (!button) {
+      throw new Error("waiting for Add Comment submit");
+    }
+    expect(button).not.toBeDisabled();
+    return button;
+  });
+  await user.click(submit);
   await screen.findByText(comment);
 }
 

@@ -1,9 +1,7 @@
-import * as React from "react";
 import * as api from "../../../src/lib/api";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createTestRepo,
-  findSidebarBranchElement,
   openRepo,
   resolveWorkspacePath,
   writeWorkspaceFile,
@@ -14,9 +12,13 @@ import {
   getWorkspaces,
   listCommits,
 } from "../../../src/lib/api";
-import { render, screen, waitFor } from "../../test-utils";
-import { Dashboard } from "../../../src/components/Dashboard";
+import { screen, waitFor } from "../../test-utils";
 import userEvent from "@testing-library/user-event";
+import {
+  addSingleReviewComment as addReviewComment,
+  clickChangedFile,
+  openReviewTab,
+} from "../review/comments-helpers";
 
 const REVIEW_FILE = "reviews-flow.txt";
 
@@ -45,17 +47,13 @@ async function setupWorkspaceWithChange(branchName: string): Promise<{
   return { fileName: REVIEW_FILE, repoPath, workspace };
 }
 
-async function openReviewTab(
+async function addSingleReviewComment(
   user: ReturnType<typeof userEvent.setup>,
-  branchName: string,
+  fileName: string,
+  comment: string,
 ) {
-  render(<Dashboard />);
-
-  await user.click(await findSidebarBranchElement(branchName));
-
-  const reviewTab = await screen.findByRole("tab", { name: /^Changes/ });
-  await user.click(reviewTab);
-  await screen.findByRole("tab", { name: /^Changes/, selected: true });
+  await clickChangedFile(fileName);
+  await addReviewComment(user, comment);
 }
 
 async function openReviewWithChange(branchName: string) {
@@ -74,27 +72,6 @@ async function expectCommitCreated(
       log.commits.some((commit) => commit.description === commitMessage),
     ).toBe(true);
   });
-}
-
-async function addSingleReviewComment(
-  user: ReturnType<typeof userEvent.setup>,
-  _fileName: string,
-  comment: string,
-) {
-  await user.click(
-    (await screen.findAllByRole("button", { name: /add comment/i }))[0],
-  );
-  await user.type(
-    await screen.findByPlaceholderText(/add a comment/i),
-    comment,
-  );
-
-  const submit = screen
-    .getAllByRole("button", { name: /add comment/i })
-    .find((button) => button.textContent === "Add Comment");
-  expect(submit).toBeTruthy();
-  await user.click(submit!);
-  await screen.findByText(comment);
 }
 
 describe("ShowWorkspace - Reviews integration", () => {

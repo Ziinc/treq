@@ -23,12 +23,6 @@ describe("Inline comments display", () => {
     await openReviewTab(user, "feat/inline-high-lines");
 
     await clickChangedFile("test.txt");
-    await screen.findAllByRole(
-      "button",
-      { name: /add comment/i },
-      { timeout: 60_000 },
-    );
-
     await addSingleReviewComment(user, "Review comment on line 102");
 
     await screen.findByText("Review comment on line 102");

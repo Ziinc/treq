@@ -115,7 +115,7 @@ describe("ShowWorkspace - Create PR", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("shows tooltips and a dark-mode border for the Create PR controls", async () => {
+  it("styles Create PR controls with a dark-mode border", async () => {
     await setupPushedWorkspaceWithGitHub();
     render(<Dashboard />);
 
@@ -130,22 +130,7 @@ describe("ShowWorkspace - Create PR", () => {
 
     expect(createPr).toHaveClass("dark:border-white/30");
     expect(moreOptions).toHaveClass("dark:border-white/30");
-
-    createPr.focus();
-    expect(await screen.findByRole("tooltip")).toHaveTextContent(
-      "Create a pull request on GitHub",
-    );
-
-    moreOptions.focus();
-    await waitFor(() => {
-      expect(
-        screen
-          .getAllByRole("tooltip")
-          .some((tooltip) =>
-            tooltip.textContent?.includes("More pull request options"),
-          ),
-      ).toBe(true);
-    });
+    expect(moreOptions).toHaveAttribute("aria-label", "More Create PR options");
   });
 
   it("shows Create PR instead of Push to remote when a GitHub remote is configured", async () => {
@@ -412,7 +397,7 @@ describe("ShowWorkspace - Create PR", () => {
     expect(ghViewPr).toHaveBeenCalledWith("acme/treq", 9);
   });
 
-  it("shows tooltips for the View PR controls", async () => {
+  it("exposes accessible names for the View PR controls", async () => {
     await setupPushedWorkspaceWithGitHub();
     vi.mocked(getCachedPrInfo).mockResolvedValue({
       number: 9,
@@ -435,21 +420,8 @@ describe("ShowWorkspace - Create PR", () => {
       name: /open pr on web/i,
     });
 
-    viewPr.focus();
-    expect(await screen.findByRole("tooltip")).toHaveTextContent(
-      "View pull request #9 in Treq",
-    );
-
-    openOnWeb.focus();
-    await waitFor(() => {
-      expect(
-        screen
-          .getAllByRole("tooltip")
-          .some((tooltip) =>
-            tooltip.textContent?.includes("Open pull request #9 on GitHub"),
-          ),
-      ).toBe(true);
-    });
+    expect(viewPr).toHaveAttribute("aria-label", "View PR (#9, open)");
+    expect(openOnWeb).toHaveAttribute("aria-label", "Open PR on web");
   });
 
   it("uses draft label when PR is a draft", async () => {

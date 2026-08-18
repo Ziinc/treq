@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { screen, within } from "../../test-utils";
+import { screen, waitFor, within } from "../../test-utils";
 import userEvent from "@testing-library/user-event";
 import {
   addSingleReviewComment,
@@ -9,7 +9,7 @@ import {
   startEditingComment,
 } from "./comments-helpers";
 
-describe("Inline comment editing — cancel", () => {
+describe("Inline comment editing — empty save and discard", () => {
   let user: ReturnType<typeof userEvent.setup>;
 
   beforeEach(() => {
@@ -23,37 +23,38 @@ describe("Inline comment editing — cancel", () => {
     await addSingleReviewComment(user, comment);
   }
 
-  it("restores the original inline comment when canceling edit", async () => {
+  it("disables saving when the edited inline comment is empty", async () => {
     await setupEditableComment(
-      "feat/comment-edit-cancel",
+      "feat/comment-edit-empty",
       "Original comment text",
     );
 
     const textarea = await startEditingComment("Original comment text");
     await user.clear(textarea);
-    await user.type(textarea, "Modified but not saved");
+
     const editForm = textarea.parentElement;
     expect(editForm).toBeTruthy();
-    await user.click(
-      within(editForm!).getByRole("button", { name: /^cancel$/i }),
-    );
-
-    await screen.findByText("Original comment text");
-    expect(screen.queryByText("Modified but not saved")).toBeNull();
+    expect(
+      within(editForm!).getByRole("button", { name: /^save$/i }),
+    ).toBeDisabled();
   });
 
-  it("cancels inline comment editing with Escape", async () => {
+  it("discards the inline comment from edit mode", async () => {
     await setupEditableComment(
-      "feat/comment-edit-escape",
+      "feat/comment-edit-discard",
       "Original comment text",
     );
 
     const textarea = await startEditingComment("Original comment text");
-    await user.clear(textarea);
-    await user.type(textarea, "Will be discarded");
-    await user.keyboard("{Escape}");
+    const editForm = textarea.parentElement;
+    expect(editForm).toBeTruthy();
 
-    await screen.findByText("Original comment text");
-    expect(screen.queryByDisplayValue("Will be discarded")).toBeNull();
+    await user.click(
+      within(editForm!).getByRole("button", { name: /^discard$/i }),
+    );
+
+    await waitFor(() => {
+      expect(screen.queryByText("Original comment text")).toBeNull();
+    });
   });
 });
