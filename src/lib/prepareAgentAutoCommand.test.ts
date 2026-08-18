@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "./api";
-import { prepareAgentAutoCommand } from "./prepareAgentAutoCommand";
+import {
+  parseJsonObject,
+  prepareAgentAutoCommand,
+} from "./prepareAgentAutoCommand";
 
 vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
@@ -12,21 +15,36 @@ vi.mock("./api", async (importOriginal) => {
   };
 });
 
+describe("parseJsonObject", () => {
+  it("returns a plain object from JSON", () => {
+    expect(parseJsonObject('{"permissions":{"allow":["Bash"]}}')).toEqual({
+      permissions: { allow: ["Bash"] },
+    });
+  });
+
+  it("returns null for invalid JSON, arrays, and primitives", () => {
+    expect(parseJsonObject("not json")).toBeNull();
+    expect(parseJsonObject("[1]")).toBeNull();
+    expect(parseJsonObject('"x"')).toBeNull();
+  });
+});
+
 const writtenFiles = {
   promptPath: "/tmp/treq-agent-prompt-1.txt",
+  settingsPath: "/tmp/treq-agent-settings-1.json",
   skillDir: "/tmp/treq-agent-skills-1",
 };
 
 describe("prepareAgentAutoCommand", () => {
   beforeEach(() => {
+    vi.mocked(api.readFile).mockRejectedValue(new Error("missing"));
     vi.mocked(api.writeAgentCliFiles).mockReset();
-    vi.mocked(api.readFile).mockReset();
   });
 
-  it("does not write Claude sandbox settings or read local settings", async () => {
+  it("writes filesystem restrictions without forcing sandbox enablement", async () => {
     vi.mocked(api.writeAgentCliFiles).mockResolvedValueOnce(writtenFiles);
 
-    const { command } = await prepareAgentAutoCommand({
+    await prepareAgentAutoCommand({
       agent: "claude",
       workspacePath: "/ws",
       repoPath: "/repo",
@@ -34,13 +52,16 @@ describe("prepareAgentAutoCommand", () => {
       treqBinDir: null,
     });
 
-    expect(api.readFile).not.toHaveBeenCalled();
-    expect(api.writeAgentCliFiles).toHaveBeenCalledWith(
-      expect.any(String),
-      undefined,
-      "/ws",
-    );
-    expect(command).not.toContain("--settings");
+    const settingsJson = vi.mocked(api.writeAgentCliFiles).mock.calls[0]?.[1];
+    expect(JSON.parse(settingsJson as string)).toEqual({
+      sandbox: {
+        filesystem: {
+          denyRead: ["/repo"],
+          allowRead: ["/ws"],
+          allowWrite: ["/ws"],
+        },
+      },
+    });
   });
 
   it("retries without cwd when writing project skills fails", async () => {
