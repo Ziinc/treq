@@ -16,15 +16,27 @@ Download the latest release [here](https://github.com/Ziinc/treq/releases). Inst
 
 ## Features
 
-- [Code reviews](https://treq.dev/docs/concepts/changes-and-reviews). Inspect diffs on your machine. Comment on lines. Send Plan or Edit to an agent. See the [code review workflow](https://treq.dev/docs/tutorials/code-review-workflow).
-- Isolated [workspaces](https://treq.dev/docs/concepts/workspaces). Each agent gets its own checkout. Uncommitted work in one workspace does not appear in another.
-- Auto-rebase. When a target branch moves, Treq rebases dependent workspaces. [Managing workspaces](https://treq.dev/docs/tutorials/managing-workspaces) covers stacks.
-- Conflict resolution. Send a conflict from Changes with Plan or Edit. On Commits, Resolve conflicts rewrites the conflicted commit in place. See [merging workspaces](https://treq.dev/docs/tutorials/merging-workspaces).
-- Agent CLI. Agents create workspaces and move work with the same [CLI](https://treq.dev/docs/reference/cli) you run. [Agent sessions](https://treq.dev/docs/concepts/agent-sessions) lists supported agents.
-- [Move files between workspaces](https://treq.dev/docs/how-to/moving-files-between-workspaces). Agents can move commits, working-copy files, and hunks.
-- Send files from a terminal. A thumbnail lands in the pane. Click it to open the file. See [terminal sessions](https://treq.dev/docs/concepts/terminal-sessions).
-- Schedule work. Hide a workspace until a time you pick. Shift commit timestamps, or set them to now.
-- [GitHub issues and pull requests](https://treq.dev/docs/concepts/github-integration). Start an agent from an issue. CI stays next to the workspace. How-to: [connecting GitHub](https://treq.dev/docs/how-to/connecting-github) and [creating pull requests](https://treq.dev/docs/how-to/creating-and-viewing-pull-requests).
+- Works with Claude Code, Codex, and Cursor Agent. [Agent sessions](https://treq.dev/docs/concepts/agent-sessions) lists Plan and Edit modes per agent.
+- Review the diff on your machine. Workspace tabs are Code, Commits, and Changes. Line comments stay on disk until you push. Send the review back as Plan or Edit. See [Changes and reviews](https://treq.dev/docs/concepts/changes-and-reviews) and the [code review workflow](https://treq.dev/docs/tutorials/code-review-workflow).
+- Read the whole change, or one commit, on the same screen. File navigation, the diff, and inline comments stay together. When a workspace has an open GitHub pull request, Changes can also show GitHub review threads. Quoting a thread does not reply on GitHub. See [GitHub review threads](https://treq.dev/docs/concepts/changes-and-reviews#github-review-threads) and [commit-level diffs](https://treq.dev/docs/concepts/commit-management#commit-level-diff).
+- Isolated [workspaces](https://treq.dev/docs/concepts/workspaces). Each agent gets its own checkout. An uncommitted change in one workspace never shows up in another. Tutorial: [managing workspaces](https://treq.dev/docs/tutorials/managing-workspaces).
+- Auto-rebase. When the target branch moves, Treq rebases dependent workspaces. You still push and pull with Git. You never have to learn Jujutsu. See [workspaces](https://treq.dev/docs/concepts/workspaces).
+- Split a feature into a stack. Stack creates a workspace that targets another workspace. When you land the base, Treq rebases the rest. Merge locally with familiar and stack-native strategies. Tutorial: [merging workspaces](https://treq.dev/docs/tutorials/merging-workspaces).
+- Agents start more agents. Tell one agent to split the work across three agents in three workspaces. Each agent gets its own checkout. Use [`treq add`](https://treq.dev/docs/reference/cli#treq-add) and [`treq agent`](https://treq.dev/docs/reference/cli#treq-agent).
+- Move changes between workspaces. Agents can move commits, working-copy files, and hunks through the CLI. See [`treq mv`](https://treq.dev/docs/reference/cli#treq-mv) and [moving files between workspaces](https://treq.dev/docs/how-to/moving-files-between-workspaces).
+- Break up a large workspace. Tell an agent to split it into smaller stacked or separate workspaces. Each slice gets its own checkout. See [managing workspaces](https://treq.dev/docs/tutorials/managing-workspaces) and the [CLI](https://treq.dev/docs/reference/cli).
+- Conflict resolution. From Changes, send a conflict with Plan or Edit. The agent can land a new commit that resolves the markers. On Commits, Resolve conflicts starts an agent that rewrites the conflicted commit in place. That path does not add a follow-up commit. See [conflict management](https://treq.dev/docs/concepts/changes-and-reviews#conflict-management) and [resolve commit conflicts inplace](https://treq.dev/docs/concepts/commit-management#resolve-commit-conflicts-inplace).
+- Agent CLI. Workspace management can be delegated to agents through the [treq CLI](https://treq.dev/docs/reference/cli). Prompt an agent to create a workspace for this fix and it can run the same commands you would.
+- Send files from the agent. `treq send` puts a thumbnail in that terminal. Click it to open the file. See [terminal sessions](https://treq.dev/docs/concepts/terminal-sessions) and [`treq send`](https://treq.dev/docs/reference/cli#treq-send).
+- [Commit management](https://treq.dev/docs/concepts/commit-management). Commit selected files or the whole working copy. Review one commit or the cumulative stack. Tutorial: [committing changes](https://treq.dev/docs/tutorials/committing-changes).
+- Schedule work. Hide a workspace until a time you pick. Shift commit timestamps into the future, or set them to now. Workspace lifecycle lives in [workspaces](https://treq.dev/docs/concepts/workspaces). Timestamp edits live in [commit management](https://treq.dev/docs/concepts/commit-management).
+- [GitHub issues and pull requests](https://treq.dev/docs/concepts/github-integration). Manage issues and pull requests in the app. Start an agent from an issue. CI for the branch stays next to the workspace. How-to: [connecting GitHub](https://treq.dev/docs/how-to/connecting-github) and [creating and viewing pull requests](https://treq.dev/docs/how-to/creating-and-viewing-pull-requests).
+- [Terminal sessions](https://treq.dev/docs/concepts/terminal-sessions). Shells and agents run in the workspace. Tutorial: [creating terminal sessions](https://treq.dev/docs/tutorials/creating-terminal-sessions).
+- Local by default. Diffs, comments, and terminal metadata stay on your machine. The desktop app does not upload your code. See [security and privacy](https://treq.dev/docs/security-and-privacy).
+- No telemetry. The app does not send feature usage, crash reports, or performance metrics. Docs-site analytics is separate. See [security and privacy](https://treq.dev/docs/security-and-privacy#telemetry).
+- Git compatible. Jujutsu under the hood. Treq uses the jj-lib Rust crate to rebase workspace branches when targets move. See [under the hood](https://treq.dev/docs/under-the-hood).
+- Apache 2.0 desktop app. You can read every command it runs. License is in this repository.
+- macOS. Download the desktop build from [GitHub Releases](https://github.com/Ziinc/treq/releases) and open a Git repository you already have. Setup is in [installation](https://treq.dev/docs/getting-started/installation).
 
 ## Developer
 
