@@ -49,7 +49,7 @@ Coding agents work in isolated copies of the codebase, ensuring changes are inde
 
 The marketing images under `assets/screenshots/` are produced by the same Chromium rasterization harness as the docs captures (`scripts/screenshot/specs/docs-*.spec.tsx`). Specs live at `scripts/screenshot/specs/readme-*.spec.tsx` and publish via `captureDocument({ publishTo })`.
 
-Landing page shots reuse those files: Code Overview (`code.png`), Changes (`review.png`), Commits (`commits.png`), workspace list (`workspaces.png`), stack panel (`stack.png`), agent terminals (`terminals.png`), and GitHub header chrome (`github.png`).
+Landing page shots reuse those files: Code Overview (`code.png`), Changes (`review.png`), Commits (`commits.png`), workspace list (`workspaces.png`), agent terminals (`terminals.png`), and GitHub header chrome (`github.png`).
 
 ```bash
 npm run screenshot:readme

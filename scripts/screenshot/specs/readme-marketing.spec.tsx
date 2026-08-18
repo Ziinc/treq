@@ -212,23 +212,6 @@ it("captures the workspace list for landing isolation copy", async () => {
   });
 }, 120000);
 
-it("captures the stack panel for landing stacked-workspace copy", async () => {
-  await prepareMarketingView();
-
-  await screen.findByTestId("workspace-stack-panel");
-
-  await captureDocument(document, {
-    name: "readme-stack",
-    deviceScaleFactor: 2,
-    clipSelector: '[data-testid="workspace-stack-panel"]',
-    publishTo: path.join(README_SCREENSHOTS_DIR, "stack.png"),
-    expectations: [
-      "A cropped stack panel lists the chain of workspaces, with feat/empty-event-message on feat/event-ingest.",
-      "Stack items show branch names, not a generic mock PR list.",
-    ],
-  });
-}, 120000);
-
 it("captures agent terminals for landing agent-session copy", async () => {
   await prepareMarketingView();
 

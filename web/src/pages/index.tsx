@@ -8,7 +8,6 @@ import Heading from '@theme/Heading';
 
 import codeScreenshot from '../../../assets/screenshots/code.png';
 import reviewScreenshot from '../../../assets/screenshots/review.png';
-import stackScreenshot from '../../../assets/screenshots/stack.png';
 import workspacesScreenshot from '../../../assets/screenshots/workspaces.png';
 import terminalsScreenshot from '../../../assets/screenshots/terminals.png';
 import commitsScreenshot from '../../../assets/screenshots/commits.png';
@@ -158,8 +157,8 @@ function HighlightGrid(): ReactNode {
           </div>
           <img
             className={styles.highlightDarkImage}
-            src={stackScreenshot}
-            alt="Stacked workspaces panel showing feat/empty-event-message on feat/event-ingest"
+            src={codeScreenshot}
+            alt="Stacked workspace feat/empty-event-message targeting feat/event-ingest"
             width={2880}
             height={1800}
             loading="lazy"
@@ -193,8 +192,8 @@ const SOLUTION_CARDS = [
   {
     title: 'Stacked workspaces',
     body: 'A stack is a chain of workspaces. Create stacked workspace from the current one. Treq tracks the target and restacks the rest.',
-    image: stackScreenshot,
-    alt: 'Stack panel with feat/empty-event-message on feat/event-ingest',
+    image: codeScreenshot,
+    alt: 'Code tab for a stacked workspace targeting feat/event-ingest',
   },
   {
     title: 'Agent sessions',
@@ -475,7 +474,7 @@ function FeaturesSection(): ReactNode {
           <div className={styles.featureScreenshot}>
             <img
               className={styles.featureImage}
-              src={stackScreenshot}
+              src={workspacesScreenshot}
               alt="Stacked workspaces panel showing feat/empty-event-message on feat/event-ingest"
               width={2880}
               height={1800}
@@ -501,8 +500,8 @@ function FeaturesSection(): ReactNode {
               className={styles.featureImage}
               src={terminalsScreenshot}
               alt="Treq terminal pane running Claude Code, Codex, and Cursor Agent"
-              width={2880}
-              height={900}
+              width={2320}
+              height={720}
               loading="lazy"
               decoding="async"
             />
@@ -525,8 +524,8 @@ function FeaturesSection(): ReactNode {
               className={styles.featureImage}
               src={githubScreenshot}
               alt="Workspace header showing View PR and CI for a stacked branch"
-              width={2880}
-              height={400}
+              width={2320}
+              height={98}
               loading="lazy"
               decoding="async"
             />
