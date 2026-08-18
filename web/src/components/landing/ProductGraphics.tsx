@@ -5,28 +5,58 @@ export function RebaseGraphic(): ReactNode {
   return (
     <svg
       className={styles.rebaseGraphic}
-      viewBox="0 0 420 220"
+      viewBox="0 0 460 240"
       role="img"
-      aria-label="Stacked branches rebase onto a moving base">
-      <title>Stacked workspaces rebase when the base moves</title>
-      <path className={styles.rebaseBase} d="M24 180 H396" />
-      <circle className={styles.rebaseDot} cx="48" cy="180" r="7" />
-      <circle className={styles.rebaseDot} cx="140" cy="180" r="7" />
-      <circle className={styles.rebaseDot} cx="232" cy="180" r="7" />
-      <circle className={styles.rebaseDotMove} cx="324" cy="180" r="8" />
-      <text className={styles.rebaseLabel} x="48" y="204">
-        main
+      aria-label="A stacked branch rebases when main, the default branch it targets, moves forward">
+      <title>When main moves, the stack rebases onto the new tip</title>
+
+      <text className={styles.rebaseCaption} x="24" y="28">
+        main moves
       </text>
-      <path className={styles.rebaseStack} d="M140 180 C140 120, 232 120, 232 70" />
-      <circle className={styles.rebaseStackDot} cx="232" cy="70" r="8" />
-      <text className={styles.rebaseLabel} x="248" y="64">
-        PR 1
+      <text className={`${styles.rebaseCaption} ${styles.rebaseCaptionDim}`} x="118" y="28">
+        · stack follows
       </text>
-      <path className={styles.rebaseStack} d="M232 70 C232 36, 324 36, 324 28" />
-      <circle className={`${styles.rebaseStackDot} ${styles.rebaseStackDotActive}`} cx="324" cy="28" r="8" />
-      <text className={styles.rebaseLabel} x="340" y="24">
-        PR 2
-      </text>
+
+      <path className={styles.rebaseBase} d="M32 168 H210" />
+      <path className={styles.rebaseBaseAdvance} d="M210 168 H358" />
+
+      <circle className={styles.rebaseDot} cx="56" cy="168" r="7" />
+      <circle className={styles.rebaseDot} cx="132" cy="168" r="7" />
+      <circle className={styles.rebaseDot} cx="210" cy="168" r="7" />
+      <circle className={styles.rebaseDotAdvance} cx="286" cy="168" r="7" />
+      <circle className={styles.rebaseDotAdvance} cx="358" cy="168" r="8" />
+
+      <g className={styles.rebaseMainLabel}>
+        <text className={styles.rebaseLabel} x="210" y="196" textAnchor="middle">
+          main
+        </text>
+      </g>
+
+      <g className={styles.rebaseStackGhost} transform="translate(210 168)">
+        <path className={styles.rebaseStack} d="M0 0 V-56" />
+        <circle className={styles.rebaseStackDot} cx="0" cy="-56" r="8" />
+        <text className={styles.rebaseLabel} x="14" y="-52">
+          PR 1
+        </text>
+        <path className={styles.rebaseStack} d="M0 -56 V-112" />
+        <circle className={`${styles.rebaseStackDot} ${styles.rebaseStackDotActive}`} cx="0" cy="-112" r="8" />
+        <text className={styles.rebaseLabel} x="14" y="-108">
+          PR 2
+        </text>
+      </g>
+
+      <g className={styles.rebaseStackLive}>
+        <path className={styles.rebaseStack} d="M0 0 V-56" />
+        <circle className={styles.rebaseStackDot} cx="0" cy="-56" r="8" />
+        <text className={styles.rebaseLabel} x="14" y="-52">
+          PR 1
+        </text>
+        <path className={styles.rebaseStack} d="M0 -56 V-112" />
+        <circle className={`${styles.rebaseStackDot} ${styles.rebaseStackDotActive}`} cx="0" cy="-112" r="8" />
+        <text className={styles.rebaseLabel} x="14" y="-108">
+          PR 2
+        </text>
+      </g>
     </svg>
   );
 }

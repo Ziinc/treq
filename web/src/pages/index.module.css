@@ -340,6 +340,7 @@
 }
 
 .rebaseBase,
+.rebaseBaseAdvance,
 .rebaseStack {
   fill: none;
   stroke: #5eb0ff;
@@ -349,16 +350,20 @@
 
 .rebaseStack {
   stroke: #93c5fd;
-  stroke-dasharray: 180;
-  animation: rebaseSlide 3.2s ease-in-out infinite;
+}
+
+.rebaseBaseAdvance {
+  stroke-dasharray: 160;
+  animation: rebaseMainGrow 5.5s ease-in-out infinite;
 }
 
 .rebaseDot {
   fill: #ffffff;
 }
 
-.rebaseDotMove {
+.rebaseDotAdvance {
   fill: var(--ifm-color-primary);
+  animation: rebaseTipAppear 5.5s ease-in-out infinite;
 }
 
 .rebaseStackDot {
@@ -375,14 +380,103 @@
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
-@keyframes rebaseSlide {
+.rebaseCaption {
+  fill: #e5e5e5;
+  font-size: 13px;
+  font-weight: 700;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+}
+
+.rebaseCaptionDim {
+  fill: #a3a3a3;
+  font-weight: 600;
+}
+
+.rebaseMainLabel {
+  animation: rebaseMainLabelShift 5.5s ease-in-out infinite;
+}
+
+.rebaseStackLive {
+  animation: rebaseStackShift 5.5s ease-in-out infinite;
+}
+
+.rebaseStackGhost {
+  opacity: 0.28;
+  animation: rebaseGhost 5.5s ease-in-out infinite;
+}
+
+@keyframes rebaseMainGrow {
   0%,
-  20% {
-    stroke-dashoffset: 180;
+  22% {
+    stroke-dashoffset: 160;
+  }
+  38%,
+  82% {
+    stroke-dashoffset: 0;
+  }
+  94%,
+  100% {
+    stroke-dashoffset: 160;
+  }
+}
+
+@keyframes rebaseTipAppear {
+  0%,
+  22% {
+    opacity: 0;
+  }
+  38%,
+  82% {
+    opacity: 1;
+  }
+  94%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes rebaseMainLabelShift {
+  0%,
+  22% {
+    transform: translateX(0);
+  }
+  48%,
+  82% {
+    transform: translateX(148px);
+  }
+  94%,
+  100% {
+    transform: translateX(0);
+  }
+}
+
+@keyframes rebaseStackShift {
+  0%,
+  40% {
+    transform: translate(210px, 168px);
+  }
+  58%,
+  82% {
+    transform: translate(358px, 168px);
+  }
+  94%,
+  100% {
+    transform: translate(210px, 168px);
+  }
+}
+
+@keyframes rebaseGhost {
+  0%,
+  40% {
+    opacity: 0;
   }
   50%,
+  70% {
+    opacity: 0.28;
+  }
+  82%,
   100% {
-    stroke-dashoffset: 0;
+    opacity: 0;
   }
 }
 
