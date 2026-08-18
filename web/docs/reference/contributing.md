@@ -65,7 +65,7 @@ npm run screenshot:readme
 
 Run `npm run build:napi` after Rust changes that integration tests depend on.
 
-`npm run screenshot:readme` (alias `npm run screenshot:landing`) captures the committed hero at `assets/screenshots/code.png` and copies it to `web/static/img/code.png`. Landing crops write to `web/static/img/landing/` and are committed so Docusaurus can serve `/img/landing/*` on deploy.
+`npm run screenshot:readme` (alias `npm run screenshot:landing`) captures the overview shot at `assets/screenshots/code.png` and the site shots under `web/static/img/`. Site shots stay out of git. The Deploy Web workflow generates them in the `landing-screenshots` job, then Docusaurus copies `static/` into the Pages build.
 
 Set `SKIP_LANDING_SCREENSHOTS=1` on docs-only CI so the site build does not recapture. Set `FORCE_LANDING_SCREENSHOTS=1` to recapture even when files already exist.
 

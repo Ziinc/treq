@@ -42,9 +42,9 @@ Download the latest release [here](https://github.com/Ziinc/treq/releases). Inst
 
 ### Regenerating screenshots
 
-The committed hero is `assets/screenshots/code.png`. The site serves it from `web/static/img/code.png`. Landing crops live in `web/static/img/landing/` and ship with the docs build.
+The committed overview shot is `assets/screenshots/code.png`. Site crops are generated in the Deploy Web `landing-screenshots` job and are not committed.
 
-Regenerate with `npm run screenshot:readme`. Set `SKIP_LANDING_SCREENSHOTS=1` on docs-only CI so the site build does not recapture.
+Regenerate locally with `npm run screenshot:readme`. Docs-only CI sets `SKIP_LANDING_SCREENSHOTS=1`.
 
 ```bash
 npm run screenshot:readme

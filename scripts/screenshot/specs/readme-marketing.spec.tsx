@@ -207,17 +207,19 @@ it("captures the Code Overview for the README", async () => {
   await screen.findByRole("button", { name: /view pr/i });
   await screen.findByRole("button", { name: /ci /i });
 
-  const pngPath = await captureDocument(document, {
+  await captureDocument(document, {
     name: "readme-code",
     deviceScaleFactor: 2,
-    publishTo: path.join(README_SCREENSHOTS_DIR, "code.png"),
+    publishTo: [
+      path.join(README_SCREENSHOTS_DIR, "code.png"),
+      path.join("web", "static", "img", "code.png"),
+    ],
     expectations: [
       "The Code tab shows a nested packages/ file tree, a stack panel for feat/empty-event-message on feat/event-ingest, and GitHub View PR plus CI pills in the header.",
       "The terminal pane shows Claude Code as a peach/orange dashed welcome TUI (v2.0.0, Sonnet, prompt), plus Codex and Cursor Agent panes with visible text.",
       "The sidebar lists stacked workspaces with GitHub PR icons; packages/web looks conflicted or changed.",
     ],
   });
-  fs.copyFileSync(pngPath, path.join("web", "static", "img", "code.png"));
 }, 120000);
 
 it("captures the Changes tab for the README", async () => {

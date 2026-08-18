@@ -76,12 +76,13 @@ export type CaptureOptions = {
    */
   clipSelector?: string;
   /**
-   * Repo-relative or absolute path to also write the PNG after capture.
-   * Marketing shots publish to `web/static/img/landing/*.png`.
-   * The committed hero publishes to `assets/screenshots/code.png`. Docs crops
-   * publish to `web/static/img/docs/*.png`.
+   * Repo-relative or absolute path, or list of paths, to also write the PNG.
+   * Landing crops publish to `web/static/img/landing/*.png`.
+   * The README hero publishes to `assets/screenshots/code.png`.
+   * The site hero publishes to `web/static/img/code.png`.
+   * Docs crops publish to `web/static/img/docs/*.png`.
    */
-  publishTo?: string;
+  publishTo?: string | string[];
 };
 
 export async function captureDocument(
@@ -157,10 +158,13 @@ ${css}
     await browser.close();
   }
 
-  if (publishTo) {
-    const dest = path.isAbsolute(publishTo)
-      ? publishTo
-      : path.join(REPO_ROOT, publishTo);
+  const destinations = publishTo
+    ? (Array.isArray(publishTo) ? publishTo : [publishTo])
+    : [];
+  for (const destPath of destinations) {
+    const dest = path.isAbsolute(destPath)
+      ? destPath
+      : path.join(REPO_ROOT, destPath);
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     fs.copyFileSync(pngPath, dest);
   }
