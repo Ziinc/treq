@@ -176,7 +176,7 @@ test.describe('Skill detail page on mobile', () => {
     await page.goto('/');
     // The navbar collapses to a hamburger at this width.
     await page.getByLabel('Toggle navigation bar').click();
-    await page.getByRole('link', { name: 'Skills' }).filter({ visible: true }).first().click();
+    await page.locator('.navbar-sidebar').getByRole('link', { name: 'Skills' }).click();
     await page.getByRole('link', { name: /^mcp-builder/ }).first().click();
   });
 

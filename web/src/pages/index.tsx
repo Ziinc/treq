@@ -65,8 +65,8 @@ function HomepageHeader() {
             className={styles.heroScreenshot}
             src={codeScreenshot}
             alt="Treq code overview screenshot"
-            width={2794}
-            height={1798}
+            width={2880}
+            height={1800}
             loading="eager"
             decoding="async"
             fetchPriority="high"
@@ -245,8 +245,8 @@ function FeaturesSection(): ReactNode {
               className={styles.featureImage}
               src={reviewScreenshot}
               alt="Treq code review screenshot showing comments sent to Claude"
-              width={2382}
-              height={1749}
+              width={2880}
+              height={1800}
               loading="lazy"
               decoding="async"
             />
