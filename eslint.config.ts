@@ -126,7 +126,7 @@ export default defineConfig([{
   files: ["eslint-rules/**/*.js", "scripts/**/*.js"],
   languageOptions: { globals: globals.node },
 }, {
-  files: ["src/lib/api.ts", "src/lib/api-extra.ts"],
+  files: ["src/lib/api.ts", "src/lib/api-extra.ts", "src/lib/api-github.ts"],
   rules: {
     "max-params": "off",
     "local/require-tauri-api-exports-used": "error",

@@ -363,11 +363,13 @@ describe("ShowWorkspace - Commits tab tentative working copy", () => {
     const dirtyUser = userEvent.setup();
     await openWorkspaceCommitsTab(dirtyUser, "feat/tentative-working-copy");
 
-    const commitsList = screen.getByRole("list");
+    const commitsList = await screen.findByRole("list");
     expect(
-      within(commitsList).getByText(/feat\/tentative-working-copy/),
+      await within(commitsList).findByText(/feat\/tentative-working-copy/),
     ).toBeInTheDocument();
-    expect(within(commitsList).getByText("Working copy")).toBeInTheDocument();
+    expect(
+      await within(commitsList).findByText("Working copy"),
+    ).toBeInTheDocument();
     expect(
       within(commitsList).getByText("- feat/tentative-working-copy"),
     ).toBeInTheDocument();

@@ -68,7 +68,7 @@ describe("agent deep-link integration", () => {
     )}&branch=feat%2Fmissing&prompt=hello&mode=plan&agent=claude&request_id=req-link-2`;
     await callback({ payload: [url] });
 
-    expect(WebviewWindow).toHaveBeenCalled();
+    await waitFor(() => expect(WebviewWindow).toHaveBeenCalled());
     expect(vi.mocked(invoke)).not.toHaveBeenCalledWith(
       "acknowledge_agent_dispatch",
       expect.objectContaining({ requestId: "req-link-2" }),
@@ -96,9 +96,14 @@ describe("agent deep-link integration", () => {
         `treq://agent/start?repo=${encodeURIComponent(repoPath)}&branch=missing&prompt=hello&mode=plan&agent=claude&request_id=req-missing`,
       ],
     });
-    expect(vi.mocked(invoke)).toHaveBeenCalledWith(
-      "acknowledge_agent_dispatch",
-      expect.objectContaining({ requestId: "req-missing", status: "rejected" }),
+    await waitFor(() =>
+      expect(vi.mocked(invoke)).toHaveBeenCalledWith(
+        "acknowledge_agent_dispatch",
+        expect.objectContaining({
+          requestId: "req-missing",
+          status: "rejected",
+        }),
+      ),
     );
   });
 

@@ -1,0 +1,176 @@
+import * as React from "react";
+import { expect } from "vitest";
+import {
+  createTestRepo,
+  findSidebarBranchElement,
+  openRepo,
+  resolveWorkspacePath,
+  writeWorkspaceFile,
+} from "../../utils";
+import {
+  type Workspace,
+  createWorkspace,
+  getWorkspaces,
+} from "../../../src/lib/api";
+import { fireEvent, render, screen, waitFor } from "../../test-utils";
+import { Dashboard } from "../../../src/components/Dashboard";
+import userEvent from "@testing-library/user-event";
+
+export async function setupWorkspaceWithDiff(
+  branchName: string,
+  fileContent = "context line 1\nadded line 2\nadded line 3\nadded line 4\ncontext line 5\ncontext line 6\n",
+): Promise<{ repoPath: string; workspace: Workspace }> {
+  const { repoPath } = createTestRepo(false);
+  openRepo(repoPath);
+
+  const workspaceId = await createWorkspace(repoPath, branchName);
+  const workspace = (await getWorkspaces(repoPath)).find(
+    (w) => w.id === workspaceId,
+  );
+  if (!workspace) throw new Error("Workspace not found");
+
+  const wsPath = resolveWorkspacePath(repoPath, workspace.workspace_path);
+  writeWorkspaceFile(wsPath, "test.txt", fileContent);
+
+  return { repoPath, workspace };
+}
+
+export async function openReviewTab(
+  user: ReturnType<typeof userEvent.setup>,
+  branchName: string,
+) {
+  render(<Dashboard />);
+  await user.click(await findSidebarBranchElement(branchName));
+  const reviewTab = await screen.findByRole(
+    "tab",
+    { name: /^Changes/ },
+    { timeout: 60_000 },
+  );
+  await user.click(reviewTab);
+  await screen.findByRole(
+    "tab",
+    { name: /^Changes/, selected: true },
+    { timeout: 60_000 },
+  );
+  await waitFor(
+    () => {
+      expect(screen.queryByText(/Loading diffs\.\.\./)).not.toBeInTheDocument();
+    },
+    { timeout: 60_000 },
+  );
+}
+
+async function findChangedFileElement(fileName: string): Promise<HTMLElement> {
+  return waitFor(
+    () => {
+      const row = document.querySelector(
+        `[data-testid="file-row-${fileName}"]`,
+      );
+      if (row) return row as HTMLElement;
+      const [sidebarMatch] = screen.queryAllByText(fileName);
+      if (sidebarMatch) return sidebarMatch;
+      throw new Error(`waiting for changed file ${fileName}`);
+    },
+    { timeout: 60_000 },
+  );
+}
+
+export async function clickChangedFile(fileName: string) {
+  try {
+    fireEvent.click(await findChangedFileElement(fileName));
+  } catch (firstError) {
+    const changesTab = screen.queryByRole("tab", {
+      name: /^Changes/,
+      selected: true,
+    });
+    if (!changesTab) {
+      throw firstError;
+    }
+    fireEvent.click(changesTab);
+    await waitFor(
+      () => {
+        expect(
+          screen.queryByText(/Loading diffs\.\.\./),
+        ).not.toBeInTheDocument();
+      },
+      { timeout: 60_000 },
+    );
+    fireEvent.click(await findChangedFileElement(fileName));
+  }
+}
+
+export async function waitForFileAndLines() {
+  await clickChangedFile("test.txt");
+  await screen.findByText(/added line 2/, {}, { timeout: 60_000 });
+}
+
+export function getDiffLines() {
+  return document.querySelectorAll("[data-diff-line]");
+}
+
+export function getClickableArea(line: Element) {
+  const el = line.querySelector("[data-testid='line-gutter']");
+  expect(el).not.toBeNull();
+  return el!;
+}
+
+export async function addSingleReviewComment(
+  user: ReturnType<typeof userEvent.setup>,
+  comment: string,
+) {
+  const gutterButton = await waitFor(
+    () => {
+      const button = document.querySelector(
+        "[data-comment-button]",
+      ) as HTMLElement | null;
+      if (!button) {
+        throw new Error("waiting for comment gutter button");
+      }
+      return button;
+    },
+    { timeout: 60_000 },
+  );
+  fireEvent.click(gutterButton);
+  const input = await screen.findByPlaceholderText(/add a comment/i);
+  await user.type(input, comment);
+  const submit = await waitFor(() => {
+    const button = screen
+      .getAllByRole("button", { name: /add comment/i, hidden: true })
+      .find((el) => el.textContent?.trim() === "Add Comment");
+    if (!button) {
+      throw new Error("waiting for Add Comment submit");
+    }
+    expect(button).not.toBeDisabled();
+    return button;
+  });
+  await user.click(submit);
+  await screen.findByText(comment);
+}
+
+export async function startEditingComment(comment: string) {
+  const commentText = await screen.findByText(comment);
+  const commentCard = commentText.closest(
+    "[data-testid='inline-comment-card']",
+  );
+  expect(commentCard).toBeTruthy();
+  fireEvent.click(commentCard!);
+  return screen.findByDisplayValue(comment);
+}
+
+export async function setupReviewMode(
+  user: ReturnType<typeof userEvent.setup>,
+  branchName: string,
+) {
+  await setupWorkspaceWithDiff(branchName);
+  await openReviewTab(user, branchName);
+  await clickChangedFile("test.txt");
+  await addSingleReviewComment(user, "Test comment");
+}
+
+export function findReviewCopyButton() {
+  const copyButtons = screen.getAllByRole("button", { name: /copy/i });
+  return copyButtons.find(
+    (btn) =>
+      btn.textContent?.includes("Copy") && !btn.textContent?.includes("path"),
+  )!;
+}

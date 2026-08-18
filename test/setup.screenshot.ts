@@ -1,7 +1,7 @@
 /**
  * Screenshot harness setup (scripts/screenshot/specs/**).
  *
- * Same real NAPI dispatch as test/setup.integration.ts, with one
+ * Same real tauri-test invoke as test/setup.integration.ts, with one
  * difference: it does not fail a run when a still-un-migrated jj_* command
  * gets invoked. test/integration/** enforces zero jj_* calls as an ongoing
  * migration-debt tracker; the screenshot harness exists to show current real
@@ -9,55 +9,38 @@
  * which jj_* commands fired instead of failing the spec.
  *
  * Prerequisites:
- *   1. Run `npm run build:napi` to compile the .node addon.
+ *   1. Run `npm run build:napi` to compile the src-tauri cdylib.
  *   2. Have `jj` and `git` installed and on PATH.
  */
 
 import os from "os";
 import path from "path";
 import fs from "fs";
-import { afterEach, beforeAll, vi } from "vitest";
+import { createRequire } from "node:module";
+import { afterEach, vi } from "vitest";
 
-// Shared DOM polyfills, browser API stubs, Tauri plugin mocks, and hook mocks
 import "./setup.common";
 
-// Keep runs deterministic: avoid background auto-rebase races during commit
-// creation in Rust core.
 process.env.TREQ_DISABLE_AUTO_REBASE = "1";
 
-// Load the napi addon (built by `npm run build:napi`)
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const napi = require("../crates/treq-napi");
-
-// ── Initialize state ─────────────────────────────────────────────────────────
-
 const testDbPath = path.join(os.tmpdir(), `treq-screenshot-${Date.now()}.db`);
+process.env.TREQ_APP_DB_PATH = testDbPath;
+process.env.TREQ_APP_DATA_DIR = path.dirname(testDbPath);
 
-beforeAll(() => {
-  napi.initState(testDbPath);
-});
+const require = createRequire(import.meta.url);
+const tauriTest = require("../src-tauri/target") as {
+  invoke: (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
+};
 
-// ── Replace Tauri invoke with real Rust dispatch ──────────────────────────────
-
-// Track jj_* calls made during each spec, for visibility only (not asserted).
 const jjCalls: string[] = [];
 
 vi.mock("@tauri-apps/api/core", () => ({
-  invoke: (cmd: string, args?: Record<string, unknown>) => {
+  invoke: vi.fn((cmd: string, args?: Record<string, unknown>) => {
     if (cmd.startsWith("jj_")) {
       jjCalls.push(cmd);
     }
-    try {
-      const result = napi.invokeSync(cmd, args ?? {});
-      return Promise.resolve(result);
-    } catch (err: unknown) {
-      return Promise.reject(
-        err instanceof Error ? err : new Error(String(err)),
-      );
-    }
-  },
-  // Local file:// URLs so <img> tags survive Chromium rasterization of the
-  // serialized DOM (asset: protocol is Tauri-webview-only).
+    return tauriTest.invoke(cmd, args ?? {});
+  }),
   convertFileSrc: (filePath: string) => `file://${filePath}`,
 }));
 
@@ -69,8 +52,6 @@ afterEach(() => {
   }
   jjCalls.length = 0;
 });
-
-// ── Cleanup db file on exit ───────────────────────────────────────────────────
 
 process.on("exit", () => {
   try {

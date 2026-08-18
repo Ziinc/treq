@@ -2,7 +2,7 @@ use crate::core;
 use crate::AppState;
 use std::collections::HashMap;
 use std::time::Instant;
-use tauri::{State, Window};
+use tauri::State;
 
 #[tauri::command]
 pub async fn init_repo(repo_path: String) -> Result<bool, String> {
@@ -65,22 +65,31 @@ pub fn set_repo_setting(
     .map_err(|e| e.to_string())
 }
 
+fn window_map_label(window_label: Option<String>) -> String {
+  let label = window_label.unwrap_or_default();
+  if label.is_empty() {
+    "main".to_string()
+  } else {
+    label
+  }
+}
+
 #[tauri::command]
 pub fn set_window_repo_path(
   state: State<AppState>,
-  window: Window,
   repo_path: String,
+  window_label: Option<String>,
 ) -> Result<(), String> {
   let mut map = state.window_repo_paths.lock().unwrap();
-  map.insert(window.label().to_string(), repo_path);
+  map.insert(window_map_label(window_label), repo_path);
   Ok(())
 }
 
 #[tauri::command]
 pub fn get_window_repo_path(
   state: State<AppState>,
-  window: Window,
+  window_label: Option<String>,
 ) -> Result<Option<String>, String> {
   let map = state.window_repo_paths.lock().unwrap();
-  Ok(map.get(window.label()).cloned())
+  Ok(map.get(&window_map_label(window_label)).cloned())
 }

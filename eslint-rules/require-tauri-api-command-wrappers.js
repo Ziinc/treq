@@ -1,7 +1,11 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 
-const API_FILES = [join("src", "lib", "api.ts"), join("src", "lib", "api-extra.ts")];
+const API_FILES = [
+  join("src", "lib", "api.ts"),
+  join("src", "lib", "api-extra.ts"),
+  join("src", "lib", "api-github.ts"),
+];
 const API_REPORT_FILE = API_FILES[0];
 const RUST_SRC_DIR = join("src-tauri", "src");
 const COMMAND_REGEX =

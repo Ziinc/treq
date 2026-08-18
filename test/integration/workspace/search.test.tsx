@@ -56,9 +56,7 @@ describe("ShowWorkspace - Search integration", () => {
     await user.click(reviewTab);
     await screen.findByRole("tab", { name: /^Changes/, selected: true });
 
-    await waitFor(() =>
-      expect(screen.getAllByText("search-test.txt").length).toBeGreaterThan(0),
-    );
+    await screen.findAllByText("search-test.txt");
 
     await user.keyboard("{Control>}f{/Control}");
 
@@ -86,9 +84,7 @@ describe("ShowWorkspace - Search integration", () => {
     await user.click(reviewTab);
     await screen.findByRole("tab", { name: /^Changes/, selected: true });
 
-    await waitFor(() =>
-      expect(screen.getAllByText("search-test.txt").length).toBeGreaterThan(0),
-    );
+    await screen.findAllByText("search-test.txt");
 
     await user.keyboard("{Control>}f{/Control}");
     const searchInput = await screen.findByPlaceholderText("Find");

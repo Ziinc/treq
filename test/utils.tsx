@@ -40,7 +40,7 @@ type NapiTestBindings = {
 
 function getNapiBindings(): NapiTestBindings {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  return require("../crates/treq-napi") as NapiTestBindings;
+  return require("../src-tauri/target") as NapiTestBindings;
 }
 
 const testRepoPaths = new Set<string>();

@@ -5,7 +5,7 @@ on:
     paths:
       - "src/**"
       - "src-tauri/**"
-      - "crates/treq-napi/**"
+      - "crates/tauri-test-macros/**"
       - "supabase/**"
       - "web/**"
       - "test/**"
@@ -64,8 +64,10 @@ jobs:
         if: matrix.task == 'test:integration'
         uses: actions/cache/restore@v4
         with:
-          path: crates/treq-napi/treq-napi.linux-x64-gnu.node
-          key: napi-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'src-tauri/Cargo.toml', 'src-tauri/build.rs', 'src-tauri/src/**', 'src-tauri/tests/**', 'crates/treq-napi/Cargo.toml', 'crates/treq-napi/build.rs', 'crates/treq-napi/src/**', 'crates/treq-napi/package.json', 'crates/treq-napi/package-lock.json') }}
+          path: |
+            target/debug/libtreq_lib.so
+            src-tauri/target/index.js
+          key: napi-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'src-tauri/Cargo.toml', 'src-tauri/build.rs', 'src-tauri/src/**', 'src-tauri/tests/**', 'src-tauri/package.json', 'crates/tauri-test-macros/**') }}
 
       - name: Install Rust stable
         # Unit JS tests never need Rust. Integration skips the toolchain when
@@ -83,12 +85,13 @@ jobs:
       # cache on subsequent runs. execute_install_scripts is required so dpkg
       # postinst (ldconfig, alternatives) still runs on restore.
       - name: install dependencies (ubuntu only)
-        # WebKit/GTK is only needed to *link* treq/tauri (NAPI miss, verify, rust).
+        # WebKit/GTK is needed to *link* treq/tauri (verify, rust, NAPI miss) and
+        # to *dlopen* libtreq_lib.so in integration tests even on a NAPI cache hit.
         if: >
           matrix.platform == 'ubuntu-22.04' && (
             matrix.kind == 'rust' ||
             matrix.kind == 'verify' ||
-            (matrix.task == 'test:integration' && steps.napi-cache.outputs.cache-hit != 'true')
+            matrix.task == 'test:integration'
           )
         uses: awalsh128/cache-apt-pkgs-action@v1.6.1
         with:
@@ -180,20 +183,22 @@ jobs:
           cache-on-failure: true
           workspaces: |
             ./src-tauri -> target
-            ./crates/treq-napi -> target
 
       - name: Build NAPI addon
         if: matrix.task == 'test:integration' && steps.napi-cache.outputs.cache-hit != 'true'
         run: |
           npm run build:napi
-          test -f crates/treq-napi/treq-napi.linux-x64-gnu.node
+          test -f target/debug/libtreq_lib.so
+          test -f src-tauri/target/index.js
 
       - name: Save NAPI addon cache
         if: matrix.task == 'test:integration' && steps.napi-cache.outputs.cache-hit != 'true'
         continue-on-error: true
         uses: actions/cache/save@v4
         with:
-          path: crates/treq-napi/treq-napi.linux-x64-gnu.node
+          path: |
+            target/debug/libtreq_lib.so
+            src-tauri/target/index.js
           key: ${{ steps.napi-cache.outputs.cache-primary-key }}
 
       - name: Run JS task

@@ -1,3 +1,6 @@
 [workspace]
-members = ["src-tauri", "crates/treq-napi"]
+members = ["src-tauri"]
 resolver = "3"
+
+[patch.crates-io]
+tauri-test-macros = { path = "crates/tauri-test-macros" }

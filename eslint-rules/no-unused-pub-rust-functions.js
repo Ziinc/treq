@@ -137,6 +137,10 @@ export default {
 
         const allRustText = loadRustText(rootDir);
         for (const candidate of candidates) {
+          if (candidate.file.endsWith("tauri_test_bridge.rs")) {
+            continue;
+          }
+
           const declarationCount = declarationCounts.get(candidate.name) ?? 1;
           if (countIdentifier(allRustText, candidate.name) > declarationCount) {
             continue;

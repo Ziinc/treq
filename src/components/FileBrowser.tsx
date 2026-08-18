@@ -1150,6 +1150,8 @@ export const FileBrowser = memo(
       new Set([basePath]),
     );
     const [selectedFile, setSelectedFile] = useState<string | null>(null);
+    const selectedFileRef = useRef<string | null>(null);
+    selectedFileRef.current = selectedFile;
     const [selectedFileModifiedAt, setSelectedFileModifiedAt] = useState<
       string | null
     >(null);
@@ -1161,8 +1163,6 @@ export const FileBrowser = memo(
     directoryCacheRef.current = directoryCache;
     const expandedDirsRef = useRef(expandedDirs);
     expandedDirsRef.current = expandedDirs;
-    const selectedFileRef = useRef(selectedFile);
-    selectedFileRef.current = selectedFile;
     const [isLoadingFile, setIsLoadingFile] = useState(false);
     const [isLoadingDir, setIsLoadingDir] = useState(false);
     const [rootEntries, setRootEntries] = useState<DirectoryEntry[]>([]);

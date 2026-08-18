@@ -6,7 +6,7 @@ message: >
   jj-lib through the napi addon, so a `jj` binary is not guaranteed to be on
   PATH. Use the test helpers in `test/utils.tsx` (`resolveCommitId`,
   `resolveRevsetCommitIds`, `newCommitWithParents`) or add a napi helper in
-  `crates/treq-napi/src/helpers.rs` instead.
+  `src-tauri/src/tauri_test_bridge.rs` instead.
 files:
   - "test/**/*.ts"
   - "test/**/*.tsx"

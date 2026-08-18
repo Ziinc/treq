@@ -40,9 +40,17 @@ async function openReviewForBranch(
 ) {
   render(<Dashboard />);
   await user.click(await findSidebarBranchElement(branchName));
-  const reviewTab = await screen.findByRole("tab", { name: /^Changes/ });
+  const reviewTab = await screen.findByRole(
+    "tab",
+    { name: /^Changes/ },
+    { timeout: 30_000 },
+  );
   await user.click(reviewTab);
   await screen.findByRole("tab", { name: /^Changes/, selected: true });
+}
+
+async function waitForChangedFile(fileName: string) {
+  await screen.findAllByText(fileName, {}, { timeout: 30_000 });
 }
 
 function createDataTransfer(): DataTransfer {
@@ -94,9 +102,7 @@ describe("Review tab - drag changes to workspace sidebar", () => {
       await createTwoWorkspacesWithDirtySource();
     await openReviewForBranch(user, source.branch_name);
 
-    await waitFor(() =>
-      expect(screen.getAllByText(fileName).length).toBeGreaterThan(0),
-    );
+    await waitForChangedFile(fileName);
 
     const [sidebarFile] = screen.getAllByText(fileName);
     const dragRow = sidebarFile.closest("[draggable='true']") as HTMLElement;
@@ -124,9 +130,7 @@ describe("Review tab - drag changes to workspace sidebar", () => {
       await createTwoWorkspacesWithDirtySource();
     await openReviewForBranch(user, source.branch_name);
 
-    await waitFor(() =>
-      expect(screen.getAllByText(fileName).length).toBeGreaterThan(0),
-    );
+    await waitForChangedFile(fileName);
 
     const [sidebarFile] = screen.getAllByText(fileName);
     const dragRow = sidebarFile.closest("[draggable='true']") as HTMLElement;
@@ -162,9 +166,7 @@ describe("Review tab - drag changes to workspace sidebar", () => {
 
     await openReviewForBranch(user, source.branch_name);
 
-    await waitFor(() =>
-      expect(screen.getAllByText("a.txt").length).toBeGreaterThan(0),
-    );
+    await waitForChangedFile("a.txt");
 
     await user.click(screen.getByTitle(/Select all/i));
 

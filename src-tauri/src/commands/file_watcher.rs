@@ -26,6 +26,10 @@ impl WatcherManager {
     *app_handle = Some(handle);
   }
 
+  pub fn cloned_app_handle(&self) -> Option<AppHandle> {
+    self.app_handle.lock().ok()?.clone()
+  }
+
   pub fn start_watching(&self, workspace_id: i64, workspace_path: String) -> Result<(), String> {
     let mut watchers = self.watchers.lock().unwrap();
 
