@@ -129,7 +129,7 @@ function HighlightGrid(): ReactNode {
           <div className={styles.rebaseVisual}>
             <RebaseGraphic />
             <img
-              className={styles.highlightCardImage}
+              className={clsx(styles.highlightCardImage, styles.sidebarCrop)}
               src={sidebarScreenshot}
               alt="Sidebar showing stacked workspace hierarchy"
               width={560}
@@ -309,8 +309,8 @@ function ShowcaseSection(): ReactNode {
         className={styles.showcaseImage}
         src={reviewScreenshot}
         alt="Treq Changes tab with a conflicted Home.tsx and inline comments"
-        width={2880}
-        height={1800}
+        width={2320}
+        height={1580}
         loading="lazy"
         decoding="async"
       />
@@ -376,8 +376,8 @@ function FeaturesSection(): ReactNode {
               className={styles.featureImage}
               src={reviewScreenshot}
               alt="Treq code review screenshot showing comments sent to Claude"
-              width={2880}
-              height={1800}
+              width={2320}
+              height={1580}
               loading="lazy"
               decoding="async"
             />
@@ -430,8 +430,8 @@ function FeaturesSection(): ReactNode {
               className={styles.featureImage}
               src={promptScreenshot}
               alt="Agent prompt asking to create a workspace for this fix"
-              width={1200}
-              height={400}
+              width={1346}
+              height={224}
               loading="lazy"
               decoding="async"
             />
@@ -453,8 +453,8 @@ function FeaturesSection(): ReactNode {
               className={styles.featureImage}
               src={sendScreenshot}
               alt="Agent prompt asking to send screenshots and a research draft"
-              width={1200}
-              height={400}
+              width={1346}
+              height={224}
               loading="lazy"
               decoding="async"
             />
@@ -476,8 +476,8 @@ function FeaturesSection(): ReactNode {
               className={styles.featureImage}
               src={scheduleScreenshot}
               alt="Schedule workspace dialog with hide-until presets"
-              width={1200}
-              height={800}
+              width={1152}
+              height={1064}
               loading="lazy"
               decoding="async"
             />
@@ -500,8 +500,8 @@ function FeaturesSection(): ReactNode {
                 className={styles.featureImage}
                 src={githubIssuesScreenshot}
                 alt="GitHub issues list in Treq"
-                width={1440}
-                height={900}
+                width={2320}
+                height={1800}
                 loading="lazy"
                 decoding="async"
               />
@@ -509,8 +509,8 @@ function FeaturesSection(): ReactNode {
                 className={styles.featureImage}
                 src={githubScreenshot}
                 alt="GitHub pull request list in Treq"
-                width={1440}
-                height={900}
+                width={2320}
+                height={1800}
                 loading="lazy"
                 decoding="async"
               />
