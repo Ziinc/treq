@@ -42,9 +42,9 @@ Download the latest release [here](https://github.com/Ziinc/treq/releases). Inst
 
 ### Regenerating screenshots
 
-The committed hero is `assets/screenshots/code.png`. Other marketing crops write to `web/static/img/landing/` and are gitignored.
+The committed hero is `assets/screenshots/code.png`. The site serves it from `web/static/img/code.png`. Landing crops live in `web/static/img/landing/` and ship with the docs build.
 
-A Docusaurus production build runs `npm run screenshot:readme` when those landing files are missing. The Deploy Web workflow captures them in CI and copies them into the site build. Set `SKIP_LANDING_SCREENSHOTS=1` to skip that step. Set `FORCE_LANDING_SCREENSHOTS=1` to recapture even when files exist.
+Regenerate with `npm run screenshot:readme`. Set `SKIP_LANDING_SCREENSHOTS=1` on docs-only CI so the site build does not recapture.
 
 ```bash
 npm run screenshot:readme

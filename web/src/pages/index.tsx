@@ -6,7 +6,6 @@ import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import Layout from '@theme/Layout';
 import Heading from '@theme/Heading';
 
-import codeScreenshot from '../../../assets/screenshots/code.png';
 import useBaseUrl from '@docusaurus/useBaseUrl';
 import styles from './index.module.css';
 import {RebaseGraphic, WorkspaceTreeGraphic} from '../components/landing/ProductGraphics';
@@ -51,6 +50,7 @@ function DownloadIcon() {
 }
 
 function HomepageHeader() {
+  const codeScreenshot = useBaseUrl('/img/code.png');
   return (
     <header className={styles.heroBanner} aria-label="Hero">
       <Head>

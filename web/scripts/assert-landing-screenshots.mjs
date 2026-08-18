@@ -6,6 +6,10 @@ const landingDir = path.join(__dirname, '..', 'static', 'img', 'landing');
 const listPath = path.join(__dirname, '..', 'src', 'data', 'landing-screenshots.json');
 const files = JSON.parse(fs.readFileSync(listPath, 'utf8'));
 const missing = files.filter((name) => !fs.existsSync(path.join(landingDir, name)));
+const heroPath = path.join(__dirname, '..', 'static', 'img', 'code.png');
+if (!fs.existsSync(heroPath)) {
+  missing.push('code.png');
+}
 
 if (missing.length > 0) {
   console.error(

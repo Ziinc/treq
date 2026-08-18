@@ -207,7 +207,7 @@ it("captures the Code Overview for the README", async () => {
   await screen.findByRole("button", { name: /view pr/i });
   await screen.findByRole("button", { name: /ci /i });
 
-  await captureDocument(document, {
+  const pngPath = await captureDocument(document, {
     name: "readme-code",
     deviceScaleFactor: 2,
     publishTo: path.join(README_SCREENSHOTS_DIR, "code.png"),
@@ -217,6 +217,7 @@ it("captures the Code Overview for the README", async () => {
       "The sidebar lists stacked workspaces with GitHub PR icons; packages/web looks conflicted or changed.",
     ],
   });
+  fs.copyFileSync(pngPath, path.join("web", "static", "img", "code.png"));
 }, 120000);
 
 it("captures the Changes tab for the README", async () => {
