@@ -26,6 +26,8 @@
   line-height: 1.6;
   margin: 0;
 }
+
+.footerLinks :global(.footer__links) {
   margin-bottom: 0;
 }
 
