@@ -201,7 +201,11 @@
   margin: 0 0 2rem;
 }
 
-.solutionsSection,
+.solutionsSection {
+  padding: 5rem 1.5rem;
+  background: #f6f4f2;
+}
+
 .resourcesSection {
   padding: 5rem 1.5rem;
   background: #ffffff;
@@ -209,7 +213,15 @@
 
 .statsSection {
   padding: 5rem 1.5rem;
-  background: #f6f4f2;
+  background: #111111;
+}
+
+.statsSection .sectionHeading {
+  color: #ffffff;
+}
+
+.statsSection .kicker {
+  color: var(--ifm-color-primary);
 }
 
 .accordion {
@@ -282,10 +294,10 @@
 }
 
 .statCard {
-  background: #ffffff;
+  background: #1c1c1c;
   border-radius: 16px;
   padding: 1.5rem 1.25rem;
-  border: 1px solid #e7e5e4;
+  border: 1px solid #2a2a2a;
 }
 
 .statValue {
@@ -293,12 +305,12 @@
   font-weight: 700;
   letter-spacing: -0.03em;
   margin: 0 0 0.5rem;
-  color: #111111;
+  color: #ffffff;
 }
 
 .statLabel {
   margin: 0;
-  color: #525252;
+  color: #d4d4d4;
   line-height: 1.5;
   font-size: 0.95rem;
 }
@@ -747,28 +759,29 @@
   }
 }
 
-[data-theme='dark'] .solutionsSection,
+[data-theme='dark'] .solutionsSection {
+  background: #1c1c1c;
+}
+
 [data-theme='dark'] .resourcesSection,
 [data-theme='dark'] .featuresSection {
   background: #161616;
 }
 
 [data-theme='dark'] .statsSection {
-  background: #111111;
+  background: #0a0a0a;
 }
 
 [data-theme='dark'] .sectionHeading,
 [data-theme='dark'] .featuresHeading,
 [data-theme='dark'] .featureHeading,
 [data-theme='dark'] .accordionTitle,
-[data-theme='dark'] .statValue,
 [data-theme='dark'] .resourceTitle {
   color: #ffffff;
 }
 
 [data-theme='dark'] .sectionLead,
 [data-theme='dark'] .featuresSubheading,
-[data-theme='dark'] .statLabel,
 [data-theme='dark'] .accordionSubtitle,
 [data-theme='dark'] .resourceCard p {
   color: #a3a3a3;
@@ -797,46 +810,46 @@
 }
 
 [data-theme='dark'] .heroBanner {
-  background: #ffffff;
-  color: #111111;
+  background: #111111;
+  color: #ffffff;
 }
 
 [data-theme='dark'] .heroTitle,
 [data-theme='dark'] .heroAccent {
-  color: #111111;
+  color: #ffffff;
 }
 
 [data-theme='dark'] .heroLead {
-  color: #404040;
+  color: #d4d4d4;
 }
 
 [data-theme='dark'] .platformsSupported,
 [data-theme='dark'] .agentsLabel,
 [data-theme='dark'] .agentIcon span {
-  color: #525252;
+  color: #a3a3a3;
 }
 
 [data-theme='dark'] .platformIcon,
 [data-theme='dark'] .agentIcon svg {
-  color: #111111;
+  color: #e5e5e5;
 }
 
 [data-theme='dark'] .agentsSupported {
-  border-top-color: #e7e5e4;
+  border-top-color: #2a2a2a;
 }
 
 [data-theme='dark'] .secondaryButton {
-  background: #ffffff;
-  color: #111111;
-  border-color: #d4d4d4;
+  background: transparent;
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.28);
 }
 
 [data-theme='dark'] .secondaryButton:hover {
-  border-color: #111111;
-  color: #111111;
+  border-color: #ffffff;
+  color: #ffffff;
 }
 
 [data-theme='dark'] .heroScreenshot {
-  border-color: #e7e5e4;
-  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.12);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
 }
