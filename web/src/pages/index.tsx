@@ -19,6 +19,8 @@ import scheduleScreenshot from '../../../assets/screenshots/schedule.png';
 import timestampScreenshot from '../../../assets/screenshots/timestamp.png';
 import githubScreenshot from '../../../assets/screenshots/github.png';
 import githubIssuesScreenshot from '../../../assets/screenshots/github-issues.png';
+import conflictNewCommitScreenshot from '../../../assets/screenshots/conflict-new-commit.png';
+import conflictInplaceScreenshot from '../../../assets/screenshots/conflict-inplace.png';
 import styles from './index.module.css';
 import {RebaseGraphic, WorkspaceTreeGraphic} from '../components/landing/ProductGraphics';
 
@@ -261,8 +263,8 @@ const FACTS = [
     label: 'The desktop app is open source. You can read every command it runs.',
   },
   {
-    value: 'Jujutsu + Git',
-    label: 'Push and pull stay on Git. Jujutsu sits beside it so Treq can rebase workspace branches when targets move.',
+    value: 'Git compatible',
+    label: 'Jujutsu under the hood. Treq uses the jj-lib Rust crate to automatically rebase workspace branches when targets move.',
   },
   {
     value: 'macOS',
@@ -418,8 +420,7 @@ function FeaturesSection(): ReactNode {
               Auto-rebase
             </Heading>
             <p className={styles.featureDescription}>
-              When the base moves, Treq rebases dependent workspaces. Conflicts
-              surface in the UI so you can finish the restack.
+              When the base moves, Treq rebases dependent workspaces.
             </p>
           </div>
           <div className={styles.featureScreenshot}>
@@ -428,6 +429,49 @@ function FeaturesSection(): ReactNode {
         </div>
 
         <div className={clsx(styles.featureRow, styles.featureRowReverse)}>
+          <div className={styles.featureText}>
+            <Heading as="h3" className={styles.featureHeading}>
+              Conflict resolution
+            </Heading>
+            <p className={styles.featureDescription}>
+              Send a conflict to an agent from Changes with Plan or Edit. The
+              agent can land a new commit that resolves the markers. On the
+              Commits tab, Resolve conflicts starts an agent that rewrites the
+              conflicted commit in place. That path does not add a follow-up
+              commit.
+            </p>
+          </div>
+          <div className={styles.featureScreenshot}>
+            <div className={styles.beforeAfter}>
+              <figure>
+                <figcaption>New commit</figcaption>
+                <img
+                  className={styles.featureImage}
+                  src={conflictNewCommitScreenshot}
+                  alt="Changes tab Resolve conflicts popover with Plan and Edit"
+                  width={2320}
+                  height={1588}
+                  loading="lazy"
+                  decoding="async"
+                />
+              </figure>
+              <figure>
+                <figcaption>In place</figcaption>
+                <img
+                  className={styles.featureImage}
+                  src={conflictInplaceScreenshot}
+                  alt="Resolve commit conflicts inplace dialog"
+                  width={1212}
+                  height={520}
+                  loading="lazy"
+                  decoding="async"
+                />
+              </figure>
+            </div>
+          </div>
+        </div>
+
+        <div className={styles.featureRow}>
           <div className={styles.featureText}>
             <Heading as="h3" className={styles.featureHeading}>
               Agent CLI
@@ -451,7 +495,7 @@ function FeaturesSection(): ReactNode {
           </div>
         </div>
 
-        <div className={styles.featureRow}>
+        <div className={clsx(styles.featureRow, styles.featureRowReverse)}>
           <div className={styles.featureText}>
             <Heading as="h3" className={styles.featureHeading}>
               Send files from the agent
@@ -491,7 +535,7 @@ function FeaturesSection(): ReactNode {
           </div>
         </div>
 
-        <div className={clsx(styles.featureRow, styles.featureRowReverse)}>
+        <div className={styles.featureRow}>
           <div className={styles.featureText}>
             <Heading as="h3" className={styles.featureHeading}>
               Schedule work
@@ -532,7 +576,7 @@ function FeaturesSection(): ReactNode {
           </div>
         </div>
 
-        <div className={styles.featureRow}>
+        <div className={clsx(styles.featureRow, styles.featureRowReverse)}>
           <div className={styles.featureText}>
             <Heading as="h3" className={styles.featureHeading}>
               GitHub issues and pull requests

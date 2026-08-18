@@ -233,19 +233,19 @@ it("captures sending a conflict to an agent for a new commit", async () => {
   await user.click(await within(conflictsSection).findByTitle(/Home\.tsx/));
   await screen.findByText(/Conflict 1 of/);
 
+  hideMarketingTerminalPane();
   await user.click(
     await screen.findByRole("button", { name: "Resolve conflicts..." }),
   );
   await screen.findByRole("heading", { name: "Resolve conflicts" });
   await screen.findByRole("button", { name: "Plan" });
   await screen.findByRole("button", { name: "Edit" });
-
-  hideMarketingTerminalPane();
   await new Promise((resolve) => setTimeout(resolve, 300));
 
   await captureDocument(document, {
     name: "readme-conflict-new-commit",
     deviceScaleFactor: 2,
+    scrollIntoView: '[data-conflict-section-label="Side #1"]',
     clipSelector: '[data-testid="changes-diff-viewer"]',
     publishTo: path.join(README_SCREENSHOTS_DIR, "conflict-new-commit.png"),
     expectations: [
