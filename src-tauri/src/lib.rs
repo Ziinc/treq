@@ -15,7 +15,7 @@ pub mod local_db;
 mod open_new_window;
 pub mod pr_status;
 pub mod pty;
-mod send_dispatch;
+pub mod send_dispatch;
 pub mod telemetry;
 
 use agent_runtime::{
@@ -672,6 +672,7 @@ pub fn run() {
             commands::cleanup_agent_cli_files,
             commands::get_file_modified_at,
             commands::list_directory,
+            commands::list_send_artifacts,
             commands::ls_workspace,
             commands::list_gitignored_path_suggestions,
             commands::get_workspace_readme,

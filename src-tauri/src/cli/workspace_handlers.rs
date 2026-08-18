@@ -605,6 +605,11 @@ pub(super) fn handle_send(matches: &Matches) -> bool {
   request.title = Some(title);
   request.pty_session_id = crate::send_dispatch::pty_session_id_from_env();
 
+  if let Err(error) = crate::send_dispatch::record_send_artifact(&request) {
+    super::log_cli_error(&format!("Error recording send artifact: {}", error));
+    return false;
+  }
+
   if let Err(error) = dispatch_send_request(&request) {
     super::log_cli_error(&format!("Error dispatching send request: {}", error));
     return false;

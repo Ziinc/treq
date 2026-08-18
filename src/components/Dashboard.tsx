@@ -62,6 +62,7 @@ import {
   githubListPath,
   stateFilterForPrState,
 } from "../lib/githubRoutes";
+import { ARTIFACTS_BASE_PATH, artifactsPath } from "../lib/artifactRoutes";
 import { getFullWorkspacePath } from "../lib/utils";
 import type { GitHubIssueAttachment } from "../lib/promptAttachments";
 import {
@@ -78,6 +79,7 @@ import { Onboarding } from "./Onboarding";
 import { PromptHistoryModal } from "./PromptHistoryModal";
 import { StashModal } from "./StashModal";
 import { SettingsPage } from "./SettingsPage";
+import { ArtifactsPage } from "./ArtifactsPage";
 import { ShowWorkspace } from "./ShowWorkspace";
 import { TerminalMissionControl } from "./TerminalMissionControl";
 import type { BranchListItem } from "./TargetBranchSelector";
@@ -101,6 +103,7 @@ type ViewMode =
   | "session"
   | "show-workspace"
   | "settings"
+  | "artifacts"
   | "merge-preview"
   | "github";
 
@@ -217,6 +220,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
     setViewMode(previousViewModeRef.current);
   }, []);
 
+  const openArtifacts = useCallback(() => {
+    if (viewMode !== "artifacts") {
+      previousViewModeRef.current = viewMode;
+    }
+    setViewMode("artifacts");
+    navigate(artifactsPath());
+  }, [viewMode, navigate]);
+
+  const closeArtifacts = useCallback(() => {
+    setViewMode(previousViewModeRef.current);
+    navigate("/", { replace: true });
+  }, [navigate]);
+
   const openGitHub = useCallback(() => {
     if (viewMode !== "github") {
       previousViewModeRef.current = viewMode;
@@ -245,6 +261,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
     if (viewMode === "github" && !location.startsWith(GITHUB_BASE_PATH)) {
       setViewMode(previousViewModeRef.current);
     }
+    if (viewMode === "artifacts" && !location.startsWith(ARTIFACTS_BASE_PATH)) {
+      setViewMode(previousViewModeRef.current);
+    }
+    if (location.startsWith(ARTIFACTS_BASE_PATH) && viewMode !== "artifacts") {
+      if (viewMode !== "github") {
+        previousViewModeRef.current = viewMode;
+      }
+      setViewMode("artifacts");
+    }
   }, [location, viewMode]);
 
   // The reverse also happens: leaving "github" through a non-URL action (e.g.
@@ -255,8 +280,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
   useEffect(() => {
     const leftGitHub =
       previousViewModeForUrlRef.current === "github" && viewMode !== "github";
+    const leftArtifacts =
+      previousViewModeForUrlRef.current === "artifacts" &&
+      viewMode !== "artifacts";
     previousViewModeForUrlRef.current = viewMode;
     if (leftGitHub && location.startsWith(GITHUB_BASE_PATH)) {
+      navigate("/", { replace: true });
+    }
+    if (leftArtifacts && location.startsWith(ARTIFACTS_BASE_PATH)) {
       navigate("/", { replace: true });
     }
   }, [viewMode, location, navigate]);
@@ -1431,14 +1462,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
         onCreateShellTerminal={handleCreateShellTerminalFromSidebar}
         onDropChangeFiles={handleDropChangeFiles}
         onOpenGitHub={openGitHub}
+        onOpenArtifacts={openArtifacts}
         currentPage={
           viewMode === "settings"
             ? "settings"
             : viewMode === "github"
               ? "github"
-              : viewMode === "session" || viewMode === "show-workspace"
-                ? "session"
-                : undefined
+              : viewMode === "artifacts"
+                ? "artifacts"
+                : viewMode === "session" || viewMode === "show-workspace"
+                  ? "session"
+                  : undefined
         }
       />
 
@@ -1591,6 +1625,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
               onClose={closeSettings}
               currentBranch={effectiveDefaultBranch}
             />
+          )}
+
+          {viewMode === "artifacts" && (
+            <ArtifactsPage repoPath={repoPath} onClose={closeArtifacts} />
           )}
 
           {/* GitHub Panel */}

@@ -129,6 +129,20 @@ export const getFileModifiedAt = (path: string): Promise<string | null> =>
 export const listDirectory = (path: string): Promise<DirectoryEntry[]> =>
   invoke("list_directory", { path });
 
+export interface SendArtifactRecord {
+  id: string;
+  repo: string;
+  pty_session_id?: string | null;
+  media_type: string;
+  path: string;
+  title?: string | null;
+  received_at: number;
+}
+
+export const listSendArtifacts = (
+  repoPath: string,
+): Promise<SendArtifactRecord[]> => invoke("list_send_artifacts", { repoPath });
+
 export const listDirectoryCached = (
   repoPath: string,
   workspaceId: number | null,
