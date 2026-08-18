@@ -9,15 +9,16 @@ import {
 import { useToast } from "../components/ui/toast";
 
 type UseAutoUpdateOptions = {
-  /** When false, skip the automatic startup check (manual menu still works). */
+  /** When false, skip the one-time automatic startup check. */
   autoCheck?: boolean;
-  /** When false, do not subscribe to the Help → Check for Updates menu event. */
+  /** When false, do not subscribe to Help → Check for Updates…. */
   listenMenu?: boolean;
 };
 
 /**
- * Mac-only auto-update: polls `/version`, prompts when a newer release exists,
- * and installs the GitHub `.app.tar.gz` artifact on confirm.
+ * Mac-only auto-update: checks `/version` once on startup, prompts when a
+ * newer release exists, and installs the GitHub `.app.tar.gz` artifact on
+ * confirm. Users can also trigger a check from Help → Check for Updates….
  */
 export function useAutoUpdate(options: UseAutoUpdateOptions = {}) {
   const { autoCheck = true, listenMenu = true } = options;
@@ -126,30 +127,35 @@ export function useAutoUpdate(options: UseAutoUpdateOptions = {}) {
     [addToast, promptInstall],
   );
 
+  const runCheckRef = useRef(runCheck);
+  runCheckRef.current = runCheck;
+
+  // Automatic check once on app startup (Dashboard only).
   useEffect(() => {
     if (!autoCheck) {
       return;
     }
     const timer = window.setTimeout(() => {
-      void runCheck();
+      void runCheckRef.current();
     }, 2500);
     return () => window.clearTimeout(timer);
-  }, [autoCheck, runCheck]);
+  }, [autoCheck]);
 
+  // Help → Check for Updates… (manual, with feedback toasts).
   useEffect(() => {
     if (!listenMenu) {
       return;
     }
     let unlisten: (() => void) | undefined;
     void listen("menu-check-for-updates", () => {
-      void runCheck({ manual: true });
+      void runCheckRef.current({ manual: true });
     }).then((fn) => {
       unlisten = fn;
     });
     return () => {
       unlisten?.();
     };
-  }, [listenMenu, runCheck]);
+  }, [listenMenu]);
 
   return { checkForUpdate: () => runCheck({ manual: true }) };
 }
