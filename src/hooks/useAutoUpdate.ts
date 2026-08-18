@@ -15,6 +15,13 @@ type UseAutoUpdateOptions = {
   listenMenu?: boolean;
 };
 
+function isAutoUpdateDisabledInTests(): boolean {
+  return (
+    typeof process !== "undefined" &&
+    process.env.TREQ_DISABLE_AUTO_UPDATE === "1"
+  );
+}
+
 /**
  * Mac-only auto-update: checks `/version` once on startup, prompts when a
  * newer release exists, and installs the GitHub `.app.tar.gz` artifact on
@@ -132,7 +139,7 @@ export function useAutoUpdate(options: UseAutoUpdateOptions = {}) {
 
   // Automatic check once on app startup (Dashboard only).
   useEffect(() => {
-    if (!autoCheck) {
+    if (!autoCheck || isAutoUpdateDisabledInTests()) {
       return;
     }
     const timer = window.setTimeout(() => {

@@ -7,8 +7,27 @@ fn version_base_url_from_env() -> String {
     .unwrap_or_else(|_| auto_update::default_version_base_url().to_string())
 }
 
+fn auto_update_disabled_via_env() -> bool {
+  std::env::var("TREQ_DISABLE_AUTO_UPDATE")
+    .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+    .unwrap_or(false)
+}
+
+fn no_update_result() -> UpdateCheckResult {
+  UpdateCheckResult {
+    supported: auto_update::auto_update_supported(),
+    available: false,
+    current_version: auto_update::app_version().to_string(),
+    latest_version: None,
+    download_url: None,
+  }
+}
+
 #[tauri::command]
 pub fn check_for_app_update() -> Result<UpdateCheckResult, String> {
+  if auto_update_disabled_via_env() || !auto_update::auto_update_supported() {
+    return Ok(no_update_result());
+  }
   auto_update::check_for_update(auto_update::app_version(), &version_base_url_from_env())
 }
 
@@ -31,7 +50,32 @@ pub fn install_app_update(app: AppHandle, download_url: String) -> Result<(), St
 
 #[cfg(test)]
 mod tests {
+  use super::{auto_update_disabled_via_env, no_update_result};
   use crate::core::auto_update::{evaluate_update, parse_version_endpoint_body};
+
+  #[test]
+  fn auto_update_disabled_via_env_recognizes_flag() {
+    let key = "TREQ_DISABLE_AUTO_UPDATE";
+    let previous = std::env::var(key).ok();
+    std::env::set_var(key, "1");
+    assert!(auto_update_disabled_via_env());
+    std::env::set_var(key, "true");
+    assert!(auto_update_disabled_via_env());
+    std::env::set_var(key, "0");
+    assert!(!auto_update_disabled_via_env());
+    match previous {
+      Some(value) => std::env::set_var(key, value),
+      None => std::env::remove_var(key),
+    }
+  }
+
+  #[test]
+  fn no_update_result_never_marks_available() {
+    let result = no_update_result();
+    assert!(!result.available);
+    assert!(result.latest_version.is_none());
+    assert!(result.download_url.is_none());
+  }
 
   #[test]
   fn trusted_download_url_prefix_is_github_releases() {
