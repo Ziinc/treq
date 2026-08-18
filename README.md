@@ -6,7 +6,7 @@
 
 # treq
 
-Treq is the open-source Stacking Agent Development Environment (ADE). It gives each agent its own workspace, stacks branches, and rebases when the base moves. Reviews stay on disk until you push.
+Treq is the open-source Stacking Agent Development Environment (ADE). It gives each agent its own workspace, stacks branches, and rebases when the base moves.
 
 ![Treq code overview](./assets/screenshots/code.png)
 
@@ -17,7 +17,7 @@ Download the latest release [here](https://github.com/Ziinc/treq/releases). Inst
 ## Features
 
 - Works with Claude Code, Codex, and Cursor Agent. [Agent sessions](https://treq.dev/docs/concepts/agent-sessions) lists Plan and Edit modes per agent.
-- Review the diff on your machine. Workspace tabs are Code, Commits, and Changes. Line comments stay on disk until you push. Send the review back as Plan or Edit. See [Changes and reviews](https://treq.dev/docs/concepts/changes-and-reviews) and the [code review workflow](https://treq.dev/docs/tutorials/code-review-workflow).
+- Review the diff on your machine. Workspace tabs are Code, Commits, and Changes. Send line comments to a local agent as Plan or Edit. See [Changes and reviews](https://treq.dev/docs/concepts/changes-and-reviews) and the [code review workflow](https://treq.dev/docs/tutorials/code-review-workflow).
 - Read the whole change, or one commit, on the same screen. File navigation, the diff, and inline comments stay together. When a workspace has an open GitHub pull request, Changes can also show GitHub review threads. Quoting a thread does not reply on GitHub. See [GitHub review threads](https://treq.dev/docs/concepts/changes-and-reviews#github-review-threads) and [commit-level diffs](https://treq.dev/docs/concepts/commit-management#commit-level-diff).
 - Isolated [workspaces](https://treq.dev/docs/concepts/workspaces). Each agent gets its own checkout. An uncommitted change in one workspace never shows up in another. Tutorial: [managing workspaces](https://treq.dev/docs/tutorials/managing-workspaces).
 - Auto-rebase. When the target branch moves, Treq rebases dependent workspaces. You still push and pull with Git. You never have to learn Jujutsu. See [workspaces](https://treq.dev/docs/concepts/workspaces).

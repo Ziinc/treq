@@ -63,8 +63,7 @@ function HomepageHeader() {
         </Heading>
         <p className={styles.heroLead}>
           Open a Git repo. Give each agent its own workspace. Treq rebases
-          dependent workspaces when the target branch moves. Reviews stay on
-          disk until you push.
+          dependent workspaces when the target branch moves.
         </p>
         <div className={styles.buttons}>
           <Link
@@ -128,7 +127,7 @@ function HighlightGrid(): ReactNode {
           </Heading>
           <p>
             The workspace tabs are Code, Commits, and Changes. Line comments stay
-            on disk until you push a Git remote.
+            local. Send them to an agent as Plan or Edit.
           </p>
           <Link className={styles.highlightButton} to="/docs/concepts/changes-and-reviews">
             How reviews work
@@ -669,7 +668,7 @@ function ClosingCTA(): ReactNode {
     <section className={styles.closingCTA} aria-label="Download">
       <div className={styles.closingCTAContainer}>
         <Heading as="h2" className={styles.closingCTAHeading}>
-          Download Treq for macOS. Reviews stay local until you push.
+          Download Treq for macOS.
         </Heading>
         <p className={styles.closingCTASubheading}>
           The desktop app is Apache 2.0. Treq was used to build Treq.
