@@ -9,6 +9,7 @@ import React, {
 } from "react";
 import { useAgentMessageQueue } from "../../hooks/useAgentMessageQueue";
 import { ptyClose, setSessionModel } from "../../lib/api";
+import { looksLikeAgentUserQuestion } from "../../lib/agentMessageQueue";
 import { cn } from "../../lib/utils";
 import {
   ConsolidatedTerminal,
@@ -86,6 +87,7 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
     const [terminalBodyEl, setTerminalBodyEl] = useState<HTMLDivElement | null>(
       null,
     );
+    const lastProcessOutputRef = useRef("");
 
     const {
       messages: queuedMessages,
@@ -108,14 +110,21 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
     // Handle terminal output — agent is busy while streaming process output.
     const handleTerminalOutput = useCallback(
       (output: string, fromProcess?: boolean) => {
-        if (fromProcess !== false) markBusy();
+        if (fromProcess !== false) {
+          lastProcessOutputRef.current = output;
+          markBusy();
+        }
         onTerminalOutput?.(output, fromProcess);
       },
       [markBusy, onTerminalOutput],
     );
 
     const handleTerminalIdle = useCallback(() => {
-      markIdle();
+      markIdle({
+        awaitingQuestion: looksLikeAgentUserQuestion(
+          lastProcessOutputRef.current,
+        ),
+      });
       onTerminalIdle?.();
     }, [markIdle, onTerminalIdle]);
 
@@ -170,6 +179,7 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
         setIsResetting(true);
         try {
           clearQueuedMessages();
+          lastProcessOutputRef.current = "";
           markBusy();
           await ptyClose(sessionData.ptySessionId).catch(console.error);
           setTerminalInstanceKey((prev) => prev + 1);
