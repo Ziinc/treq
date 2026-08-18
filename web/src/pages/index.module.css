@@ -529,6 +529,12 @@
   background: #111111;
 }
 
+.carouselHero .beforeAfter img {
+  height: auto;
+  max-height: 22rem;
+  object-fit: contain;
+}
+
 .beforeAfter figure {
   margin: 0;
 }
@@ -560,10 +566,6 @@
 .carouselHeader {
   max-width: 1120px;
   margin: 0 auto 1.5rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: 1rem;
 }
 
 .carouselHeading {
@@ -576,32 +578,22 @@
   color: #111111;
 }
 
-.carouselNav {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.carouselArrow {
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: 999px;
-  border: 1px solid #d4d4d4;
-  background: #ffffff;
-  cursor: pointer;
-  font-size: 1.1rem;
-}
-
-.carouselArrow:disabled {
-  opacity: 0.35;
-  cursor: default;
-}
-
-.carouselTrack {
+.carouselStack {
   max-width: 1120px;
   margin: 0 auto;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  flex-direction: column;
   gap: 1rem;
+}
+
+.carouselRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.carouselHero {
+  min-height: 0;
 }
 
 .carouselCard {
@@ -1241,7 +1233,7 @@
   .highlightWide,
   .rebaseVisual,
   .beforeAfter,
-  .carouselTrack,
+  .carouselRow,
   .statsSplit,
   .proofSection {
     grid-template-columns: 1fr;

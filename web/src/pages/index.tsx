@@ -167,21 +167,16 @@ function HighlightGrid(): ReactNode {
   );
 }
 
-const SOLUTION_CARDS = [
-  {
-    title: 'Agents start more agents',
-    body: 'Tell one agent to split the work across three agents in three workspaces. Each agent gets its own checkout and can keep going in parallel.',
-    image: spawnBeforeScreenshot,
-    alt: 'Agent prompt: Split the work across 3 agents in 3 different workspaces',
-    afterImage: spawnAfterScreenshot,
-    afterAlt: 'Sidebar after three new agent workspaces appear',
-  },
-  {
-    title: 'Agent CLI',
-    body: 'Agents can create and inspect workspaces through the treq CLI. Ask an agent to create a workspace for this fix and it can run the same commands you would.',
-    image: promptScreenshot,
-    alt: 'Agent prompt asking to create a workspace for this fix',
-  },
+const SPAWN_CARD = {
+  title: 'Agents start more agents',
+  body: 'Tell one agent to split the work across three agents in three workspaces. Each agent gets its own checkout and can keep going in parallel.',
+  image: spawnBeforeScreenshot,
+  alt: 'Agent prompt: Split the work across 3 agents in 3 different workspaces',
+  afterImage: spawnAfterScreenshot,
+  afterAlt: 'Sidebar after three new agent workspaces appear',
+};
+
+const DELEGATE_ROW_CARDS = [
   {
     title: 'Move changes between workspaces',
     body: 'Tell an agent to move your changes to a new workspace and continue the fix there. Agents can move commits, working-copy files, and hunks through the treq CLI.',
@@ -196,66 +191,65 @@ const SOLUTION_CARDS = [
   },
 ];
 
-function SolutionsCarousel(): ReactNode {
-  const [start, setStart] = useState(0);
-  const visible = 3;
-  const maxStart = Math.max(0, SOLUTION_CARDS.length - visible);
-  const slice = SOLUTION_CARDS.slice(start, start + visible);
+function DelegateCard({
+  card,
+  className,
+}: {
+  card: {
+    title: string;
+    body: string;
+    image: string;
+    alt: string;
+    afterImage?: string;
+    afterAlt?: string;
+  };
+  className?: string;
+}): ReactNode {
+  return (
+    <article className={clsx(styles.carouselCard, className)}>
+      {card.afterImage ? (
+        <div className={styles.beforeAfter}>
+          <figure>
+            <figcaption>Before</figcaption>
+            <img src={card.image} alt={card.alt} width={1346} height={224} loading="lazy" decoding="async" />
+          </figure>
+          <figure>
+            <figcaption>After</figcaption>
+            <img src={card.afterImage} alt={card.afterAlt} width={560} height={1800} loading="lazy" decoding="async" />
+          </figure>
+        </div>
+      ) : (
+        <img
+          className={styles.carouselCardImage}
+          src={card.image}
+          alt={card.alt}
+          width={1346}
+          height={224}
+          loading="lazy"
+          decoding="async"
+        />
+      )}
+      <Heading as="h3" className={styles.carouselCardTitle}>{card.title}</Heading>
+      <p>{card.body}</p>
+    </article>
+  );
+}
 
+function SolutionsCarousel(): ReactNode {
   return (
     <section className={styles.carouselSection} aria-label="Solutions">
       <div className={styles.carouselHeader}>
         <Heading as="h2" className={styles.carouselHeading}>
           Delegate workspaces. Let agents move work and start more agents.
         </Heading>
-        <div className={styles.carouselNav}>
-          <button
-            type="button"
-            className={styles.carouselArrow}
-            aria-label="Previous solutions"
-            disabled={start === 0}
-            onClick={() => setStart((s) => Math.max(0, s - 1))}>
-            ←
-          </button>
-          <button
-            type="button"
-            className={styles.carouselArrow}
-            aria-label="Next solutions"
-            disabled={start >= maxStart}
-            onClick={() => setStart((s) => Math.min(maxStart, s + 1))}>
-            →
-          </button>
-        </div>
       </div>
-      <div className={styles.carouselTrack}>
-        {slice.map((card) => (
-          <article key={card.title} className={styles.carouselCard}>
-            {card.afterImage ? (
-              <div className={styles.beforeAfter}>
-                <figure>
-                  <figcaption>Before</figcaption>
-                  <img src={card.image} alt={card.alt} width={1346} height={224} loading="lazy" decoding="async" />
-                </figure>
-                <figure>
-                  <figcaption>After</figcaption>
-                  <img src={card.afterImage} alt={card.afterAlt} width={560} height={1800} loading="lazy" decoding="async" />
-                </figure>
-              </div>
-            ) : (
-              <img
-                className={styles.carouselCardImage}
-                src={card.image}
-                alt={card.alt}
-                width={1346}
-                height={224}
-                loading="lazy"
-                decoding="async"
-              />
-            )}
-            <Heading as="h3" className={styles.carouselCardTitle}>{card.title}</Heading>
-            <p>{card.body}</p>
-          </article>
-        ))}
+      <div className={styles.carouselStack}>
+        <DelegateCard card={SPAWN_CARD} className={styles.carouselHero} />
+        <div className={styles.carouselRow}>
+          {DELEGATE_ROW_CARDS.map((card) => (
+            <DelegateCard key={card.title} card={card} />
+          ))}
+        </div>
       </div>
     </section>
   );
