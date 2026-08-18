@@ -92,7 +92,7 @@ const config: Config = {
   ],
 
   title: 'Treq',
-  tagline: 'The open source Graphite alternative',
+  tagline: 'Isolates each agent and rebases stacked PRs when the base moves',
   favicon: 'img/favicon.svg',
 
   // Future flags, see https://docusaurus.io/docs/api/docusaurus-config#future

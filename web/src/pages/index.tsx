@@ -29,14 +29,14 @@ function HomepageHeader() {
         <link rel="preload" as="image" href={codeScreenshot} fetchPriority="high" />
       </Head>
       <div className={styles.heroContainer}>
-        <p className={styles.heroEyebrow}>The open source Graphite alternative</p>
+        <p className={styles.heroEyebrow}>Treq for macOS. Apache 2.0.</p>
         <Heading as="h1" className={styles.heroTitle}>
           <span className={styles.heroAccent}>Stacking Agent Development Environment</span>
-          {' '}for teams that run agents in parallel
+          {' '}that isolates each agent and rebases stacked PRs when the base moves
         </Heading>
         <p className={styles.heroLead}>
-          Review, rebase, and ship stacked work without sharing one checkout.
-          Treq keeps each agent in its own workspace and rebases the stack when the base moves.
+          Open a Git repo. Create one workspace per agent. Treq rebases dependent workspaces when the target branch moves.
+          Reviews stay on disk until you push.
         </p>
         <div className={styles.buttons}>
           <Link
@@ -45,7 +45,7 @@ function HomepageHeader() {
             target="_blank"
             rel="noopener noreferrer">
             <DownloadIcon />
-            Download for Desktop
+            Download Treq for macOS
           </Link>
           <Link
             className={clsx('button', styles.secondaryButton)}
@@ -75,7 +75,7 @@ function HomepageHeader() {
       </div>
 
       <div className={styles.agentsSupported}>
-        <span className={styles.agentsLabel}>Works with your agents</span>
+        <span className={styles.agentsLabel}>Works with Claude, Codex, and Cursor</span>
         <div className={styles.agentsIcons}>
           <div className={styles.agentIcon} title="Claude Code">
             <svg xmlns="http://www.w3.org/2000/svg" width="70" height="70" fill="currentColor" className={styles.platformIcon} viewBox="0 0 16 16" aria-hidden="true">
@@ -105,8 +105,8 @@ const SOLUTIONS = [
   {
     id: 'workspaces',
     title: 'Workspaces',
-    subtitle: 'Give each agent its own checkout',
-    body: 'Treq creates an isolated working copy under .treq/workspaces. Agents can write in parallel without colliding on the same files. Delete a workspace when the work is merged or discarded.',
+    subtitle: 'Each agent writes under .treq/workspaces, not in your main checkout',
+    body: 'Treq creates an isolated working copy at .treq/workspaces/<name>. Two agents can edit the same files without colliding. Delete a workspace after you commit, move, or discard the work.',
     href: '/docs/concepts/workspaces',
   },
   {
@@ -147,11 +147,11 @@ function SolutionsSection(): ReactNode {
       <div className={styles.sectionInner}>
         <p className={styles.kicker}>Solutions</p>
         <Heading as="h2" className={styles.sectionHeading}>
-          Get the change reviewed. Get the stack rebased. Ship the PR.
+          Each agent writes in its own checkout. Dependent workspaces rebase when the base moves.
         </Heading>
         <p className={styles.sectionLead}>
-          Treq is the desktop environment that sits between your agents and GitHub.
-          You keep the review. The stack stays in sync.
+          Treq sits on your machine between the agent and GitHub.
+          You read the diff. You send comments back. Git remotes stay Git.
         </p>
         <div className={styles.accordion}>
           {SOLUTIONS.map((item) => {
@@ -192,12 +192,12 @@ function StatsSection(): ReactNode {
       <div className={styles.sectionInner}>
         <p className={styles.kicker}>Facts</p>
         <Heading as="h2" className={styles.sectionHeading}>
-          Built to run on your machine
+          What Treq actually does on disk
         </Heading>
         <div className={styles.statsGrid}>
           <div className={styles.statCard}>
             <p className={styles.statValue}>Local</p>
-            <p className={styles.statLabel}>Code, diffs, and comments stay on disk unless you push.</p>
+            <p className={styles.statLabel}>Diffs and review comments stay under .treq until you push a Git remote.</p>
           </div>
           <div className={styles.statCard}>
             <p className={styles.statValue}>Apache 2.0</p>
@@ -205,11 +205,11 @@ function StatsSection(): ReactNode {
           </div>
           <div className={styles.statCard}>
             <p className={styles.statValue}>jj + Git</p>
-            <p className={styles.statLabel}>Git remotes stay Git. Jujutsu supplies the rebase model underneath.</p>
+            <p className={styles.statLabel}>Push and pull stay on Git. Jujutsu supplies the rebase model underneath.</p>
           </div>
           <div className={styles.statCard}>
             <p className={styles.statValue}>macOS</p>
-            <p className={styles.statLabel}>Download the desktop build and open a repo you already have.</p>
+            <p className={styles.statLabel}>Download the desktop build and open a Git repository you already have.</p>
           </div>
         </div>
       </div>
@@ -227,7 +227,7 @@ function FeaturesSection(): ReactNode {
             Features
           </Heading>
           <p className={styles.featuresSubheading}>
-            Review the diff. Rebase the stack. Keep agents off the same working tree.
+            Review the diff on your machine. Rebase the stack when main moves. Keep agents off the same working tree.
           </p>
         </div>
 
@@ -361,7 +361,7 @@ function ResourcesSection(): ReactNode {
       <div className={styles.sectionInner}>
         <p className={styles.kicker}>Resources</p>
         <Heading as="h2" className={styles.sectionHeading}>
-          Stay current on the workflow
+          Install, then read how the workflow works
         </Heading>
         <div className={styles.resourceGrid}>
           <Link className={styles.resourceCard} to="/docs/getting-started/installation">
@@ -395,10 +395,10 @@ function ClosingCTA(): ReactNode {
     <section className={styles.closingCTA} aria-label="Download">
       <div className={styles.closingCTAContainer}>
         <Heading as="h2" className={styles.closingCTAHeading}>
-          Run agents in parallel. Keep the review.
+          Download Treq for macOS. Reviews stay local until you push.
         </Heading>
         <p className={styles.closingCTASubheading}>
-          Treq runs on your machine and is private by default. Treq was used to build Treq.
+          The desktop app is Apache 2.0. Treq was used to build Treq.
         </p>
         <div className={styles.closingCTAButtons}>
           <Link
@@ -406,7 +406,7 @@ function ClosingCTA(): ReactNode {
             href={DOWNLOAD_HREF}
             target="_blank"
             rel="noopener noreferrer">
-            Download Treq
+            Download Treq for macOS
           </Link>
           <Link className={styles.closingCTASecondary} to="/pricing">
             See pricing
@@ -422,7 +422,7 @@ const SOFTWARE_APP_SCHEMA = {
   '@type': 'SoftwareApplication',
   name: 'Treq',
   description:
-    'Stacking Agent Development Environment (ADE) for teams that run agents in parallel. The open source Graphite alternative.',
+    'Stacking Agent Development Environment that isolates each agent and rebases stacked PRs when the base moves.',
   url: 'https://treq.dev',
   applicationCategory: 'DeveloperApplication',
   operatingSystem: 'macOS',
@@ -441,7 +441,7 @@ export default function Home(): ReactNode {
   return (
     <Layout
       title={siteConfig.title}
-      description="The open source Graphite alternative. Review, rebase, and ship stacked work without sharing one checkout.">
+      description="Stacking Agent Development Environment that isolates each agent and rebases stacked PRs when the base moves.">
       <Head>
         <script type="application/ld+json">{JSON.stringify(SOFTWARE_APP_SCHEMA)}</script>
       </Head>

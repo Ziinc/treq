@@ -18,13 +18,13 @@
   --font-mono: 'JetBrains Mono', 'JetBrains Mono Fallback', ui-monospace,
     SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', monospace;
 
-  --ifm-color-primary: #ff622d;
-  --ifm-color-primary-dark: #e45524;
-  --ifm-color-primary-darker: #d14e21;
-  --ifm-color-primary-darkest: #ac401b;
-  --ifm-color-primary-light: #ff7a4d;
-  --ifm-color-primary-lighter: #ff8b64;
-  --ifm-color-primary-lightest: #ffad91;
+  --ifm-color-primary: #3b9cff;
+  --ifm-color-primary-dark: #1f8eff;
+  --ifm-color-primary-darker: #1187ff;
+  --ifm-color-primary-darkest: #0070df;
+  --ifm-color-primary-light: #57aaff;
+  --ifm-color-primary-lighter: #65b1ff;
+  --ifm-color-primary-lightest: #8cc5ff;
   --ifm-code-font-size: 95%;
   --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
   --ifm-background-color: #ffffff;
@@ -45,13 +45,13 @@
 
 /* For readability concerns, you should choose a lighter palette in dark mode. */
 [data-theme='dark'] {
-  --ifm-color-primary: #ff7a4d;
-  --ifm-color-primary-dark: #ff622d;
-  --ifm-color-primary-darker: #e45524;
-  --ifm-color-primary-darkest: #d14e21;
-  --ifm-color-primary-light: #ff8b64;
-  --ifm-color-primary-lighter: #ff9d7c;
-  --ifm-color-primary-lightest: #ffbda8;
+  --ifm-color-primary: #5eb0ff;
+  --ifm-color-primary-dark: #3b9cff;
+  --ifm-color-primary-darker: #2993ff;
+  --ifm-color-primary-darkest: #007aff;
+  --ifm-color-primary-light: #81c1ff;
+  --ifm-color-primary-lighter: #93caff;
+  --ifm-color-primary-lightest: #bbdeff;
   --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
   --ifm-background-color: #111111;
   --ifm-navbar-background-color: #161616;
@@ -119,7 +119,7 @@ html {
 }
 
 .navbar .button--primary {
-  background: #ff622d;
+  background: var(--ifm-color-primary);
   color: #ffffff;
   border: none;
   border-radius: 999px;
@@ -127,7 +127,7 @@ html {
 }
 
 .navbar .button--primary:hover {
-  background: #e45524;
+  background: var(--ifm-color-primary-dark);
   color: #ffffff;
 }
 
@@ -191,7 +191,7 @@ html {
 }
 
 .menu__link--active:not(.menu__link--sublist) {
-  background: rgba(255, 98, 45, 0.1);
+  background: rgba(59, 156, 255, 0.1);
   color: var(--ifm-color-primary);
 }
 
@@ -288,14 +288,14 @@ main[class*='docMainContainer'] > .container {
 }
 
 .button--primary {
-  background: #ff622d;
+  background: var(--ifm-color-primary);
   box-shadow: none;
   color: #ffffff;
   border: none;
 }
 
 .button--primary:hover {
-  background: #e45524;
+  background: var(--ifm-color-primary-dark);
   color: #ffffff;
 }
 

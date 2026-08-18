@@ -1,7 +1,7 @@
 .heroBanner {
   padding: 5.5rem 1.5rem 0;
-  background: #111111;
-  color: #ffffff;
+  background: #ffffff;
+  color: #111111;
   position: relative;
   overflow: hidden;
 }
@@ -20,29 +20,29 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #ff7a4d;
+  color: var(--ifm-color-primary);
   margin: 0 0 1.25rem;
 }
 
 .heroTitle {
-  font-size: clamp(2.4rem, 5.5vw, 4.25rem);
+  font-size: clamp(2.15rem, 4.8vw, 3.65rem);
   font-weight: 600;
-  line-height: 1.08;
+  line-height: 1.12;
   margin: 0 0 1.25rem;
-  color: #ffffff;
-  letter-spacing: -0.035em;
+  color: #111111;
+  letter-spacing: -0.03em;
 }
 
 .heroAccent {
-  color: #ffffff;
+  color: #111111;
 }
 
 .heroLead {
-  max-width: 40rem;
+  max-width: 42rem;
   margin: 0 auto 2rem;
   font-size: 1.15rem;
   line-height: 1.6;
-  color: #d4d4d4;
+  color: #404040;
 }
 
 .buttons {
@@ -56,7 +56,7 @@
 
 .platformsSupported {
   font-size: 0.9rem;
-  color: #a3a3a3;
+  color: #525252;
   margin-bottom: 2.5rem;
   display: flex;
   align-items: center;
@@ -65,7 +65,7 @@
 }
 
 .platformIcon {
-  color: #d4d4d4;
+  color: #404040;
   flex-shrink: 0;
 }
 
@@ -74,7 +74,7 @@
   max-width: 1080px;
   margin: 0 auto;
   padding: 1.5rem 0 2.5rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid #e7e5e4;
   text-align: center;
   display: flex;
   flex-direction: column;
@@ -84,7 +84,7 @@
 .agentsLabel {
   display: block;
   font-size: 0.75rem;
-  color: #a3a3a3;
+  color: #525252;
   margin-bottom: 1rem;
   font-weight: 700;
   text-transform: uppercase;
@@ -109,17 +109,17 @@
 .agentIcon svg {
   width: 36px;
   height: 36px;
-  color: #e5e5e5;
+  color: #111111;
 }
 
 .agentIcon span {
   font-size: 0.8rem;
   font-weight: 600;
-  color: #a3a3a3;
+  color: #525252;
 }
 
 .primaryButton {
-  background: #ff622d;
+  background: var(--ifm-color-primary);
   color: #ffffff;
   padding: 0.95rem 1.75rem;
   font-size: 1rem;
@@ -132,15 +132,15 @@
 }
 
 .primaryButton:hover {
-  background: #e45524;
+  background: var(--ifm-color-primary-dark);
   color: #ffffff;
   text-decoration: none;
 }
 
 .secondaryButton {
-  background: transparent;
-  color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: #ffffff;
+  color: #111111;
+  border: 1px solid #d4d4d4;
   padding: 0.95rem 1.75rem;
   font-size: 1rem;
   font-weight: 700;
@@ -150,8 +150,8 @@
 }
 
 .secondaryButton:hover {
-  border-color: #ffffff;
-  color: #ffffff;
+  border-color: #111111;
+  color: #111111;
   text-decoration: none;
 }
 
@@ -165,9 +165,9 @@
   width: min(100%, 920px);
   height: auto;
   border-radius: 12px 12px 0 0;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid #e7e5e4;
   border-bottom: 0;
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.12);
 }
 
 .sectionInner {
@@ -180,7 +180,7 @@
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #ff622d;
+  color: var(--ifm-color-primary);
   margin: 0 0 0.75rem;
 }
 
@@ -254,7 +254,7 @@
 .accordionToggle {
   font-size: 1.4rem;
   line-height: 1;
-  color: #ff622d;
+  color: var(--ifm-color-primary);
   font-weight: 500;
 }
 
@@ -271,7 +271,7 @@
 
 .accordionBody a {
   font-weight: 700;
-  color: #ff622d;
+  color: var(--ifm-color-primary);
 }
 
 .statsGrid {
@@ -463,9 +463,9 @@
 }
 
 .inlineStackNode[data-active="true"] {
-  background: rgba(255, 98, 45, 0.1);
-  border-color: rgba(255, 98, 45, 0.4);
-  color: #ff622d;
+  background: rgba(59, 156, 255, 0.1);
+  border-color: rgba(59, 156, 255, 0.4);
+  color: var(--ifm-color-primary);
 }
 
 .mockRebaseStack {
@@ -492,7 +492,7 @@
 }
 
 .mockRebaseLabel[data-type="workspace"] {
-  background: rgba(255, 98, 45, 0.45);
+  background: rgba(59, 156, 255, 0.45);
 }
 
 .mockRebaseLine {
@@ -506,7 +506,7 @@
 }
 
 .mockRebaseLine[data-type="workspace"] {
-  background: rgba(255, 98, 45, 0.35);
+  background: rgba(59, 156, 255, 0.35);
 }
 
 .mockRebaseCommit {
@@ -521,17 +521,17 @@
 }
 
 .mockRebaseCommit[data-type="workspace"] {
-  background: #ff622d;
+  background: var(--ifm-color-primary);
 }
 
 .mockRebaseStatus {
   font-size: 0.65rem;
   font-weight: 700;
-  color: #ff622d;
+  color: var(--ifm-color-primary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   padding: 2px 8px;
-  background: rgba(255, 98, 45, 0.15);
+  background: rgba(59, 156, 255, 0.15);
   border-radius: 4px;
 }
 
@@ -592,16 +592,16 @@
 }
 
 .mockStackCard[data-type="active"] {
-  background: rgba(255, 98, 45, 0.18);
-  border: 1px solid rgba(255, 98, 45, 0.4);
+  background: rgba(59, 156, 255, 0.18);
+  border: 1px solid rgba(59, 156, 255, 0.4);
 }
 
 .mockStackPrBadge {
   font-size: 0.6rem;
   font-weight: 700;
-  color: #ff7a4d;
+  color: var(--ifm-color-primary);
   padding: 2px 6px;
-  background: rgba(255, 98, 45, 0.15);
+  background: rgba(59, 156, 255, 0.15);
   border-radius: 3px;
   margin-left: auto;
 }
@@ -624,7 +624,7 @@
 }
 
 .resourceCard:hover {
-  border-color: #ff622d;
+  border-color: var(--ifm-color-primary);
 }
 
 .resourceKind {
@@ -633,7 +633,7 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #ff622d;
+  color: var(--ifm-color-primary);
   margin-bottom: 0.6rem;
 }
 
@@ -686,7 +686,7 @@
 .closingCTAButton {
   display: inline-flex;
   align-items: center;
-  background: #ff622d;
+  background: var(--ifm-color-primary);
   color: #ffffff;
   padding: 1rem 1.75rem;
   font-size: 1.05rem;
@@ -695,7 +695,7 @@
 }
 
 .closingCTAButton:hover {
-  background: #e45524;
+  background: var(--ifm-color-primary-dark);
   color: #ffffff;
   text-decoration: none;
 }
@@ -794,4 +794,49 @@
   background: #1c1c1c;
   border-color: #2a2a2a;
   color: #e5e5e5;
+}
+
+[data-theme='dark'] .heroBanner {
+  background: #ffffff;
+  color: #111111;
+}
+
+[data-theme='dark'] .heroTitle,
+[data-theme='dark'] .heroAccent {
+  color: #111111;
+}
+
+[data-theme='dark'] .heroLead {
+  color: #404040;
+}
+
+[data-theme='dark'] .platformsSupported,
+[data-theme='dark'] .agentsLabel,
+[data-theme='dark'] .agentIcon span {
+  color: #525252;
+}
+
+[data-theme='dark'] .platformIcon,
+[data-theme='dark'] .agentIcon svg {
+  color: #111111;
+}
+
+[data-theme='dark'] .agentsSupported {
+  border-top-color: #e7e5e4;
+}
+
+[data-theme='dark'] .secondaryButton {
+  background: #ffffff;
+  color: #111111;
+  border-color: #d4d4d4;
+}
+
+[data-theme='dark'] .secondaryButton:hover {
+  border-color: #111111;
+  color: #111111;
+}
+
+[data-theme='dark'] .heroScreenshot {
+  border-color: #e7e5e4;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.12);
 }

@@ -23,7 +23,7 @@ export default function FooterLayout({
             <img src="/assets/combined-horizontal.png" alt="Treq" />
           </div>
           <p>
-            Review, rebase, and ship stacked work without sharing one checkout.
+            Isolates each agent in its own workspace and rebases stacked PRs when the base moves.
           </p>
         </div>
         <div className={styles.footerLinks}>{links}</div>
