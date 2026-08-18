@@ -12,7 +12,7 @@ import * as React from "react";
 import { expect, it, vi } from "vitest";
 import { Dashboard } from "../../../src/components/Dashboard";
 import { render, screen, waitFor, within } from "../../../test/test-utils";
-import { getWorkspaces, createWorkspace } from "../../../src/lib/api";
+import { getWorkspaces } from "../../../src/lib/api";
 import { listen } from "@tauri-apps/api/event";
 import { TREQ_SEND_EVENT } from "../../../src/lib/treqSend";
 import { getFullWorkspacePath } from "../../../src/lib/utils";
@@ -354,7 +354,7 @@ it("captures agent prompt input for CLI delegation copy", async () => {
 }, 120000);
 
 it("captures an agent splitting work across three workspaces", async () => {
-  const { user, repoPath } = await prepareWorkspace();
+  const { user } = await prepareWorkspace();
 
   const input = await screen.findByPlaceholderText("Describe a task...");
   await user.click(input);
@@ -374,12 +374,28 @@ it("captures an agent splitting work across three workspaces", async () => {
     ],
   });
 
-  await createWorkspace(repoPath, "feat/agent-one");
-  await createWorkspace(repoPath, "feat/agent-two");
-  await createWorkspace(repoPath, "feat/agent-three");
-  await findSidebarBranchElement("feat/agent-one");
-  await findSidebarBranchElement("feat/agent-two");
-  await findSidebarBranchElement("feat/agent-three");
+  for (const branch of [
+    "feat/agent-one",
+    "feat/agent-two",
+    "feat/agent-three",
+  ] as const) {
+    const header = await screen.findByTestId("show-workspace-header");
+    await user.click(
+      within(header).getByRole("button", { name: "Stack", exact: true }),
+    );
+    const dialog = await screen.findByTestId("modal");
+    await user.type(within(dialog).getByLabelText("Branch Name"), branch);
+    await user.click(
+      within(dialog).getByRole("button", { name: "Create Workspace" }),
+    );
+    await waitFor(() => {
+      expect(screen.queryByTestId("modal")).not.toBeInTheDocument();
+    });
+    await findSidebarBranchElement(branch);
+  }
+
+  await user.click(await findSidebarBranchElement("feat/agent-one"));
+  await screen.findByTestId("show-workspace-header");
   document.documentElement.classList.add("dark");
   await new Promise((resolve) => setTimeout(resolve, 400));
 
@@ -407,7 +423,9 @@ it("captures treq send thumbnail and lightbox for landing copy", async () => {
 `,
   );
 
-  await user.click(await screen.findByRole("button", { name: "New Shell" }));
+  await user.click(
+    await screen.findByRole("button", { name: "New shell terminal" }),
+  );
   showMarketingTerminalPane();
   expandMarketingTerminalPane();
   await waitFor(() => {
