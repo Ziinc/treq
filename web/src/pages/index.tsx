@@ -10,9 +10,13 @@ import codeScreenshot from '../../../assets/screenshots/code.png';
 import reviewScreenshot from '../../../assets/screenshots/review.png';
 import isolationScreenshot from '../../../assets/screenshots/isolation.png';
 import sidebarScreenshot from '../../../assets/screenshots/sidebar.png';
+import spawnBeforeScreenshot from '../../../assets/screenshots/spawn-before.png';
+import spawnAfterScreenshot from '../../../assets/screenshots/spawn-after.png';
 import promptScreenshot from '../../../assets/screenshots/prompt.png';
-import sendScreenshot from '../../../assets/screenshots/send.png';
+import sendThumbScreenshot from '../../../assets/screenshots/send-thumb.png';
+import sendLightboxScreenshot from '../../../assets/screenshots/send-lightbox.png';
 import scheduleScreenshot from '../../../assets/screenshots/schedule.png';
+import timestampScreenshot from '../../../assets/screenshots/timestamp.png';
 import githubScreenshot from '../../../assets/screenshots/github.png';
 import githubIssuesScreenshot from '../../../assets/screenshots/github-issues.png';
 import styles from './index.module.css';
@@ -161,22 +165,18 @@ function HighlightGrid(): ReactNode {
 
 const SOLUTION_CARDS = [
   {
+    title: 'Agents start more agents',
+    body: 'Tell one agent to split the work across three agents in three workspaces. Each agent gets its own checkout and can keep going in parallel.',
+    image: spawnBeforeScreenshot,
+    alt: 'Agent prompt: Split the work across 3 agents in 3 different workspaces',
+    afterImage: spawnAfterScreenshot,
+    afterAlt: 'Sidebar after three new agent workspaces appear',
+  },
+  {
     title: 'Agent CLI',
     body: 'Agents can create and inspect workspaces through the treq CLI. Ask an agent to create a workspace for this fix and it can run the same commands you would.',
     image: promptScreenshot,
     alt: 'Agent prompt asking to create a workspace for this fix',
-  },
-  {
-    title: 'Send files back',
-    body: 'Tell an agent to send you the screenshots and the updated research draft. Treq previews those files in the session that produced them.',
-    image: sendScreenshot,
-    alt: 'Agent prompt asking to send screenshots and a research draft',
-  },
-  {
-    title: 'Schedule workspaces',
-    body: 'Hide a workspace until a time you pick. The sidebar stays focused on the work that is due now.',
-    image: scheduleScreenshot,
-    alt: 'Schedule workspace dialog with hide-until presets',
   },
   {
     title: 'GitHub issues and PRs',
@@ -196,7 +196,7 @@ function SolutionsCarousel(): ReactNode {
     <section className={styles.carouselSection} aria-label="Solutions">
       <div className={styles.carouselHeader}>
         <Heading as="h2" className={styles.carouselHeading}>
-          Delegate workspaces. Send files. Schedule the rest.
+          Delegate workspaces. Let one agent start three more.
         </Heading>
         <div className={styles.carouselNav}>
           <button
@@ -220,15 +220,28 @@ function SolutionsCarousel(): ReactNode {
       <div className={styles.carouselTrack}>
         {slice.map((card) => (
           <article key={card.title} className={styles.carouselCard}>
-            <img
-              className={styles.carouselCardImage}
-              src={card.image}
-              alt={card.alt}
-              width={2880}
-              height={1800}
-              loading="lazy"
-              decoding="async"
-            />
+            {card.afterImage ? (
+              <div className={styles.beforeAfter}>
+                <figure>
+                  <figcaption>Before</figcaption>
+                  <img src={card.image} alt={card.alt} width={1346} height={224} loading="lazy" decoding="async" />
+                </figure>
+                <figure>
+                  <figcaption>After</figcaption>
+                  <img src={card.afterImage} alt={card.afterAlt} width={560} height={1800} loading="lazy" decoding="async" />
+                </figure>
+              </div>
+            ) : (
+              <img
+                className={styles.carouselCardImage}
+                src={card.image}
+                alt={card.alt}
+                width={2880}
+                height={1800}
+                loading="lazy"
+                decoding="async"
+              />
+            )}
             <Heading as="h3" className={styles.carouselCardTitle}>{card.title}</Heading>
             <p>{card.body}</p>
           </article>
@@ -444,43 +457,78 @@ function FeaturesSection(): ReactNode {
               Send files from the agent
             </Heading>
             <p className={styles.featureDescription}>
-              Ask an agent to send you the screenshots and the updated research
-              draft. Treq previews those files in the session that produced them.
+              Tell an agent to send you the screenshots and the updated research
+              draft. A thumbnail lands in that terminal. Click it to open the file.
             </p>
           </div>
           <div className={styles.featureScreenshot}>
-            <img
-              className={styles.featureImage}
-              src={sendScreenshot}
-              alt="Agent prompt asking to send screenshots and a research draft"
-              width={1346}
-              height={224}
-              loading="lazy"
-              decoding="async"
-            />
+            <div className={styles.beforeAfter}>
+              <figure>
+                <figcaption>Before</figcaption>
+                <img
+                  className={styles.featureImage}
+                  src={sendThumbScreenshot}
+                  alt="Terminal pane with an asset thumbnail from treq send"
+                  width={2320}
+                  height={720}
+                  loading="lazy"
+                  decoding="async"
+                />
+              </figure>
+              <figure>
+                <figcaption>After</figcaption>
+                <img
+                  className={styles.featureImage}
+                  src={sendLightboxScreenshot}
+                  alt="Asset lightbox open after clicking the thumbnail"
+                  width={2880}
+                  height={1800}
+                  loading="lazy"
+                  decoding="async"
+                />
+              </figure>
+            </div>
           </div>
         </div>
 
         <div className={clsx(styles.featureRow, styles.featureRowReverse)}>
           <div className={styles.featureText}>
             <Heading as="h3" className={styles.featureHeading}>
-              Schedule workspaces
+              Schedule work
             </Heading>
             <p className={styles.featureDescription}>
-              Hide a workspace until a time you pick. Bring it back when the work
-              is due.
+              Hide a workspace until a time you pick. Shift commit timestamps
+              into the future, or set them to now. Prepare the work ahead of time
+              and release it on a schedule you control.
             </p>
           </div>
           <div className={styles.featureScreenshot}>
-            <img
-              className={styles.featureImage}
-              src={scheduleScreenshot}
-              alt="Schedule workspace dialog with hide-until presets"
-              width={1152}
-              height={1064}
-              loading="lazy"
-              decoding="async"
-            />
+            <div className={styles.beforeAfter}>
+              <figure>
+                <figcaption>Hide until</figcaption>
+                <img
+                  className={styles.featureImage}
+                  src={scheduleScreenshot}
+                  alt="Schedule workspace dialog with hide-until presets"
+                  width={1152}
+                  height={1064}
+                  loading="lazy"
+                  decoding="async"
+                />
+              </figure>
+              <figure>
+                <figcaption>Commit time</figcaption>
+                <img
+                  className={styles.featureImage}
+                  src={timestampScreenshot}
+                  alt="Edit commit timestamp dialog with shift to now"
+                  width={1200}
+                  height={800}
+                  loading="lazy"
+                  decoding="async"
+                />
+              </figure>
+            </div>
           </div>
         </div>
 

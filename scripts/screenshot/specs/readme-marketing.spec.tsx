@@ -5,13 +5,16 @@
  * Terminal TUI pixels are injected because xterm canvas does not serialize.
  */
 
+import fs from "node:fs";
 import path from "node:path";
 import userEvent from "@testing-library/user-event";
 import * as React from "react";
 import { expect, it, vi } from "vitest";
 import { Dashboard } from "../../../src/components/Dashboard";
 import { render, screen, waitFor, within } from "../../../test/test-utils";
-import { getWorkspaces } from "../../../src/lib/api";
+import { getWorkspaces, createWorkspace } from "../../../src/lib/api";
+import { listen } from "@tauri-apps/api/event";
+import { TREQ_SEND_EVENT } from "../../../src/lib/treqSend";
 import { getFullWorkspacePath } from "../../../src/lib/utils";
 import {
   findSidebarBranchElement,
@@ -37,6 +40,7 @@ import {
   expandMarketingFileTree,
   expandMarketingTerminalPane,
   hideMarketingTerminalPane,
+  showMarketingTerminalPane,
   injectMarketingTuiOverlays,
   openMarketingAgentTerminals,
 } from "../readme-terminals";
@@ -349,24 +353,130 @@ it("captures agent prompt input for CLI delegation copy", async () => {
   });
 }, 120000);
 
-it("captures an agent send-files prompt for landing copy", async () => {
-  const { user } = await prepareWorkspace();
+it("captures an agent splitting work across three workspaces", async () => {
+  const { user, repoPath } = await prepareWorkspace();
 
   const input = await screen.findByPlaceholderText("Describe a task...");
   await user.click(input);
   await user.clear(input);
   await user.type(
     input,
-    "send me the screenshots and updated research draft markdown file",
+    "Split the work across 3 agents in 3 different workspaces",
   );
 
   await captureDocument(document, {
-    name: "readme-send-prompt",
+    name: "readme-spawn-before",
     deviceScaleFactor: 2,
     clipSelector: '[data-testid="agent-task-input"]',
-    publishTo: path.join(README_SCREENSHOTS_DIR, "send.png"),
+    publishTo: path.join(README_SCREENSHOTS_DIR, "spawn-before.png"),
     expectations: [
-      "The agent prompt box asks the agent to send screenshots and a research draft markdown file.",
+      "The agent prompt asks to split the work across 3 agents in 3 different workspaces.",
+    ],
+  });
+
+  await createWorkspace(repoPath, "feat/agent-one");
+  await createWorkspace(repoPath, "feat/agent-two");
+  await createWorkspace(repoPath, "feat/agent-three");
+  await findSidebarBranchElement("feat/agent-one");
+  await findSidebarBranchElement("feat/agent-two");
+  await findSidebarBranchElement("feat/agent-three");
+  document.documentElement.classList.add("dark");
+  await new Promise((resolve) => setTimeout(resolve, 400));
+
+  await captureDocument(document, {
+    name: "readme-spawn-after",
+    deviceScaleFactor: 2,
+    clipSelector: '[data-testid="workspace-sidebar"]',
+    publishTo: path.join(README_SCREENSHOTS_DIR, "spawn-after.png"),
+    expectations: [
+      "The sidebar lists feat/agent-one, feat/agent-two, and feat/agent-three after the split.",
+    ],
+  });
+}, 120000);
+
+it("captures treq send thumbnail and lightbox for landing copy", async () => {
+  const { user, repoPath } = await prepareWorkspace();
+
+  const imagePath = path.join(repoPath, "research-draft.svg");
+  fs.writeFileSync(
+    imagePath,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128">
+  <rect width="128" height="128" fill="#2563eb"/>
+  <circle cx="64" cy="64" r="36" fill="#f8fafc"/>
+</svg>
+`,
+  );
+
+  await user.click(await screen.findByRole("button", { name: "New Shell" }));
+  showMarketingTerminalPane();
+  expandMarketingTerminalPane();
+  await waitFor(() => {
+    expect(document.querySelector('[data-terminal-id^="shell-"]')).not.toBeNull();
+  });
+  expandMarketingTerminalPane();
+
+  const terminalEl = document.querySelector(
+    '[data-terminal-id^="shell-"]',
+  ) as HTMLElement;
+  const ptySessionId = terminalEl.getAttribute("data-terminal-id");
+  expect(ptySessionId).toBeTruthy();
+
+  await waitFor(() => {
+    expect(
+      vi.mocked(listen).mock.calls.some((args) => args[0] === TREQ_SEND_EVENT),
+    ).toBe(true);
+  });
+
+  const sendCallback = vi
+    .mocked(listen)
+    .mock.calls.find((args) => args[0] === TREQ_SEND_EVENT)?.[1] as (event: {
+    payload: {
+      kind: string;
+      request_id: string;
+      repo: string;
+      pty_session_id: string;
+      media_type: string;
+      path: string;
+      title: string;
+    };
+  }) => void;
+
+  sendCallback({
+    payload: {
+      kind: "send",
+      request_id: "landing-send-image",
+      repo: repoPath,
+      pty_session_id: ptySessionId!,
+      media_type: "image",
+      path: imagePath,
+      title: "research-draft.svg",
+    },
+  });
+
+  const imageThumb = await screen.findByTestId(
+    "terminal-send-preview-landing-send-image",
+  );
+
+  await captureDocument(document, {
+    name: "readme-send-thumb",
+    deviceScaleFactor: 2,
+    clipSelector: '[data-testid="workspace-terminal-pane"]',
+    publishTo: path.join(README_SCREENSHOTS_DIR, "send-thumb.png"),
+    expectations: [
+      "The terminal pane shows an asset thumbnail for research-draft.svg.",
+      "The lightbox is not open.",
+    ],
+  });
+
+  await user.click(imageThumb);
+  await screen.findByTestId("treq-send-preview-lightbox");
+
+  await captureDocument(document, {
+    name: "readme-send-lightbox",
+    deviceScaleFactor: 2,
+    publishTo: path.join(README_SCREENSHOTS_DIR, "send-lightbox.png"),
+    expectations: [
+      "The asset lightbox is open over the workspace, showing research-draft.svg.",
     ],
   });
 }, 120000);
@@ -385,6 +495,30 @@ it("captures the schedule dialog for landing schedule copy", async () => {
     expectations: [
       "A Schedule workspace dialog is open with hide-until presets.",
       "The dialog is cropped; the rest of the app chrome is out of frame.",
+    ],
+  });
+}, 120000);
+
+it("captures commit timestamp editing for landing schedule copy", async () => {
+  const { user } = await prepareWorkspace();
+
+  await user.click(await screen.findByRole("tab", { name: /^Commits/ }));
+  const commitTitle = await screen.findByText(
+    "feat: handle empty event messages",
+  );
+  await user.click(commitTitle);
+  await user.click(await screen.findByRole("button", { name: "Edit timestamp" }));
+  const editDialog = await screen.findByTestId("modal");
+  await within(editDialog).findByText("Edit commit timestamp");
+
+  await captureDocument(document, {
+    name: "readme-timestamp",
+    deviceScaleFactor: 2,
+    clipSelector: '[data-testid="modal"]',
+    publishTo: path.join(README_SCREENSHOTS_DIR, "timestamp.png"),
+    expectations: [
+      "A dialog titled Edit commit timestamp is open with shift-by-duration fields.",
+      "A control exists to shift the stack to now.",
     ],
   });
 }, 120000);

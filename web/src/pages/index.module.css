@@ -508,10 +508,38 @@
   font-weight: 700;
 }
 
-.githubShotPair {
+.githubShotPair,
+.beforeAfter {
   display: grid;
   gap: 0.75rem;
   width: 100%;
+}
+
+.beforeAfter {
+  grid-template-columns: 1fr 1fr;
+}
+
+.carouselCard .beforeAfter img {
+  display: block;
+  width: 100%;
+  height: 8rem;
+  object-fit: cover;
+  object-position: top left;
+  border-radius: 10px;
+  background: #111111;
+}
+
+.beforeAfter figure {
+  margin: 0;
+}
+
+.beforeAfter figcaption {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #737373;
+  margin-bottom: 0.4rem;
 }
 
 .highlightDarkImage {
@@ -1212,6 +1240,7 @@
   .highlightDark,
   .highlightWide,
   .rebaseVisual,
+  .beforeAfter,
   .carouselTrack,
   .statsSplit,
   .proofSection {
@@ -1287,8 +1316,8 @@
   background: #143d38;
 }
 
-[data-theme='dark'] .featureImage {
-  border-color: #2a2a2a;
+[data-theme='dark'] .beforeAfter figcaption {
+  color: #a3a3a3;
 }
 
 [data-theme='dark'] .inlineStackNode {
