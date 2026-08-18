@@ -447,6 +447,50 @@ it("captures agent prompt input for CLI delegation copy", async () => {
   });
 }, 120000);
 
+it("captures a prompt to move changes to a new workspace", async () => {
+  const { user } = await prepareWorkspace();
+
+  const input = await screen.findByPlaceholderText("Describe a task...");
+  await user.click(input);
+  await user.clear(input);
+  await user.type(
+    input,
+    "Move my changes to a new workspace and continue the fix there",
+  );
+
+  await captureDocument(document, {
+    name: "readme-move-changes",
+    deviceScaleFactor: 2,
+    clipSelector: '[data-testid="agent-task-input"]',
+    publishTo: path.join(README_SCREENSHOTS_DIR, "move-changes.png"),
+    expectations: [
+      "The agent prompt asks to move changes to a new workspace and continue the fix there.",
+    ],
+  });
+}, 120000);
+
+it("captures a prompt to break a workspace into smaller ones", async () => {
+  const { user } = await prepareWorkspace();
+
+  const input = await screen.findByPlaceholderText("Describe a task...");
+  await user.click(input);
+  await user.clear(input);
+  await user.type(
+    input,
+    "Break up this workspace into smaller stacked or separate workspaces",
+  );
+
+  await captureDocument(document, {
+    name: "readme-break-workspace",
+    deviceScaleFactor: 2,
+    clipSelector: '[data-testid="agent-task-input"]',
+    publishTo: path.join(README_SCREENSHOTS_DIR, "break-workspace.png"),
+    expectations: [
+      "The agent prompt asks to break the workspace into smaller stacked or separate workspaces.",
+    ],
+  });
+}, 120000);
+
 it("captures an agent splitting work across three workspaces", async () => {
   const { user } = await prepareWorkspace("feat/keyvalues-cache");
 
