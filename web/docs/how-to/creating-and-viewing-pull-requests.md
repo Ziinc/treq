@@ -42,7 +42,7 @@ From the command palette (`Cmd+K`):
 
 ## Use the GitHub Panel
 
-Open **GitHub** in the sidebar, then **Pull Requests**. Select Open, Closed, or All. Click a row to open detail beside the list. From detail you can manage the PR: read the conversation, add comments, change draft state, close or reopen, inspect checks, and open the PR on GitHub.
+Open **GitHub** in the sidebar, then **Pull Requests**. Select Draft, Open, Closed, or All. Draft lists only draft PRs. Click a row to open detail beside the list. From detail you can manage the PR: read the conversation, add comments, change draft state, close or reopen, inspect checks, and open the PR on GitHub.
 
 Use **New** on the PR list when you need a manual title, body, base, and head instead of the workspace Create PR flow. Issues under the same GitHub panel follow the same list and detail pattern.
 

@@ -412,22 +412,19 @@ pub fn gh_list_prs_impl(
   let limit = limit.max(1);
   let page = page.max(1);
   let fetch_limit = (limit * page).to_string();
-  let out = run_gh(
-    gh_path,
-    &[
-      "pr",
-      "list",
-      "--repo",
-      repo_full_name,
-      "--state",
-      state,
-      "--json",
-      "number,title,state,url,author,labels,headRefName,baseRefName,createdAt,updatedAt,isDraft",
-      "--limit",
-      &fetch_limit,
-    ],
-    extended_path,
-  )?;
+  let is_draft = state == "draft";
+  let gh_state = if is_draft { "open" } else { state };
+  let mut args = vec!["pr", "list", "--repo", repo_full_name, "--state", gh_state];
+  if is_draft {
+    args.push("--draft");
+  }
+  args.extend([
+    "--json",
+    "number,title,state,url,author,labels,headRefName,baseRefName,createdAt,updatedAt,isDraft",
+    "--limit",
+    fetch_limit.as_str(),
+  ]);
+  let out = run_gh(gh_path, &args, extended_path)?;
   let bytes = check_gh_output(out)?;
   let fetched: Vec<GhPullRequest> =
     serde_json::from_slice(&bytes).map_err(|e| format!("Failed to parse gh output: {e}"))?;
@@ -1394,6 +1391,20 @@ echo ok"#,
 echo ok"#,
     );
     gh_set_pr_draft_impl(&gh_path, "owner/repo", 9, true, "/usr/bin:/bin").unwrap();
+  }
+
+  #[test]
+  #[cfg(unix)]
+  fn gh_list_prs_passes_draft_flag_when_state_is_draft() {
+    let bin_dir = TempDir::new().unwrap();
+    let gh_path = write_fake_gh(
+      &bin_dir,
+      r#"test "$*" = "pr list --repo owner/repo --state open --draft --json number,title,state,url,author,labels,headRefName,baseRefName,createdAt,updatedAt,isDraft --limit 30" || exit 9
+echo '[]'"#,
+    );
+    let page = gh_list_prs_impl(&gh_path, "owner/repo", "draft", 30, 1, "/usr/bin:/bin").unwrap();
+    assert!(page.items.is_empty());
+    assert!(!page.has_more);
   }
 
   // ── check duration ───────────────────────────────────────────────────────

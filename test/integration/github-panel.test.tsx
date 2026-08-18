@@ -373,6 +373,63 @@ describe("GitHubPanel", () => {
     expect(screen.getByRole("button", { name: /load more/i })).toBeVisible();
   });
 
+  it("places a Draft filter to the left of Open on the pull request list", async () => {
+    render(<GitHubPanel repoPath="/tmp/repo" />);
+    await user.click(screen.getByRole("tab", { name: /pull requests/i }));
+
+    const draftFilter = await screen.findByRole("button", { name: "Draft" });
+    const openFilter = screen.getByRole("button", { name: "Open" });
+    expect(draftFilter.compareDocumentPosition(openFilter)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+
+  it("does not show a Draft filter on the issues list", async () => {
+    render(<GitHubPanel repoPath="/tmp/repo" />);
+
+    expect(await screen.findByRole("button", { name: "Open" })).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "Draft" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("lists only draft pull requests when the Draft filter is selected", async () => {
+    api.ghListPrs.mockImplementation(
+      async (_repo: string, state: string) => {
+        if (state === "draft") {
+          return {
+            items: [{ ...makePr(2, "WIP PR"), is_draft: true }],
+            hasMore: false,
+          };
+        }
+        return {
+          items: [
+            { ...makePr(1, "Ready PR"), is_draft: false },
+            { ...makePr(2, "WIP PR"), is_draft: true },
+          ],
+          hasMore: false,
+        };
+      },
+    );
+
+    render(<GitHubPanel repoPath="/tmp/repo" />);
+    await user.click(screen.getByRole("tab", { name: /pull requests/i }));
+
+    expect(await screen.findByText("Ready PR")).toBeVisible();
+    expect(screen.getByText("WIP PR")).toBeVisible();
+
+    await user.click(screen.getByRole("button", { name: "Draft" }));
+
+    expect(await screen.findByText("WIP PR")).toBeVisible();
+    expect(screen.queryByText("Ready PR")).not.toBeInTheDocument();
+    expect(api.ghListPrs).toHaveBeenCalledWith(
+      "acme/treq",
+      "draft",
+      expect.any(Number),
+      1,
+    );
+  });
+
   it("marks draft pull requests as Draft instead of Open", async () => {
     api.ghListPrs.mockResolvedValue({
       items: [
