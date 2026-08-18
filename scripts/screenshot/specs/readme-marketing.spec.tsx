@@ -455,17 +455,11 @@ it("captures a clean code-review diff for Features", async () => {
   );
   writeWorkspaceFile(
     cachePath,
-    "packages/api/src/cache.test.ts",
-    `import { getKey } from "./cache";
-
-export function miss(): string {
-  return getKey("missing") ?? "";
-}
-`,
+    "README.md",
+    "# keyvalues cache notes\n",
   );
   await ensureWorkspaceIndexed(repoPath, cache.id, cachePath);
 
-  await user.click(await screen.findByRole("tab", { name: /^Code/ }));
   await user.click(await screen.findByRole("tab", { name: /^Changes/ }));
   await screen.findByRole("tab", { name: /^Changes/, selected: true });
   const viewer = screen.getByTestId("changes-diff-viewer");
@@ -480,8 +474,8 @@ export function miss(): string {
     "keep the map private",
   );
 
-  await user.click(await within(viewer).findByTitle(/cache\.test\.ts/));
-  await addInlineComment(user, /getKey\("missing"\)/, "cover the miss path");
+  await user.click(await within(viewer).findByTitle(/README\.md/, {}, { timeout: 10000 }));
+  await addInlineComment(user, /keyvalues cache notes/, "keep this note short");
 
   hideMarketingTerminalPane();
   await new Promise((resolve) => setTimeout(resolve, 300));
@@ -493,7 +487,7 @@ export function miss(): string {
     publishTo: path.join(README_SCREENSHOTS_DIR, "code-reviews.png"),
     expectations: [
       "The Changes tab shows a normal diff with no conflict markers.",
-      "The sidebar lists one committed file (cache.ts) and one uncommitted file (cache.test.ts).",
+      "The sidebar lists one committed file (cache.ts) and one uncommitted file (README.md).",
       "Local inline comments are visible on the diff.",
     ],
   });
