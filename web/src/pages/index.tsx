@@ -13,6 +13,8 @@ import sidebarScreenshot from '../../../assets/screenshots/sidebar.png';
 import spawnBeforeScreenshot from '../../../assets/screenshots/spawn-before.png';
 import spawnAfterScreenshot from '../../../assets/screenshots/spawn-after.png';
 import promptScreenshot from '../../../assets/screenshots/prompt.png';
+import moveChangesScreenshot from '../../../assets/screenshots/move-changes.png';
+import breakWorkspaceScreenshot from '../../../assets/screenshots/break-workspace.png';
 import sendThumbScreenshot from '../../../assets/screenshots/send-thumb.png';
 import sendLightboxScreenshot from '../../../assets/screenshots/send-lightbox.png';
 import scheduleScreenshot from '../../../assets/screenshots/schedule.png';
@@ -181,10 +183,16 @@ const SOLUTION_CARDS = [
     alt: 'Agent prompt asking to create a workspace for this fix',
   },
   {
-    title: 'GitHub issues and PRs',
-    body: 'Open Issues and Pull Requests in the app. Create a PR, read CI, and start an agent from an issue without leaving Treq.',
-    image: githubScreenshot,
-    alt: 'GitHub panel listing pull requests for the repo',
+    title: 'Move changes between workspaces',
+    body: 'Tell an agent to move your changes to a new workspace and continue the fix there. Agents can move commits, working-copy files, and hunks through the treq CLI.',
+    image: moveChangesScreenshot,
+    alt: 'Agent prompt: Move my changes to a new workspace and continue the fix there',
+  },
+  {
+    title: 'Break up a large workspace',
+    body: 'Tell an agent to break this workspace into smaller stacked or separate workspaces. Each slice gets its own checkout.',
+    image: breakWorkspaceScreenshot,
+    alt: 'Agent prompt: Break up this workspace into smaller stacked or separate workspaces',
   },
 ];
 
@@ -198,7 +206,7 @@ function SolutionsCarousel(): ReactNode {
     <section className={styles.carouselSection} aria-label="Solutions">
       <div className={styles.carouselHeader}>
         <Heading as="h2" className={styles.carouselHeading}>
-          Delegate workspaces. Let one agent start three more.
+          Delegate workspaces. Let agents move work and start more agents.
         </Heading>
         <div className={styles.carouselNav}>
           <button
@@ -238,8 +246,8 @@ function SolutionsCarousel(): ReactNode {
                 className={styles.carouselCardImage}
                 src={card.image}
                 alt={card.alt}
-                width={2880}
-                height={1800}
+                width={1346}
+                height={224}
                 loading="lazy"
                 decoding="async"
               />
