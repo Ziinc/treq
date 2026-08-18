@@ -449,8 +449,12 @@ it("captures a clean code-review diff for Features", async () => {
     (ws) => ws.branch_name === "feat/keyvalues-cache",
   );
   if (!cache) throw new Error("feat/keyvalues-cache not found");
+  const cachePath = resolveWorkspacePath(
+    repoPath,
+    getFullWorkspacePath(cache),
+  );
   writeWorkspaceFile(
-    resolveWorkspacePath(repoPath, getFullWorkspacePath(cache)),
+    cachePath,
     "packages/api/src/cache.test.ts",
     `import { getKey } from "./cache";
 
@@ -459,7 +463,9 @@ export function miss(): string {
 }
 `,
   );
+  await ensureWorkspaceIndexed(repoPath, cache.id, cachePath);
 
+  await user.click(await screen.findByRole("tab", { name: /^Code/ }));
   await user.click(await screen.findByRole("tab", { name: /^Changes/ }));
   await screen.findByRole("tab", { name: /^Changes/, selected: true });
   const viewer = screen.getByTestId("changes-diff-viewer");
