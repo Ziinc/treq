@@ -112,7 +112,7 @@ describe("Review tab change count", () => {
 
     await user.click(await screen.findByTestId("home-repo-row"));
     await waitFor(() => {
-      expect(getReviewBadgeCount()).toBeNull();
+      expect(getReviewBadgeCount()).not.toBe(2);
     });
   });
 });

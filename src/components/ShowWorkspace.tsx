@@ -418,44 +418,42 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
     const includeCommittedInReviewCount =
       Boolean(workspace) && workspace!.branch_name !== defaultTargetBranch;
     const reviewWorkspaceId = workspace?.id ?? null;
-    const {
-      data: reviewChangeCount = 0,
-      isPending: reviewChangeCountPending,
-    } = useQuery({
-      queryKey: [
-        ...reviewChangeCountQueryKey(effectiveRepoPath, reviewWorkspaceId),
-        includeCommittedInReviewCount,
-        defaultTargetBranch,
-      ],
-      enabled: Boolean(effectiveRepoPath),
-      // Never show another workspace/branch's count while the new key loads.
-      placeholderData: (previousData, previousQuery) => {
-        const previousKey = previousQuery?.queryKey;
-        if (!previousKey) return undefined;
-        const sameWorkspace = previousKey[2] === reviewWorkspaceId;
-        const sameIncludeCommitted =
-          previousKey[3] === includeCommittedInReviewCount;
-        const sameTarget = previousKey[4] === defaultTargetBranch;
-        return sameWorkspace && sameIncludeCommitted && sameTarget
-          ? previousData
-          : undefined;
-      },
-      queryFn: async ({ queryKey }) => {
-        const repoPath = queryKey[1] as string | undefined;
-        const workspaceId = queryKey[2] as number | null;
-        const includeCommitted = queryKey[3] as boolean;
-        if (!repoPath) return 0;
-        if (includeCommitted && workspaceId !== null) {
-          const diff = await getWorkspaceDiff(repoPath, workspaceId);
-          return countUniqueReviewChangePaths(
-            diff.uncommitted_files ?? [],
-            diff.committed_files ?? [],
-          );
-        }
-        const files = await getWorkspaceChangedFiles(repoPath, workspaceId);
-        return countUniqueReviewChangePaths(files);
-      },
-    });
+    const { data: reviewChangeCount = 0, isPending: reviewChangeCountPending } =
+      useQuery<number>({
+        queryKey: [
+          ...reviewChangeCountQueryKey(effectiveRepoPath, reviewWorkspaceId),
+          includeCommittedInReviewCount,
+          defaultTargetBranch,
+        ],
+        enabled: Boolean(effectiveRepoPath),
+        // Never show another workspace/branch's count while the new key loads.
+        placeholderData: (previousData, previousQuery) => {
+          const previousKey = previousQuery?.queryKey;
+          if (!previousKey) return undefined;
+          const sameWorkspace = previousKey[2] === reviewWorkspaceId;
+          const sameIncludeCommitted =
+            previousKey[3] === includeCommittedInReviewCount;
+          const sameTarget = previousKey[4] === defaultTargetBranch;
+          return sameWorkspace && sameIncludeCommitted && sameTarget
+            ? previousData
+            : undefined;
+        },
+        queryFn: async ({ queryKey }) => {
+          const repoPath = queryKey[1] as string | undefined;
+          const workspaceId = queryKey[2] as number | null;
+          const includeCommitted = queryKey[3] as boolean;
+          if (!repoPath) return 0;
+          if (includeCommitted && workspaceId !== null) {
+            const diff = await getWorkspaceDiff(repoPath, workspaceId);
+            return countUniqueReviewChangePaths(
+              diff.uncommitted_files ?? [],
+              diff.committed_files ?? [],
+            );
+          }
+          const files = await getWorkspaceChangedFiles(repoPath, workspaceId);
+          return countUniqueReviewChangePaths(files);
+        },
+      });
     const visibleReviewChangeCount = reviewChangeCountPending
       ? 0
       : reviewChangeCount;
