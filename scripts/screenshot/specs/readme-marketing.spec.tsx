@@ -221,7 +221,7 @@ it("captures the Changes tab for the README", async () => {
   await screen.findByRole("tab", { name: /^Changes/, selected: true });
 
   const committedToggle = await screen.findByRole("button", {
-    name: "Committed",
+    name: /^Committed/,
   });
   const committedSection = committedToggle.closest("div")?.parentElement;
   if (!committedSection) throw new Error("Committed section not found");
@@ -467,7 +467,7 @@ export function miss(): string {
   await screen.findByRole("tab", { name: /^Changes/, selected: true });
 
   const committedToggle = await screen.findByRole("button", {
-    name: "Committed",
+    name: /^Committed/,
   });
   const committedSection = committedToggle.closest("div")?.parentElement;
   if (!committedSection) throw new Error("Committed section not found");
@@ -478,7 +478,9 @@ export function miss(): string {
     "keep the map private",
   );
 
-  const changesToggle = await screen.findByRole("button", { name: "Changes" });
+  const changesToggle = await within(
+    screen.getByTestId("changes-diff-viewer"),
+  ).findByRole("button", { name: /^Changes/ });
   const changesSection = changesToggle.closest("div")?.parentElement;
   if (!changesSection) throw new Error("Changes section not found");
   await user.click(await within(changesSection).findByTitle(/cache\.test\.ts/));
