@@ -51,40 +51,6 @@ export const buildTreqAgentSystemPrompt = ({
   ].join(" ");
 };
 
-/** Build per-session Claude sandbox settings for the resolved working directory. */
-export const buildClaudeSandboxSettings = ({
-  workspacePath,
-  repoPath,
-}: AgentPathContext) => ({
-  sandbox: {
-    enabled: true,
-    failIfUnavailable: false,
-    allowUnsandboxedCommands: false,
-    filesystem: workspacePath
-      ? {
-          denyRead: [repoPath],
-          allowRead: [workspacePath],
-          allowWrite: [workspacePath],
-        }
-      : {
-          allowRead: [repoPath],
-          allowWrite: [repoPath],
-        },
-  },
-});
-
-/** Overlay Treq sandbox config onto a copy of `.claude/settings.local.json`. */
-export const mergeClaudeLocalSettings = (
-  existing: Record<string, unknown> | null,
-  sandboxSettings: ReturnType<typeof buildClaudeSandboxSettings>,
-): Record<string, unknown> => ({
-  ...existing,
-  sandbox: sandboxSettings.sandbox,
-});
-
-export const claudeLocalSettingsPath = (cwd: string): string =>
-  `${cwd.replace(/\/+$/, "")}/.claude/settings.local.json`;
-
 const shellCat = (path: string): string => `$(cat -- ${shellQuote(path)})`;
 
 const wrapWithTempFileCleanup = (command: string, paths: string[]): string => {
@@ -110,8 +76,8 @@ export interface BuildAgentAutoCommandOptions {
 /**
  * Build the PTY auto-command for an agent CLI.
  *
- * Long prompt/settings bodies are never inlined. Claude reads files via native
- * flags; Codex and Cursor have no append-from-file flags, so the shell expands
+ * Long prompt bodies are never inlined. Claude reads the prompt via a native
+ * flag; Codex and Cursor have no append-from-file flags, so the shell expands
  * `$(cat -- path)` at exec time (the typed command stays short).
  */
 export const buildAgentAutoCommand = ({
@@ -151,11 +117,6 @@ export const buildAgentAutoCommand = ({
     if (sessionModel) {
       autoCommand += ` --model=${shellQuote(sessionModel)}`;
     }
-    if (!files.settingsPath) {
-      throw new Error("Claude auto-command requires a settings file path");
-    }
-    cleanupPaths.push(files.settingsPath);
-    autoCommand += ` --settings ${shellQuote(files.settingsPath)}`;
     autoCommand += ` --append-system-prompt-file ${shellQuote(files.promptPath)}`;
     if (pendingPrompt) {
       autoCommand += ` -- ${shellQuote(pendingPrompt)}`;

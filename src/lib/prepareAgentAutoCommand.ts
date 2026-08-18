@@ -1,27 +1,10 @@
 import {
   type AgentKind,
   buildAgentAutoCommand,
-  buildClaudeSandboxSettings,
   buildTreqAgentSystemPrompt,
-  claudeLocalSettingsPath,
   cursorPromptFileContents,
-  mergeClaudeLocalSettings,
 } from "./agentCommand";
-import { cleanupAgentCliFiles, readFile, writeAgentCliFiles } from "./api";
-
-export const parseJsonObject = (
-  raw: string,
-): Record<string, unknown> | null => {
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      return parsed as Record<string, unknown>;
-    }
-  } catch {
-    return null;
-  }
-  return null;
-};
+import { cleanupAgentCliFiles, writeAgentCliFiles } from "./api";
 
 export const prepareAgentAutoCommand = async ({
   agent,
@@ -49,38 +32,20 @@ export const prepareAgentAutoCommand = async ({
   const systemPrompt = buildTreqAgentSystemPrompt(agentPathContext);
 
   let promptContents = systemPrompt;
-  let settingsJson: string | undefined;
   if (agent === "cursor") {
     promptContents = cursorPromptFileContents(systemPrompt, pendingPrompt);
-  } else if (agent === "claude") {
-    let existing: Record<string, unknown> | null = null;
-    try {
-      existing = parseJsonObject(await readFile(claudeLocalSettingsPath(cwd)));
-    } catch {
-      existing = null;
-    }
-    settingsJson = JSON.stringify(
-      mergeClaudeLocalSettings(
-        existing,
-        buildClaudeSandboxSettings(agentPathContext),
-      ),
-      null,
-      2,
-    );
   }
 
   let skippedProjectSkills = false;
-  const files = await writeAgentCliFiles(
-    promptContents,
-    settingsJson,
-    cwd,
-  ).catch((error) => {
-    if (!cwd) {
-      throw error;
-    }
-    skippedProjectSkills = true;
-    return writeAgentCliFiles(promptContents, settingsJson, null);
-  });
+  const files = await writeAgentCliFiles(promptContents, undefined, cwd).catch(
+    (error) => {
+      if (!cwd) {
+        throw error;
+      }
+      skippedProjectSkills = true;
+      return writeAgentCliFiles(promptContents, undefined, null);
+    },
+  );
   const filePaths = [
     files.promptPath,
     files.settingsPath,
