@@ -12,12 +12,20 @@ import * as React from "react";
 import { expect, it, vi } from "vitest";
 import { Dashboard } from "../../../src/components/Dashboard";
 import { render, screen, waitFor, within } from "../../../test/test-utils";
-import { getWorkspaces } from "../../../src/lib/api";
+import {
+  checkAndRebaseWorkspaces,
+  createCommit,
+  createWorkspace,
+  ensureWorkspaceIndexed,
+  getWorkspaces,
+} from "../../../src/lib/api";
 import { listen } from "@tauri-apps/api/event";
 import { TREQ_SEND_EVENT } from "../../../src/lib/treqSend";
 import { getFullWorkspacePath } from "../../../src/lib/utils";
 import {
+  createTestRepo,
   findSidebarBranchElement,
+  openRepo,
   resolveWorkspacePath,
   writeWorkspaceFile,
 } from "../../../test/utils";
@@ -207,6 +215,92 @@ it("captures the Changes tab for the README", async () => {
       "The Changes tab is cropped to the diff viewer. The terminal pane is not visible.",
       "A conflicted packages/web/src/pages/Home.tsx shows an inline conflict card (Side #1 / Base / Side #2).",
       "Committed files such as client.ts are listed in the Changes sidebar.",
+    ],
+  });
+}, 120000);
+
+it("captures sending a conflict to an agent for a new commit", async () => {
+  const { user } = await prepareWorkspace();
+
+  await user.click(await screen.findByRole("tab", { name: /^Changes/ }));
+  await screen.findByRole("tab", { name: /^Changes/, selected: true });
+
+  const conflictsToggle = await screen.findByRole("button", {
+    name: "Conflicts",
+  });
+  const conflictsSection = conflictsToggle.closest("div")?.parentElement;
+  if (!conflictsSection) throw new Error("Conflicts section not found");
+  await user.click(await within(conflictsSection).findByTitle(/Home\.tsx/));
+  await screen.findByText(/Conflict 1 of/);
+
+  await user.click(
+    await screen.findByRole("button", { name: "Resolve conflicts..." }),
+  );
+  await screen.findByRole("heading", { name: "Resolve conflicts" });
+  await screen.findByRole("button", { name: "Plan" });
+  await screen.findByRole("button", { name: "Edit" });
+
+  hideMarketingTerminalPane();
+  await new Promise((resolve) => setTimeout(resolve, 300));
+
+  await captureDocument(document, {
+    name: "readme-conflict-new-commit",
+    deviceScaleFactor: 2,
+    clipSelector: '[data-testid="changes-diff-viewer"]',
+    publishTo: path.join(README_SCREENSHOTS_DIR, "conflict-new-commit.png"),
+    expectations: [
+      "The Changes tab shows a conflicted file and a Resolve conflicts popover.",
+      "Plan and Edit buttons are visible so an agent can land a new resolution commit.",
+    ],
+  });
+}, 120000);
+
+it("captures inplace conflict resolution on the Commits tab", async () => {
+  stubGithub();
+  const { repoPath, defaultBranch } = createTestRepo(false);
+  openRepo(repoPath);
+
+  const user = userEvent.setup();
+  const workspaceId = await createWorkspace(repoPath, "feat/landing-inplace");
+  const workspace = (await getWorkspaces(repoPath)).find(
+    (w) => w.id === workspaceId,
+  );
+  if (!workspace) throw new Error("Workspace not found");
+  const workspacePath = resolveWorkspacePath(
+    repoPath,
+    workspace.workspace_path,
+  );
+
+  writeWorkspaceFile(workspacePath, "README.md", "workspace side\n");
+  await createCommit(repoPath, workspaceId, "workspace conflicting change");
+
+  writeWorkspaceFile(repoPath, "README.md", "main side\n");
+  await createCommit(repoPath, null, "main conflicting change");
+
+  await checkAndRebaseWorkspaces(repoPath, workspaceId, defaultBranch, true);
+  await ensureWorkspaceIndexed(repoPath, workspaceId, workspacePath);
+
+  render(<Dashboard />);
+  await user.click(await findSidebarBranchElement("feat/landing-inplace"));
+  await screen.findByTestId(`workspace-conflict-indicator-${workspaceId}`);
+
+  await user.click(await screen.findByRole("tab", { name: /^Commits/ }));
+  await user.click(await screen.findByTestId("resolve-conflicts-button"));
+  await screen.findByTestId("resolve-conflicts-prompt");
+  await screen.findByRole("button", { name: /^Resolve$/i }, { timeout: 15000 });
+  await screen.findByText("Resolve commit conflicts inplace");
+
+  document.documentElement.classList.add("dark");
+  await new Promise((resolve) => setTimeout(resolve, 300));
+
+  await captureDocument(document, {
+    name: "readme-conflict-inplace",
+    deviceScaleFactor: 2,
+    clipSelector: '[data-testid="modal"]',
+    publishTo: path.join(README_SCREENSHOTS_DIR, "conflict-inplace.png"),
+    expectations: [
+      "A dialog titled Resolve commit conflicts inplace is open.",
+      "The agent prompt field and Resolve action are visible.",
     ],
   });
 }, 120000);
