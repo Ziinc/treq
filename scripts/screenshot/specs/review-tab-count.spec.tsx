@@ -48,6 +48,7 @@ it("captures Review badge showing total WC + committed count before and after se
 	writeWorkspaceFile(workspacePath, "committed-only.txt", "committed\n");
 	await createCommit(repoPath, workspaceId, "commit committed-only file");
 	writeWorkspaceFile(workspacePath, "uncommitted-only.txt", "working only\n");
+	await createWorkspace(repoPath, "feat/clean-badge");
 
 	const user = userEvent.setup();
 	render(<Dashboard />);
@@ -81,6 +82,19 @@ it("captures Review badge showing total WC + committed count before and after se
 		expectations: [
 			"The Changes tab is selected and its badge still shows 2 (did not drop).",
 			"The Changes sidebar lists uncommitted-only.txt and the Committed section lists committed-only.txt.",
+		],
+	});
+
+	await user.click(await screen.findByText("feat/clean-badge"));
+	await waitFor(() => {
+		expect(getReviewBadgeCount()).toBeNull();
+	});
+
+	await captureDocument(document, {
+		name: "review-tab-count-03-after-workspace-switch",
+		expectations: [
+			'The header shows the "feat/clean-badge" workspace.',
+			"The Changes tab has no numeric badge — the previous workspace's count of 2 is gone.",
 		],
 	});
 }, 60000);

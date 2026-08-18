@@ -417,27 +417,48 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
     // must not change this number.
     const includeCommittedInReviewCount =
       Boolean(workspace) && workspace!.branch_name !== defaultTargetBranch;
-    const { data: reviewChangeCount = 0 } = useQuery({
+    const reviewWorkspaceId = workspace?.id ?? null;
+    const {
+      data: reviewChangeCount = 0,
+      isPending: reviewChangeCountPending,
+    } = useQuery({
       queryKey: [
-        ...reviewChangeCountQueryKey(effectiveRepoPath, workspace?.id ?? null),
+        ...reviewChangeCountQueryKey(effectiveRepoPath, reviewWorkspaceId),
         includeCommittedInReviewCount,
+        defaultTargetBranch,
       ],
       enabled: Boolean(effectiveRepoPath),
-      queryFn: async () => {
-        if (includeCommittedInReviewCount && workspace?.id !== undefined) {
-          const diff = await getWorkspaceDiff(effectiveRepoPath, workspace.id);
+      // Never show another workspace/branch's count while the new key loads.
+      placeholderData: (previousData, previousQuery) => {
+        const previousKey = previousQuery?.queryKey;
+        if (!previousKey) return undefined;
+        const sameWorkspace = previousKey[2] === reviewWorkspaceId;
+        const sameIncludeCommitted =
+          previousKey[3] === includeCommittedInReviewCount;
+        const sameTarget = previousKey[4] === defaultTargetBranch;
+        return sameWorkspace && sameIncludeCommitted && sameTarget
+          ? previousData
+          : undefined;
+      },
+      queryFn: async ({ queryKey }) => {
+        const repoPath = queryKey[1] as string | undefined;
+        const workspaceId = queryKey[2] as number | null;
+        const includeCommitted = queryKey[3] as boolean;
+        if (!repoPath) return 0;
+        if (includeCommitted && workspaceId !== null) {
+          const diff = await getWorkspaceDiff(repoPath, workspaceId);
           return countUniqueReviewChangePaths(
             diff.uncommitted_files ?? [],
             diff.committed_files ?? [],
           );
         }
-        const files = await getWorkspaceChangedFiles(
-          effectiveRepoPath,
-          workspace?.id ?? null,
-        );
+        const files = await getWorkspaceChangedFiles(repoPath, workspaceId);
         return countUniqueReviewChangePaths(files);
       },
     });
+    const visibleReviewChangeCount = reviewChangeCountPending
+      ? 0
+      : reviewChangeCount;
 
     // Workspace LOC (committed + working copy) for the Gerrit-style marker
     // on the tab row. Shares the stack panel's query key for cache reuse.
@@ -449,22 +470,22 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
     });
 
     const reviewTabPill = useMemo(() => {
-      if (reviewChangeCount <= 0) return null;
+      if (visibleReviewChangeCount <= 0) return null;
       const derived = getReviewTabPill({
         conflictCount,
         uncommittedCount: changedFiles.size,
         hasUncommittedFromStatus: workspaceStatusData?.has_changes ?? false,
-        committedFileCount: reviewChangeCount,
+        committedFileCount: visibleReviewChangeCount,
         commitsAheadCount:
           workspaceStatusData?.commits_ahead_of_target?.length ?? 0,
         hasWorkspaceCommits,
       });
       return {
         tone: derived?.tone ?? "committed",
-        count: reviewChangeCount,
+        count: visibleReviewChangeCount,
       };
     }, [
-      reviewChangeCount,
+      visibleReviewChangeCount,
       conflictCount,
       changedFiles.size,
       workspaceStatusData?.has_changes,

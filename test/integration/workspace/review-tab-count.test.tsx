@@ -76,4 +76,43 @@ describe("Review tab change count", () => {
     });
     expect(getReviewBadgeCount()).toBe(before);
   });
+
+  it("updates the Changes tab badge when switching to a workspace with no changes", async () => {
+    const fixture =
+      await setupWorkspaceWithCommittedAndUncommitted("feat/review-count");
+    await createWorkspace(fixture.repoPath, "feat/clean");
+
+    render(<Dashboard />);
+    await user.click(await findSidebarBranchElement(fixture.branchName));
+    await screen.findByTestId("show-workspace-header");
+    await waitFor(() => {
+      expect(getReviewBadgeCount()).toBe(2);
+    });
+
+    await user.click(await findSidebarBranchElement("feat/clean"));
+    const header = await screen.findByTestId("show-workspace-header");
+    await waitFor(() => {
+      expect(header).toHaveTextContent("feat/clean");
+    });
+    await waitFor(() => {
+      expect(getReviewBadgeCount()).toBeNull();
+    });
+  });
+
+  it("updates the Changes tab badge when switching back to the home repo", async () => {
+    const fixture =
+      await setupWorkspaceWithCommittedAndUncommitted("feat/review-count");
+
+    render(<Dashboard />);
+    await user.click(await findSidebarBranchElement(fixture.branchName));
+    await screen.findByTestId("show-workspace-header");
+    await waitFor(() => {
+      expect(getReviewBadgeCount()).toBe(2);
+    });
+
+    await user.click(await screen.findByTestId("home-repo-row"));
+    await waitFor(() => {
+      expect(getReviewBadgeCount()).toBeNull();
+    });
+  });
 });

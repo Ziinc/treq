@@ -864,10 +864,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
   ]);
 
   // Navigate to workspace without creating an agent session
-  const handleSelectWorkspace = useCallback((workspace: Workspace | null) => {
-    setSelectedWorkspace(workspace);
-    setViewMode("show-workspace");
-  }, []);
+  const handleSelectWorkspace = useCallback(
+    (workspace: Workspace | null) => {
+      const next = workspace ?? null;
+      setSelectedWorkspace(next);
+      setViewMode("show-workspace");
+      if (repoPath) {
+        void invalidateReviewChangeCount(
+          queryClient,
+          repoPath,
+          next?.id ?? null,
+        );
+      }
+    },
+    [queryClient, repoPath],
+  );
 
   const { moveWorkspace } = useWorkspaceHierarchy({
     repoPath,
@@ -1332,6 +1343,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
       queryClient.invalidateQueries({
         queryKey: ["workspace-statuses", repoPath],
       });
+      void queryClient.invalidateQueries({
+        queryKey: ["workspace-review-change-count", repoPath],
+      });
+      dispatchRefreshWorkspaceChanges();
     },
     [repoPath, queryClient],
   );
@@ -1442,6 +1457,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 onReset={handleReturnToDashboard}
               >
                 <ShowWorkspace
+                  key={selectedWorkspace?.id ?? "home"}
                   repositoryPath={repoPath}
                   workspace={selectedWorkspace}
                   onActiveTabChange={setShowWorkspaceActiveTab}
