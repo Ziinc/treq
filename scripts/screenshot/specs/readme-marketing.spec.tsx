@@ -448,9 +448,9 @@ it("captures treq send thumbnail and lightbox for landing copy", async () => {
     ).toBe(true);
   });
 
-  const sendCallback = vi
-    .mocked(listen)
-    .mock.calls.find((args) => args[0] === TREQ_SEND_EVENT)?.[1] as (event: {
+  const sendCallback = [...vi.mocked(listen).mock.calls]
+    .reverse()
+    .find((args) => args[0] === TREQ_SEND_EVENT)?.[1] as (event: {
     payload: {
       kind: string;
       request_id: string;
