@@ -354,7 +354,7 @@ it("captures agent prompt input for CLI delegation copy", async () => {
 }, 120000);
 
 it("captures an agent splitting work across three workspaces", async () => {
-  const { user } = await prepareWorkspace();
+  const { user } = await prepareWorkspace("feat/keyvalues-cache");
 
   const input = await screen.findByPlaceholderText("Describe a task...");
   await user.click(input);
@@ -379,9 +379,10 @@ it("captures an agent splitting work across three workspaces", async () => {
     "feat/agent-two",
     "feat/agent-three",
   ] as const) {
-    const header = await screen.findByTestId("show-workspace-header");
+    const parent = await findSidebarBranchElement("feat/keyvalues-cache");
+    const row = parent.closest("[data-rfd-draggable-id]") as HTMLElement;
     await user.click(
-      within(header).getByRole("button", { name: "Stack", exact: true }),
+      within(row).getByRole("button", { name: "Stack a workspace" }),
     );
     const dialog = await screen.findByTestId("modal");
     await user.type(within(dialog).getByLabelText("Branch Name"), branch);
@@ -423,10 +424,12 @@ it("captures treq send thumbnail and lightbox for landing copy", async () => {
 `,
   );
 
-  await user.click(
-    await screen.findByRole("button", { name: "New shell terminal" }),
-  );
+  const workspaceLabel = await findSidebarBranchElement(MARKETING_BRANCH);
+  const workspaceRow = workspaceLabel.closest(
+    "[data-rfd-draggable-id]",
+  ) as HTMLElement;
   showMarketingTerminalPane();
+  await user.click(within(workspaceRow).getByRole("button", { name: "Open shell" }));
   expandMarketingTerminalPane();
   await waitFor(() => {
     expect(document.querySelector('[data-terminal-id^="shell-"]')).not.toBeNull();
