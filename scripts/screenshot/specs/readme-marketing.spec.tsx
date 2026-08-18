@@ -24,6 +24,7 @@ import { TREQ_SEND_EVENT } from "../../../src/lib/treqSend";
 import { getFullWorkspacePath } from "../../../src/lib/utils";
 import {
   createTestRepo,
+  commitWorkspaceFile,
   findSidebarBranchElement,
   openRepo,
   resolveWorkspacePath,
@@ -442,8 +443,8 @@ it("captures two working copies side by side for isolation copy", async () => {
 }, 120000);
 
 it("captures a clean code-review diff for Features", async () => {
-  const { user, repoPath } = await prepareWorkspace("feat/keyvalues-cache");
-
+  stubGithub();
+  const { repoPath } = await seedReadmeMarketingRepo();
   const workspaces = await getWorkspaces(repoPath);
   const cache = workspaces.find(
     (ws) => ws.branch_name === "feat/keyvalues-cache",
@@ -453,29 +454,44 @@ it("captures a clean code-review diff for Features", async () => {
     repoPath,
     getFullWorkspacePath(cache),
   );
+  await commitWorkspaceFile(
+    repoPath,
+    { id: cache.id, path: cache.workspace_path },
+    "packages/api/src/cache.test.ts",
+    `import { getKey } from "./cache";
+
+export function miss(): string {
+  return getKey("missing") ?? "";
+}`,
+    "test cache misses",
+  );
   writeWorkspaceFile(
     cachePath,
-    "README.md",
-    "# keyvalues cache notes\n",
+    "packages/api/src/cache.ts",
+    "export const CACHE_TTL = 30;\n",
   );
-  await ensureWorkspaceIndexed(repoPath, cache.id, cachePath);
+
+  const user = userEvent.setup();
+  render(<Dashboard />);
+  await user.click(await findSidebarBranchElement("feat/keyvalues-cache"));
+  await screen.findByTestId("show-workspace-header");
+  hideMarketingTerminalPane();
+  document.documentElement.classList.add("dark");
 
   await user.click(await screen.findByRole("tab", { name: /^Changes/ }));
   await screen.findByRole("tab", { name: /^Changes/, selected: true });
   const viewer = screen.getByTestId("changes-diff-viewer");
+  await user.click(
+    await within(viewer).findByTitle(/cache\.ts/, {}, { timeout: 10000 }),
+  );
+  await addInlineComment(user, /CACHE_TTL/, "keep the map private");
+
   const showCommitted = within(viewer).queryByRole("button", { name: "Show" });
   if (showCommitted && showCommitted.getAttribute("aria-pressed") !== "true") {
     await user.click(showCommitted);
   }
-  await user.click(await within(viewer).findByTitle(/cache\.ts/, {}, { timeout: 10000 }));
-  await addInlineComment(
-    user,
-    /store\.set\(key, value\)/,
-    "keep the map private",
-  );
-
-  await user.click(await within(viewer).findByTitle(/README\.md/, {}, { timeout: 10000 }));
-  await addInlineComment(user, /keyvalues cache notes/, "keep this note short");
+  await user.click(await within(viewer).findByTitle(/cache\.test\.ts/));
+  await addInlineComment(user, /getKey\("missing"\)/, "cover the miss path");
 
   hideMarketingTerminalPane();
   await new Promise((resolve) => setTimeout(resolve, 300));
@@ -487,7 +503,7 @@ it("captures a clean code-review diff for Features", async () => {
     publishTo: path.join(README_SCREENSHOTS_DIR, "code-reviews.png"),
     expectations: [
       "The Changes tab shows a normal diff with no conflict markers.",
-      "The sidebar lists one committed file (cache.ts) and one uncommitted file (README.md).",
+      "The sidebar lists one committed file (cache.test.ts) and one uncommitted file (cache.ts).",
       "Local inline comments are visible on the diff.",
     ],
   });
