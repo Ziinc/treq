@@ -394,23 +394,21 @@ describe("GitHubPanel", () => {
   });
 
   it("lists only draft pull requests when the Draft filter is selected", async () => {
-    api.ghListPrs.mockImplementation(
-      async (_repo: string, state: string) => {
-        if (state === "draft") {
-          return {
-            items: [{ ...makePr(2, "WIP PR"), is_draft: true }],
-            hasMore: false,
-          };
-        }
+    api.ghListPrs.mockImplementation(async (_repo: string, state: string) => {
+      if (state === "draft") {
         return {
-          items: [
-            { ...makePr(1, "Ready PR"), is_draft: false },
-            { ...makePr(2, "WIP PR"), is_draft: true },
-          ],
+          items: [{ ...makePr(2, "WIP PR"), is_draft: true }],
           hasMore: false,
         };
-      },
-    );
+      }
+      return {
+        items: [
+          { ...makePr(1, "Ready PR"), is_draft: false },
+          { ...makePr(2, "WIP PR"), is_draft: true },
+        ],
+        hasMore: false,
+      };
+    });
 
     render(<GitHubPanel repoPath="/tmp/repo" />);
     await user.click(screen.getByRole("tab", { name: /pull requests/i }));
