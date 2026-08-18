@@ -3,7 +3,11 @@ import { Command } from "cmdk";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import { FileText } from "lucide-react";
-import { FileSearchResult, searchWorkspaceFiles } from "../lib/api";
+import {
+  FileSearchResult,
+  ensureWorkspaceIndexed,
+  searchWorkspaceFiles,
+} from "../lib/api";
 import { useDebounce } from "../hooks/useDebounce";
 
 interface FilePickerProps {
@@ -11,6 +15,8 @@ interface FilePickerProps {
   onOpenChange: (open: boolean) => void;
   repoPath: string;
   workspaceId: number | null;
+  /** Absolute path to index and search (workspace checkout or repo root). */
+  workspacePath: string;
   onFileSelect: (relativePath: string) => void;
 }
 
@@ -19,35 +25,61 @@ export const FilePicker: React.FC<FilePickerProps> = ({
   onOpenChange,
   repoPath,
   workspaceId,
+  workspacePath,
   onFileSelect,
 }) => {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<FileSearchResult[]>([]);
+  const [indexed, setIndexed] = useState(false);
   const [, setIsLoading] = useState(false);
 
   const debouncedQuery = useDebounce(query, 150);
 
-  // Search when debounced query changes
-  useEffect(() => {
-    if (!debouncedQuery.trim()) {
-      setResults([]);
-      return;
-    }
-
-    setIsLoading(true);
-    searchWorkspaceFiles(repoPath, workspaceId, debouncedQuery, 50)
-      .then(setResults)
-      .catch(() => setResults([]))
-      .finally(() => setIsLoading(false));
-  }, [debouncedQuery, repoPath, workspaceId]);
-
-  // Reset state when dialog closes
+  // Index the active checkout when the picker opens so search is not empty
+  // on workspaces that never mounted FileBrowser.
   useEffect(() => {
     if (!open) {
       setQuery("");
       setResults([]);
+      setIndexed(false);
+      return;
     }
-  }, [open]);
+
+    let cancelled = false;
+    const pathToIndex = workspacePath || repoPath;
+    ensureWorkspaceIndexed(repoPath, workspaceId, pathToIndex)
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) setIndexed(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, repoPath, workspaceId, workspacePath]);
+
+  useEffect(() => {
+    if (!open || !indexed) {
+      return;
+    }
+
+    let cancelled = false;
+    setIsLoading(true);
+    searchWorkspaceFiles(repoPath, workspaceId, debouncedQuery, 50)
+      .then((files) => {
+        if (!cancelled) setResults(files);
+      })
+      .catch(() => {
+        if (!cancelled) setResults([]);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, indexed, debouncedQuery, repoPath, workspaceId]);
 
   const handleSelect = useCallback(
     (filePath: string) => {
@@ -57,7 +89,6 @@ export const FilePicker: React.FC<FilePickerProps> = ({
     [onFileSelect, onOpenChange],
   );
 
-  // Get icon based on file extension (can be expanded)
   const getFileIcon = () => (
     <FileText className="w-4 h-4 text-muted-foreground" />
   );
@@ -70,6 +101,7 @@ export const FilePicker: React.FC<FilePickerProps> = ({
     <Command.Dialog
       open={open}
       onOpenChange={onOpenChange}
+      shouldFilter={false}
       label="Jump to File"
       className="[&_[cmdk-root]]:bg-background [&_[cmdk-root]]:text-foreground"
     >
@@ -81,7 +113,6 @@ export const FilePicker: React.FC<FilePickerProps> = ({
         data-testid="modal"
         className="bg-background text-foreground rounded-xl border border-border shadow-2xl w-[40vw] max-w-none overflow-hidden"
       >
-        {/* Search Input */}
         <div className="flex items-center border-b border-border px-3 bg-background">
           <Command.Input
             placeholder="Search files..."
@@ -91,13 +122,14 @@ export const FilePicker: React.FC<FilePickerProps> = ({
           />
         </div>
 
-        {/* Results List */}
         <Command.List className="max-h-[300px] overflow-y-auto py-2">
-          <Command.Empty>
-            <div className="px-4 py-8 text-center text-muted-foreground text-sm">
-              {query.trim() ? "No files found" : "Type to search files..."}
-            </div>
-          </Command.Empty>
+          {results.length === 0 && (
+            <Command.Empty>
+              <div className="px-4 py-8 text-center text-muted-foreground text-sm">
+                {query.trim() ? "No files found" : "Type to search files..."}
+              </div>
+            </Command.Empty>
+          )}
 
           {results.map((file) => (
             <Command.Item
@@ -114,7 +146,6 @@ export const FilePicker: React.FC<FilePickerProps> = ({
           ))}
         </Command.List>
 
-        {/* Footer with keyboard hints */}
         <div className="border-t border-border px-3 py-2 flex items-center justify-between text-sm text-muted-foreground">
           <div className="flex items-center gap-3">
             <span>
