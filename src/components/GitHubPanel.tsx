@@ -51,10 +51,15 @@ interface GitHubPanelProps {
   onOpenWorkspace?: (workspaceId: number) => void;
 }
 
-const FILTERS: { label: string; value: GitHubStateFilter }[] = [
+const ISSUE_FILTERS: { label: string; value: GitHubStateFilter }[] = [
   { label: "Open", value: "open" },
   { label: "Closed", value: "closed" },
   { label: "All", value: "all" },
+];
+
+const PR_FILTERS: { label: string; value: GitHubStateFilter }[] = [
+  { label: "Draft", value: "draft" },
+  ...ISSUE_FILTERS,
 ];
 
 export const GitHubPanel: React.FC<GitHubPanelProps> = ({
@@ -97,7 +102,11 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
   const routeParams = activeTab === "prs" ? prsParams : issuesParams;
   const rawFilter = (isIssuesRoute || isPrsRoute) && routeParams?.filter;
   const currentFilter: GitHubStateFilter =
-    rawFilter === "closed" || rawFilter === "all" ? rawFilter : "open";
+    rawFilter === "closed" || rawFilter === "all"
+      ? rawFilter
+      : rawFilter === "draft" && activeTab === "prs"
+        ? "draft"
+        : "open";
   const selector = routeParams?.selector;
   const showCreateForm = selector === "new";
 
@@ -271,11 +280,12 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
         {isListTab && (
           <div className="flex items-center gap-2 px-4 pb-2 shrink-0">
             <div className="flex items-center gap-1 border border-border rounded-md p-0.5 bg-muted/30">
-              {FILTERS.map((btn) => (
+              {(activeTab === "prs" ? PR_FILTERS : ISSUE_FILTERS).map((btn) => (
                 <button
                   key={btn.value}
                   type="button"
                   onClick={() => handleFilterChange(btn.value)}
+                  aria-pressed={currentFilter === btn.value}
                   className={`text-base px-2 py-0.5 rounded transition-colors ${
                     currentFilter === btn.value
                       ? "bg-background shadow-sm text-foreground"

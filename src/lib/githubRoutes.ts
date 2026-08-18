@@ -10,7 +10,7 @@
  */
 
 export type GitHubTab = "issues" | "prs" | "merge-queue";
-export type GitHubStateFilter = "open" | "closed" | "all";
+export type GitHubStateFilter = "draft" | "open" | "closed" | "all";
 
 export const GITHUB_BASE_PATH = "/github";
 
