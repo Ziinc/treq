@@ -369,7 +369,9 @@ describe("ShowWorkspace - Commits tab tentative working copy", () => {
 
     const commitsListElement = commitsList as HTMLElement;
     expect(
-      await within(commitsListElement).findByText(/feat\/tentative-working-copy/),
+      await within(commitsListElement).findByText(
+        /feat\/tentative-working-copy/,
+      ),
     ).toBeInTheDocument();
     expect(
       within(commitsListElement).getByText("Working copy"),

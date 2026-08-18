@@ -1,5 +1,3 @@
-/* eslint-disable max-lines */
-
 import { DragDropContext, Droppable, type DropResult } from "@hello-pangea/dnd";
 import { useQuery } from "@tanstack/react-query";
 import { Archive, CalendarClock, Github, Search } from "lucide-react";
