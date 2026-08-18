@@ -14,6 +14,7 @@ const config: Config = {
     require.resolve('./plugins/versionPlugin'),
     require.resolve('./plugins/jsonLdPlugin'),
     require.resolve('./plugins/skillsPlugin'),
+    require.resolve('./plugins/landingScreenshotsPlugin'),
     [
       '@docusaurus/plugin-content-docs',
       {

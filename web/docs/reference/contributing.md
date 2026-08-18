@@ -65,7 +65,9 @@ npm run screenshot:readme
 
 Run `npm run build:napi` after Rust changes that integration tests depend on.
 
-`npm run screenshot:readme` (alias `npm run screenshot:landing`) regenerates the web landing and project readme images under `assets/screenshots/` from `scripts/screenshot/specs/readme-*.spec.tsx`. Full-window shots: `code.png` and `commits.png`. Crops: `review.png` (Changes tab without the terminal pane), `sidebar.png`, `prompt.png`, `spawn-before.png`, `spawn-after.png`, `send-thumb.png`, `send-lightbox.png`, `schedule.png`, `timestamp.png`, `github.png`, and `github-issues.png`. `isolation.png` is a side-by-side stitch of two working copies.
+`npm run screenshot:readme` (alias `npm run screenshot:landing`) captures the committed hero at `assets/screenshots/code.png`. Other marketing crops write to `web/static/img/landing/` and stay out of git. A Docusaurus production build runs that command when landing files are missing.
+
+Set `SKIP_LANDING_SCREENSHOTS=1` to skip generation. Set `FORCE_LANDING_SCREENSHOTS=1` to recapture even when files already exist.
 
 ## Implementation Rules
 

@@ -1,6 +1,7 @@
 /**
- * Shared repo seed for README / web-home marketing screenshots
- * (assets/screenshots/*.png).
+ * Shared repo seed for README / web-home marketing screenshots.
+ * The committed hero is assets/screenshots/code.png.
+ * Landing crops generate into web/static/img/landing/.
  *
  * Builds a lorem-ipsum event-bus repo: stacked workspaces with GitHub PRs,
  * mixed CI, nested directories, and a real conflict under packages/web.
@@ -305,3 +306,9 @@ export async function seedReadmeMarketingRepo(): Promise<MarketingFixture> {
 }
 
 export const README_SCREENSHOTS_DIR = path.join("assets", "screenshots");
+export const LANDING_SCREENSHOTS_DIR = path.join(
+  "web",
+  "static",
+  "img",
+  "landing",
+);

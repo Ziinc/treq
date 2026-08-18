@@ -52,6 +52,7 @@ jobs:
       - name: Build docs
         env:
           DOCUSAURUS_ENABLE_GTAG: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'true' || 'false' }}
+          SKIP_LANDING_SCREENSHOTS: "1"
         run: npm run build
       - name: Publish to Production
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'

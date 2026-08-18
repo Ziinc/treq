@@ -1,5 +1,7 @@
 /**
- * README / web-home marketing screenshots → assets/screenshots/*.png
+ * README hero + web-home marketing screenshots.
+ * Hero publishes to assets/screenshots/code.png.
+ * Other crops publish to web/static/img/landing/ for the Docusaurus build.
  *
  * Real Jujutsu repo via NAPI, real Dashboard, GitHub/CI cache stubbed (no gh CLI).
  * Terminal TUI pixels are injected because xterm canvas does not serialize.
@@ -33,6 +35,7 @@ import {
 import {
   MARKETING_BRANCH,
   README_SCREENSHOTS_DIR,
+  LANDING_SCREENSHOTS_DIR,
   SIBLING_BRANCHES,
   STACK_PARENT_BRANCH,
   seedReadmeMarketingRepo,
@@ -243,7 +246,7 @@ it("captures the Changes tab for the README", async () => {
     deviceScaleFactor: 2,
     scrollIntoView: '[data-testid="inline-comment-card"]',
     clipSelector: '[data-testid="changes-diff-viewer"]',
-    publishTo: path.join(README_SCREENSHOTS_DIR, "review.png"),
+    publishTo: path.join(LANDING_SCREENSHOTS_DIR, "review.png"),
     expectations: [
       "The Changes tab is cropped to the diff viewer. The terminal pane is not visible.",
       "An expanded GitHub review thread on client.ts shows a Resolved badge.",
@@ -280,7 +283,7 @@ it("captures sending a conflict to an agent for a new commit", async () => {
     deviceScaleFactor: 2,
     scrollIntoView: '[data-conflict-section-label="Side #1"]',
     clipSelector: '[data-testid="changes-diff-viewer"]',
-    publishTo: path.join(README_SCREENSHOTS_DIR, "conflict-new-commit.png"),
+    publishTo: path.join(LANDING_SCREENSHOTS_DIR, "conflict-new-commit.png"),
     expectations: [
       "The Changes tab shows a conflicted file and a Resolve conflicts popover.",
       "Plan and Edit buttons are visible so an agent can land a new resolution commit.",
@@ -330,7 +333,7 @@ it("captures inplace conflict resolution on the Commits tab", async () => {
     name: "readme-conflict-inplace",
     deviceScaleFactor: 2,
     clipSelector: '[data-testid="modal"]',
-    publishTo: path.join(README_SCREENSHOTS_DIR, "conflict-inplace.png"),
+    publishTo: path.join(LANDING_SCREENSHOTS_DIR, "conflict-inplace.png"),
     expectations: [
       "A dialog titled Resolve commit conflicts inplace is open.",
       "The agent prompt field and Resolve action are visible.",
@@ -357,7 +360,7 @@ it("captures the Commits tab for the README", async () => {
   await captureDocument(document, {
     name: "readme-commits",
     deviceScaleFactor: 2,
-    publishTo: path.join(README_SCREENSHOTS_DIR, "commits.png"),
+    publishTo: path.join(LANDING_SCREENSHOTS_DIR, "commits.png"),
     expectations: [
       "The Commits tab is active with 'feat: handle empty event messages' expanded, showing a client.ts diff.",
       "The stack and GitHub PR/CI chrome are visible; the workspace is feat/empty-event-message.",
@@ -380,7 +383,7 @@ it("captures the workspace list for landing isolation copy", async () => {
     name: "readme-sidebar",
     deviceScaleFactor: 2,
     clipSelector: '[data-testid="workspace-sidebar"]',
-    publishTo: path.join(README_SCREENSHOTS_DIR, "sidebar.png"),
+    publishTo: path.join(LANDING_SCREENSHOTS_DIR, "sidebar.png"),
     expectations: [
       "The sidebar is cropped and lists stacked workspaces, including feat/empty-event-message under feat/event-ingest.",
       "Sibling workspaces feat/keyvalues-cache and feat/alerting-logs are visible.",
@@ -412,7 +415,7 @@ it("captures two working copies side by side for isolation copy", async () => {
   hideMarketingTerminalPane();
   await screen.findByTestId("changes-diff-viewer");
   await new Promise((resolve) => setTimeout(resolve, 400));
-  const leftClip = path.join(README_SCREENSHOTS_DIR, "isolation-left.png");
+  const leftClip = path.join(LANDING_SCREENSHOTS_DIR, "isolation-left.png");
   await captureDocument(document, {
     name: "readme-isolation-left",
     deviceScaleFactor: 2,
@@ -429,7 +432,7 @@ it("captures two working copies side by side for isolation copy", async () => {
   hideMarketingTerminalPane();
   await screen.findByTestId("changes-diff-viewer");
   await new Promise((resolve) => setTimeout(resolve, 400));
-  const rightClip = path.join(README_SCREENSHOTS_DIR, "isolation-right.png");
+  const rightClip = path.join(LANDING_SCREENSHOTS_DIR, "isolation-right.png");
   await captureDocument(document, {
     name: "readme-isolation-right",
     deviceScaleFactor: 2,
@@ -465,18 +468,21 @@ export function miss(): string {
 }`,
     "test cache misses",
   );
+  const user = userEvent.setup();
+  render(<Dashboard />);
+  await user.click(await findSidebarBranchElement(MARKETING_BRANCH));
+  await screen.findByTestId("show-workspace-header");
+  hideMarketingTerminalPane();
+  document.documentElement.classList.add("dark");
+
   writeWorkspaceFile(
     cachePath,
     "packages/api/src/cache.ts",
     "export const CACHE_TTL = 30;\n",
   );
 
-  const user = userEvent.setup();
-  render(<Dashboard />);
   await user.click(await findSidebarBranchElement("feat/keyvalues-cache"));
   await screen.findByTestId("show-workspace-header");
-  hideMarketingTerminalPane();
-  document.documentElement.classList.add("dark");
 
   await user.click(await screen.findByRole("tab", { name: /^Changes/ }));
   await screen.findByRole("tab", { name: /^Changes/, selected: true });
@@ -500,7 +506,7 @@ export function miss(): string {
     name: "readme-code-reviews",
     deviceScaleFactor: 2,
     clipSelector: '[data-testid="changes-diff-viewer"]',
-    publishTo: path.join(README_SCREENSHOTS_DIR, "code-reviews.png"),
+    publishTo: path.join(LANDING_SCREENSHOTS_DIR, "code-reviews.png"),
     expectations: [
       "The Changes tab shows a normal diff with no conflict markers.",
       "The sidebar lists one committed file (cache.test.ts) and one uncommitted file (cache.ts).",
@@ -522,7 +528,7 @@ it("captures agent prompt input for CLI delegation copy", async () => {
     name: "readme-prompt",
     deviceScaleFactor: 2,
     clipSelector: '[data-testid="agent-task-input"]',
-    publishTo: path.join(README_SCREENSHOTS_DIR, "prompt.png"),
+    publishTo: path.join(LANDING_SCREENSHOTS_DIR, "prompt.png"),
     expectations: [
       "The agent prompt box contains the text 'create a workspace for this fix'.",
       "The prompt sits on the Code tab, not in a mock terminal.",
@@ -545,7 +551,7 @@ it("captures a prompt to move changes to a new workspace", async () => {
     name: "readme-move-changes",
     deviceScaleFactor: 2,
     clipSelector: '[data-testid="agent-task-input"]',
-    publishTo: path.join(README_SCREENSHOTS_DIR, "move-changes.png"),
+    publishTo: path.join(LANDING_SCREENSHOTS_DIR, "move-changes.png"),
     expectations: [
       "The agent prompt asks to move changes to a new workspace and continue the fix there.",
     ],
@@ -567,7 +573,7 @@ it("captures a prompt to break a workspace into smaller ones", async () => {
     name: "readme-break-workspace",
     deviceScaleFactor: 2,
     clipSelector: '[data-testid="agent-task-input"]',
-    publishTo: path.join(README_SCREENSHOTS_DIR, "break-workspace.png"),
+    publishTo: path.join(LANDING_SCREENSHOTS_DIR, "break-workspace.png"),
     expectations: [
       "The agent prompt asks to break the workspace into smaller stacked or separate workspaces.",
     ],
@@ -589,7 +595,7 @@ it("captures an agent splitting work across three workspaces", async () => {
     name: "readme-spawn-before",
     deviceScaleFactor: 2,
     clipSelector: '[data-testid="agent-task-input"]',
-    publishTo: path.join(README_SCREENSHOTS_DIR, "spawn-before.png"),
+    publishTo: path.join(LANDING_SCREENSHOTS_DIR, "spawn-before.png"),
     expectations: [
       "The agent prompt asks to split the work across 3 agents in 3 different workspaces.",
     ],
@@ -625,7 +631,7 @@ it("captures an agent splitting work across three workspaces", async () => {
     name: "readme-spawn-after",
     deviceScaleFactor: 2,
     clipSelector: '[data-testid="workspace-sidebar"]',
-    publishTo: path.join(README_SCREENSHOTS_DIR, "spawn-after.png"),
+    publishTo: path.join(LANDING_SCREENSHOTS_DIR, "spawn-after.png"),
     expectations: [
       "The sidebar lists feat/agent-one, feat/agent-two, and feat/agent-three after the split.",
     ],
@@ -703,7 +709,7 @@ it("captures treq send thumbnail and lightbox for landing copy", async () => {
     name: "readme-send-thumb",
     deviceScaleFactor: 2,
     clipSelector: '[data-testid="workspace-terminal-pane"]',
-    publishTo: path.join(README_SCREENSHOTS_DIR, "send-thumb.png"),
+    publishTo: path.join(LANDING_SCREENSHOTS_DIR, "send-thumb.png"),
     expectations: [
       "The terminal pane shows an asset thumbnail for research-draft.svg.",
       "The lightbox is not open.",
@@ -716,7 +722,7 @@ it("captures treq send thumbnail and lightbox for landing copy", async () => {
   await captureDocument(document, {
     name: "readme-send-lightbox",
     deviceScaleFactor: 2,
-    publishTo: path.join(README_SCREENSHOTS_DIR, "send-lightbox.png"),
+    publishTo: path.join(LANDING_SCREENSHOTS_DIR, "send-lightbox.png"),
     expectations: [
       "The asset lightbox is open over the workspace, showing research-draft.svg.",
     ],
@@ -733,7 +739,7 @@ it("captures the schedule dialog for landing schedule copy", async () => {
     name: "readme-schedule",
     deviceScaleFactor: 2,
     clipSelector: '[data-testid="schedule-workspace-dialog"]',
-    publishTo: path.join(README_SCREENSHOTS_DIR, "schedule.png"),
+    publishTo: path.join(LANDING_SCREENSHOTS_DIR, "schedule.png"),
     expectations: [
       "A Schedule workspace dialog is open with hide-until presets.",
       "The dialog is cropped; the rest of the app chrome is out of frame.",
@@ -757,7 +763,7 @@ it("captures commit timestamp editing for landing schedule copy", async () => {
     name: "readme-timestamp",
     deviceScaleFactor: 2,
     clipSelector: '[data-testid="modal"]',
-    publishTo: path.join(README_SCREENSHOTS_DIR, "timestamp.png"),
+    publishTo: path.join(LANDING_SCREENSHOTS_DIR, "timestamp.png"),
     expectations: [
       "A dialog titled Edit commit timestamp is open with shift-by-duration fields.",
       "A control exists to shift the stack to now.",
@@ -781,7 +787,7 @@ it("captures GitHub pull requests for landing GitHub copy", async () => {
     name: "readme-github-prs",
     deviceScaleFactor: 2,
     clipSelector: '[data-testid="github-panel"]',
-    publishTo: path.join(README_SCREENSHOTS_DIR, "github.png"),
+    publishTo: path.join(LANDING_SCREENSHOTS_DIR, "github.png"),
     expectations: [
       "The GitHub panel lists pull requests including feat: handle empty event messages.",
       "Issues and Pull Requests tabs are visible.",
@@ -805,7 +811,7 @@ it("captures GitHub issues for landing GitHub copy", async () => {
     name: "readme-github-issues",
     deviceScaleFactor: 2,
     clipSelector: '[data-testid="github-panel"]',
-    publishTo: path.join(README_SCREENSHOTS_DIR, "github-issues.png"),
+    publishTo: path.join(LANDING_SCREENSHOTS_DIR, "github-issues.png"),
     expectations: [
       "The GitHub Issues tab lists Empty event payloads drop the Discord body.",
       "The panel is cropped to the GitHub integration, not the workspace header.",

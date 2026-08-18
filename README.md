@@ -6,56 +6,41 @@
 
 # treq
 
-Treq is the open-source Stacking Agent Development Environment (ADE) and Graphite alternative for parallel development, review, and delivery. It gives teams isolated workspaces, stacked branches, and AI-assisted workflows without giving up control of their code.
+Treq is the open-source Stacking Agent Development Environment (ADE). It gives each agent its own workspace, stacks branches, and rebases when the base moves. Reviews stay on disk until you push.
 
-![Code Overview](./assets/screenshots/code.png)
+![Treq code overview](./assets/screenshots/code.png)
 
 ## Getting Started
 
-Download the latest release [here](https://github.com/Ziinc/treq/releases).
+Download the latest release [here](https://github.com/Ziinc/treq/releases). Install steps are in the [installation docs](https://treq.dev/docs/getting-started/installation).
 
 ## Features
 
-### Code Reviews
-
-Inspect and iterate on each change for a human-in-the-loop agentic workflow.
-
-![Code Review](./assets/screenshots/review.png)
-
-- Review the code diffs just like a familiar Github PR, annotate and comment on code, and then send it to an agent for changes.
-- Spotted an issue when browsing files? Send it to an agent for adjustments in the background.
-- Got a specific commit that you want the agent to work on, review it and send your comments directly to the agent. Did I mention that we have commit management tooling as well?
-
-![Commit History](./assets/screenshots/commits.png)
-
-### Workspaces
-
-Coding agents work in isolated copies of the codebase, ensuring changes are independent from each other while keeping your current repository clean for planning.
-
-<!-- insert gif of worktree creation -->
-
-- Workspaces are isolated but and **automatically rebased**, meaning code never goes stale.
-
-- Got a code conflict? Agents can **automatically resolve your conflicts**.
-
-- Stack workspaces and build features incrementally over smaller bite-sized branches. All stacked workspaces automatically rebases on top of each other, **even on top of your uncommitted changes**.
-
-<!-- insert gif of stacking -->
-
+- [Code reviews](https://treq.dev/docs/concepts/changes-and-reviews). Inspect diffs on your machine. Comment on lines. Send Plan or Edit to an agent. See the [code review workflow](https://treq.dev/docs/tutorials/code-review-workflow).
+- Isolated [workspaces](https://treq.dev/docs/concepts/workspaces). Each agent gets its own checkout. Uncommitted work in one workspace does not appear in another.
+- Auto-rebase. When a target branch moves, Treq rebases dependent workspaces. [Managing workspaces](https://treq.dev/docs/tutorials/managing-workspaces) covers stacks.
+- Conflict resolution. Send a conflict from Changes with Plan or Edit. On Commits, Resolve conflicts rewrites the conflicted commit in place. See [merging workspaces](https://treq.dev/docs/tutorials/merging-workspaces).
+- Agent CLI. Agents create workspaces and move work with the same [CLI](https://treq.dev/docs/reference/cli) you run. [Agent sessions](https://treq.dev/docs/concepts/agent-sessions) lists supported agents.
+- [Move files between workspaces](https://treq.dev/docs/how-to/moving-files-between-workspaces). Agents can move commits, working-copy files, and hunks.
+- Send files from a terminal. A thumbnail lands in the pane. Click it to open the file. See [terminal sessions](https://treq.dev/docs/concepts/terminal-sessions).
+- Schedule work. Hide a workspace until a time you pick. Shift commit timestamps, or set them to now.
+- [GitHub issues and pull requests](https://treq.dev/docs/concepts/github-integration). Start an agent from an issue. CI stays next to the workspace. How-to: [connecting GitHub](https://treq.dev/docs/how-to/connecting-github) and [creating pull requests](https://treq.dev/docs/how-to/creating-and-viewing-pull-requests).
 
 ## Developer
 
-### Regenerating README screenshots
+### Regenerating screenshots
 
-The marketing images under `assets/screenshots/` are produced by the same Chromium rasterization harness as the docs captures (`scripts/screenshot/specs/docs-*.spec.tsx`). Specs live at `scripts/screenshot/specs/readme-*.spec.tsx` and publish via `captureDocument({ publishTo })`.
+The committed hero is `assets/screenshots/code.png`. Other marketing crops write to `web/static/img/landing/` and are gitignored.
 
-Landing page shots reuse those files plus crops for Changes without the terminal pane (`review.png`), the workspace sidebar (`sidebar.png`), agent prompts (`prompt.png`, `spawn-before.png`, `spawn-after.png`), send thumbnails and lightbox (`send-thumb.png`, `send-lightbox.png`), scheduling (`schedule.png`, `timestamp.png`), GitHub issues and pull requests (`github-issues.png`, `github.png`), and a side-by-side isolation stitch (`isolation.png`).
+A Docusaurus production build runs `npm run screenshot:readme` when those landing files are missing. Set `SKIP_LANDING_SCREENSHOTS=1` to skip that step. Set `FORCE_LANDING_SCREENSHOTS=1` to recapture even when files exist.
 
 ```bash
 npm run screenshot:readme
 # same as
 npm run screenshot:landing
 ```
+
+Specs live at `scripts/screenshot/specs/readme-*.spec.tsx`.
 
 ### Bumping the version
 

@@ -7,28 +7,38 @@ import Layout from '@theme/Layout';
 import Heading from '@theme/Heading';
 
 import codeScreenshot from '../../../assets/screenshots/code.png';
-import reviewScreenshot from '../../../assets/screenshots/review.png';
-import codeReviewsScreenshot from '../../../assets/screenshots/code-reviews.png';
-import isolationLeftScreenshot from '../../../assets/screenshots/isolation-left.png';
-import isolationRightScreenshot from '../../../assets/screenshots/isolation-right.png';
-import sidebarScreenshot from '../../../assets/screenshots/sidebar.png';
-import spawnBeforeScreenshot from '../../../assets/screenshots/spawn-before.png';
-import spawnAfterScreenshot from '../../../assets/screenshots/spawn-after.png';
-import promptScreenshot from '../../../assets/screenshots/prompt.png';
-import moveChangesScreenshot from '../../../assets/screenshots/move-changes.png';
-import breakWorkspaceScreenshot from '../../../assets/screenshots/break-workspace.png';
-import sendThumbScreenshot from '../../../assets/screenshots/send-thumb.png';
-import sendLightboxScreenshot from '../../../assets/screenshots/send-lightbox.png';
-import scheduleScreenshot from '../../../assets/screenshots/schedule.png';
-import timestampScreenshot from '../../../assets/screenshots/timestamp.png';
-import githubScreenshot from '../../../assets/screenshots/github.png';
-import githubIssuesScreenshot from '../../../assets/screenshots/github-issues.png';
-import conflictNewCommitScreenshot from '../../../assets/screenshots/conflict-new-commit.png';
-import conflictInplaceScreenshot from '../../../assets/screenshots/conflict-inplace.png';
+import useBaseUrl from '@docusaurus/useBaseUrl';
 import styles from './index.module.css';
 import {RebaseGraphic, WorkspaceTreeGraphic} from '../components/landing/ProductGraphics';
 
 const DOWNLOAD_HREF = 'https://github.com/Ziinc/treq/releases';
+
+function LandingShot({
+  file,
+  className,
+  alt,
+  width,
+  height,
+}: {
+  file: string;
+  className?: string;
+  alt: string;
+  width: number;
+  height: number;
+}) {
+  const src = useBaseUrl(`/img/landing/${file}`);
+  return (
+    <img
+      className={className}
+      src={src}
+      alt={alt}
+      width={width}
+      height={height}
+      loading="lazy"
+      decoding="async"
+    />
+  );
+}
 
 function DownloadIcon() {
   return (
@@ -138,14 +148,12 @@ function HighlightGrid(): ReactNode {
           </Link>
           <div className={styles.rebaseVisual}>
             <RebaseGraphic />
-            <img
+            <LandingShot
               className={clsx(styles.highlightCardImage, styles.sidebarCrop)}
-              src={sidebarScreenshot}
+              file="sidebar.png"
               alt="Sidebar showing stacked workspace hierarchy"
               width={560}
               height={1800}
-              loading="lazy"
-              decoding="async"
             />
           </div>
         </article>
@@ -172,9 +180,9 @@ function HighlightGrid(): ReactNode {
 const SPAWN_CARD = {
   title: 'Agents start more agents',
   body: 'Tell one agent to split the work across three agents in three workspaces. Each agent gets its own checkout and can keep going in parallel.',
-  image: spawnBeforeScreenshot,
+  file: 'spawn-before.png',
   alt: 'Agent prompt: Split the work across 3 agents in 3 different workspaces',
-  afterImage: spawnAfterScreenshot,
+  afterFile: 'spawn-after.png',
   afterAlt: 'Sidebar after three new agent workspaces appear',
 };
 
@@ -182,13 +190,13 @@ const DELEGATE_ROW_CARDS = [
   {
     title: 'Move changes between workspaces',
     body: 'Tell an agent to move your changes to a new workspace and continue the fix there. Agents can move commits, working-copy files, and hunks through the treq CLI.',
-    image: moveChangesScreenshot,
+    file: 'move-changes.png',
     alt: 'Agent prompt: Move my changes to a new workspace and continue the fix there',
   },
   {
     title: 'Break up a large workspace',
     body: 'Tell an agent to break this workspace into smaller stacked or separate workspaces. Each slice gets its own checkout.',
-    image: breakWorkspaceScreenshot,
+    file: 'break-workspace.png',
     alt: 'Agent prompt: Break up this workspace into smaller stacked or separate workspaces',
   },
 ];
@@ -200,37 +208,55 @@ function DelegateCard({
   card: {
     title: string;
     body: string;
-    image: string;
+    file: string;
     alt: string;
-    afterImage?: string;
+    afterFile?: string;
     afterAlt?: string;
   };
   className?: string;
 }): ReactNode {
-  return (
-    <article className={clsx(styles.carouselCard, className)}>
-      {card.afterImage ? (
-        <div className={styles.beforeAfter}>
-          <figure>
-            <figcaption>Before</figcaption>
-            <img src={card.image} alt={card.alt} width={1346} height={224} loading="lazy" decoding="async" />
-          </figure>
-          <figure>
+  if (card.afterFile) {
+    return (
+      <article className={clsx(styles.carouselCard, className)}>
+        <div className={styles.spawnLayout}>
+          <div className={styles.spawnCopyCol}>
+            <Heading as="h3" className={styles.carouselCardTitle}>{card.title}</Heading>
+            <p>{card.body}</p>
+            <figure>
+              <figcaption>Before</figcaption>
+              <LandingShot
+                className={styles.containShot}
+                file={card.file}
+                alt={card.alt}
+                width={1346}
+                height={224}
+              />
+            </figure>
+          </div>
+          <figure className={styles.spawnAfterCol}>
             <figcaption>After</figcaption>
-            <img src={card.afterImage} alt={card.afterAlt} width={560} height={1800} loading="lazy" decoding="async" />
+            <LandingShot
+              className={styles.containShot}
+              file={card.afterFile}
+              alt={card.afterAlt ?? ''}
+              width={560}
+              height={1800}
+            />
           </figure>
         </div>
-      ) : (
-        <img
-          className={styles.carouselCardImage}
-          src={card.image}
-          alt={card.alt}
-          width={1346}
-          height={224}
-          loading="lazy"
-          decoding="async"
-        />
-      )}
+      </article>
+    );
+  }
+
+  return (
+    <article className={clsx(styles.carouselCard, className)}>
+      <LandingShot
+        className={styles.containShot}
+        file={card.file}
+        alt={card.alt}
+        width={1346}
+        height={224}
+      />
       <Heading as="h3" className={styles.carouselCardTitle}>{card.title}</Heading>
       <p>{card.body}</p>
     </article>
@@ -324,14 +350,12 @@ function ShowcaseSection(): ReactNode {
       <Link className={styles.showcaseCta} to="/docs/concepts/changes-and-reviews">
         Changes and reviews
       </Link>
-      <img
+      <LandingShot
         className={styles.showcaseImage}
-        src={reviewScreenshot}
+        file="review.png"
         alt="Treq Changes tab with a resolved GitHub review thread and a local comment that says remove this"
         width={2320}
         height={1580}
-        loading="lazy"
-        decoding="async"
       />
     </section>
   );
@@ -347,23 +371,19 @@ function ProofSection(): ReactNode {
         </p>
         <p className={styles.proofAttr}>From the Workspaces docs</p>
         <div className={styles.proofShots}>
-          <img
+          <LandingShot
             className={styles.proofImage}
-            src={isolationLeftScreenshot}
+            file="isolation-left.png"
             alt="Changes in feat/keyvalues-cache with an uncommitted cache.ts edit"
             width={2320}
             height={1580}
-            loading="lazy"
-            decoding="async"
           />
-          <img
+          <LandingShot
             className={styles.proofImage}
-            src={isolationRightScreenshot}
+            file="isolation-right.png"
             alt="Changes in feat/empty-event-message with a different uncommitted Home.tsx edit"
             width={2320}
             height={1580}
-            loading="lazy"
-            decoding="async"
           />
         </div>
       </article>
@@ -402,14 +422,12 @@ function FeaturesSection(): ReactNode {
             </p>
           </div>
           <div className={styles.featureScreenshot}>
-            <img
+            <LandingShot
               className={styles.featureImage}
-              src={codeReviewsScreenshot}
+              file="code-reviews.png"
               alt="Treq code review screenshot showing comments sent to Claude"
               width={2320}
               height={1580}
-              loading="lazy"
-              decoding="async"
             />
           </div>
         </div>
@@ -460,26 +478,22 @@ function FeaturesSection(): ReactNode {
             <div className={styles.beforeAfter}>
               <figure>
                 <figcaption>New commit</figcaption>
-                <img
+                <LandingShot
                   className={styles.featureImage}
-                  src={conflictNewCommitScreenshot}
+                  file="conflict-new-commit.png"
                   alt="Changes tab Resolve conflicts popover with Plan and Edit"
                   width={2320}
                   height={1588}
-                  loading="lazy"
-                  decoding="async"
                 />
               </figure>
               <figure>
                 <figcaption>In place</figcaption>
-                <img
+                <LandingShot
                   className={styles.featureImage}
-                  src={conflictInplaceScreenshot}
+                  file="conflict-inplace.png"
                   alt="Resolve commit conflicts inplace dialog"
                   width={1212}
                   height={520}
-                  loading="lazy"
-                  decoding="async"
                 />
               </figure>
             </div>
@@ -498,14 +512,12 @@ function FeaturesSection(): ReactNode {
             </p>
           </div>
           <div className={styles.featureScreenshot}>
-            <img
+            <LandingShot
               className={styles.featureImage}
-              src={promptScreenshot}
+              file="prompt.png"
               alt="Agent prompt asking to create a workspace for this fix"
               width={1346}
               height={224}
-              loading="lazy"
-              decoding="async"
             />
           </div>
         </div>
@@ -524,26 +536,22 @@ function FeaturesSection(): ReactNode {
             <div className={styles.beforeAfter}>
               <figure>
                 <figcaption>Before</figcaption>
-                <img
+                <LandingShot
                   className={styles.featureImage}
-                  src={sendThumbScreenshot}
+                  file="send-thumb.png"
                   alt="Terminal pane with an asset thumbnail from treq send"
                   width={2320}
                   height={720}
-                  loading="lazy"
-                  decoding="async"
                 />
               </figure>
               <figure>
                 <figcaption>After</figcaption>
-                <img
+                <LandingShot
                   className={styles.featureImage}
-                  src={sendLightboxScreenshot}
+                  file="send-lightbox.png"
                   alt="Asset lightbox open after clicking the thumbnail"
                   width={2880}
                   height={1800}
-                  loading="lazy"
-                  decoding="async"
                 />
               </figure>
             </div>
@@ -565,26 +573,22 @@ function FeaturesSection(): ReactNode {
             <div className={styles.beforeAfter}>
               <figure>
                 <figcaption>Hide until</figcaption>
-                <img
+                <LandingShot
                   className={styles.featureImage}
-                  src={scheduleScreenshot}
+                  file="schedule.png"
                   alt="Schedule workspace dialog with hide-until presets"
                   width={1152}
                   height={1064}
-                  loading="lazy"
-                  decoding="async"
                 />
               </figure>
               <figure>
                 <figcaption>Commit time</figcaption>
-                <img
+                <LandingShot
                   className={styles.featureImage}
-                  src={timestampScreenshot}
+                  file="timestamp.png"
                   alt="Edit commit timestamp dialog with shift to now"
                   width={1040}
                   height={652}
-                  loading="lazy"
-                  decoding="async"
                 />
               </figure>
             </div>
@@ -603,23 +607,19 @@ function FeaturesSection(): ReactNode {
           </div>
           <div className={styles.featureScreenshot}>
             <div className={styles.githubShotPair}>
-              <img
+              <LandingShot
                 className={styles.featureImage}
-                src={githubIssuesScreenshot}
+                file="github-issues.png"
                 alt="GitHub issues list in Treq"
                 width={2320}
                 height={1800}
-                loading="lazy"
-                decoding="async"
               />
-              <img
+              <LandingShot
                 className={styles.featureImage}
-                src={githubScreenshot}
+                file="github.png"
                 alt="GitHub pull request list in Treq"
                 width={2320}
                 height={1800}
-                loading="lazy"
-                decoding="async"
               />
             </div>
           </div>

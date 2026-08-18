@@ -77,7 +77,8 @@ export type CaptureOptions = {
   clipSelector?: string;
   /**
    * Repo-relative or absolute path to also write the PNG after capture.
-   * README marketing shots publish to `assets/screenshots/*.png`; docs crops
+   * Marketing shots publish to `web/static/img/landing/*.png`.
+   * The committed hero publishes to `assets/screenshots/code.png`. Docs crops
    * publish to `web/static/img/docs/*.png`.
    */
   publishTo?: string;

@@ -60,6 +60,11 @@ src-tauri/target/index.js
 # screenshot harness output (compiled CSS, HTML snapshots, PNGs)
 scripts/screenshot/.generated/
 
+# Generated landing screenshots (hero code.png is the only committed shot)
+assets/screenshots/*
+!assets/screenshots/code.png
+web/static/img/landing/*.png
+
 # service-qa harness output (outcome manifests)
 scripts/service-qa/.generated/
 *storybook.log
