@@ -140,9 +140,10 @@ async function addInlineComment(
   lineMatch: RegExp,
   text: string,
 ) {
-  const line = (await screen.findByText(lineMatch)).closest(
-    "[data-diff-line]",
-  ) as HTMLElement;
+  const line = [...document.querySelectorAll("[data-diff-line]")].find((el) =>
+    lineMatch.test(el.textContent ?? ""),
+  ) as HTMLElement | undefined;
+  if (!line) throw new Error(`No diff line matching ${lineMatch}`);
   await user.hover(line);
   await user.click(
     line.querySelector("[data-comment-button]") as HTMLElement,
@@ -220,12 +221,8 @@ it("captures the Changes tab for the README", async () => {
   await user.click(await screen.findByRole("tab", { name: /^Changes/ }));
   await screen.findByRole("tab", { name: /^Changes/, selected: true });
 
-  const committedToggle = await screen.findByRole("button", {
-    name: /^Committed/,
-  });
-  const committedSection = committedToggle.closest("div")?.parentElement;
-  if (!committedSection) throw new Error("Committed section not found");
-  await user.click(await within(committedSection).findByTitle(/client\.ts/));
+  const viewer = screen.getByTestId("changes-diff-viewer");
+  await user.click(await within(viewer).findByTitle(/client\.ts/));
   await screen.findByText(/JSON\.stringify/);
 
   await screen.findByText("Resolved");
@@ -465,25 +462,19 @@ export function miss(): string {
 
   await user.click(await screen.findByRole("tab", { name: /^Changes/ }));
   await screen.findByRole("tab", { name: /^Changes/, selected: true });
-
-  const committedToggle = await screen.findByRole("button", {
-    name: /^Committed/,
-  });
-  const committedSection = committedToggle.closest("div")?.parentElement;
-  if (!committedSection) throw new Error("Committed section not found");
-  await user.click(await within(committedSection).findByTitle(/cache\.ts/));
+  const viewer = screen.getByTestId("changes-diff-viewer");
+  const showCommitted = within(viewer).queryByRole("button", { name: "Show" });
+  if (showCommitted && showCommitted.getAttribute("aria-pressed") !== "true") {
+    await user.click(showCommitted);
+  }
+  await user.click(await within(viewer).findByTitle(/cache\.ts/, {}, { timeout: 10000 }));
   await addInlineComment(
     user,
     /store\.set\(key, value\)/,
     "keep the map private",
   );
 
-  const changesToggle = await within(
-    screen.getByTestId("changes-diff-viewer"),
-  ).findByRole("button", { name: /^Changes/ });
-  const changesSection = changesToggle.closest("div")?.parentElement;
-  if (!changesSection) throw new Error("Changes section not found");
-  await user.click(await within(changesSection).findByTitle(/cache\.test\.ts/));
+  await user.click(await within(viewer).findByTitle(/cache\.test\.ts/));
   await addInlineComment(user, /getKey\("missing"\)/, "cover the miss path");
 
   hideMarketingTerminalPane();
