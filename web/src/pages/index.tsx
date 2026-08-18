@@ -8,7 +8,9 @@ import Heading from '@theme/Heading';
 
 import codeScreenshot from '../../../assets/screenshots/code.png';
 import reviewScreenshot from '../../../assets/screenshots/review.png';
-import isolationScreenshot from '../../../assets/screenshots/isolation.png';
+import codeReviewsScreenshot from '../../../assets/screenshots/code-reviews.png';
+import isolationLeftScreenshot from '../../../assets/screenshots/isolation-left.png';
+import isolationRightScreenshot from '../../../assets/screenshots/isolation-right.png';
 import sidebarScreenshot from '../../../assets/screenshots/sidebar.png';
 import spawnBeforeScreenshot from '../../../assets/screenshots/spawn-before.png';
 import spawnAfterScreenshot from '../../../assets/screenshots/spawn-after.png';
@@ -344,15 +346,26 @@ function ProofSection(): ReactNode {
           Agents can write in parallel without sharing your main checkout.
         </p>
         <p className={styles.proofAttr}>From the Workspaces docs</p>
-        <img
-          className={styles.proofImage}
-          src={isolationScreenshot}
-          alt="Two workspaces side by side with different working-copy changes"
-          width={2880}
-          height={1800}
-          loading="lazy"
-          decoding="async"
-        />
+        <div className={styles.proofShots}>
+          <img
+            className={styles.proofImage}
+            src={isolationLeftScreenshot}
+            alt="Changes in feat/keyvalues-cache with an uncommitted cache.ts edit"
+            width={2320}
+            height={1580}
+            loading="lazy"
+            decoding="async"
+          />
+          <img
+            className={styles.proofImage}
+            src={isolationRightScreenshot}
+            alt="Changes in feat/empty-event-message with a different uncommitted Home.tsx edit"
+            width={2320}
+            height={1580}
+            loading="lazy"
+            decoding="async"
+          />
+        </div>
       </article>
       <article className={styles.proofLight}>
         <p className={styles.proofStat}>0</p>
@@ -391,7 +404,7 @@ function FeaturesSection(): ReactNode {
           <div className={styles.featureScreenshot}>
             <img
               className={styles.featureImage}
-              src={reviewScreenshot}
+              src={codeReviewsScreenshot}
               alt="Treq code review screenshot showing comments sent to Claude"
               width={2320}
               height={1580}

@@ -776,8 +776,18 @@
   display: block;
   width: 100%;
   height: auto;
-  margin-top: 1rem;
   border-radius: 12px;
+}
+
+.proofShots {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.proofShots .proofImage {
+  margin-top: 0;
 }
 
 .proofLight {

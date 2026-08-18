@@ -36,7 +36,7 @@ import {
   STACK_PARENT_BRANCH,
   seedReadmeMarketingRepo,
 } from "../readme-fixture";
-import { captureDocument, stitchPngsSideBySide } from "../capture";
+import { captureDocument } from "../capture";
 import {
   MARKETING_REMOTE,
   marketingCiByBranch,
@@ -135,6 +135,27 @@ function stubGithub() {
   mockGhListPrReviewThreads.mockResolvedValue(marketingReviewThreads());
 }
 
+async function addInlineComment(
+  user: ReturnType<typeof userEvent.setup>,
+  lineMatch: RegExp,
+  text: string,
+) {
+  const line = (await screen.findByText(lineMatch)).closest(
+    "[data-diff-line]",
+  ) as HTMLElement;
+  await user.hover(line);
+  await user.click(
+    line.querySelector("[data-comment-button]") as HTMLElement,
+  );
+  await user.type(await screen.findByPlaceholderText(/add a comment/i), text);
+  const submit = screen
+    .getAllByRole("button", { name: /add comment/i })
+    .find((btn) => btn.textContent === "Add Comment");
+  if (!submit) throw new Error("Add Comment button not found");
+  await user.click(submit);
+  await screen.findByText(text);
+}
+
 async function prepareWorkspace(branch = MARKETING_BRANCH) {
   stubGithub();
   const fixture = await seedReadmeMarketingRepo();
@@ -214,23 +235,7 @@ it("captures the Changes tab for the README", async () => {
     "JSON.stringify is the right fallback when event_message is empty.",
   );
 
-  const messageLine = (
-    await screen.findByText(/\? body\.event_message/)
-  ).closest("[data-diff-line]") as HTMLElement;
-  await user.hover(messageLine);
-  await user.click(
-    messageLine.querySelector("[data-comment-button]") as HTMLElement,
-  );
-  await user.type(
-    await screen.findByPlaceholderText(/add a comment/i),
-    "remove this",
-  );
-  const submit = screen
-    .getAllByRole("button", { name: /add comment/i })
-    .find((btn) => btn.textContent === "Add Comment");
-  if (!submit) throw new Error("Add Comment button not found");
-  await user.click(submit);
-  await screen.findByText("remove this");
+  await addInlineComment(user, /\? body\.event_message/, "remove this");
 
   hideMarketingTerminalPane();
   await new Promise((resolve) => setTimeout(resolve, 300));
@@ -409,12 +414,7 @@ it("captures two working copies side by side for isolation copy", async () => {
   hideMarketingTerminalPane();
   await screen.findByTestId("changes-diff-viewer");
   await new Promise((resolve) => setTimeout(resolve, 400));
-  const leftClip = path.join(
-    "scripts",
-    "screenshot",
-    ".generated",
-    "isolation-left.png",
-  );
+  const leftClip = path.join(README_SCREENSHOTS_DIR, "isolation-left.png");
   await captureDocument(document, {
     name: "readme-isolation-left",
     deviceScaleFactor: 2,
@@ -431,12 +431,7 @@ it("captures two working copies side by side for isolation copy", async () => {
   hideMarketingTerminalPane();
   await screen.findByTestId("changes-diff-viewer");
   await new Promise((resolve) => setTimeout(resolve, 400));
-  const rightClip = path.join(
-    "scripts",
-    "screenshot",
-    ".generated",
-    "isolation-right.png",
-  );
+  const rightClip = path.join(README_SCREENSHOTS_DIR, "isolation-right.png");
   await captureDocument(document, {
     name: "readme-isolation-right",
     deviceScaleFactor: 2,
@@ -447,13 +442,62 @@ it("captures two working copies side by side for isolation copy", async () => {
       "The terminal pane is not visible.",
     ],
   });
+}, 120000);
 
-  await stitchPngsSideBySide(
-    leftClip,
-    rightClip,
-    path.join(README_SCREENSHOTS_DIR, "isolation.png"),
-    [SIBLING_BRANCHES[0], MARKETING_BRANCH],
+it("captures a clean code-review diff for Features", async () => {
+  const { user, repoPath } = await prepareWorkspace("feat/keyvalues-cache");
+
+  const workspaces = await getWorkspaces(repoPath);
+  const cache = workspaces.find(
+    (ws) => ws.branch_name === "feat/keyvalues-cache",
   );
+  if (!cache) throw new Error("feat/keyvalues-cache not found");
+  writeWorkspaceFile(
+    resolveWorkspacePath(repoPath, getFullWorkspacePath(cache)),
+    "packages/api/src/cache.test.ts",
+    `import { getKey } from "./cache";
+
+export function miss(): string {
+  return getKey("missing") ?? "";
+}
+`,
+  );
+
+  await user.click(await screen.findByRole("tab", { name: /^Changes/ }));
+  await screen.findByRole("tab", { name: /^Changes/, selected: true });
+
+  const committedToggle = await screen.findByRole("button", {
+    name: "Committed",
+  });
+  const committedSection = committedToggle.closest("div")?.parentElement;
+  if (!committedSection) throw new Error("Committed section not found");
+  await user.click(await within(committedSection).findByTitle(/cache\.ts/));
+  await addInlineComment(
+    user,
+    /store\.set\(key, value\)/,
+    "keep the map private",
+  );
+
+  const changesToggle = await screen.findByRole("button", { name: "Changes" });
+  const changesSection = changesToggle.closest("div")?.parentElement;
+  if (!changesSection) throw new Error("Changes section not found");
+  await user.click(await within(changesSection).findByTitle(/cache\.test\.ts/));
+  await addInlineComment(user, /getKey\("missing"\)/, "cover the miss path");
+
+  hideMarketingTerminalPane();
+  await new Promise((resolve) => setTimeout(resolve, 300));
+
+  await captureDocument(document, {
+    name: "readme-code-reviews",
+    deviceScaleFactor: 2,
+    clipSelector: '[data-testid="changes-diff-viewer"]',
+    publishTo: path.join(README_SCREENSHOTS_DIR, "code-reviews.png"),
+    expectations: [
+      "The Changes tab shows a normal diff with no conflict markers.",
+      "The sidebar lists one committed file (cache.ts) and one uncommitted file (cache.test.ts).",
+      "Local inline comments are visible on the diff.",
+    ],
+  });
 }, 120000);
 
 it("captures agent prompt input for CLI delegation copy", async () => {
