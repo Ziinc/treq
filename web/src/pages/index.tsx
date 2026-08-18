@@ -522,8 +522,8 @@ function FeaturesSection(): ReactNode {
                   className={styles.featureImage}
                   src={timestampScreenshot}
                   alt="Edit commit timestamp dialog with shift to now"
-                  width={1200}
-                  height={800}
+                  width={1040}
+                  height={652}
                   loading="lazy"
                   decoding="async"
                 />
