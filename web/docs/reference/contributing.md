@@ -67,6 +67,8 @@ Run `npm run build:napi` after Rust changes that integration tests depend on.
 
 `npm run screenshot:readme` (alias `npm run screenshot:landing`) captures the committed hero at `assets/screenshots/code.png`. Other marketing crops write to `web/static/img/landing/` and stay out of git. A Docusaurus production build runs that command when landing files are missing.
 
+The Deploy Web workflow captures those landing PNGs in a `landing-screenshots` job, then copies them into `web/static/img/landing` before `docusaurus build`. GitHub Web CI and Web E2E set `SKIP_LANDING_SCREENSHOTS=1` and do not capture.
+
 Set `SKIP_LANDING_SCREENSHOTS=1` to skip generation. Set `FORCE_LANDING_SCREENSHOTS=1` to recapture even when files already exist.
 
 ## Implementation Rules

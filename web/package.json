@@ -8,6 +8,7 @@
     "build:search-index": "node scripts/build-search-index.mjs",
     "build:skills-catalog": "node scripts/fetch-skills-catalog.mjs",
     "build": "node scripts/build-search-index.mjs && docusaurus build",
+    "assert:landing-screenshots": "node scripts/assert-landing-screenshots.mjs",
     "swizzle": "docusaurus swizzle",
     "deploy": "docusaurus deploy",
     "clear": "docusaurus clear",

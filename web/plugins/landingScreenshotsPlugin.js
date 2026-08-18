@@ -9,6 +9,9 @@ function landingScreenshotsPlugin(context) {
     name: 'landing-screenshots-plugin',
     async loadContent() {
       if (process.env.SKIP_LANDING_SCREENSHOTS === '1') {
+        console.warn(
+          '[landing-screenshots] skipped (SKIP_LANDING_SCREENSHOTS=1). Landing PNGs must already be in static/img/landing.',
+        );
         return;
       }
       if (process.env.NODE_ENV !== 'production') {

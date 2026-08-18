@@ -32,7 +32,7 @@ Download the latest release [here](https://github.com/Ziinc/treq/releases). Inst
 
 The committed hero is `assets/screenshots/code.png`. Other marketing crops write to `web/static/img/landing/` and are gitignored.
 
-A Docusaurus production build runs `npm run screenshot:readme` when those landing files are missing. Set `SKIP_LANDING_SCREENSHOTS=1` to skip that step. Set `FORCE_LANDING_SCREENSHOTS=1` to recapture even when files exist.
+A Docusaurus production build runs `npm run screenshot:readme` when those landing files are missing. The Deploy Web workflow captures them in CI and copies them into the site build. Set `SKIP_LANDING_SCREENSHOTS=1` to skip that step. Set `FORCE_LANDING_SCREENSHOTS=1` to recapture even when files exist.
 
 ```bash
 npm run screenshot:readme
