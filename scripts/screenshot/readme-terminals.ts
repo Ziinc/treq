@@ -118,6 +118,14 @@ export function expandMarketingTerminalPane(): void {
   pane.style.maxHeight = "60%";
 }
 
+export function hideMarketingTerminalPane(): void {
+  const pane = document.querySelector(
+    '[data-testid="workspace-terminal-pane"]',
+  ) as HTMLElement | null;
+  if (!pane) return;
+  pane.style.display = "none";
+}
+
 /** Overlay TUI HTML — xterm paints to canvas, which does not serialize into the screenshot DOM. */
 export function injectMarketingTuiOverlays(): void {
   for (const panel of document.querySelectorAll<HTMLElement>(

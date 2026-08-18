@@ -308,6 +308,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
         <Sidebar
           collapsible="none"
           className="group/sidebar h-screen border-r border-border"
+          data-testid="workspace-sidebar"
         >
           <SidebarHeader>
             <div className="flex items-center gap-2">

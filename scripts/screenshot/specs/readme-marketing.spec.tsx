@@ -1,7 +1,7 @@
 /**
  * README / web-home marketing screenshots → assets/screenshots/*.png
  *
- * Real jj repo via NAPI, real Dashboard, GitHub/CI cache stubbed (no gh CLI).
+ * Real Jujutsu repo via NAPI, real Dashboard, GitHub/CI cache stubbed (no gh CLI).
  * Terminal TUI pixels are injected because xterm canvas does not serialize.
  */
 
@@ -11,22 +11,32 @@ import * as React from "react";
 import { expect, it, vi } from "vitest";
 import { Dashboard } from "../../../src/components/Dashboard";
 import { render, screen, waitFor, within } from "../../../test/test-utils";
-import { findSidebarBranchElement } from "../../../test/utils";
-import { captureDocument } from "../capture";
+import { getWorkspaces } from "../../../src/lib/api";
+import { getFullWorkspacePath } from "../../../src/lib/utils";
+import {
+  findSidebarBranchElement,
+  resolveWorkspacePath,
+  writeWorkspaceFile,
+} from "../../../test/utils";
 import {
   MARKETING_BRANCH,
   README_SCREENSHOTS_DIR,
+  SIBLING_BRANCHES,
   STACK_PARENT_BRANCH,
   seedReadmeMarketingRepo,
 } from "../readme-fixture";
+import { captureDocument, stitchPngsSideBySide } from "../capture";
 import {
   MARKETING_REMOTE,
   marketingCiByBranch,
+  marketingGhIssues,
+  marketingGhPullRequests,
   marketingPrByBranch,
 } from "../readme-github";
 import {
   expandMarketingFileTree,
   expandMarketingTerminalPane,
+  hideMarketingTerminalPane,
   injectMarketingTuiOverlays,
   openMarketingAgentTerminals,
 } from "../readme-terminals";
@@ -44,10 +54,16 @@ const {
   mockListCachedPrStatuses,
   mockListCachedPrCiStatuses,
   mockGetGitRemoteUrl,
+  mockGhListPrs,
+  mockGhListIssues,
+  mockGhViewPr,
 } = vi.hoisted(() => ({
   mockListCachedPrStatuses: vi.fn(),
   mockListCachedPrCiStatuses: vi.fn(),
   mockGetGitRemoteUrl: vi.fn(),
+  mockGhListPrs: vi.fn(),
+  mockGhListIssues: vi.fn(),
+  mockGhViewPr: vi.fn(),
 }));
 
 vi.mock("../../../src/lib/api", async () => {
@@ -77,6 +93,9 @@ vi.mock("../../../src/lib/api", async () => {
     refreshPrStatuses: vi.fn(async () => undefined),
     refreshPrBranchStatus: vi.fn(async () => undefined),
     getGitRemoteUrl: mockGetGitRemoteUrl,
+    ghListPrs: mockGhListPrs,
+    ghListIssues: mockGhListIssues,
+    ghViewPr: mockGhViewPr,
   };
 });
 
@@ -84,6 +103,32 @@ function stubGithub() {
   mockGetGitRemoteUrl.mockResolvedValue(MARKETING_REMOTE);
   mockListCachedPrStatuses.mockResolvedValue(marketingPrByBranch());
   mockListCachedPrCiStatuses.mockResolvedValue(marketingCiByBranch());
+  mockGhListPrs.mockResolvedValue({
+    items: marketingGhPullRequests(),
+    hasMore: false,
+  });
+  mockGhListIssues.mockResolvedValue({
+    items: marketingGhIssues(),
+    hasMore: false,
+  });
+  mockGhViewPr.mockImplementation(async (_repo: string, number: number) => {
+    return (
+      marketingGhPullRequests().find((item) => item.number === number) ?? null
+    );
+  });
+}
+
+async function prepareWorkspace(branch = MARKETING_BRANCH) {
+  stubGithub();
+  const fixture = await seedReadmeMarketingRepo();
+  const user = userEvent.setup();
+  render(<Dashboard />);
+  await user.click(await findSidebarBranchElement(branch));
+  await screen.findByTestId("show-workspace-header");
+  hideMarketingTerminalPane();
+  document.documentElement.classList.add("dark");
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  return { user, ...fixture };
 }
 
 async function prepareMarketingView() {
@@ -145,19 +190,19 @@ it("captures the Changes tab for the README", async () => {
   await user.click(await within(conflictsSection).findByTitle(/Home\.tsx/));
   await screen.findByText(/Conflict 1 of/);
 
-  expandMarketingTerminalPane();
-  injectMarketingTuiOverlays();
+  hideMarketingTerminalPane();
   await new Promise((resolve) => setTimeout(resolve, 300));
 
   await captureDocument(document, {
     name: "readme-review",
     deviceScaleFactor: 2,
     scrollIntoView: '[data-conflict-section-label="Side #1"]',
+    clipSelector: '[data-testid="changes-diff-viewer"]',
     publishTo: path.join(README_SCREENSHOTS_DIR, "review.png"),
     expectations: [
-      "The Changes tab is open on a conflicted packages/web/src/pages/Home.tsx with an inline conflict card (Side #1 / Base / Side #2).",
-      "Committed files such as client.ts are listed; GitHub View PR and CI remain in the header.",
-      "The terminal pane still shows Claude, Codex, and Cursor TUI content.",
+      "The Changes tab is cropped to the diff viewer. The terminal pane is not visible.",
+      "A conflicted packages/web/src/pages/Home.tsx shows an inline conflict card (Side #1 / Base / Side #2).",
+      "Committed files such as client.ts are listed in the Changes sidebar.",
     ],
   });
 }, 120000);
@@ -201,52 +246,193 @@ it("captures the workspace list for landing isolation copy", async () => {
   await new Promise((resolve) => setTimeout(resolve, 400));
 
   await captureDocument(document, {
-    name: "readme-workspaces",
+    name: "readme-sidebar",
     deviceScaleFactor: 2,
-    publishTo: path.join(README_SCREENSHOTS_DIR, "workspaces.png"),
+    clipSelector: '[data-testid="workspace-sidebar"]',
+    publishTo: path.join(README_SCREENSHOTS_DIR, "sidebar.png"),
     expectations: [
-      "The home repo dashboard lists multiple workspaces, including feat/empty-event-message stacked on feat/event-ingest.",
-      "Sibling workspaces feat/keyvalues-cache and feat/alerting-logs are visible in the sidebar.",
-      "The Code tab is not showing a nested workspace review; this is the repo-level workspace list.",
+      "The sidebar is cropped and lists stacked workspaces, including feat/empty-event-message under feat/event-ingest.",
+      "Sibling workspaces feat/keyvalues-cache and feat/alerting-logs are visible.",
     ],
   });
 }, 120000);
 
-it("captures agent terminals for landing agent-session copy", async () => {
-  await prepareMarketingView();
+it("captures two working copies side by side for isolation copy", async () => {
+  const { user, repoPath } = await prepareWorkspace();
 
-  await screen.findByTestId("workspace-terminal-pane");
-  await waitFor(() => {
-    expect(screen.getByTestId("marketing-tui-claude")).toBeTruthy();
+  const workspaces = await getWorkspaces(repoPath);
+  const left = workspaces.find((ws) => ws.branch_name === SIBLING_BRANCHES[0]);
+  const right = workspaces.find((ws) => ws.branch_name === MARKETING_BRANCH);
+  if (!left || !right) throw new Error("Expected isolation workspaces");
+
+  writeWorkspaceFile(
+    resolveWorkspacePath(repoPath, getFullWorkspacePath(left)),
+    "packages/api/src/cache.ts",
+    "export const CACHE_TTL = 30;\n",
+  );
+  writeWorkspaceFile(
+    resolveWorkspacePath(repoPath, getFullWorkspacePath(right)),
+    "packages/web/src/pages/Home.tsx",
+    "export default function Home() { return <h1>Local feed</h1>; }\n",
+  );
+
+  await user.click(await findSidebarBranchElement(SIBLING_BRANCHES[0]));
+  await user.click(await screen.findByRole("tab", { name: /^Changes/ }));
+  hideMarketingTerminalPane();
+  await screen.findByTestId("changes-diff-viewer");
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  const leftClip = path.join(
+    "scripts",
+    "screenshot",
+    ".generated",
+    "isolation-left.png",
+  );
+  await captureDocument(document, {
+    name: "readme-isolation-left",
+    deviceScaleFactor: 2,
+    clipSelector: '[data-testid="changes-diff-viewer"]',
+    publishTo: leftClip,
+    expectations: [
+      "The Changes view for feat/keyvalues-cache shows an uncommitted cache.ts change.",
+      "The terminal pane is not visible.",
+    ],
   });
 
+  await user.click(await findSidebarBranchElement(MARKETING_BRANCH));
+  await user.click(await screen.findByRole("tab", { name: /^Changes/ }));
+  hideMarketingTerminalPane();
+  await screen.findByTestId("changes-diff-viewer");
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  const rightClip = path.join(
+    "scripts",
+    "screenshot",
+    ".generated",
+    "isolation-right.png",
+  );
   await captureDocument(document, {
-    name: "readme-terminals",
+    name: "readme-isolation-right",
     deviceScaleFactor: 2,
-    clipSelector: '[data-testid="workspace-terminal-pane"]',
-    publishTo: path.join(README_SCREENSHOTS_DIR, "terminals.png"),
+    clipSelector: '[data-testid="changes-diff-viewer"]',
+    publishTo: rightClip,
     expectations: [
-      "The Terminals pane is cropped and shows Claude Code, Codex, and Cursor Agent sessions.",
-      "Claude's peach welcome TUI is visible; the pane is labeled Terminals.",
+      "The Changes view for feat/empty-event-message shows a different uncommitted Home.tsx change.",
+      "The terminal pane is not visible.",
+    ],
+  });
+
+  await stitchPngsSideBySide(
+    leftClip,
+    rightClip,
+    path.join(README_SCREENSHOTS_DIR, "isolation.png"),
+    [SIBLING_BRANCHES[0], MARKETING_BRANCH],
+  );
+}, 120000);
+
+it("captures agent prompt input for CLI delegation copy", async () => {
+  const { user } = await prepareWorkspace();
+
+  const input = await screen.findByPlaceholderText("Describe a task...");
+  await user.click(input);
+  await user.clear(input);
+  await user.type(input, "create a workspace for this fix");
+  await screen.findByTestId("agent-task-input");
+
+  await captureDocument(document, {
+    name: "readme-prompt",
+    deviceScaleFactor: 2,
+    clipSelector: '[data-testid="agent-task-input"]',
+    publishTo: path.join(README_SCREENSHOTS_DIR, "prompt.png"),
+    expectations: [
+      "The agent prompt box contains the text 'create a workspace for this fix'.",
+      "The prompt sits on the Code tab, not in a mock terminal.",
     ],
   });
 }, 120000);
 
-it("captures GitHub View PR and CI chrome for landing GitHub copy", async () => {
-  await prepareMarketingView();
+it("captures an agent send-files prompt for landing copy", async () => {
+  const { user } = await prepareWorkspace();
 
-  await screen.findByRole("button", { name: /view pr/i });
-  await screen.findByRole("button", { name: /ci /i });
-  await screen.findByTestId("show-workspace-header");
+  const input = await screen.findByPlaceholderText("Describe a task...");
+  await user.click(input);
+  await user.clear(input);
+  await user.type(
+    input,
+    "send me the screenshots and updated research draft markdown file",
+  );
 
   await captureDocument(document, {
-    name: "readme-github",
+    name: "readme-send-prompt",
     deviceScaleFactor: 2,
-    clipSelector: '[data-testid="show-workspace-header"]',
+    clipSelector: '[data-testid="agent-task-input"]',
+    publishTo: path.join(README_SCREENSHOTS_DIR, "send.png"),
+    expectations: [
+      "The agent prompt box asks the agent to send screenshots and a research draft markdown file.",
+    ],
+  });
+}, 120000);
+
+it("captures the schedule dialog for landing schedule copy", async () => {
+  const { user } = await prepareWorkspace();
+
+  await user.click(await screen.findByTestId("schedule-workspace-button"));
+  await screen.findByTestId("schedule-workspace-dialog");
+
+  await captureDocument(document, {
+    name: "readme-schedule",
+    deviceScaleFactor: 2,
+    clipSelector: '[data-testid="schedule-workspace-dialog"]',
+    publishTo: path.join(README_SCREENSHOTS_DIR, "schedule.png"),
+    expectations: [
+      "A Schedule workspace dialog is open with hide-until presets.",
+      "The dialog is cropped; the rest of the app chrome is out of frame.",
+    ],
+  });
+}, 120000);
+
+it("captures GitHub pull requests for landing GitHub copy", async () => {
+  stubGithub();
+  await seedReadmeMarketingRepo();
+  const user = userEvent.setup();
+  render(<Dashboard />);
+
+  await user.click(await screen.findByRole("button", { name: "GitHub" }));
+  await user.click(await screen.findByRole("tab", { name: /pull requests/i }));
+  await screen.findByText("feat: handle empty event messages");
+  document.documentElement.classList.add("dark");
+  await new Promise((resolve) => setTimeout(resolve, 400));
+
+  await captureDocument(document, {
+    name: "readme-github-prs",
+    deviceScaleFactor: 2,
+    clipSelector: '[data-testid="github-panel"]',
     publishTo: path.join(README_SCREENSHOTS_DIR, "github.png"),
     expectations: [
-      "The workspace header shows feat/empty-event-message targeting feat/event-ingest.",
-      "View PR and CI status controls are visible in the header.",
+      "The GitHub panel lists pull requests including feat: handle empty event messages.",
+      "Issues and Pull Requests tabs are visible.",
+    ],
+  });
+}, 120000);
+
+it("captures GitHub issues for landing GitHub copy", async () => {
+  stubGithub();
+  await seedReadmeMarketingRepo();
+  const user = userEvent.setup();
+  render(<Dashboard />);
+
+  await user.click(await screen.findByRole("button", { name: "GitHub" }));
+  await user.click(await screen.findByRole("tab", { name: /issues/i }));
+  await screen.findByText("Empty event payloads drop the Discord body");
+  document.documentElement.classList.add("dark");
+  await new Promise((resolve) => setTimeout(resolve, 400));
+
+  await captureDocument(document, {
+    name: "readme-github-issues",
+    deviceScaleFactor: 2,
+    clipSelector: '[data-testid="github-panel"]',
+    publishTo: path.join(README_SCREENSHOTS_DIR, "github-issues.png"),
+    expectations: [
+      "The GitHub Issues tab lists Empty event payloads drop the Discord body.",
+      "The panel is cropped to the GitHub integration, not the workspace header.",
     ],
   });
 }, 120000);

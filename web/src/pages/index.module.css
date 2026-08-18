@@ -319,6 +319,107 @@
   border-radius: 12px;
 }
 
+.highlightWide {
+  grid-column: 1 / -1;
+}
+
+.rebaseVisual {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 1.5rem;
+  align-items: center;
+  margin-top: 1.5rem;
+}
+
+.rebaseGraphic {
+  width: 100%;
+  height: auto;
+  background: #111111;
+  border-radius: 12px;
+  padding: 1rem;
+}
+
+.rebaseBase,
+.rebaseStack {
+  fill: none;
+  stroke: #5eb0ff;
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.rebaseStack {
+  stroke: #93c5fd;
+  stroke-dasharray: 180;
+  animation: rebaseSlide 3.2s ease-in-out infinite;
+}
+
+.rebaseDot {
+  fill: #ffffff;
+}
+
+.rebaseDotMove {
+  fill: var(--ifm-color-primary);
+}
+
+.rebaseStackDot {
+  fill: #93c5fd;
+}
+
+.rebaseStackDotActive {
+  fill: #ffffff;
+}
+
+.rebaseLabel {
+  fill: #d4d4d4;
+  font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@keyframes rebaseSlide {
+  0%,
+  20% {
+    stroke-dashoffset: 180;
+  }
+  50%,
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+.treeGraphic {
+  width: 100%;
+  background: #111111;
+  color: #e5e5e5;
+  border-radius: 12px;
+  padding: 1.25rem 1.5rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9rem;
+  line-height: 1.7;
+}
+
+.treeGraphic ul {
+  list-style: none;
+  margin: 0;
+  padding-left: 1.1rem;
+  border-left: 1px solid #3f3f46;
+}
+
+.treeGraphic > ul {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.treeFolder {
+  color: #93c5fd;
+  font-weight: 700;
+}
+
+.githubShotPair {
+  display: grid;
+  gap: 0.75rem;
+  width: 100%;
+}
+
 .highlightDarkImage {
   margin-top: 0;
 }
@@ -1009,6 +1110,8 @@
   .featureRow,
   .highlightGrid,
   .highlightDark,
+  .highlightWide,
+  .rebaseVisual,
   .carouselTrack,
   .statsSplit,
   .proofSection {

@@ -65,7 +65,7 @@ npm run screenshot:readme
 
 Run `npm run build:napi` after Rust changes that integration tests depend on.
 
-`npm run screenshot:readme` (alias `npm run screenshot:landing`) regenerates the web landing and project readme images under `assets/screenshots/` from `scripts/screenshot/specs/readme-*.spec.tsx`. Full-window shots: `code.png`, `review.png`, `commits.png`, `workspaces.png`. Crops: `terminals.png` (agent terminals) and `github.png` (View PR and CI header).
+`npm run screenshot:readme` (alias `npm run screenshot:landing`) regenerates the web landing and project readme images under `assets/screenshots/` from `scripts/screenshot/specs/readme-*.spec.tsx`. Full-window shots: `code.png` and `commits.png`. Crops: `review.png` (Changes tab without the terminal pane), `sidebar.png`, `prompt.png`, `send.png`, `schedule.png`, `github.png`, and `github-issues.png`. `isolation.png` is a side-by-side stitch of two working copies.
 
 ## Implementation Rules
 

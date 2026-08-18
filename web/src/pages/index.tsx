@@ -8,11 +8,15 @@ import Heading from '@theme/Heading';
 
 import codeScreenshot from '../../../assets/screenshots/code.png';
 import reviewScreenshot from '../../../assets/screenshots/review.png';
-import workspacesScreenshot from '../../../assets/screenshots/workspaces.png';
-import terminalsScreenshot from '../../../assets/screenshots/terminals.png';
-import commitsScreenshot from '../../../assets/screenshots/commits.png';
+import isolationScreenshot from '../../../assets/screenshots/isolation.png';
+import sidebarScreenshot from '../../../assets/screenshots/sidebar.png';
+import promptScreenshot from '../../../assets/screenshots/prompt.png';
+import sendScreenshot from '../../../assets/screenshots/send.png';
+import scheduleScreenshot from '../../../assets/screenshots/schedule.png';
 import githubScreenshot from '../../../assets/screenshots/github.png';
+import githubIssuesScreenshot from '../../../assets/screenshots/github-issues.png';
 import styles from './index.module.css';
+import {RebaseGraphic, WorkspaceTreeGraphic} from '../components/landing/ProductGraphics';
 
 const DOWNLOAD_HREF = 'https://github.com/Ziinc/treq/releases';
 
@@ -38,9 +42,9 @@ function HomepageHeader() {
           {' '}that isolates each agent and rebases stacked PRs when the base moves
         </Heading>
         <p className={styles.heroLead}>
-          Open a Git repo. Create one workspace per agent under{' '}
-          <code>.treq/workspaces</code>. Treq rebases dependent workspaces when the
-          target branch moves. Reviews stay on disk until you push.
+          Open a Git repo. Give each agent its own workspace. Treq rebases
+          dependent workspaces when the target branch moves. Reviews stay on
+          disk until you push.
         </p>
         <div className={styles.buttons}>
           <Link
@@ -104,42 +108,36 @@ function HighlightGrid(): ReactNode {
           </Heading>
           <p>
             The workspace tabs are Code, Commits, and Changes. Line comments stay
-            under <code>.treq</code> until you push a Git remote.
+            on disk until you push a Git remote.
           </p>
           <Link className={styles.highlightButton} to="/docs/concepts/changes-and-reviews">
             How reviews work
           </Link>
-          <img
-            className={styles.highlightCardImage}
-            src={reviewScreenshot}
-            alt="Changes tab with a conflicted Home.tsx and inline comments"
-            width={2880}
-            height={1800}
-            loading="lazy"
-            decoding="async"
-          />
         </article>
-        <article className={styles.highlightPlain}>
+        <article className={clsx(styles.highlightPlain, styles.highlightWide)}>
           <Heading as="h2" className={styles.highlightTitle}>
             When the target branch moves, dependent workspaces rebase.
           </Heading>
           <p>
-            Git worktrees cannot restack a chain of branches for you. Treq colocates
-            Jujutsu for that rebase. You still push and pull with Git. You never have
-            to learn <code>jj</code>.
+            Git worktrees cannot restack a chain of branches for you. Treq uses
+            Jujutsu for that rebase. You still push and pull with Git. You never
+            have to learn Jujutsu.
           </p>
           <Link className={styles.highlightGhost} to="/docs/concepts/workspaces">
             How workspaces work
           </Link>
-          <img
-            className={styles.highlightCardImage}
-            src={commitsScreenshot}
-            alt="Commits tab with feat/empty-event-message expanded to a client.ts diff"
-            width={2880}
-            height={1800}
-            loading="lazy"
-            decoding="async"
-          />
+          <div className={styles.rebaseVisual}>
+            <RebaseGraphic />
+            <img
+              className={styles.highlightCardImage}
+              src={sidebarScreenshot}
+              alt="Sidebar showing stacked workspace hierarchy"
+              width={560}
+              height={1800}
+              loading="lazy"
+              decoding="async"
+            />
+          </div>
         </article>
         <article className={styles.highlightDark}>
           <div className={styles.highlightDarkCopy}>
@@ -147,23 +145,14 @@ function HighlightGrid(): ReactNode {
               Split a feature into a stack. Keep the chain current.
             </Heading>
             <p>
-              Header Stack creates a workspace that targets another workspace. When
-              you land the base, Treq rebases the rest. Merge locally with Regular,
-              Squash, No Fast-Forward, or Fast-Forward Only.
+              Stack creates a workspace that targets another workspace. When you
+              land the base, Treq rebases the rest. Merge locally with familiar
+              and stack-native merge strategies.
             </p>
             <Link className={styles.highlightButtonLight} to="/docs/tutorials/merging-workspaces">
               Merging workspaces
             </Link>
           </div>
-          <img
-            className={styles.highlightDarkImage}
-            src={codeScreenshot}
-            alt="Stacked workspace feat/empty-event-message targeting feat/event-ingest"
-            width={2880}
-            height={1800}
-            loading="lazy"
-            decoding="async"
-          />
         </article>
       </div>
     </section>
@@ -172,40 +161,28 @@ function HighlightGrid(): ReactNode {
 
 const SOLUTION_CARDS = [
   {
-    title: 'Isolated workspaces',
-    body: 'New Workspace creates a working copy at .treq/workspaces/<name>. An uncommitted change in one workspace never shows up in another.',
-    image: workspacesScreenshot,
-    alt: 'Dashboard listing isolated workspaces including stacked feat/empty-event-message',
+    title: 'Agent CLI',
+    body: 'Agents can create and inspect workspaces through the treq CLI. Ask an agent to create a workspace for this fix and it can run the same commands you would.',
+    image: promptScreenshot,
+    alt: 'Agent prompt asking to create a workspace for this fix',
   },
   {
-    title: 'Local review',
-    body: 'Read the diff on Changes. Leave comments on line ranges. Finish review, Plan, Edit, Copy, or Discard. Comments are not Git history.',
-    image: reviewScreenshot,
-    alt: 'Changes tab reviewing a conflicted Home.tsx',
+    title: 'Send files back',
+    body: 'Tell an agent to send you the screenshots and the updated research draft. Treq previews those files in the session that produced them.',
+    image: sendScreenshot,
+    alt: 'Agent prompt asking to send screenshots and a research draft',
   },
   {
-    title: 'Auto-rebase',
-    body: 'Treq rebases dependent workspaces when their target moves. Conflicts surface in the UI. Resolve conflicts starts the fix. It is not a silent merge.',
-    image: commitsScreenshot,
-    alt: 'Commits tab showing stacked commit history after a rebase',
+    title: 'Schedule workspaces',
+    body: 'Hide a workspace until a time you pick. The sidebar stays focused on the work that is due now.',
+    image: scheduleScreenshot,
+    alt: 'Schedule workspace dialog with hide-until presets',
   },
   {
-    title: 'Stacked workspaces',
-    body: 'A stack is a chain of workspaces. Create stacked workspace from the current one. Treq tracks the target and restacks the rest.',
-    image: codeScreenshot,
-    alt: 'Code tab for a stacked workspace targeting feat/event-ingest',
-  },
-  {
-    title: 'Agent sessions',
-    body: 'The Code tab starts Claude, Codex, or Cursor in the workspace directory. Plan and Edit send review comments back to that agent.',
-    image: terminalsScreenshot,
-    alt: 'Terminal pane with Claude Code, Codex, and Cursor Agent sessions',
-  },
-  {
-    title: 'GitHub pull requests',
-    body: 'Create PR and View PR call gh. CI status for the branch shows in the workspace header. Reviews on disk are not GitHub review comments until you push.',
+    title: 'GitHub issues and PRs',
+    body: 'Open Issues and Pull Requests in the app. Create a PR, read CI, and start an agent from an issue without leaving Treq.',
     image: githubScreenshot,
-    alt: 'Workspace header with View PR and CI status for a stacked branch',
+    alt: 'GitHub panel listing pull requests for the repo',
   },
 ];
 
@@ -219,7 +196,7 @@ function SolutionsCarousel(): ReactNode {
     <section className={styles.carouselSection} aria-label="Solutions">
       <div className={styles.carouselHeader}>
         <Heading as="h2" className={styles.carouselHeading}>
-          Isolate the agent. Review the change. Rebase the stack.
+          Delegate workspaces. Send files. Schedule the rest.
         </Heading>
         <div className={styles.carouselNav}>
           <button
@@ -264,14 +241,14 @@ function SolutionsCarousel(): ReactNode {
 const FACTS = [
   {
     value: 'Local',
-    label: 'Diffs, comments, and terminal metadata live under .treq and the app database. The base app does not upload your code.',
+    label: 'Diffs, comments, and terminal metadata stay on your machine. The desktop app does not upload your code.',
   },
   {
     value: 'Apache 2.0',
     label: 'The desktop app is open source. You can read every command it runs.',
   },
   {
-    value: 'jj + Git',
+    value: 'Jujutsu + Git',
     label: 'Push and pull stay on Git. Jujutsu sits beside it so Treq can rebase workspace branches when targets move.',
   },
   {
@@ -304,7 +281,7 @@ function StatsSection(): ReactNode {
         <div className={styles.statsCopy}>
           <p className={styles.kicker}>Facts</p>
           <Heading as="h2" className={styles.statsCopyHeading}>
-            The constraints that make the product honest
+            The constraints that stay on your machine
           </Heading>
           <p>{FACTS[active].label}</p>
         </div>
@@ -321,9 +298,9 @@ function ShowcaseSection(): ReactNode {
         Read the whole change, or one commit, on the same screen
       </Heading>
       <p className={styles.showcaseLead}>
-        File navigation, the diff, inline comments, and commit history stay together.
-        When a workspace has an open GitHub pull request, the Changes tab can also
-        show GitHub review threads. Quoting a thread does not reply on GitHub.
+        File navigation, the diff, and inline comments stay together. When a
+        workspace has an open GitHub pull request, Changes can also show GitHub
+        review threads. Quoting a thread does not reply on GitHub.
       </p>
       <Link className={styles.showcaseCta} to="/docs/concepts/changes-and-reviews">
         Changes and reviews
@@ -346,15 +323,14 @@ function ProofSection(): ReactNode {
     <section className={styles.proofSection} aria-label="How isolation works">
       <article className={styles.proofDark}>
         <p>
-          An uncommitted change in one workspace never shows up in another. That is
-          the point of <code>.treq/workspaces</code>. Agents can write in parallel
-          without sharing your main checkout.
+          An uncommitted change in one workspace never shows up in another.
+          Agents can write in parallel without sharing your main checkout.
         </p>
         <p className={styles.proofAttr}>From the Workspaces docs</p>
         <img
           className={styles.proofImage}
-          src={workspacesScreenshot}
-          alt="Repo dashboard with isolated workspaces in the sidebar"
+          src={isolationScreenshot}
+          alt="Two workspaces side by side with different working-copy changes"
           width={2880}
           height={1800}
           loading="lazy"
@@ -379,8 +355,8 @@ function FeaturesSection(): ReactNode {
             Features
           </Heading>
           <p className={styles.featuresSubheading}>
-            Review the diff on Changes. Rebase the stack when the target moves. Keep
-            agents off the same working tree.
+            Review locally. Rebase the stack. Let agents open workspaces through
+            the CLI.
           </p>
         </div>
 
@@ -414,20 +390,12 @@ function FeaturesSection(): ReactNode {
               Isolated workspaces
             </Heading>
             <p className={styles.featureDescription}>
-              Each agent gets its own checkout under <code>.treq/workspaces</code>.
-              An uncommitted change in one workspace never shows up in another.
+              Each agent gets its own checkout. An uncommitted change in one
+              workspace never shows up in another.
             </p>
           </div>
           <div className={styles.featureScreenshot}>
-            <img
-              className={styles.featureImage}
-              src={workspacesScreenshot}
-              alt="Treq dashboard listing isolated stacked workspaces"
-              width={2880}
-              height={1800}
-              loading="lazy"
-              decoding="async"
-            />
+            <WorkspaceTreeGraphic />
           </div>
         </div>
 
@@ -437,47 +405,33 @@ function FeaturesSection(): ReactNode {
               Auto-rebase
             </Heading>
             <p className={styles.featureDescription}>
-              Workspaces stay isolated and current. When the base moves, Treq rebases
-              dependent workspaces. Start Resolve conflicts from the Commits tab when
-              a rebase stops.
+              When the base moves, Treq rebases dependent workspaces. Conflicts
+              surface in the UI so you can finish the restack.
             </p>
           </div>
           <div className={styles.featureScreenshot}>
-            <img
-              className={styles.featureImage}
-              src={commitsScreenshot}
-              alt="Treq Commits tab with stacked commit history and a file diff"
-              width={2880}
-              height={1800}
-              loading="lazy"
-              decoding="async"
-            />
+            <RebaseGraphic />
           </div>
         </div>
 
         <div className={clsx(styles.featureRow, styles.featureRowReverse)}>
           <div className={styles.featureText}>
             <Heading as="h3" className={styles.featureHeading}>
-              Stacked workspaces
+              Agent CLI
             </Heading>
             <p className={styles.featureDescription}>
-              Split a large feature into a chain of smaller pull requests. Treq keeps
-              the whole chain rebased so later work sits on what you already shipped.
+              Workspace management can be delegated to agents through the treq
+              CLI. Prompt an agent to create a workspace for this fix and it can
+              run the same commands you would.
             </p>
-            <div className={styles.inlineStackViz} aria-label="Linear stacked pull requests">
-              <div className={styles.inlineStackNode}>main</div>
-              <div className={styles.inlineStackNode}>PR 1</div>
-              <div className={styles.inlineStackNode}>PR 2</div>
-              <div className={styles.inlineStackNode} data-active="true">PR 3</div>
-            </div>
           </div>
           <div className={styles.featureScreenshot}>
             <img
               className={styles.featureImage}
-              src={workspacesScreenshot}
-              alt="Stacked workspaces panel showing feat/empty-event-message on feat/event-ingest"
-              width={2880}
-              height={1800}
+              src={promptScreenshot}
+              alt="Agent prompt asking to create a workspace for this fix"
+              width={1200}
+              height={400}
               loading="lazy"
               decoding="async"
             />
@@ -487,21 +441,20 @@ function FeaturesSection(): ReactNode {
         <div className={styles.featureRow}>
           <div className={styles.featureText}>
             <Heading as="h3" className={styles.featureHeading}>
-              Agent terminals
+              Send files from the agent
             </Heading>
             <p className={styles.featureDescription}>
-              The Code tab starts Claude, Codex, or Cursor in the workspace directory.
-              Plan and Edit send review comments back to that agent. Extra shells stay
-              running when you switch tabs.
+              Ask an agent to send you the screenshots and the updated research
+              draft. Treq previews those files in the session that produced them.
             </p>
           </div>
           <div className={styles.featureScreenshot}>
             <img
               className={styles.featureImage}
-              src={terminalsScreenshot}
-              alt="Treq terminal pane running Claude Code, Codex, and Cursor Agent"
-              width={2320}
-              height={720}
+              src={sendScreenshot}
+              alt="Agent prompt asking to send screenshots and a research draft"
+              width={1200}
+              height={400}
               loading="lazy"
               decoding="async"
             />
@@ -511,24 +464,57 @@ function FeaturesSection(): ReactNode {
         <div className={clsx(styles.featureRow, styles.featureRowReverse)}>
           <div className={styles.featureText}>
             <Heading as="h3" className={styles.featureHeading}>
-              GitHub PRs and CI
+              Schedule workspaces
             </Heading>
             <p className={styles.featureDescription}>
-              Create PR and View PR call <code>gh</code>. CI for the branch shows in
-              the workspace header. Local review comments are not GitHub review
-              comments until you push.
+              Hide a workspace until a time you pick. Bring it back when the work
+              is due.
             </p>
           </div>
           <div className={styles.featureScreenshot}>
             <img
               className={styles.featureImage}
-              src={githubScreenshot}
-              alt="Workspace header showing View PR and CI for a stacked branch"
-              width={2320}
-              height={98}
+              src={scheduleScreenshot}
+              alt="Schedule workspace dialog with hide-until presets"
+              width={1200}
+              height={800}
               loading="lazy"
               decoding="async"
             />
+          </div>
+        </div>
+
+        <div className={styles.featureRow}>
+          <div className={styles.featureText}>
+            <Heading as="h3" className={styles.featureHeading}>
+              GitHub issues and pull requests
+            </Heading>
+            <p className={styles.featureDescription}>
+              Manage issues and pull requests in the app. Start an agent from an
+              issue. CI for the branch stays next to the workspace.
+            </p>
+          </div>
+          <div className={styles.featureScreenshot}>
+            <div className={styles.githubShotPair}>
+              <img
+                className={styles.featureImage}
+                src={githubIssuesScreenshot}
+                alt="GitHub issues list in Treq"
+                width={1440}
+                height={900}
+                loading="lazy"
+                decoding="async"
+              />
+              <img
+                className={styles.featureImage}
+                src={githubScreenshot}
+                alt="GitHub pull request list in Treq"
+                width={1440}
+                height={900}
+                loading="lazy"
+                decoding="async"
+              />
+            </div>
           </div>
         </div>
       </div>
