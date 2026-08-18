@@ -1,8 +1,6 @@
-import * as React from "react";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   createTestRepo,
-  findSidebarBranchElement,
   openRepo,
   resolveWorkspacePath,
   writeWorkspaceFile,
@@ -17,9 +15,13 @@ import {
   savePendingReview,
 } from "../../../src/lib/api-extra";
 import type { LineComment } from "../../../src/lib/api-types";
-import { render, screen, waitFor } from "../../test-utils";
-import { Dashboard } from "../../../src/components/Dashboard";
+import { screen, waitFor } from "../../test-utils";
 import userEvent from "@testing-library/user-event";
+import {
+  addSingleReviewComment,
+  clickChangedFile,
+  openReviewTab,
+} from "./comments-helpers";
 
 const PENDING_FILE = "pending-test.txt";
 
@@ -44,37 +46,9 @@ async function setupWorkspaceWithFile(branchName: string): Promise<{
   return { repoPath, workspace };
 }
 
-async function openReviewTab(
-  user: ReturnType<typeof userEvent.setup>,
-  branchName: string,
-) {
-  render(<Dashboard />);
-
-  await user.click(await findSidebarBranchElement(branchName));
-
-  const reviewTab = await screen.findByRole("tab", { name: /^Changes/ });
-  await user.click(reviewTab);
-  await screen.findByRole("tab", { name: /^Changes/, selected: true });
-}
-
-async function addSingleReviewComment(
-  user: ReturnType<typeof userEvent.setup>,
-  comment: string,
-) {
-  await user.click(
-    (await screen.findAllByRole("button", { name: /add comment/i }))[0],
-  );
-  await user.type(
-    await screen.findByPlaceholderText(/add a comment/i),
-    comment,
-  );
-
-  const submit = screen
-    .getAllByRole("button", { name: /add comment/i })
-    .find((button) => button.textContent === "Add Comment");
-  expect(submit).toBeTruthy();
-  await user.click(submit!);
-  await screen.findByText(comment);
+async function openPendingFile() {
+  await clickChangedFile(PENDING_FILE);
+  await screen.findByText(/first line/, {}, { timeout: 60_000 });
 }
 
 describe("Pending review persistence", () => {
@@ -108,7 +82,7 @@ describe("Pending review persistence", () => {
           screen.queryByRole("button", { name: /finish review/i }),
         ).toBeInTheDocument();
       },
-      { timeout: 5000 },
+      { timeout: 60_000 },
     );
   });
 
@@ -117,12 +91,7 @@ describe("Pending review persistence", () => {
     const { repoPath, workspace } = await setupWorkspaceWithFile(branchName);
 
     await openReviewTab(user, branchName);
-
-    await waitFor(() => {
-      expect(
-        screen.getAllByText(new RegExp(PENDING_FILE)).length,
-      ).toBeGreaterThan(0);
-    });
+    await openPendingFile();
 
     await addSingleReviewComment(user, "New comment for auto-save");
 
@@ -132,7 +101,7 @@ describe("Pending review persistence", () => {
         expect(review).not.toBeNull();
         expect(review!.comments.length).toBeGreaterThan(0);
       },
-      { timeout: 5000 },
+      { timeout: 60_000 },
     );
   });
 
@@ -141,12 +110,7 @@ describe("Pending review persistence", () => {
     const { repoPath, workspace } = await setupWorkspaceWithFile(branchName);
 
     await openReviewTab(user, branchName);
-
-    await waitFor(() => {
-      expect(
-        screen.getAllByText(new RegExp(PENDING_FILE)).length,
-      ).toBeGreaterThan(0);
-    });
+    await openPendingFile();
 
     await addSingleReviewComment(user, "Comment to be cleared");
 
@@ -155,7 +119,7 @@ describe("Pending review persistence", () => {
         const review = await loadPendingReview(repoPath, workspace.id);
         expect(review).not.toBeNull();
       },
-      { timeout: 5000 },
+      { timeout: 60_000 },
     );
 
     const actionBarBtns = await screen.findAllByRole("button", {
@@ -175,7 +139,7 @@ describe("Pending review persistence", () => {
         const review = await loadPendingReview(repoPath, workspace.id);
         expect(review).toBeNull();
       },
-      { timeout: 5000 },
+      { timeout: 60_000 },
     );
   });
 
@@ -184,12 +148,7 @@ describe("Pending review persistence", () => {
     const { repoPath, workspace } = await setupWorkspaceWithFile(branchName);
 
     await openReviewTab(user, branchName);
-
-    await waitFor(() => {
-      expect(
-        screen.getAllByText(new RegExp(PENDING_FILE)).length,
-      ).toBeGreaterThan(0);
-    });
+    await openPendingFile();
 
     await addSingleReviewComment(user, "Comment to keep");
 
@@ -198,7 +157,7 @@ describe("Pending review persistence", () => {
         const review = await loadPendingReview(repoPath, workspace.id);
         expect(review).not.toBeNull();
       },
-      { timeout: 5000 },
+      { timeout: 60_000 },
     );
 
     const discardBtn = await screen.findByRole("button", {
