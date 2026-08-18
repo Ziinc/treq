@@ -325,7 +325,7 @@ function ShowcaseSection(): ReactNode {
       <img
         className={styles.showcaseImage}
         src={reviewScreenshot}
-        alt="Treq Changes tab with a conflicted Home.tsx and inline comments"
+        alt="Treq Changes tab with a resolved GitHub review thread and a local comment that says remove this"
         width={2320}
         height={1580}
         loading="lazy"

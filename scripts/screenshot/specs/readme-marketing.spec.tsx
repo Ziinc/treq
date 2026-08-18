@@ -43,6 +43,7 @@ import {
   marketingGhIssues,
   marketingGhPullRequests,
   marketingPrByBranch,
+  marketingReviewThreads,
 } from "../readme-github";
 import {
   expandMarketingFileTree,
@@ -69,6 +70,7 @@ const {
   mockGhListPrs,
   mockGhListIssues,
   mockGhViewPr,
+  mockGhListPrReviewThreads,
 } = vi.hoisted(() => ({
   mockListCachedPrStatuses: vi.fn(),
   mockListCachedPrCiStatuses: vi.fn(),
@@ -76,6 +78,7 @@ const {
   mockGhListPrs: vi.fn(),
   mockGhListIssues: vi.fn(),
   mockGhViewPr: vi.fn(),
+  mockGhListPrReviewThreads: vi.fn(),
 }));
 
 vi.mock("../../../src/lib/api", async () => {
@@ -108,6 +111,7 @@ vi.mock("../../../src/lib/api", async () => {
     ghListPrs: mockGhListPrs,
     ghListIssues: mockGhListIssues,
     ghViewPr: mockGhViewPr,
+    ghListPrReviewThreads: mockGhListPrReviewThreads,
   };
 });
 
@@ -128,6 +132,7 @@ function stubGithub() {
       marketingGhPullRequests().find((item) => item.number === number) ?? null
     );
   });
+  mockGhListPrReviewThreads.mockResolvedValue(marketingReviewThreads());
 }
 
 async function prepareWorkspace(branch = MARKETING_BRANCH) {
@@ -194,13 +199,38 @@ it("captures the Changes tab for the README", async () => {
   await user.click(await screen.findByRole("tab", { name: /^Changes/ }));
   await screen.findByRole("tab", { name: /^Changes/, selected: true });
 
-  const conflictsToggle = await screen.findByRole("button", {
-    name: "Conflicts",
+  const committedToggle = await screen.findByRole("button", {
+    name: "Committed",
   });
-  const conflictsSection = conflictsToggle.closest("div")?.parentElement;
-  if (!conflictsSection) throw new Error("Conflicts section not found");
-  await user.click(await within(conflictsSection).findByTitle(/Home\.tsx/));
-  await screen.findByText(/Conflict 1 of/);
+  const committedSection = committedToggle.closest("div")?.parentElement;
+  if (!committedSection) throw new Error("Committed section not found");
+  await user.click(await within(committedSection).findByTitle(/client\.ts/));
+  await screen.findByText(/JSON\.stringify/);
+
+  await screen.findByText("Resolved");
+  await user.click(await screen.findByTestId("github-thread-toggle"));
+  await screen.findByTestId("github-comment-card");
+  await screen.findByText(
+    "JSON.stringify is the right fallback when event_message is empty.",
+  );
+
+  const messageLine = (
+    await screen.findByText(/\? body\.event_message/)
+  ).closest("[data-diff-line]") as HTMLElement;
+  await user.hover(messageLine);
+  await user.click(
+    messageLine.querySelector("[data-comment-button]") as HTMLElement,
+  );
+  await user.type(
+    await screen.findByPlaceholderText(/add a comment/i),
+    "remove this",
+  );
+  const submit = screen
+    .getAllByRole("button", { name: /add comment/i })
+    .find((btn) => btn.textContent === "Add Comment");
+  if (!submit) throw new Error("Add Comment button not found");
+  await user.click(submit);
+  await screen.findByText("remove this");
 
   hideMarketingTerminalPane();
   await new Promise((resolve) => setTimeout(resolve, 300));
@@ -208,13 +238,13 @@ it("captures the Changes tab for the README", async () => {
   await captureDocument(document, {
     name: "readme-review",
     deviceScaleFactor: 2,
-    scrollIntoView: '[data-conflict-section-label="Side #1"]',
+    scrollIntoView: '[data-testid="inline-comment-card"]',
     clipSelector: '[data-testid="changes-diff-viewer"]',
     publishTo: path.join(README_SCREENSHOTS_DIR, "review.png"),
     expectations: [
       "The Changes tab is cropped to the diff viewer. The terminal pane is not visible.",
-      "A conflicted packages/web/src/pages/Home.tsx shows an inline conflict card (Side #1 / Base / Side #2).",
-      "Committed files such as client.ts are listed in the Changes sidebar.",
+      "An expanded GitHub review thread on client.ts shows a Resolved badge.",
+      "A local inline comment reads 'remove this'.",
     ],
   });
 }, 120000);

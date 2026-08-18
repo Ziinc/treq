@@ -1,4 +1,4 @@
-import type { PrCiStatus, PrInfo } from "../../src/lib/api-types";
+import type { GhReviewThread, PrCiStatus, PrInfo } from "../../src/lib/api-types";
 import {
   MARKETING_BRANCH,
   SIBLING_BRANCHES,
@@ -208,4 +208,29 @@ export function marketingCiByBranch(): Record<string, PrCiStatus | null> {
     }),
     [SIBLING_BRANCHES[1]]: ci(),
   };
+}
+
+/** Resolved GitHub review thread on the marketing client.ts commit. */
+export function marketingReviewThreads(): GhReviewThread[] {
+  return [
+    {
+      id: "PRRT_client_stringify",
+      is_resolved: true,
+      is_outdated: false,
+      path: "packages/web/src/lib/client.ts",
+      line: 7,
+      diff_side: "RIGHT",
+      comments: [
+        {
+          id: "PRRC_client_stringify",
+          body: "JSON.stringify is the right fallback when event_message is empty.",
+          author: { login: "octocat", avatar_url: null },
+          created_at: "2026-08-12T14:22:00Z",
+          diff_hunk:
+            "@@ -0,0 +1,14 @@\n+import type { EventBody } from \"../../../api/src/schema\";\n+\n+export async function postEvent(body: EventBody): Promise<Response> {\n+  const message =\n+    typeof body.event_message === \"string\" && body.event_message.length > 0\n+      ? body.event_message\n+      : JSON.stringify(body);",
+          url: "https://github.com/lorem-ipsum/event-bus/pull/418#discussion_r1",
+        },
+      ],
+    },
+  ];
 }
