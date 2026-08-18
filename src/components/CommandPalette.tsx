@@ -9,6 +9,7 @@ import { FilePicker } from "./FilePicker";
 import { ClaudeIcon } from "./icons/AgentIcons";
 import { CmdkFooter } from "./ui/cmdk-footer";
 import { Workspace } from "../lib/api";
+import { getFullWorkspacePath } from "../lib/utils";
 import { usePrInfoViaGh } from "../hooks/useMergeQueueStatus";
 import {
   AppWindow,
@@ -404,6 +405,11 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
             onOpenChange={onFilePickerChange}
             repoPath={repoPath}
             workspaceId={selectedWorkspaceId}
+            workspacePath={
+              currentWorkspace
+                ? getFullWorkspacePath(currentWorkspace)
+                : repoPath
+            }
             onFileSelect={onFileSelected}
           />
         </>
