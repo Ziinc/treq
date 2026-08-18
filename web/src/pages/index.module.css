@@ -424,6 +424,12 @@
   margin-top: 0;
 }
 
+.sidebarCrop {
+  max-height: 28rem;
+  object-fit: cover;
+  object-position: top left;
+}
+
 .carouselSection {
   padding: 4.5rem 1.5rem;
   background: #ffffff;
