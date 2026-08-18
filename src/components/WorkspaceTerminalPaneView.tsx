@@ -134,6 +134,7 @@ export const WorkspaceTerminalPaneView: React.FC<
     )}
 
     <div
+      data-testid="workspace-terminal-pane"
       className="flex flex-col border-t bg-background flex-shrink-0 overflow-hidden"
       style={{
         height: collapsed ? 32 : maximized ? "100%" : `${height}%`,

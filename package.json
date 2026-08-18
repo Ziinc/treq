@@ -43,6 +43,7 @@
     "screenshot:css": "node scripts/screenshot/build-css.mjs",
     "screenshot": "npm run build:napi --silent && npm run screenshot:css && vitest run --config vitest.screenshot.config.ts",
     "screenshot:readme": "npm run build:napi --silent && npm run screenshot:css && vitest run --config vitest.screenshot.config.ts scripts/screenshot/specs/readme-*.spec.tsx",
+    "screenshot:landing": "npm run screenshot:readme",
     "service-qa:up": "bash scripts/service-qa/up.sh",
     "service-qa": "vitest run --config vitest.service-qa.config.ts",
     "service-qa:full": "npm run service-qa:up && npm run service-qa",

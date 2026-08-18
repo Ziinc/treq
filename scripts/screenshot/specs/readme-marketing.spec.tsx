@@ -16,6 +16,7 @@ import { captureDocument } from "../capture";
 import {
   MARKETING_BRANCH,
   README_SCREENSHOTS_DIR,
+  STACK_PARENT_BRANCH,
   seedReadmeMarketingRepo,
 } from "../readme-fixture";
 import {
@@ -185,6 +186,84 @@ it("captures the Commits tab for the README", async () => {
       "The Commits tab is active with 'feat: handle empty event messages' expanded, showing a client.ts diff.",
       "The stack and GitHub PR/CI chrome are visible; the workspace is feat/empty-event-message.",
       "The terminal pane still shows Claude, Codex, and Cursor TUI content.",
+    ],
+  });
+}, 120000);
+
+it("captures the workspace list for landing isolation copy", async () => {
+  stubGithub();
+  await seedReadmeMarketingRepo();
+  render(<Dashboard />);
+
+  await findSidebarBranchElement(MARKETING_BRANCH);
+  await findSidebarBranchElement(STACK_PARENT_BRANCH);
+  document.documentElement.classList.add("dark");
+  await new Promise((resolve) => setTimeout(resolve, 400));
+
+  await captureDocument(document, {
+    name: "readme-workspaces",
+    deviceScaleFactor: 2,
+    publishTo: path.join(README_SCREENSHOTS_DIR, "workspaces.png"),
+    expectations: [
+      "The home repo dashboard lists multiple workspaces, including feat/empty-event-message stacked on feat/event-ingest.",
+      "Sibling workspaces feat/keyvalues-cache and feat/alerting-logs are visible in the sidebar.",
+      "The Code tab is not showing a nested workspace review; this is the repo-level workspace list.",
+    ],
+  });
+}, 120000);
+
+it("captures the stack panel for landing stacked-workspace copy", async () => {
+  await prepareMarketingView();
+
+  await screen.findByTestId("workspace-stack-panel");
+
+  await captureDocument(document, {
+    name: "readme-stack",
+    deviceScaleFactor: 2,
+    clipSelector: '[data-testid="workspace-stack-panel"]',
+    publishTo: path.join(README_SCREENSHOTS_DIR, "stack.png"),
+    expectations: [
+      "A cropped stack panel lists the chain of workspaces, with feat/empty-event-message on feat/event-ingest.",
+      "Stack items show branch names, not a generic mock PR list.",
+    ],
+  });
+}, 120000);
+
+it("captures agent terminals for landing agent-session copy", async () => {
+  await prepareMarketingView();
+
+  await screen.findByTestId("workspace-terminal-pane");
+  await waitFor(() => {
+    expect(screen.getByTestId("marketing-tui-claude")).toBeTruthy();
+  });
+
+  await captureDocument(document, {
+    name: "readme-terminals",
+    deviceScaleFactor: 2,
+    clipSelector: '[data-testid="workspace-terminal-pane"]',
+    publishTo: path.join(README_SCREENSHOTS_DIR, "terminals.png"),
+    expectations: [
+      "The Terminals pane is cropped and shows Claude Code, Codex, and Cursor Agent sessions.",
+      "Claude's peach welcome TUI is visible; the pane is labeled Terminals.",
+    ],
+  });
+}, 120000);
+
+it("captures GitHub View PR and CI chrome for landing GitHub copy", async () => {
+  await prepareMarketingView();
+
+  await screen.findByRole("button", { name: /view pr/i });
+  await screen.findByRole("button", { name: /ci /i });
+  await screen.findByTestId("show-workspace-header");
+
+  await captureDocument(document, {
+    name: "readme-github",
+    deviceScaleFactor: 2,
+    clipSelector: '[data-testid="show-workspace-header"]',
+    publishTo: path.join(README_SCREENSHOTS_DIR, "github.png"),
+    expectations: [
+      "The workspace header shows feat/empty-event-message targeting feat/event-ingest.",
+      "View PR and CI status controls are visible in the header.",
     ],
   });
 }, 120000);

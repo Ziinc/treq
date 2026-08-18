@@ -8,6 +8,11 @@ import Heading from '@theme/Heading';
 
 import codeScreenshot from '../../../assets/screenshots/code.png';
 import reviewScreenshot from '../../../assets/screenshots/review.png';
+import stackScreenshot from '../../../assets/screenshots/stack.png';
+import workspacesScreenshot from '../../../assets/screenshots/workspaces.png';
+import terminalsScreenshot from '../../../assets/screenshots/terminals.png';
+import commitsScreenshot from '../../../assets/screenshots/commits.png';
+import githubScreenshot from '../../../assets/screenshots/github.png';
 import styles from './index.module.css';
 
 const DOWNLOAD_HREF = 'https://github.com/Ziinc/treq/releases';
@@ -105,6 +110,15 @@ function HighlightGrid(): ReactNode {
           <Link className={styles.highlightButton} to="/docs/concepts/changes-and-reviews">
             How reviews work
           </Link>
+          <img
+            className={styles.highlightCardImage}
+            src={reviewScreenshot}
+            alt="Changes tab with a conflicted Home.tsx and inline comments"
+            width={2880}
+            height={1800}
+            loading="lazy"
+            decoding="async"
+          />
         </article>
         <article className={styles.highlightPlain}>
           <Heading as="h2" className={styles.highlightTitle}>
@@ -118,6 +132,15 @@ function HighlightGrid(): ReactNode {
           <Link className={styles.highlightGhost} to="/docs/concepts/workspaces">
             How workspaces work
           </Link>
+          <img
+            className={styles.highlightCardImage}
+            src={commitsScreenshot}
+            alt="Commits tab with feat/empty-event-message expanded to a client.ts diff"
+            width={2880}
+            height={1800}
+            loading="lazy"
+            decoding="async"
+          />
         </article>
         <article className={styles.highlightDark}>
           <div className={styles.highlightDarkCopy}>
@@ -135,8 +158,8 @@ function HighlightGrid(): ReactNode {
           </div>
           <img
             className={styles.highlightDarkImage}
-            src={codeScreenshot}
-            alt=""
+            src={stackScreenshot}
+            alt="Stacked workspaces panel showing feat/empty-event-message on feat/event-ingest"
             width={2880}
             height={1800}
             loading="lazy"
@@ -152,26 +175,38 @@ const SOLUTION_CARDS = [
   {
     title: 'Isolated workspaces',
     body: 'New Workspace creates a working copy at .treq/workspaces/<name>. An uncommitted change in one workspace never shows up in another.',
+    image: workspacesScreenshot,
+    alt: 'Dashboard listing isolated workspaces including stacked feat/empty-event-message',
   },
   {
     title: 'Local review',
     body: 'Read the diff on Changes. Leave comments on line ranges. Finish review, Plan, Edit, Copy, or Discard. Comments are not Git history.',
+    image: reviewScreenshot,
+    alt: 'Changes tab reviewing a conflicted Home.tsx',
   },
   {
     title: 'Auto-rebase',
     body: 'Treq rebases dependent workspaces when their target moves. Conflicts surface in the UI. Resolve conflicts starts the fix. It is not a silent merge.',
+    image: commitsScreenshot,
+    alt: 'Commits tab showing stacked commit history after a rebase',
   },
   {
     title: 'Stacked workspaces',
     body: 'A stack is a chain of workspaces. Create stacked workspace from the current one. Treq tracks the target and restacks the rest.',
+    image: stackScreenshot,
+    alt: 'Stack panel with feat/empty-event-message on feat/event-ingest',
   },
   {
     title: 'Agent sessions',
     body: 'The Code tab starts Claude, Codex, or Cursor in the workspace directory. Plan and Edit send review comments back to that agent.',
+    image: terminalsScreenshot,
+    alt: 'Terminal pane with Claude Code, Codex, and Cursor Agent sessions',
   },
   {
-    title: 'Terminals',
-    body: 'Each workspace can hold several real shells. A terminal starts in the workspace directory and keeps running when you switch tabs.',
+    title: 'GitHub pull requests',
+    body: 'Create PR and View PR call gh. CI status for the branch shows in the workspace header. Reviews on disk are not GitHub review comments until you push.',
+    image: githubScreenshot,
+    alt: 'Workspace header with View PR and CI status for a stacked branch',
   },
 ];
 
@@ -209,6 +244,15 @@ function SolutionsCarousel(): ReactNode {
       <div className={styles.carouselTrack}>
         {slice.map((card) => (
           <article key={card.title} className={styles.carouselCard}>
+            <img
+              className={styles.carouselCardImage}
+              src={card.image}
+              alt={card.alt}
+              width={2880}
+              height={1800}
+              loading="lazy"
+              decoding="async"
+            />
             <Heading as="h3" className={styles.carouselCardTitle}>{card.title}</Heading>
             <p>{card.body}</p>
           </article>
@@ -285,6 +329,15 @@ function ShowcaseSection(): ReactNode {
       <Link className={styles.showcaseCta} to="/docs/concepts/changes-and-reviews">
         Changes and reviews
       </Link>
+      <img
+        className={styles.showcaseImage}
+        src={reviewScreenshot}
+        alt="Treq Changes tab with a conflicted Home.tsx and inline comments"
+        width={2880}
+        height={1800}
+        loading="lazy"
+        decoding="async"
+      />
     </section>
   );
 }
@@ -299,6 +352,15 @@ function ProofSection(): ReactNode {
           without sharing your main checkout.
         </p>
         <p className={styles.proofAttr}>From the Workspaces docs</p>
+        <img
+          className={styles.proofImage}
+          src={workspacesScreenshot}
+          alt="Repo dashboard with isolated workspaces in the sidebar"
+          width={2880}
+          height={1800}
+          loading="lazy"
+          decoding="async"
+        />
       </article>
       <article className={styles.proofLight}>
         <p className={styles.proofStat}>0</p>
@@ -350,6 +412,29 @@ function FeaturesSection(): ReactNode {
         <div className={clsx(styles.featureRow, styles.featureRowReverse)}>
           <div className={styles.featureText}>
             <Heading as="h3" className={styles.featureHeading}>
+              Isolated workspaces
+            </Heading>
+            <p className={styles.featureDescription}>
+              Each agent gets its own checkout under <code>.treq/workspaces</code>.
+              An uncommitted change in one workspace never shows up in another.
+            </p>
+          </div>
+          <div className={styles.featureScreenshot}>
+            <img
+              className={styles.featureImage}
+              src={workspacesScreenshot}
+              alt="Treq dashboard listing isolated stacked workspaces"
+              width={2880}
+              height={1800}
+              loading="lazy"
+              decoding="async"
+            />
+          </div>
+        </div>
+
+        <div className={styles.featureRow}>
+          <div className={styles.featureText}>
+            <Heading as="h3" className={styles.featureHeading}>
               Auto-rebase
             </Heading>
             <p className={styles.featureDescription}>
@@ -359,36 +444,19 @@ function FeaturesSection(): ReactNode {
             </p>
           </div>
           <div className={styles.featureScreenshot}>
-            <div className={styles.screenshotWindow} aria-hidden="true">
-              <div className={styles.screenshotTitlebar}>
-                <span className={styles.windowDot} style={{background: '#ff5f57'}}></span>
-                <span className={styles.windowDot} style={{background: '#febc2e'}}></span>
-                <span className={styles.windowDot} style={{background: '#28c840'}}></span>
-                <span className={styles.windowTitle}>Auto Rebase</span>
-              </div>
-              <div className={styles.screenshotContent} style={{padding: '16px'}}>
-                <div className={styles.mockRebaseStack}>
-                  <div className={styles.mockRebaseBranch}>
-                    <div className={styles.mockRebaseLabel} data-type="main"></div>
-                    <div className={styles.mockRebaseLine} data-type="main"></div>
-                    <div className={styles.mockRebaseCommit} data-type="main"></div>
-                    <div className={styles.mockRebaseCommit} data-type="main"></div>
-                    <div className={styles.mockRebaseCommit} data-type="main"></div>
-                  </div>
-                  <div className={styles.mockRebaseBranch}>
-                    <div className={styles.mockRebaseLabel} data-type="workspace"></div>
-                    <div className={styles.mockRebaseLine} data-type="workspace"></div>
-                    <div className={styles.mockRebaseCommit} data-type="workspace"></div>
-                    <div className={styles.mockRebaseCommit} data-type="workspace"></div>
-                    <div className={styles.mockRebaseStatus}>rebased</div>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <img
+              className={styles.featureImage}
+              src={commitsScreenshot}
+              alt="Treq Commits tab with stacked commit history and a file diff"
+              width={2880}
+              height={1800}
+              loading="lazy"
+              decoding="async"
+            />
           </div>
         </div>
 
-        <div className={styles.featureRow}>
+        <div className={clsx(styles.featureRow, styles.featureRowReverse)}>
           <div className={styles.featureText}>
             <Heading as="h3" className={styles.featureHeading}>
               Stacked workspaces
@@ -405,46 +473,63 @@ function FeaturesSection(): ReactNode {
             </div>
           </div>
           <div className={styles.featureScreenshot}>
-            <div className={styles.screenshotWindow} aria-hidden="true">
-              <div className={styles.screenshotTitlebar}>
-                <span className={styles.windowDot} style={{background: '#ff5f57'}}></span>
-                <span className={styles.windowDot} style={{background: '#febc2e'}}></span>
-                <span className={styles.windowDot} style={{background: '#28c840'}}></span>
-                <span className={styles.windowTitle}>Stacked PRs</span>
-              </div>
-              <div className={styles.screenshotContent} style={{padding: '16px'}}>
-                <div className={styles.mockStackList}>
-                  <div className={styles.mockStackItem} data-level="3">
-                    <div className={styles.mockStackConnector}></div>
-                    <div className={styles.mockStackCard} data-type="active">
-                      <div className={styles.mockItem} style={{width: '74%'}}></div>
-                      <div className={styles.mockStackPrBadge}>PR #3</div>
-                    </div>
-                  </div>
-                  <div className={styles.mockStackItem} data-level="2">
-                    <div className={styles.mockStackConnector}></div>
-                    <div className={styles.mockStackCard} data-type="pr">
-                      <div className={styles.mockItem} style={{width: '58%'}}></div>
-                      <div className={styles.mockStackPrBadge}>PR #2</div>
-                    </div>
-                  </div>
-                  <div className={styles.mockStackItem} data-level="1">
-                    <div className={styles.mockStackConnector}></div>
-                    <div className={styles.mockStackCard} data-type="pr">
-                      <div className={styles.mockItem} style={{width: '42%'}}></div>
-                      <div className={styles.mockStackPrBadge}>PR #1</div>
-                    </div>
-                  </div>
-                  <div className={styles.mockStackItem} data-level="0">
-                    <div className={styles.mockStackConnector}></div>
-                    <div className={styles.mockStackCard} data-type="main">
-                      <div className={styles.mockItem} style={{width: '28%'}}></div>
-                      <div className={styles.mockStackPrBadge}>main</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <img
+              className={styles.featureImage}
+              src={stackScreenshot}
+              alt="Stacked workspaces panel showing feat/empty-event-message on feat/event-ingest"
+              width={2880}
+              height={1800}
+              loading="lazy"
+              decoding="async"
+            />
+          </div>
+        </div>
+
+        <div className={styles.featureRow}>
+          <div className={styles.featureText}>
+            <Heading as="h3" className={styles.featureHeading}>
+              Agent terminals
+            </Heading>
+            <p className={styles.featureDescription}>
+              The Code tab starts Claude, Codex, or Cursor in the workspace directory.
+              Plan and Edit send review comments back to that agent. Extra shells stay
+              running when you switch tabs.
+            </p>
+          </div>
+          <div className={styles.featureScreenshot}>
+            <img
+              className={styles.featureImage}
+              src={terminalsScreenshot}
+              alt="Treq terminal pane running Claude Code, Codex, and Cursor Agent"
+              width={2880}
+              height={900}
+              loading="lazy"
+              decoding="async"
+            />
+          </div>
+        </div>
+
+        <div className={clsx(styles.featureRow, styles.featureRowReverse)}>
+          <div className={styles.featureText}>
+            <Heading as="h3" className={styles.featureHeading}>
+              GitHub PRs and CI
+            </Heading>
+            <p className={styles.featureDescription}>
+              Create PR and View PR call <code>gh</code>. CI for the branch shows in
+              the workspace header. Local review comments are not GitHub review
+              comments until you push.
+            </p>
+          </div>
+          <div className={styles.featureScreenshot}>
+            <img
+              className={styles.featureImage}
+              src={githubScreenshot}
+              alt="Workspace header showing View PR and CI for a stacked branch"
+              width={2880}
+              height={400}
+              loading="lazy"
+              decoding="async"
+            />
           </div>
         </div>
       </div>

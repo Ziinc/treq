@@ -65,7 +65,7 @@ npm run screenshot:readme
 
 Run `npm run build:napi` after Rust changes that integration tests depend on.
 
-`npm run screenshot:readme` regenerates the project readme marketing images under `assets/screenshots/` from `scripts/screenshot/specs/readme-*.spec.tsx` (same capture path as the `docs-*` screenshot specs).
+`npm run screenshot:readme` (alias `npm run screenshot:landing`) regenerates the README and web landing images under `assets/screenshots/` from `scripts/screenshot/specs/readme-*.spec.tsx`. Full-window shots: `code.png`, `review.png`, `commits.png`, `workspaces.png`. Crops: `stack.png` (stack panel), `terminals.png` (agent terminals), `github.png` (View PR and CI header).
 
 ## Implementation Rules
 
