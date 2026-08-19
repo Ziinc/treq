@@ -76,23 +76,24 @@ jobs:
         if: steps.napi-cache.outputs.cache-hit != 'true'
         with:
           cache-on-failure: true
+          # Only cache the src-tauri workspace. Mapping crates/treq-napi as its
+          # own workspace makes rust-cache chdir there, and later relative
+          # crates/treq-napi/*.node checks miss the binary that napi just wrote.
           workspaces: |
             ./src-tauri -> target
-            ./crates/treq-napi -> target
 
       - name: Build NAPI addon
         if: steps.napi-cache.outputs.cache-hit != 'true'
+        working-directory: ${{ github.workspace }}
         run: |
-          npm run build:napi
-          ls -la crates/treq-napi/*.node || true
-          find crates/treq-napi -name '*.node' -print
-          if [ ! -f crates/treq-napi/treq-napi.linux-x64-gnu.node ]; then
-            found=$(find crates/treq-napi -name 'treq-napi*.node' | head -n 1)
-            if [ -n "$found" ]; then
-              cp "$found" crates/treq-napi/treq-napi.linux-x64-gnu.node
-            fi
-          fi
-          test -f crates/treq-napi/treq-napi.linux-x64-gnu.node
+          set -euxo pipefail
+          napi_dir="${GITHUB_WORKSPACE}/crates/treq-napi"
+          test -d "$napi_dir"
+          npm ci --prefix "$napi_dir"
+          npm run build:debug --prefix "$napi_dir"
+          pwd
+          ls -la "$napi_dir"/*.node
+          test -f "$napi_dir/treq-napi.linux-x64-gnu.node"
 
       - name: Save NAPI addon cache
         if: steps.napi-cache.outputs.cache-hit != 'true'
@@ -100,7 +101,7 @@ jobs:
         uses: actions/cache/save@v4
         with:
           path: crates/treq-napi/treq-napi.linux-x64-gnu.node
-          key: napi-${{ runner.os }}-${{ hashFiles('Cargo.lock', 'Cargo.toml', 'src-tauri/Cargo.toml', 'src-tauri/build.rs', 'src-tauri/src/**', 'src-tauri/tests/**', 'crates/treq-napi/Cargo.toml', 'crates/treq-napi/build.rs', 'crates/treq-napi/src/**', 'crates/treq-napi/package.json', 'crates/treq-napi/package-lock.json') }}
+          key: ${{ steps.napi-cache.outputs.cache-primary-key }}
 
       - name: Compile screenshot CSS
         run: npm run screenshot:css
