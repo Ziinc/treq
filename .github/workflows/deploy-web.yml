@@ -84,6 +84,14 @@ jobs:
         if: steps.napi-cache.outputs.cache-hit != 'true'
         run: |
           npm run build:napi
+          ls -la crates/treq-napi/*.node || true
+          find crates/treq-napi -name '*.node' -print
+          if [ ! -f crates/treq-napi/treq-napi.linux-x64-gnu.node ]; then
+            found=$(find crates/treq-napi -name 'treq-napi*.node' | head -n 1)
+            if [ -n "$found" ]; then
+              cp "$found" crates/treq-napi/treq-napi.linux-x64-gnu.node
+            fi
+          fi
           test -f crates/treq-napi/treq-napi.linux-x64-gnu.node
 
       - name: Save NAPI addon cache
@@ -148,7 +156,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: landing-screenshots
-          path: web/static/img
+          path: /tmp/landing-screenshots
+      - name: Place screenshots in Docusaurus static/img
+        run: |
+          find /tmp/landing-screenshots -type f -name '*.png' | sort
+          node scripts/place-landing-screenshots.mjs /tmp/landing-screenshots
+          ls -la static/img
+          ls -la static/img/landing
       - name: Assert landing screenshots
         run: npm run assert:landing-screenshots
       - name: Build docs
@@ -169,6 +183,8 @@ jobs:
               print("Missing hero build/img/code.png")
               sys.exit(1)
           print(f"Landing screenshots in build: {len(names)}")
+          print("build/img:", os.listdir("build/img"))
+          print("build/img/landing:", os.listdir("build/img/landing"))
           PY
       - name: Publish to Production
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'

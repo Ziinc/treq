@@ -3,6 +3,24 @@ const {spawnSync} = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
+function copyPngTree(src, dest) {
+  if (!fs.existsSync(src)) return 0;
+  fs.mkdirSync(dest, {recursive: true});
+  let copied = 0;
+  for (const ent of fs.readdirSync(src, {withFileTypes: true})) {
+    const from = path.join(src, ent.name);
+    const to = path.join(dest, ent.name);
+    if (ent.isDirectory()) {
+      copied += copyPngTree(from, to);
+      continue;
+    }
+    if (!ent.name.endsWith('.png')) continue;
+    fs.copyFileSync(from, to);
+    copied += 1;
+  }
+  return copied;
+}
+
 /** @type {import('@docusaurus/types').PluginModule} */
 function landingScreenshotsPlugin(context) {
   return {
@@ -10,7 +28,7 @@ function landingScreenshotsPlugin(context) {
     async loadContent() {
       if (process.env.SKIP_LANDING_SCREENSHOTS === '1') {
         console.warn(
-          '[landing-screenshots] skipped (SKIP_LANDING_SCREENSHOTS=1). Landing PNGs must already be in static/img/landing.',
+          '[landing-screenshots] skipped capture (SKIP_LANDING_SCREENSHOTS=1). Using files already in static/img.',
         );
         return;
       }
@@ -48,10 +66,19 @@ function landingScreenshotsPlugin(context) {
         );
         if (stillMissing.length > 0) {
           console.warn(
-            `[landing-screenshots] screenshot:readme exited ${result.status}. Missing: ${stillMissing.join(', ')}. Set SKIP_LANDING_SCREENSHOTS=1 to skip.`,
+            `[landing-screenshots] screenshot:readme exited ${result.status}. Missing: ${stillMissing.join(', ')}.`,
           );
         }
       }
+    },
+    async postBuild({outDir}) {
+      const copied = copyPngTree(
+        path.join(context.siteDir, 'static', 'img'),
+        path.join(outDir, 'img'),
+      );
+      console.log(
+        `[landing-screenshots] copied ${copied} PNG(s) into ${path.join(outDir, 'img')}`,
+      );
     },
   };
 }
