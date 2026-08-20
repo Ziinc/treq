@@ -1,73 +1,97 @@
-import { useEffect, useMemo, useState, type CSSProperties } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type CSSProperties,
+  type FormEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from "react";
 import { Copy, FolderOpen, X, ZoomIn, ZoomOut } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { readFile } from "../../lib/api";
+import { readFile, writeSendReviewImage } from "../../lib/api";
 import { type TreqSendAsset, treqSendFileSrc } from "../../lib/treqSend";
-import { copyTextToClipboard, cn } from "../../lib/utils";
-import { useToast } from "../ui/toast";
 import {
-  type CarouselApi,
-  Carousel,
-  CarouselContent,
-  CarouselItem,
-  CarouselNext,
-  CarouselPrevious,
-} from "../ui/carousel";
+  type AssetLineComment,
+  type ImageHighlightComment,
+  blobToBase64,
+  formatSendAssetReviewPrompt,
+  hasUnsentSendAssetReview,
+  renderHighlightedImageBlob,
+} from "../../lib/sendAssetReview";
+import { copyTextToClipboard } from "../../lib/utils";
+import { useToast } from "../ui/toast";
+import { type CarouselApi } from "../ui/carousel";
 import { Button } from "../ui/button";
+import { Input } from "../ui/input";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "../ui/alert-dialog";
+import {
+  IMAGE_ZOOM_DEFAULT,
+  IMAGE_ZOOM_MAX,
+  IMAGE_ZOOM_MIN,
+  IMAGE_ZOOM_STEP,
+  SendAssetLightboxCarousel,
+  clampImageZoom,
+  fallbackImageHeight,
+  revealInFileManagerLabel,
+} from "./SendAssetLightboxCarousel";
 
-/** OS-aware label for revealing a path in the desktop file manager. */
-export function revealInFileManagerLabel(): string {
-  const ua = navigator.userAgent.toLowerCase();
-  if (ua.includes("mac")) return "Show in Finder";
-  if (ua.includes("win")) return "Show in Explorer";
-  return "Show in file manager";
-}
-
-const IMAGE_ZOOM_MIN = 1;
-const IMAGE_ZOOM_MAX = 2;
-const IMAGE_ZOOM_STEP = 1;
-const IMAGE_ZOOM_DEFAULT = 1;
-/** Fallback height as vh when natural size is unknown (jsdom / slow decode). */
-const IMAGE_ZOOM_FALLBACK_VIEWPORT_FRACTION = 0.8;
-
-function clampImageZoom(value: number): number {
-  return Math.min(
-    IMAGE_ZOOM_MAX,
-    Math.max(IMAGE_ZOOM_MIN, Math.round(value * 100) / 100),
-  );
-}
-
-function fallbackImageHeight(zoomFactor: number): string {
-  const vh =
-    Math.round(IMAGE_ZOOM_FALLBACK_VIEWPORT_FRACTION * zoomFactor * 10000) /
-    100;
-  return `${vh}vh`;
-}
+export { revealInFileManagerLabel } from "./SendAssetLightboxCarousel";
 
 interface SendAssetLightboxProps {
   assets: TreqSendAsset[];
   initialIndex: number;
   onClose: () => void;
+  onSendReview?: (prompt: string) => void;
 }
 
 export function SendAssetLightbox({
   assets,
   initialIndex,
   onClose,
+  onSendReview,
 }: SendAssetLightboxProps) {
   const { addToast } = useToast();
   const [api, setApi] = useState<CarouselApi>();
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [textByPath, setTextByPath] = useState<Record<string, string>>({});
   const [imageZoom, setImageZoom] = useState(IMAGE_ZOOM_DEFAULT);
-  /** Fitted display size at 100% zoom, keyed by asset id (from natural size on load). */
   const [baseSizeById, setBaseSizeById] = useState<
     Record<string, { width: number; height: number }>
   >({});
+  const [generalComment, setGeneralComment] = useState("");
+  const [highlightsById, setHighlightsById] = useState<
+    Record<string, ImageHighlightComment[]>
+  >({});
+  const [activeHighlightId, setActiveHighlightId] = useState<string | null>(
+    null,
+  );
+  const [lineCommentsById, setLineCommentsById] = useState<
+    Record<string, AssetLineComment[]>
+  >({});
+  const [lineComposerOpen, setLineComposerOpen] = useState(false);
+  const [discardOpen, setDiscardOpen] = useState(false);
+  const [sending, setSending] = useState(false);
   const revealLabel = useMemo(() => revealInFileManagerLabel(), []);
 
   const current = assets[currentIndex] ?? assets[0];
   const showingImage = current?.mediaType === "image";
+  const highlights = current ? (highlightsById[current.id] ?? []) : [];
+  const lineComments = current ? (lineCommentsById[current.id] ?? []) : [];
+  const hasUnsent =
+    hasUnsentSendAssetReview({
+      generalComment,
+      highlights,
+      lineComments,
+    }) || lineComposerOpen;
 
   useEffect(() => {
     if (!api) return;
@@ -82,17 +106,16 @@ export function SendAssetLightbox({
 
   useEffect(() => {
     setImageZoom(IMAGE_ZOOM_DEFAULT);
+    setActiveHighlightId(null);
   }, [currentIndex]);
 
   const rememberFittedBaseSize = (assetId: string, img: HTMLImageElement) => {
     if (img.naturalWidth <= 0 || img.naturalHeight <= 0) return;
     const maxH = window.innerHeight * 0.8;
-    // Fit to at least ~75vw of the viewport (carousel is min 75vw / typically 90vw).
     const maxW = Math.min(
       window.innerWidth * 0.9,
       Math.max(img.parentElement?.clientWidth || 0, window.innerWidth * 0.75),
     );
-    // Allow upscaling so small assets fill the lightbox on initial load.
     const fitScale = Math.min(
       maxW / img.naturalWidth,
       maxH / img.naturalHeight,
@@ -108,7 +131,6 @@ export function SendAssetLightbox({
     });
   };
 
-  /** Explicit width so zoom grows layout (transform/scale does not; CSS zoom won't serialize in jsdom captures). */
   const imageSizeStyle = (assetId: string): CSSProperties => {
     const zoomFactor = assetId === current?.id ? imageZoom : IMAGE_ZOOM_DEFAULT;
     const base = baseSizeById[assetId];
@@ -128,16 +150,28 @@ export function SendAssetLightbox({
     };
   };
 
+  const requestClose = () => {
+    if (hasUnsent) {
+      setDiscardOpen(true);
+      return;
+    }
+    onClose();
+  };
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
+        if (hasUnsent) {
+          setDiscardOpen(true);
+          return;
+        }
         onClose();
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+  }, [hasUnsent, onClose]);
 
   useEffect(() => {
     const textAssets = assets.filter((asset) => asset.mediaType === "text");
@@ -230,79 +264,164 @@ export function SendAssetLightbox({
     );
   };
 
+  const sendReview = async () => {
+    if (!current || !onSendReview) return;
+    if (!hasUnsent) return;
+    setSending(true);
+    try {
+      let annotatedImagePath: string | undefined;
+      if (current.mediaType === "image" && highlights.length > 0) {
+        try {
+          const blob = await Promise.race([
+            renderHighlightedImageBlob(
+              treqSendFileSrc(current.path),
+              highlights,
+            ),
+            new Promise<Blob>((_, reject) => {
+              window.setTimeout(
+                () => reject(new Error("Timed out drawing highlights")),
+                2500,
+              );
+            }),
+          ]);
+          const contentsBase64 = await blobToBase64(blob);
+          annotatedImagePath = await writeSendReviewImage(
+            current.repo,
+            `${current.title}-review.png`,
+            contentsBase64,
+          );
+        } catch (error) {
+          addToast({
+            title: "Could not attach highlighted image",
+            description: error instanceof Error ? error.message : String(error),
+            type: "error",
+          });
+        }
+      }
+      onSendReview(
+        formatSendAssetReviewPrompt({
+          title: current.title,
+          path: current.path,
+          mediaType: current.mediaType,
+          generalComment,
+          highlights,
+          lineComments,
+          annotatedImagePath,
+        }),
+      );
+      setGeneralComment("");
+      setHighlightsById((prev) => ({ ...prev, [current.id]: [] }));
+      setLineCommentsById((prev) => ({ ...prev, [current.id]: [] }));
+      setActiveHighlightId(null);
+      setLineComposerOpen(false);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const onReviewKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      void sendReview();
+    }
+  };
+
+  const onReviewSubmit = (event: FormEvent) => {
+    event.preventDefault();
+    void sendReview();
+  };
+
   const lightboxControls = (
-    <div
-      className="flex shrink-0 items-center gap-1 rounded-full border border-white/15 bg-black/40 p-1 shadow-lg backdrop-blur"
-      onClick={(event) => event.stopPropagation()}
-    >
-      {showingImage && (
-        <>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            className="h-8 w-8 text-white hover:bg-white/15 hover:text-white"
-            aria-label="Zoom out"
-            data-testid="treq-send-zoom-out"
-            disabled={imageZoom <= IMAGE_ZOOM_MIN}
-            onClick={zoomOut}
-          >
-            <ZoomOut className="h-4 w-4" />
-          </Button>
-          <span
-            data-testid="treq-send-zoom-level"
-            className="min-w-10 px-1 text-center text-xs tabular-nums text-white/80"
-          >
-            {Math.round(imageZoom * 100)}%
-          </span>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            className="h-8 w-8 text-white hover:bg-white/15 hover:text-white"
-            aria-label="Zoom in"
-            data-testid="treq-send-zoom-in"
-            disabled={imageZoom >= IMAGE_ZOOM_MAX}
-            onClick={zoomIn}
-          >
-            <ZoomIn className="h-4 w-4" />
-          </Button>
-          <span aria-hidden className="mx-0.5 h-4 w-px bg-white/20" />
-        </>
-      )}
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-xs"
-        className="h-8 w-8 text-white hover:bg-white/15 hover:text-white"
-        aria-label="Copy asset"
-        data-testid="treq-send-copy"
-        onClick={copyCurrentAsset}
+    <div className="flex max-w-full flex-wrap items-center justify-center gap-2">
+      <div
+        className="flex shrink-0 items-center gap-1 rounded-full border border-white/15 bg-black/40 p-1 shadow-lg backdrop-blur"
+        onClick={(event) => event.stopPropagation()}
       >
-        <Copy className="h-4 w-4" />
-      </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-xs"
-        className="h-8 w-8 text-white hover:bg-white/15 hover:text-white"
-        aria-label={revealLabel}
-        data-testid="treq-send-reveal"
-        onClick={revealCurrentAsset}
+        {showingImage && (
+          <>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              className="h-8 w-8 text-white hover:bg-white/15 hover:text-white"
+              aria-label="Zoom out"
+              data-testid="treq-send-zoom-out"
+              disabled={imageZoom <= IMAGE_ZOOM_MIN}
+              onClick={zoomOut}
+            >
+              <ZoomOut className="h-4 w-4" />
+            </Button>
+            <span
+              data-testid="treq-send-zoom-level"
+              className="min-w-10 px-1 text-center text-xs tabular-nums text-white/80"
+            >
+              {Math.round(imageZoom * 100)}%
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-xs"
+              className="h-8 w-8 text-white hover:bg-white/15 hover:text-white"
+              aria-label="Zoom in"
+              data-testid="treq-send-zoom-in"
+              disabled={imageZoom >= IMAGE_ZOOM_MAX}
+              onClick={zoomIn}
+            >
+              <ZoomIn className="h-4 w-4" />
+            </Button>
+            <span aria-hidden className="mx-0.5 h-4 w-px bg-white/20" />
+          </>
+        )}
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          className="h-8 w-8 text-white hover:bg-white/15 hover:text-white"
+          aria-label="Copy asset"
+          data-testid="treq-send-copy"
+          onClick={copyCurrentAsset}
+        >
+          <Copy className="h-4 w-4" />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          className="h-8 w-8 text-white hover:bg-white/15 hover:text-white"
+          aria-label={revealLabel}
+          data-testid="treq-send-reveal"
+          onClick={revealCurrentAsset}
+        >
+          <FolderOpen className="h-4 w-4" />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          className="h-8 w-8 text-white hover:bg-white/15 hover:text-white"
+          aria-label="Close preview"
+          data-testid="treq-send-close"
+          onClick={requestClose}
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+      <form
+        className="min-w-56 max-w-md flex-1"
+        onSubmit={onReviewSubmit}
+        onClick={(event) => event.stopPropagation()}
       >
-        <FolderOpen className="h-4 w-4" />
-      </Button>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-xs"
-        className="h-8 w-8 text-white hover:bg-white/15 hover:text-white"
-        aria-label="Close preview"
-        data-testid="treq-send-close"
-        onClick={onClose}
-      >
-        <X className="h-4 w-4" />
-      </Button>
+        <Input
+          value={generalComment}
+          onChange={(event) => setGeneralComment(event.target.value)}
+          onKeyDown={onReviewKeyDown}
+          placeholder="Add a review comment…"
+          aria-label="Review comment"
+          data-testid="treq-send-review-input"
+          disabled={!onSendReview || sending}
+          className="h-9 border-white/15 bg-black/40 text-sm text-white placeholder:text-white/50 focus-visible:ring-white/30"
+        />
+      </form>
     </div>
   );
 
@@ -310,7 +429,7 @@ export function SendAssetLightbox({
     <div
       data-testid="treq-send-preview-lightbox"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-md"
-      onClick={onClose}
+      onClick={requestClose}
     >
       <div
         data-testid="treq-send-preview-carousel-shell"
@@ -328,77 +447,56 @@ export function SendAssetLightbox({
           )}
           {lightboxControls}
         </div>
-        <Carousel
-          key={`send-carousel-${initialIndex}-${assets.map((a) => a.id).join(":")}`}
+        <SendAssetLightboxCarousel
+          assets={assets}
+          initialIndex={initialIndex}
+          current={current}
+          showingImage={showingImage}
+          imageZoom={imageZoom}
+          highlights={highlights}
+          lineComments={lineComments}
+          activeHighlightId={activeHighlightId}
+          textByPath={textByPath}
           setApi={setApi}
-          opts={{ startIndex: initialIndex, loop: false }}
-          className="w-full"
-        >
-          <CarouselContent>
-            {assets.map((asset) => (
-              <CarouselItem
-                key={asset.id}
-                className="flex min-h-0 items-stretch justify-center"
+          imageSizeStyle={imageSizeStyle}
+          rememberFittedBaseSize={rememberFittedBaseSize}
+          onActiveHighlightIdChange={setActiveHighlightId}
+          onHighlightsChange={(next) => {
+            if (!current) return;
+            setHighlightsById((prev) => ({ ...prev, [current.id]: next }));
+          }}
+          onLineCommentsChange={(next) => {
+            if (!current) return;
+            setLineCommentsById((prev) => ({ ...prev, [current.id]: next }));
+          }}
+          onLineComposerChange={setLineComposerOpen}
+          onToggleImageZoom={toggleImageZoom}
+        />
+      </div>
+      <div onClick={(event) => event.stopPropagation()}>
+        <AlertDialog open={discardOpen} onOpenChange={setDiscardOpen}>
+          <AlertDialogContent
+            data-testid="treq-send-unsaved-dialog"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <AlertDialogHeader>
+              <AlertDialogTitle>Discard unsent comments?</AlertDialogTitle>
+              <AlertDialogDescription>
+                You have review comments that have not been sent to the agent.
+                Close anyway and lose them?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Keep reviewing</AlertDialogCancel>
+              <AlertDialogAction
+                data-testid="treq-send-unsaved-discard"
+                onClick={onClose}
               >
-                {asset.mediaType === "image" ? (
-                  <div
-                    data-testid={
-                      asset.id === current?.id
-                        ? "treq-send-image-scroll"
-                        : undefined
-                    }
-                    className={cn(
-                      "w-full max-w-full overflow-auto",
-                      asset.id === current?.id && imageZoom > IMAGE_ZOOM_DEFAULT
-                        ? "h-[80vh]"
-                        : "max-h-[80vh]",
-                    )}
-                  >
-                    <div
-                      className={cn(
-                        "flex min-h-full min-w-full justify-center",
-                        asset.id === current?.id &&
-                          imageZoom > IMAGE_ZOOM_DEFAULT
-                          ? "items-start"
-                          : "items-center",
-                      )}
-                    >
-                      <img
-                        src={treqSendFileSrc(asset.path)}
-                        alt={asset.title}
-                        className={cn(
-                          "object-contain",
-                          asset.id === current?.id && showingImage
-                            ? imageZoom === IMAGE_ZOOM_DEFAULT
-                              ? "cursor-zoom-in"
-                              : "cursor-zoom-out"
-                            : undefined,
-                        )}
-                        style={imageSizeStyle(asset.id)}
-                        onLoad={(event) =>
-                          rememberFittedBaseSize(asset.id, event.currentTarget)
-                        }
-                        onClick={
-                          asset.id === current?.id ? toggleImageZoom : undefined
-                        }
-                        draggable={false}
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  <pre
-                    data-testid="treq-send-text-preview"
-                    className="max-h-[80vh] w-full max-w-3xl overflow-auto whitespace-pre-wrap break-words rounded-lg bg-zinc-950/70 p-6 font-mono text-sm leading-relaxed text-zinc-100 select-text"
-                  >
-                    {textByPath[asset.path] ?? "Loading…"}
-                  </pre>
-                )}
-              </CarouselItem>
-            ))}
-          </CarouselContent>
-          <CarouselPrevious className="fixed left-3 top-1/2 h-16 w-16 border-white/20 bg-black/40 text-white hover:bg-black/60 hover:text-white [&_svg]:size-8" />
-          <CarouselNext className="fixed right-3 top-1/2 h-16 w-16 border-white/20 bg-black/40 text-white hover:bg-black/60 hover:text-white [&_svg]:size-8" />
-        </Carousel>
+                Discard comments
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </div>
   );

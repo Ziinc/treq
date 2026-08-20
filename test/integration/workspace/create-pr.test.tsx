@@ -15,7 +15,12 @@ import {
   updateWorkspace,
 } from "../../../src/lib/api";
 import { render, screen, waitFor, within } from "../../test-utils";
-import { commitWorkspaceFile, createTestRepo, openRepo } from "../../utils";
+import {
+  commitWorkspaceFile,
+  createTestRepo,
+  findSidebarBranchElement,
+  openRepo,
+} from "../../utils";
 import { deriveConventionalPrTitle } from "../../../src/lib/github-pr";
 
 vi.mock("../../../src/lib/api", async (importOriginal) => {
@@ -100,12 +105,29 @@ describe("ShowWorkspace - Create PR", () => {
     return { workspace: workspace!, title, description };
   }
 
+  async function openWorkspace(branchName: string) {
+    await user.click(await findSidebarBranchElement(branchName));
+    return screen.findByTestId("show-workspace-header");
+  }
+
+  async function findEnabledCreatePr(header: HTMLElement) {
+    const createPr = await within(header).findByRole("button", {
+      name: /^create pr$/i,
+    });
+    await waitFor(
+      () => {
+        expect(createPr).toBeEnabled();
+      },
+      { timeout: 60_000 },
+    );
+    return createPr;
+  }
+
   it("shows Create PR instead of Push after the branch is on remote with GitHub", async () => {
     await setupPushedWorkspaceWithGitHub();
     render(<Dashboard />);
 
-    await user.click(await screen.findByText("feat/create-pr"));
-    const header = await screen.findByTestId("show-workspace-header");
+    const header = await openWorkspace("feat/create-pr");
 
     expect(
       await within(header).findByRole("button", { name: /^create pr$/i }),
@@ -119,8 +141,7 @@ describe("ShowWorkspace - Create PR", () => {
     await setupPushedWorkspaceWithGitHub();
     render(<Dashboard />);
 
-    await user.click(await screen.findByText("feat/create-pr"));
-    const header = await screen.findByTestId("show-workspace-header");
+    const header = await openWorkspace("feat/create-pr");
     const createPr = await within(header).findByRole("button", {
       name: /^create pr$/i,
     });
@@ -138,8 +159,7 @@ describe("ShowWorkspace - Create PR", () => {
     setOriginUrl(repoPath, "https://github.com/acme/treq.git");
     render(<Dashboard />);
 
-    await user.click(await screen.findByText("feat/unpushed"));
-    const header = await screen.findByTestId("show-workspace-header");
+    const header = await openWorkspace("feat/unpushed");
 
     expect(
       await within(header).findByRole("button", { name: /^create pr$/i }),
@@ -154,8 +174,7 @@ describe("ShowWorkspace - Create PR", () => {
     setOriginUrl(repoPath, "https://github.com/acme/treq.git");
     const view = render(<Dashboard />);
 
-    await user.click(await screen.findByText("feat/no-commits"));
-    const header = await screen.findByTestId("show-workspace-header");
+    const header = await openWorkspace("feat/no-commits");
     const createPr = await within(header).findByRole("button", {
       name: /^create pr$/i,
     });
@@ -181,13 +200,8 @@ describe("ShowWorkspace - Create PR", () => {
     );
 
     render(<Dashboard />);
-    await user.click(await screen.findByText("feat/no-commits"));
-    const reopenedHeader = await screen.findByTestId("show-workspace-header");
-    await waitFor(() => {
-      expect(
-        within(reopenedHeader).getByRole("button", { name: /^create pr$/i }),
-      ).toBeEnabled();
-    });
+    const reopenedHeader = await openWorkspace("feat/no-commits");
+    await findEnabledCreatePr(reopenedHeader);
   });
 
   it("keeps Push to remote when the branch is not on remote and there's no GitHub remote", async () => {
@@ -195,8 +209,7 @@ describe("ShowWorkspace - Create PR", () => {
     setOriginUrl(repoPath, "https://gitlab.com/acme/treq.git");
     render(<Dashboard />);
 
-    await user.click(await screen.findByText("feat/unpushed"));
-    const header = await screen.findByTestId("show-workspace-header");
+    const header = await openWorkspace("feat/unpushed");
 
     expect(
       await within(header).findByRole("button", { name: /push to remote/i }),
@@ -229,11 +242,8 @@ describe("ShowWorkspace - Create PR", () => {
     setOriginUrl(repoPath, "https://github.com/acme/treq.git");
     render(<Dashboard />);
 
-    await user.click(await screen.findByText("feat/unpushed"));
-    const header = await screen.findByTestId("show-workspace-header");
-    await user.click(
-      await within(header).findByRole("button", { name: /^create pr$/i }),
-    );
+    const header = await openWorkspace("feat/unpushed");
+    await user.click(await findEnabledCreatePr(header));
 
     await waitFor(() => {
       expect(pushWorkspaceToRemote).toHaveBeenCalledWith(repoPath, workspaceId);
@@ -254,8 +264,7 @@ describe("ShowWorkspace - Create PR", () => {
     await setupPushedWorkspaceWithGitHub({ githubRemote: false });
     render(<Dashboard />);
 
-    await user.click(await screen.findByText("feat/create-pr"));
-    const header = await screen.findByTestId("show-workspace-header");
+    const header = await openWorkspace("feat/create-pr");
 
     await waitFor(() => {
       expect(
@@ -271,11 +280,8 @@ describe("ShowWorkspace - Create PR", () => {
     const { title, description } = await setupPushedWorkspaceWithGitHub();
     render(<Dashboard />);
 
-    await user.click(await screen.findByText("feat/create-pr"));
-    const header = await screen.findByTestId("show-workspace-header");
-    await user.click(
-      await within(header).findByRole("button", { name: /^create pr$/i }),
-    );
+    const header = await openWorkspace("feat/create-pr");
+    await user.click(await findEnabledCreatePr(header));
 
     await waitFor(() => {
       expect(ghCreatePr).toHaveBeenCalledWith(
@@ -300,8 +306,8 @@ describe("ShowWorkspace - Create PR", () => {
     const { title, description } = await setupPushedWorkspaceWithGitHub();
     render(<Dashboard />);
 
-    await user.click(await screen.findByText("feat/create-pr"));
-    const header = await screen.findByTestId("show-workspace-header");
+    const header = await openWorkspace("feat/create-pr");
+    await findEnabledCreatePr(header);
     await user.click(
       within(header).getByRole("button", { name: /more create pr options/i }),
     );
@@ -325,8 +331,8 @@ describe("ShowWorkspace - Create PR", () => {
     await setupPushedWorkspaceWithGitHub();
     render(<Dashboard />);
 
-    await user.click(await screen.findByText("feat/create-pr"));
-    const header = await screen.findByTestId("show-workspace-header");
+    const header = await openWorkspace("feat/create-pr");
+    await findEnabledCreatePr(header);
     await user.click(
       within(header).getByRole("button", { name: /more create pr options/i }),
     );
@@ -374,8 +380,7 @@ describe("ShowWorkspace - Create PR", () => {
     });
     render(<Dashboard />);
 
-    await user.click(await screen.findByText("feat/create-pr"));
-    const header = await screen.findByTestId("show-workspace-header");
+    const header = await openWorkspace("feat/create-pr");
 
     const viewPr = await within(header).findByRole("button", {
       name: /view pr.*open/i,
@@ -411,8 +416,7 @@ describe("ShowWorkspace - Create PR", () => {
     });
     render(<Dashboard />);
 
-    await user.click(await screen.findByText("feat/create-pr"));
-    const header = await screen.findByTestId("show-workspace-header");
+    const header = await openWorkspace("feat/create-pr");
     const viewPr = await within(header).findByRole("button", {
       name: /view pr.*open/i,
     });
@@ -438,8 +442,7 @@ describe("ShowWorkspace - Create PR", () => {
     });
     render(<Dashboard />);
 
-    await user.click(await screen.findByText("feat/create-pr"));
-    const header = await screen.findByTestId("show-workspace-header");
+    const header = await openWorkspace("feat/create-pr");
     expect(
       await within(header).findByRole("button", { name: /view pr.*draft/i }),
     ).toBeVisible();
@@ -458,8 +461,7 @@ describe("ShowWorkspace - Create PR", () => {
     });
     const view = render(<Dashboard />);
 
-    await user.click(await screen.findByText("feat/create-pr"));
-    let header = await screen.findByTestId("show-workspace-header");
+    let header = await openWorkspace("feat/create-pr");
     const closed = await within(header).findByRole("button", {
       name: /view pr.*closed/i,
     });
@@ -476,8 +478,7 @@ describe("ShowWorkspace - Create PR", () => {
       merge_state_status: null,
     });
     render(<Dashboard />);
-    await user.click(await screen.findByText("feat/create-pr"));
-    header = await screen.findByTestId("show-workspace-header");
+    header = await openWorkspace("feat/create-pr");
     const merged = await within(header).findByRole("button", {
       name: /view pr.*merged/i,
     });

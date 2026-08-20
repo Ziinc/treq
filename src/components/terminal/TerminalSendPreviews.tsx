@@ -18,12 +18,14 @@ interface TerminalSendPreviewsProps {
   ptySessionId: string;
   isActive?: boolean;
   className?: string;
+  onSendReview?: (prompt: string) => void;
 }
 
 export function TerminalSendPreviews({
   ptySessionId,
   isActive = false,
   className,
+  onSendReview,
 }: TerminalSendPreviewsProps) {
   const send = useTreqSendOptional();
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
@@ -128,6 +130,7 @@ export function TerminalSendPreviews({
           assets={assets}
           initialIndex={Math.min(previewIndex, assets.length - 1)}
           onClose={() => setPreviewIndex(null)}
+          onSendReview={onSendReview}
         />
       )}
     </>

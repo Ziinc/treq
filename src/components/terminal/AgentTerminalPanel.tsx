@@ -408,6 +408,7 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
                 <TerminalSendPreviews
                   ptySessionId={sessionData.ptySessionId}
                   isActive={!!isActive}
+                  onSendReview={handleEnqueueMessage}
                 />
                 <ConsolidatedTerminal
                   key={`${sessionData.ptySessionId}-${terminalInstanceKey}`}

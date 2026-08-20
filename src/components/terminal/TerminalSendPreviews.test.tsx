@@ -11,6 +11,7 @@ import { TREQ_SEND_EVENT } from "../../lib/treqSend";
 import * as api from "../../lib/api";
 import * as treqSend from "../../lib/treqSend";
 import * as utils from "../../lib/utils";
+import * as sendAssetReview from "../../lib/sendAssetReview";
 
 vi.spyOn(api, "readFile").mockResolvedValue("hello from send");
 vi.spyOn(treqSend, "treqSendFileSrc").mockImplementation(
@@ -21,9 +22,11 @@ vi.spyOn(utils, "copyTextToClipboard").mockResolvedValue(undefined);
 function SendHarness({
   ptySessionId,
   isActive = true,
+  onSendReview,
 }: {
   ptySessionId: string;
   isActive?: boolean;
+  onSendReview?: (prompt: string) => void;
 }) {
   const { ingestPayload } = useTreqSend();
   return (
@@ -60,7 +63,11 @@ function SendHarness({
       >
         Inject image
       </button>
-      <TerminalSendPreviews ptySessionId={ptySessionId} isActive={isActive} />
+      <TerminalSendPreviews
+        ptySessionId={ptySessionId}
+        isActive={isActive}
+        onSendReview={onSendReview}
+      />
     </div>
   );
 }
@@ -96,10 +103,22 @@ describe("TerminalSendPreviews", () => {
       await screen.findByTestId("treq-send-preview-lightbox"),
     ).toBeTruthy();
     await waitFor(() => {
-      expect(screen.getByTestId("treq-send-text-preview").textContent).toBe(
-        "hello from send",
-      );
+      expect(
+        screen.getByTestId("treq-send-text-preview").textContent,
+      ).toContain("hello from send");
     });
+    expect(screen.getByTestId("treq-send-text-preview").className).toContain(
+      "bg-zinc-900",
+    );
+    expect(screen.getByTestId("treq-send-text-preview").className).toContain(
+      "opacity-100",
+    );
+    expect(screen.getByTestId("treq-send-text-preview").className).not.toMatch(
+      /bg-zinc-900\/\d+/,
+    );
+    expect(screen.getByTestId("treq-send-preview-lightbox").className).toMatch(
+      /bg-black\/\d+/,
+    );
     expect(screen.queryByTestId("treq-send-preview-modal")).toBeNull();
     expect(api.readFile).toHaveBeenCalledWith("/tmp/repo/.treq/send/note.txt");
   });
@@ -236,12 +255,12 @@ describe("TerminalSendPreviews", () => {
       .querySelector('img[alt="shot.png"]') as HTMLImageElement;
     expect(screen.getByTestId("treq-send-zoom-level").textContent).toBe("100%");
 
-    await user.click(image);
+    await user.click(screen.getByTestId("treq-send-highlight-surface"));
     expect(screen.getByTestId("treq-send-zoom-level").textContent).toBe("200%");
     expect(image.style.height).toBe("160vh");
     expect(screen.getByTestId("treq-send-preview-lightbox")).toBeTruthy();
 
-    await user.click(image);
+    await user.click(screen.getByTestId("treq-send-highlight-surface"));
     expect(screen.getByTestId("treq-send-zoom-level").textContent).toBe("100%");
     expect(image.style.height).toBe("80vh");
   });
@@ -305,5 +324,116 @@ describe("TerminalSendPreviews", () => {
     await waitFor(() => {
       expect(hasSendListener()).toBe(true);
     });
+  });
+
+  it("sends a toolbar review comment to the agent on Enter", async () => {
+    const user = userEvent.setup();
+    const onSendReview = vi.fn();
+    renderSend(
+      <SendHarness ptySessionId="session-1" onSendReview={onSendReview} />,
+    );
+    await user.click(screen.getByRole("button", { name: "Inject text" }));
+    await user.click(await screen.findByTestId("terminal-send-preview-send-1"));
+    const input = await screen.findByTestId("treq-send-review-input");
+    await user.type(input, "Please tighten this copy{Enter}");
+    expect(onSendReview).toHaveBeenCalledWith(
+      expect.stringContaining("Please tighten this copy"),
+    );
+  });
+
+  it("warns when closing the lightbox with unsent comments", async () => {
+    const user = userEvent.setup();
+    renderSend(<SendHarness ptySessionId="session-1" onSendReview={vi.fn()} />);
+    await user.click(screen.getByRole("button", { name: "Inject text" }));
+    await user.click(await screen.findByTestId("terminal-send-preview-send-1"));
+    await user.type(
+      await screen.findByTestId("treq-send-review-input"),
+      "unsent",
+    );
+    await user.click(screen.getByTestId("treq-send-close"));
+    expect(await screen.findByTestId("treq-send-unsaved-dialog")).toBeTruthy();
+    expect(screen.getByTestId("treq-send-preview-lightbox")).toBeTruthy();
+    await user.click(screen.getByTestId("treq-send-unsaved-discard"));
+    await waitFor(() => {
+      expect(screen.queryByTestId("treq-send-preview-lightbox")).toBeNull();
+    });
+  });
+
+  it("adds an inline line comment on a text asset", async () => {
+    const user = userEvent.setup();
+    const onSendReview = vi.fn();
+    renderSend(
+      <SendHarness ptySessionId="session-1" onSendReview={onSendReview} />,
+    );
+    await user.click(screen.getByRole("button", { name: "Inject text" }));
+    await user.click(await screen.findByTestId("terminal-send-preview-send-1"));
+    await waitFor(() => {
+      expect(screen.getByTestId("treq-send-text-line-1")).toBeTruthy();
+    });
+    await user.click(screen.getByTestId("treq-send-text-line-1"));
+    const composer = await screen.findByTestId(
+      "treq-send-line-comment-composer",
+    );
+    await user.type(
+      composer.querySelector("textarea") as HTMLTextAreaElement,
+      "Rename these",
+    );
+    await user.click(screen.getByTestId("treq-send-line-comment-save"));
+    await user.type(screen.getByTestId("treq-send-review-input"), "{Enter}");
+    expect(onSendReview).toHaveBeenCalledWith(
+      expect.stringContaining("Rename these"),
+    );
+    expect(onSendReview).toHaveBeenCalledWith(
+      expect.stringContaining("note.txt:1"),
+    );
+  });
+
+  it("draws a red highlight on an image and includes the comment in the prompt", async () => {
+    const user = userEvent.setup();
+    const onSendReview = vi.fn();
+    vi.spyOn(sendAssetReview, "renderHighlightedImageBlob").mockRejectedValue(
+      new Error("skip canvas"),
+    );
+    if (!Element.prototype.setPointerCapture) {
+      Element.prototype.setPointerCapture = () => {};
+      Element.prototype.releasePointerCapture = () => {};
+    }
+    renderSend(
+      <SendHarness ptySessionId="session-1" onSendReview={onSendReview} />,
+    );
+    await user.click(screen.getByRole("button", { name: "Inject image" }));
+    await user.click(await screen.findByTestId("terminal-send-preview-send-2"));
+    const surface = await screen.findByTestId("treq-send-highlight-surface");
+    vi.spyOn(surface, "getBoundingClientRect").mockReturnValue({
+      x: 0,
+      y: 0,
+      top: 0,
+      left: 0,
+      bottom: 100,
+      right: 100,
+      width: 100,
+      height: 100,
+      toJSON: () => ({}),
+    });
+    await user.pointer([
+      { keys: "[MouseLeft>]", target: surface, coords: { x: 10, y: 10 } },
+      { target: surface, coords: { x: 50, y: 40 } },
+      { keys: "[/MouseLeft]", target: surface, coords: { x: 50, y: 40 } },
+    ]);
+    const commentBox = await screen.findByLabelText("Highlight comment");
+    await user.type(commentBox, "Move this button");
+    await user.type(
+      screen.getByTestId("treq-send-review-input"),
+      "Header is too loud{Enter}",
+    );
+    expect(onSendReview).toHaveBeenCalledWith(
+      expect.stringContaining("Move this button"),
+    );
+    expect(onSendReview).toHaveBeenCalledWith(
+      expect.stringContaining("Header is too loud"),
+    );
+    expect(onSendReview).toHaveBeenCalledWith(
+      expect.stringContaining("Highlights:"),
+    );
   });
 });

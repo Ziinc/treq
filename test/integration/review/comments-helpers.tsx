@@ -75,6 +75,10 @@ async function findChangedFileElement(fileName: string): Promise<HTMLElement> {
   );
 }
 
+export async function waitForChangedFile(fileName: string) {
+  return findChangedFileElement(fileName);
+}
+
 export async function clickChangedFile(fileName: string) {
   try {
     fireEvent.click(await findChangedFileElement(fileName));
