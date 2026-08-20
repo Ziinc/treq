@@ -1,0 +1,37 @@
+id: no-use-effect-api-set-state-ts
+snapshots:
+  ? |
+    useEffect(() => {
+      const load = async () => {
+        const review = await loadFileBrowserReview(repoPath, workspaceId);
+        setComments(review.comments);
+      };
+      load();
+    }, [repoPath, workspaceId]);
+  : labels:
+    - source: |-
+        useEffect(() => {
+          const load = async () => {
+            const review = await loadFileBrowserReview(repoPath, workspaceId);
+            setComments(review.comments);
+          };
+          load();
+        }, [repoPath, workspaceId])
+      style: primary
+      start: 0
+      end: 194
+    - source: await loadFileBrowserReview(repoPath, workspaceId)
+      style: secondary
+      start: 66
+      end: 116
+    - source: |-
+        (() => {
+          const load = async () => {
+            const review = await loadFileBrowserReview(repoPath, workspaceId);
+            setComments(review.comments);
+          };
+          load();
+        }, [repoPath, workspaceId])
+      style: secondary
+      start: 9
+      end: 194

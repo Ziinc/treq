@@ -1,0 +1,26 @@
+id: no-use-effect-api-set-state-ts
+language: typescript
+severity: warning
+message: >
+  Load server data with useQuery or useMutation, not useEffect plus setState.
+  Subscribe to DOM/Tauri events, matchMedia, debounce, and xterm/monaco layout
+  in effects; keep Tauri API reads and writes in query functions.
+files:
+  - "src/**/*.ts"
+ignores:
+  - "src/hooks/useDebounce.ts"
+rule:
+  all:
+    - pattern: useEffect($$$ARGS)
+    - has:
+        stopBy: end
+        any:
+          - pattern: await $CALL($$$A)
+          - pattern: $CALL($$$A).then($$$B)
+    - has:
+        stopBy: end
+        regex: \bset[A-Z][A-Za-z0-9]*\(
+    - not:
+        regex: \b(addEventListener|matchMedia|listen)\s*(?:<[^>]*>)?\s*\(
+    - not:
+        regex: \bnew XTerm\s*\(
