@@ -1930,6 +1930,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
                         workspace={workspace}
                         baseBranch={targetBranch ?? defaultTargetBranch}
                         hasCommits={
+                          hasWorkspaceCommits ||
                           (workspaceStatusData?.commits_ahead_of_target
                             ?.length ?? 0) > 0
                         }
