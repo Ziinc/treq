@@ -31,6 +31,7 @@ import {
   type ChangeFilesMoveRequest,
 } from "../lib/change-file-drag";
 import { Button } from "./ui/button";
+import { SidebarMenuItem } from "./ui/sidebar";
 import { useToast } from "./ui/toast";
 import {
   ContextMenu,
@@ -228,7 +229,7 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
   const [isChangeDropTarget, setIsChangeDropTarget] = useState(false);
 
   return (
-    <div key={workspace.id}>
+    <SidebarMenuItem>
       <Draggable draggableId={String(workspace.id)} index={index}>
         {(dragProvided, dragSnapshot) => (
           <div
@@ -489,6 +490,6 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
           </div>
         )}
       </Draggable>
-    </div>
+    </SidebarMenuItem>
   );
 };

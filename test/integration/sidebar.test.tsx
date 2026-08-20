@@ -44,6 +44,20 @@ describe("Dashboard - workspace list", () => {
     expect(screen.queryByText("unknown")).toBeFalsy();
   });
 
+  it("renders the workspace list inside a shadcn sidebar", async () => {
+    render(<Dashboard />);
+    await screen.findByText("feat/alpha");
+
+    const sidebar = document.querySelector(
+      '[data-sidebar="sidebar"]',
+    ) as HTMLElement;
+    expect(sidebar).toBeTruthy();
+    expect(sidebar.querySelector('[data-sidebar="header"]')).toBeTruthy();
+    expect(sidebar.querySelector('[data-sidebar="content"]')).toBeTruthy();
+    expect(sidebar.querySelector('[data-sidebar="footer"]')).toBeTruthy();
+    expect(within(sidebar).getByText("Workspaces")).toBeTruthy();
+  });
+
   it("shows detached HEAD short hash in home repo row instead of unknown", async () => {
     execSync('git commit --allow-empty -m "temp commit for detached test"', {
       cwd: repoPath,

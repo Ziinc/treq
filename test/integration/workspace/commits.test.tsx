@@ -363,15 +363,21 @@ describe("ShowWorkspace - Commits tab tentative working copy", () => {
     const dirtyUser = userEvent.setup();
     await openWorkspaceCommitsTab(dirtyUser, "feat/tentative-working-copy");
 
-    const commitsList = await screen.findByRole("list");
+    const workingCopy = await screen.findByText("Working copy");
+    const commitsList = workingCopy.closest("ul");
+    expect(commitsList).toBeTruthy();
+
+    const commitsListElement = commitsList as HTMLElement;
     expect(
-      await within(commitsList).findByText(/feat\/tentative-working-copy/),
+      await within(commitsListElement).findByText(
+        /feat\/tentative-working-copy/,
+      ),
     ).toBeInTheDocument();
     expect(
-      await within(commitsList).findByText("Working copy"),
+      within(commitsListElement).getByText("Working copy"),
     ).toBeInTheDocument();
     expect(
-      within(commitsList).getByText("- feat/tentative-working-copy"),
+      within(commitsListElement).getByText("- feat/tentative-working-copy"),
     ).toBeInTheDocument();
     expect(screen.queryByText("wc000")).not.toBeInTheDocument();
   });

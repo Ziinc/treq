@@ -89,6 +89,12 @@
     /* Sidebar - slightly darker than background for hierarchy */
     --sidebar: 220 13% 95%;
     --sidebar-foreground: 0 0% 13%;
+    --sidebar-primary: 211 100% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 220 13% 91%;
+    --sidebar-accent-foreground: 0 0% 13%;
+    --sidebar-border: 220 13% 88%;
+    --sidebar-ring: 211 100% 50%;
 
     /* Card - elevated surface */
     --card: 0 0% 100%;
@@ -143,6 +149,12 @@
     /* Sidebar - slightly lighter than background for hierarchy */
     --sidebar: 0 0% 18%;
     --sidebar-foreground: 0 0% 95%;
+    --sidebar-primary: 211 100% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 0% 25%;
+    --sidebar-accent-foreground: 0 0% 95%;
+    --sidebar-border: 0 0% 28%;
+    --sidebar-ring: 211 100% 55%;
 
     /* Card - elevated surface */
     --card: 0 0% 20%;
