@@ -139,13 +139,13 @@ pub struct StashEntry {
 /// agent terminal. One row per workspace, mirroring `PendingReview`.
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PendingPageReview {
-    pub id: i64,
-    pub workspace_id: i64,
-    pub url: String,
-    pub comments: String, // JSON string
-    pub summary_text: Option<String>,
-    pub created_at: String,
-    pub updated_at: String,
+  pub id: i64,
+  pub workspace_id: i64,
+  pub url: String,
+  pub comments: String, // JSON string
+  pub summary_text: Option<String>,
+  pub created_at: String,
+  pub updated_at: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -1852,48 +1852,48 @@ pub fn clear_file_browser_review(repo_path: &str, workspace_id: i64) -> Result<(
 
 /// Get pending page review for a workspace
 pub fn get_pending_page_review(
-    repo_path: &str,
-    workspace_id: i64,
+  repo_path: &str,
+  workspace_id: i64,
 ) -> Result<Option<PendingPageReview>, String> {
-    let conn = get_connection(repo_path)?;
-    let mut stmt = conn
-        .prepare(
-            "SELECT id, workspace_id, url, comments, summary_text, created_at, updated_at
+  let conn = get_connection(repo_path)?;
+  let mut stmt = conn
+    .prepare(
+      "SELECT id, workspace_id, url, comments, summary_text, created_at, updated_at
              FROM pending_page_reviews
              WHERE workspace_id = ?1",
-        )
-        .map_err(|e| format!("Failed to prepare query: {}", e))?;
+    )
+    .map_err(|e| format!("Failed to prepare query: {}", e))?;
 
-    let review = stmt
-        .query_row([workspace_id], |row| {
-            Ok(PendingPageReview {
-                id: row.get(0)?,
-                workspace_id: row.get(1)?,
-                url: row.get(2)?,
-                comments: row.get(3)?,
-                summary_text: row.get(4)?,
-                created_at: row.get(5)?,
-                updated_at: row.get(6)?,
-            })
-        })
-        .optional()
-        .map_err(|e| format!("Failed to get pending page review: {}", e))?;
+  let review = stmt
+    .query_row([workspace_id], |row| {
+      Ok(PendingPageReview {
+        id: row.get(0)?,
+        workspace_id: row.get(1)?,
+        url: row.get(2)?,
+        comments: row.get(3)?,
+        summary_text: row.get(4)?,
+        created_at: row.get(5)?,
+        updated_at: row.get(6)?,
+      })
+    })
+    .optional()
+    .map_err(|e| format!("Failed to get pending page review: {}", e))?;
 
-    Ok(review)
+  Ok(review)
 }
 
 /// Save or update pending page review for a workspace
 pub fn save_pending_page_review(
-    repo_path: &str,
-    workspace_id: i64,
-    url: &str,
-    comments: &str,
-    summary_text: Option<&str>,
+  repo_path: &str,
+  workspace_id: i64,
+  url: &str,
+  comments: &str,
+  summary_text: Option<&str>,
 ) -> Result<i64, String> {
-    let conn = get_connection(repo_path)?;
-    let now = Utc::now().to_rfc3339();
+  let conn = get_connection(repo_path)?;
+  let now = Utc::now().to_rfc3339();
 
-    conn.execute(
+  conn.execute(
         "INSERT OR REPLACE INTO pending_page_reviews (workspace_id, url, comments, summary_text, created_at, updated_at)
          VALUES (
              ?1,
@@ -1907,18 +1907,19 @@ pub fn save_pending_page_review(
     )
     .map_err(|e| format!("Failed to save pending page review: {}", e))?;
 
-    Ok(conn.last_insert_rowid())
+  Ok(conn.last_insert_rowid())
 }
 
 /// Clear pending page review for a workspace
 pub fn clear_pending_page_review(repo_path: &str, workspace_id: i64) -> Result<(), String> {
-    let conn = get_connection(repo_path)?;
-    conn.execute(
-        "DELETE FROM pending_page_reviews WHERE workspace_id = ?1",
-        [workspace_id],
+  let conn = get_connection(repo_path)?;
+  conn
+    .execute(
+      "DELETE FROM pending_page_reviews WHERE workspace_id = ?1",
+      [workspace_id],
     )
     .map_err(|e| format!("Failed to clear pending page review: {}", e))?;
-    Ok(())
+  Ok(())
 }
 
 #[cfg(test)]
@@ -2483,6 +2484,7 @@ mod tests {
     }
   }
 
+  #[test]
   fn test_pending_review_cascade_delete() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let repo_path = temp_dir.path().to_str().unwrap();
@@ -2704,154 +2706,153 @@ mod tests {
     }
   }
 
+  #[test]
+  fn test_pending_page_review_round_trip() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let repo_path = temp_dir.path().to_str().unwrap();
 
-    #[test]
-    fn test_pending_page_review_round_trip() {
-        let temp_dir = TempDir::new().expect("Failed to create temp dir");
-        let repo_path = temp_dir.path().to_str().unwrap();
+    let workspace_id = add_workspace(
+      repo_path,
+      "test".to_string(),
+      format!("{}/.treq/workspaces/test", repo_path),
+      "test-branch".to_string(),
+      None,
+      None,
+      None,
+    )
+    .expect("add_workspace should succeed");
 
-        let workspace_id = add_workspace(
-            repo_path,
-            "test".to_string(),
-            format!("{}/.treq/workspaces/test", repo_path),
-            "test-branch".to_string(),
-            None,
-            None,
-            None,
-        )
-        .expect("add_workspace should succeed");
+    let comments = r##"[{"id":"c1","selector":"#foo","tag":"BUTTON","textPreview":"Submit","text":"Comment","createdAt":"2025-01-15T10:00:00Z"}]"##;
+    let url = "http://localhost:3000/checkout";
+    let summary = "Overall page feedback";
 
-        let comments = r##"[{"id":"c1","selector":"#foo","tag":"BUTTON","textPreview":"Submit","text":"Comment","createdAt":"2025-01-15T10:00:00Z"}]"##;
-        let url = "http://localhost:3000/checkout";
-        let summary = "Overall page feedback";
+    let id = save_pending_page_review(repo_path, workspace_id, url, comments, Some(summary))
+      .expect("save_pending_page_review should succeed");
+    assert!(id > 0, "Review ID should be positive");
 
-        let id = save_pending_page_review(repo_path, workspace_id, url, comments, Some(summary))
-            .expect("save_pending_page_review should succeed");
-        assert!(id > 0, "Review ID should be positive");
+    let review = get_pending_page_review(repo_path, workspace_id)
+      .expect("get_pending_page_review should succeed");
+    assert!(review.is_some(), "Review should exist");
 
-        let review = get_pending_page_review(repo_path, workspace_id)
-            .expect("get_pending_page_review should succeed");
-        assert!(review.is_some(), "Review should exist");
+    let review = review.unwrap();
+    assert_eq!(review.workspace_id, workspace_id);
+    assert_eq!(review.url, url);
+    assert_eq!(review.comments, comments);
+    assert_eq!(review.summary_text, Some(summary.to_string()));
 
-        let review = review.unwrap();
-        assert_eq!(review.workspace_id, workspace_id);
-        assert_eq!(review.url, url);
-        assert_eq!(review.comments, comments);
-        assert_eq!(review.summary_text, Some(summary.to_string()));
-
-        if let Some(initialized) = INITIALIZED_DBS.get() {
-            initialized.lock().unwrap().remove(repo_path);
-        }
+    if let Some(initialized) = INITIALIZED_DBS.get() {
+      initialized.lock().unwrap().remove(repo_path);
     }
+  }
 
-    #[test]
-    fn test_pending_page_review_unique_constraint() {
-        let temp_dir = TempDir::new().expect("Failed to create temp dir");
-        let repo_path = temp_dir.path().to_str().unwrap();
+  #[test]
+  fn test_pending_page_review_unique_constraint() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let repo_path = temp_dir.path().to_str().unwrap();
 
-        let workspace_id = add_workspace(
-            repo_path,
-            "test".to_string(),
-            format!("{}/.treq/workspaces/test", repo_path),
-            "test-branch".to_string(),
-            None,
-            None,
-            None,
-        )
-        .expect("add_workspace should succeed");
+    let workspace_id = add_workspace(
+      repo_path,
+      "test".to_string(),
+      format!("{}/.treq/workspaces/test", repo_path),
+      "test-branch".to_string(),
+      None,
+      None,
+      None,
+    )
+    .expect("add_workspace should succeed");
 
-        save_pending_page_review(
-            repo_path,
-            workspace_id,
-            "http://localhost:3000/",
-            r#"[{"id":"c1"}]"#,
-            None,
-        )
-        .expect("First save should succeed");
+    save_pending_page_review(
+      repo_path,
+      workspace_id,
+      "http://localhost:3000/",
+      r#"[{"id":"c1"}]"#,
+      None,
+    )
+    .expect("First save should succeed");
 
-        save_pending_page_review(
-            repo_path,
-            workspace_id,
-            "http://localhost:3000/cart",
-            r#"[{"id":"c2"}]"#,
-            Some("New summary"),
-        )
-        .expect("Second save should succeed");
+    save_pending_page_review(
+      repo_path,
+      workspace_id,
+      "http://localhost:3000/cart",
+      r#"[{"id":"c2"}]"#,
+      Some("New summary"),
+    )
+    .expect("Second save should succeed");
 
-        let review = get_pending_page_review(repo_path, workspace_id).expect("get should succeed");
-        assert!(review.is_some());
+    let review = get_pending_page_review(repo_path, workspace_id).expect("get should succeed");
+    assert!(review.is_some());
 
-        let review = review.unwrap();
-        assert_eq!(review.url, "http://localhost:3000/cart");
-        assert_eq!(review.comments, r#"[{"id":"c2"}]"#);
-        assert_eq!(review.summary_text, Some("New summary".to_string()));
+    let review = review.unwrap();
+    assert_eq!(review.url, "http://localhost:3000/cart");
+    assert_eq!(review.comments, r#"[{"id":"c2"}]"#);
+    assert_eq!(review.summary_text, Some("New summary".to_string()));
 
-        if let Some(initialized) = INITIALIZED_DBS.get() {
-            initialized.lock().unwrap().remove(repo_path);
-        }
+    if let Some(initialized) = INITIALIZED_DBS.get() {
+      initialized.lock().unwrap().remove(repo_path);
     }
+  }
 
-    #[test]
-    fn test_clear_pending_page_review() {
-        let temp_dir = TempDir::new().expect("Failed to create temp dir");
-        let repo_path = temp_dir.path().to_str().unwrap();
+  #[test]
+  fn test_clear_pending_page_review() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let repo_path = temp_dir.path().to_str().unwrap();
 
-        let workspace_id = add_workspace(
-            repo_path,
-            "test".to_string(),
-            format!("{}/.treq/workspaces/test", repo_path),
-            "test-branch".to_string(),
-            None,
-            None,
-            None,
-        )
-        .expect("add_workspace should succeed");
+    let workspace_id = add_workspace(
+      repo_path,
+      "test".to_string(),
+      format!("{}/.treq/workspaces/test", repo_path),
+      "test-branch".to_string(),
+      None,
+      None,
+      None,
+    )
+    .expect("add_workspace should succeed");
 
-        save_pending_page_review(
-            repo_path,
-            workspace_id,
-            "file:///tmp/preview.html",
-            r#"[{"id":"c1"}]"#,
-            None,
-        )
-        .expect("save should succeed");
+    save_pending_page_review(
+      repo_path,
+      workspace_id,
+      "file:///tmp/preview.html",
+      r#"[{"id":"c1"}]"#,
+      None,
+    )
+    .expect("save should succeed");
 
-        let review = get_pending_page_review(repo_path, workspace_id).expect("get should succeed");
-        assert!(review.is_some());
+    let review = get_pending_page_review(repo_path, workspace_id).expect("get should succeed");
+    assert!(review.is_some());
 
-        clear_pending_page_review(repo_path, workspace_id).expect("clear should succeed");
+    clear_pending_page_review(repo_path, workspace_id).expect("clear should succeed");
 
-        let review = get_pending_page_review(repo_path, workspace_id).expect("get should succeed");
-        assert!(review.is_none(), "Review should be cleared");
+    let review = get_pending_page_review(repo_path, workspace_id).expect("get should succeed");
+    assert!(review.is_none(), "Review should be cleared");
 
-        if let Some(initialized) = INITIALIZED_DBS.get() {
-            initialized.lock().unwrap().remove(repo_path);
-        }
+    if let Some(initialized) = INITIALIZED_DBS.get() {
+      initialized.lock().unwrap().remove(repo_path);
     }
+  }
 
-    #[test]
-    fn test_pending_page_review_missing_returns_none() {
-        let temp_dir = TempDir::new().expect("Failed to create temp dir");
-        let repo_path = temp_dir.path().to_str().unwrap();
+  #[test]
+  fn test_pending_page_review_missing_returns_none() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let repo_path = temp_dir.path().to_str().unwrap();
 
-        let workspace_id = add_workspace(
-            repo_path,
-            "test".to_string(),
-            format!("{}/.treq/workspaces/test", repo_path),
-            "test-branch".to_string(),
-            None,
-            None,
-            None,
-        )
-        .expect("add_workspace should succeed");
+    let workspace_id = add_workspace(
+      repo_path,
+      "test".to_string(),
+      format!("{}/.treq/workspaces/test", repo_path),
+      "test-branch".to_string(),
+      None,
+      None,
+      None,
+    )
+    .expect("add_workspace should succeed");
 
-        let review = get_pending_page_review(repo_path, workspace_id).expect("get should succeed");
-        assert!(review.is_none());
+    let review = get_pending_page_review(repo_path, workspace_id).expect("get should succeed");
+    assert!(review.is_none());
 
-        if let Some(initialized) = INITIALIZED_DBS.get() {
-            initialized.lock().unwrap().remove(repo_path);
-        }
+    if let Some(initialized) = INITIALIZED_DBS.get() {
+      initialized.lock().unwrap().remove(repo_path);
     }
+  }
 
   #[test]
   fn test_pending_review_migration_idempotent() {

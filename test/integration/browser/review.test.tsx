@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "../../../src/lib/api";
-import type { PickedElement } from "../../../src/lib/api-types";
 import {
+	type PickedElement,
 	type Workspace,
 	createWorkspace,
 	getWorkspaces,
@@ -41,9 +41,9 @@ async function openBrowserTab(
 
 	await user.click(await findSidebarBranchElement(branchName));
 
-	const reviewTab = await screen.findByRole("tab", { name: /^Review/ });
+	const reviewTab = await screen.findByRole("tab", { name: /^Changes/ });
 	await user.click(reviewTab);
-	await screen.findByRole("tab", { name: /^Review/, selected: true });
+	await screen.findByRole("tab", { name: /^Changes/, selected: true });
 
 	const viewSwitcher = await screen.findByRole("button", {
 		name: /switch review view/i,

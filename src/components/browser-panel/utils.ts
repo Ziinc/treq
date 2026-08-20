@@ -1,7 +1,7 @@
 import type {
 	ElementComment as ApiElementComment,
 	PickedElement as ApiPickedElement,
-} from "../../lib/api-types";
+} from "../../lib/api-browser";
 import type { ElementComment, PickedElement } from "./types";
 
 export function toLocalElementComment(c: ApiElementComment): ElementComment {

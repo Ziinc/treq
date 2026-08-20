@@ -12,8 +12,10 @@ import {
 import { render, screen } from "../../../test/test-utils";
 import { Dashboard } from "../../../src/components/Dashboard";
 import * as api from "../../../src/lib/api";
-import { createWorkspace } from "../../../src/lib/api";
-import type { PickedElement } from "../../../src/lib/api-types";
+import {
+	createWorkspace,
+	type PickedElement,
+} from "../../../src/lib/api";
 import { captureDocument } from "../capture";
 
 // A real static HTML fixture, written to disk and addressed via a real
@@ -105,14 +107,14 @@ it("captures the in-app browser page review flow", async () => {
 	render(<Dashboard />);
 
 	await user.click(await findSidebarBranchElement("feat/browser-review"));
-	const reviewTab = await screen.findByRole("tab", { name: /^Review/ });
+	const reviewTab = await screen.findByRole("tab", { name: /^Changes/ });
 	await user.click(reviewTab);
-	await screen.findByRole("tab", { name: /^Review/, selected: true });
+	await screen.findByRole("tab", { name: /^Changes/, selected: true });
 	await screen.findByRole("button", { name: /switch review view/i });
 	await captureDocument(document, {
 		name: "browser-panel-review-00-diff-default",
 		expectations: [
-			'The Review tab is active and the view-switcher dropdown button next to Code/Commits/Review reads "Diff" (the default), with a diff/changes view showing below.',
+			'The Changes tab is active and the view-switcher dropdown button next to Code/Commits/Changes reads "Diff" (the default), with a diff/changes view showing below.',
 		],
 	});
 
@@ -135,7 +137,7 @@ it("captures the in-app browser page review flow", async () => {
 	await captureDocument(document, {
 		name: "browser-panel-review-01-empty",
 		expectations: [
-			'The view-switcher dropdown button next to Code/Commits/Review now reads "Browser", showing an address bar and a placeholder message to enter a localhost or file URL.',
+			'The view-switcher dropdown button next to Code/Commits/Changes now reads "Browser", showing an address bar and a placeholder message to enter a localhost or file URL.',
 			'The "Finish review" and "Discard" buttons are visible but disabled since there are no comments yet.',
 		],
 	});
