@@ -108,10 +108,13 @@ describe("TerminalSendPreviews", () => {
       ).toContain("hello from send");
     });
     expect(screen.getByTestId("treq-send-text-preview").className).toContain(
-      "bg-zinc-950",
+      "bg-zinc-900",
+    );
+    expect(screen.getByTestId("treq-send-text-preview").className).toContain(
+      "opacity-100",
     );
     expect(screen.getByTestId("treq-send-text-preview").className).not.toMatch(
-      /bg-zinc-950\/\d+/,
+      /bg-zinc-900\/\d+/,
     );
     expect(screen.getByTestId("treq-send-preview-lightbox").className).toMatch(
       /bg-black\/\d+/,
