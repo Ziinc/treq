@@ -10,7 +10,7 @@
   padding: 0 10px;
   font-size: 0.85rem;
   border: 1.5px solid var(--ifm-color-emphasis-300);
-  border-radius: 8px;
+  border-radius: 999px;
   background: var(--ifm-background-color);
   color: var(--ifm-font-color-base);
   outline: none;

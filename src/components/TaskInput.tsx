@@ -412,7 +412,10 @@ export const TaskInput: React.FC<TaskInputProps> = ({
 
   return (
     <>
-      <div className="max-w-2xl min-w-0 mx-auto w-full">
+      <div
+        className="max-w-2xl min-w-0 mx-auto w-full"
+        data-testid="agent-task-input"
+      >
         <div
           className={cn(
             "min-h-28 rounded-xl border bg-background relative transition-colors flex flex-col",

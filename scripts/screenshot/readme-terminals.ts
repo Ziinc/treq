@@ -110,13 +110,28 @@ export async function openMarketingAgentTerminals(
 }
 
 export function expandMarketingTerminalPane(): void {
-  const label = [...document.querySelectorAll("span")].find(
-    (node) => node.textContent === "Terminals",
-  );
-  const pane = label?.closest("div.flex.flex-col.border-t") as HTMLElement | null;
+  const pane = document.querySelector(
+    '[data-testid="workspace-terminal-pane"]',
+  ) as HTMLElement | null;
   if (!pane) return;
   pane.style.height = "40%";
   pane.style.maxHeight = "60%";
+}
+
+export function hideMarketingTerminalPane(): void {
+  const pane = document.querySelector(
+    '[data-testid="workspace-terminal-pane"]',
+  ) as HTMLElement | null;
+  if (!pane) return;
+  pane.style.display = "none";
+}
+
+export function showMarketingTerminalPane(): void {
+  const pane = document.querySelector(
+    '[data-testid="workspace-terminal-pane"]',
+  ) as HTMLElement | null;
+  if (!pane) return;
+  pane.style.display = "";
 }
 
 /** Overlay TUI HTML — xterm paints to canvas, which does not serialize into the screenshot DOM. */

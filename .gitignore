@@ -60,6 +60,13 @@ src-tauri/target/index.js
 # screenshot harness output (compiled CSS, HTML snapshots, PNGs)
 scripts/screenshot/.generated/
 
+# Working copies of marketing recaptures. Committed README hero: assets/screenshots/code.png
+# Site crops are generated in Deploy Web CI, not committed.
+assets/screenshots/*
+!assets/screenshots/code.png
+web/static/img/code.png
+web/static/img/landing/*.png
+
 # service-qa harness output (outcome manifests)
 scripts/service-qa/.generated/
 *storybook.log

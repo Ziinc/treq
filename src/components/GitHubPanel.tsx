@@ -227,7 +227,7 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
   }
 
   return (
-    <div className="flex h-full bg-background">
+    <div className="flex h-full bg-background" data-testid="github-panel">
       {/* List panel */}
       <div
         className={`flex flex-col border-r border-border overflow-hidden ${showDetail ? "w-[380px] shrink-0" : "flex-1"}`}

@@ -76,11 +76,13 @@ export type CaptureOptions = {
    */
   clipSelector?: string;
   /**
-   * Repo-relative or absolute path to also write the PNG after capture.
-   * README marketing shots publish to `assets/screenshots/*.png`; docs crops
-   * publish to `web/static/img/docs/*.png`.
+   * Repo-relative or absolute path, or list of paths, to also write the PNG.
+   * Landing crops publish to `web/static/img/landing/*.png`.
+   * The README hero publishes to `assets/screenshots/code.png`.
+   * The site hero publishes to `web/static/img/code.png`.
+   * Docs crops publish to `web/static/img/docs/*.png`.
    */
-  publishTo?: string;
+  publishTo?: string | string[];
 };
 
 export async function captureDocument(
@@ -156,10 +158,13 @@ ${css}
     await browser.close();
   }
 
-  if (publishTo) {
-    const dest = path.isAbsolute(publishTo)
-      ? publishTo
-      : path.join(REPO_ROOT, publishTo);
+  const destinations = publishTo
+    ? (Array.isArray(publishTo) ? publishTo : [publishTo])
+    : [];
+  for (const destPath of destinations) {
+    const dest = path.isAbsolute(destPath)
+      ? destPath
+      : path.join(REPO_ROOT, destPath);
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     fs.copyFileSync(pngPath, dest);
   }
@@ -179,4 +184,59 @@ ${css}
   );
 
   return pngPath;
+}
+
+/** Place two published PNGs on a labeled board for isolation copy. */
+export async function stitchPngsSideBySide(
+  leftPath: string,
+  rightPath: string,
+  dest: string,
+  labels: [string, string],
+): Promise<void> {
+  const leftAbs = path.isAbsolute(leftPath)
+    ? leftPath
+    : path.join(REPO_ROOT, leftPath);
+  const rightAbs = path.isAbsolute(rightPath)
+    ? rightPath
+    : path.join(REPO_ROOT, rightPath);
+  const destAbs = path.isAbsolute(dest) ? dest : path.join(REPO_ROOT, dest);
+
+  const browser = await chromium.launch({
+    executablePath: resolveChromiumExecutable(),
+  });
+  try {
+    const page = await browser.newPage({
+      viewport: { width: 1440, height: 900 },
+      deviceScaleFactor: 2,
+    });
+    const html = `<!doctype html>
+<html><head><meta charset="utf-8" />
+<style>
+  html, body { margin: 0; background: #111; color: #e5e5e5; font-family: ui-sans-serif, system-ui, sans-serif; }
+  .board { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 20px; }
+  figure { margin: 0; }
+  figcaption { font-size: 13px; font-weight: 700; margin-bottom: 8px; font-family: ui-monospace, Menlo, monospace; }
+  img { width: 100%; height: auto; border-radius: 8px; border: 1px solid #333; display: block; }
+</style></head>
+<body>
+  <div class="board">
+    <figure>
+      <figcaption>${labels[0]}</figcaption>
+      <img src="file://${leftAbs}" />
+    </figure>
+    <figure>
+      <figcaption>${labels[1]}</figcaption>
+      <img src="file://${rightAbs}" />
+    </figure>
+  </div>
+</body></html>`;
+    const htmlPath = path.join(GENERATED_DIR, "stitch-isolation.html");
+    fs.mkdirSync(GENERATED_DIR, { recursive: true });
+    fs.writeFileSync(htmlPath, html);
+    await page.goto(`file://${htmlPath}`);
+    fs.mkdirSync(path.dirname(destAbs), { recursive: true });
+    await page.screenshot({ path: destAbs, fullPage: true });
+  } finally {
+    await browser.close();
+  }
 }

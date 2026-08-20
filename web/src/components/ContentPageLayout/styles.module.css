@@ -11,17 +11,17 @@
 .card {
   max-width: 1120px;
   margin: 0 auto;
-  padding: 2.5rem 3rem;
-  background: rgba(255, 255, 255, 0.94);
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 24px;
-  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.12);
+  padding: 2rem 0 3rem;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 :global([data-theme='dark']) .card {
-  background: rgba(17, 24, 39, 0.92);
-  border-color: rgba(255, 255, 255, 0.1);
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.38);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
 }
 
 .body {
@@ -46,11 +46,11 @@
 
 .tocContainer {
   position: relative;
-  padding: 2.75rem 1rem 1rem;
-  background: rgba(59, 156, 255, 0.06);
-  border: 1px solid rgba(59, 156, 255, 0.16);
-  border-left-width: 3px;
-  border-radius: 14px;
+  padding: 2.5rem 0.85rem 0.5rem;
+  background: transparent;
+  border: 0;
+  border-left: 2px solid #e7e5e4;
+  border-radius: 0;
 }
 
 .tocContainer::before {
@@ -66,8 +66,8 @@
 }
 
 :global([data-theme='dark']) .tocContainer {
-  background: rgba(94, 176, 255, 0.08);
-  border-color: rgba(94, 176, 255, 0.22);
+  background: transparent;
+  border-left-color: #2a2a2a;
 }
 
 .tocList {
@@ -102,8 +102,7 @@
 
 @media screen and (max-width: 996px) {
   .card {
-    padding: 1.5rem;
-    border-radius: 18px;
+    padding: 1.25rem 0 2rem;
   }
 
   .bodyWithToc {

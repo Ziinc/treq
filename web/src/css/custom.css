@@ -32,9 +32,15 @@
   --ifm-font-family-monospace: var(--font-mono);
   --ifm-heading-font-family: var(--font-display);
   --ifm-navbar-background-color: #ffffff;
-  --ifm-navbar-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --ifm-navbar-shadow: 0 1px 0 #e7e5e4;
   --ifm-heading-font-weight: 600;
   --ifm-font-weight-bold: 600;
+  --ifm-global-radius: 8px;
+  --ifm-button-border-radius: 999px;
+  --ifm-footer-background-color: #111111;
+  --ifm-footer-color: #d4d4d4;
+  --ifm-footer-link-color: #d4d4d4;
+  --ifm-footer-title-color: #ffffff;
 }
 
 /* For readability concerns, you should choose a lighter palette in dark mode. */
@@ -47,9 +53,9 @@
   --ifm-color-primary-lighter: #93caff;
   --ifm-color-primary-lightest: #bbdeff;
   --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
-  --ifm-background-color: #0f0f0f;
-  --ifm-navbar-background-color: #1a1a1a;
-  --ifm-navbar-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  --ifm-background-color: #111111;
+  --ifm-navbar-background-color: #161616;
+  --ifm-navbar-shadow: 0 1px 0 #2a2a2a;
 }
 
 /* Global styling improvements */
@@ -71,20 +77,12 @@ html {
 /* Clean navbar styling */
 .navbar {
   box-shadow: var(--ifm-navbar-shadow);
-  background-color: rgba(255, 255, 255, 0.95);
-}
-
-.navbar::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  backdrop-filter: blur(10px);
-  z-index: -1;
-  pointer-events: none;
+  background-color: #ffffff;
+  height: 4.25rem;
 }
 
 [data-theme='dark'] .navbar {
-  background-color: rgba(26, 26, 26, 0.95);
+  background-color: #161616;
 }
 
 .navbar__title {
@@ -121,15 +119,16 @@ html {
 }
 
 .navbar .button--primary {
-  background: linear-gradient(135deg, var(--ifm-color-primary) 0%, var(--ifm-color-primary-dark) 100%);
+  background: var(--ifm-color-primary);
   color: #ffffff;
   border: none;
-  box-shadow: 0 2px 10px rgba(0, 122, 255, 0.2);
+  border-radius: 999px;
+  box-shadow: none;
 }
 
 .navbar .button--primary:hover {
+  background: var(--ifm-color-primary-dark);
   color: #ffffff;
-  box-shadow: 0 4px 20px rgba(0, 122, 255, 0.3);
 }
 
 .navbar .button--outline.button--secondary {
@@ -179,7 +178,21 @@ html {
 
 /* Docs sidebar */
 .theme-doc-sidebar-container {
-  border-right: 0;
+  border-right: 1px solid #e7e5e4;
+}
+
+[data-theme='dark'] .theme-doc-sidebar-container {
+  border-right-color: #2a2a2a;
+}
+
+.menu__link {
+  border-radius: 8px;
+  font-size: 0.92rem;
+}
+
+.menu__link--active:not(.menu__link--sublist) {
+  background: rgba(59, 156, 255, 0.1);
+  color: var(--ifm-color-primary);
 }
 
 .table-of-contents__left-border {
@@ -193,18 +206,18 @@ html {
 .theme-doc-toc-desktop .table-of-contents {
   position: relative;
   margin-top: 0;
-  padding: 2.75rem 1rem 1rem;
-  background: rgba(59, 156, 255, 0.06);
-  border: 1px solid rgba(59, 156, 255, 0.16);
-  border-left-width: 3px;
-  border-radius: 14px;
+  padding: 2.5rem 0 0.5rem 0.85rem;
+  background: transparent;
+  border: 0;
+  border-left: 2px solid #e7e5e4;
+  border-radius: 0;
 }
 
 .theme-doc-toc-desktop .table-of-contents::before {
   content: 'Contents';
   position: absolute;
-  top: 0.9rem;
-  left: 1rem;
+  top: 0.5rem;
+  left: 0.85rem;
   color: var(--ifm-color-primary);
   font-size: 0.72rem;
   font-weight: 700;
@@ -231,60 +244,58 @@ html {
 }
 
 [data-theme='dark'] .theme-doc-toc-desktop .table-of-contents {
-  background: rgba(94, 176, 255, 0.08);
-  border-color: rgba(94, 176, 255, 0.22);
+  background: transparent;
+  border-left-color: #2a2a2a;
 }
 
-/* Floating docs content card */
+/* Docs content: flat Semrush-like reading pane */
 div[class*='docRoot'] {
-  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 45%);
+  background: #ffffff;
 }
 
 main[class*='docMainContainer'] > .container {
   max-width: 1120px;
-  margin: 2rem auto 3rem;
-  padding: 2.5rem 3rem;
-  background: rgba(255, 255, 255, 0.94);
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 24px;
-  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.12);
+  margin: 1.5rem auto 3rem;
+  padding: 1.5rem 2rem 3rem;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 [data-theme='dark'] div[class*='docRoot'] {
-  background: linear-gradient(180deg, #111827 0%, #0f0f0f 45%);
+  background: #111111;
 }
 
 [data-theme='dark'] main[class*='docMainContainer'] > .container {
-  background: rgba(17, 24, 39, 0.92);
-  border-color: rgba(255, 255, 255, 0.1);
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.38);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
 }
 
 @media screen and (max-width: 996px) {
   main[class*='docMainContainer'] > .container {
-    margin: 1rem;
-    padding: 1.5rem;
-    border-radius: 18px;
+    margin: 0;
+    padding: 1.25rem 1rem 2rem;
   }
 }
 
 /* Button styling with more personality */
 .button {
-  border-radius: 10px;
-  font-weight: 600;
-  transition: all 0.3s ease;
-  border: none;
+  border-radius: 999px;
+  font-weight: 700;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .button--primary {
-  background: linear-gradient(135deg, var(--ifm-color-primary) 0%, var(--ifm-color-primary-dark) 100%);
-  box-shadow: 0 2px 10px rgba(0, 122, 255, 0.2);
+  background: var(--ifm-color-primary);
+  box-shadow: none;
   color: #ffffff;
+  border: none;
 }
 
 .button--primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 20px rgba(0, 122, 255, 0.3);
+  background: var(--ifm-color-primary-dark);
   color: #ffffff;
 }
 
@@ -306,40 +317,40 @@ main[class*='docMainContainer'] > .container {
 
 /* Footer improvements */
 .footer {
-  background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.02) 100%);
-  /* Light mode: footer background is transparent, so force dark text for readability */
-  --ifm-footer-link-color: #4b5563;
+  background: #111111;
+  --ifm-footer-background-color: #111111;
+  --ifm-footer-link-color: #d4d4d4;
+  padding-top: 3.5rem;
 }
 
 [data-theme='dark'] .footer {
-  background: linear-gradient(180deg, transparent 0%, rgba(255, 255, 255, 0.02) 100%);
-  /* Dark mode: background is dark, so use light text */
-  --ifm-footer-link-color: rgba(255, 255, 255, 0.7);
+  background: #0a0a0a;
+  --ifm-footer-link-color: #d4d4d4;
 }
 
 .footer__title {
   font-weight: 700;
-  color: var(--ifm-color-primary);
+  color: #ffffff;
 }
 
 .footer__copyright {
-  color: #4b5563;
+  color: #a3a3a3;
 }
 
 [data-theme='dark'] .footer__copyright {
-  color: rgba(255, 255, 255, 0.6);
+  color: #a3a3a3;
 }
 
 .footer .footer__link-item {
-  color: #4b5563;
+  color: #d4d4d4;
 }
 
 .footer .footer__link-item:hover {
-  color: #111827;
+  color: #ffffff;
 }
 
 [data-theme='dark'] .footer .footer__link-item {
-  color: rgba(255, 255, 255, 0.7);
+  color: #d4d4d4;
 }
 
 [data-theme='dark'] .footer .footer__link-item:hover {

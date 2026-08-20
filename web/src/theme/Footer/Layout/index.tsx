@@ -23,7 +23,7 @@ export default function FooterLayout({
             <img src="/assets/combined-horizontal.png" alt="Treq" />
           </div>
           <p>
-            Treq is a desktop Stacking Agent Development Environment (ADE).
+            Isolates each agent in its own workspace and rebases stacked PRs when the base moves.
           </p>
         </div>
         <div className={styles.footerLinks}>{links}</div>

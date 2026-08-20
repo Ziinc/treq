@@ -1,4 +1,4 @@
-import type { PrCiStatus, PrInfo } from "../../src/lib/api-types";
+import type { GhReviewThread, PrCiStatus, PrInfo } from "../../src/lib/api-types";
 import {
   MARKETING_BRANCH,
   SIBLING_BRANCHES,
@@ -96,6 +96,56 @@ export function marketingPrByBranch(): Record<string, PrInfo | null> {
   };
 }
 
+export function marketingGhPullRequests() {
+  return Object.values(marketingPrByBranch())
+    .filter((item): item is PrInfo => item !== null)
+    .map((item) => ({
+      number: item.number,
+      title: item.title,
+      state: item.state,
+      url: item.url,
+      body: null,
+      author: { login: "octocat", avatar_url: null },
+      labels: [],
+      head_ref_name: item.head_ref_name,
+      base_ref_name: item.base_ref_name,
+      merge_state_status: item.merge_state_status,
+      created_at: "2026-08-01T10:00:00Z",
+      updated_at: "2026-08-12T10:00:00Z",
+      comments: [],
+      is_draft: item.is_draft ?? false,
+    }));
+}
+
+export function marketingGhIssues() {
+  return [
+    {
+      number: 77,
+      title: "Empty event payloads drop the Discord body",
+      state: "OPEN",
+      url: "https://github.com/lorem-ipsum/event-bus/issues/77",
+      body: "Create a workspace for this fix.",
+      author: { login: "alice", avatar_url: null },
+      labels: [],
+      created_at: "2026-08-10T10:00:00Z",
+      updated_at: "2026-08-10T10:00:00Z",
+      comments: null,
+    },
+    {
+      number: 81,
+      title: "Document retry/backoff for ingest",
+      state: "OPEN",
+      url: "https://github.com/lorem-ipsum/event-bus/issues/81",
+      body: null,
+      author: { login: "bob", avatar_url: null },
+      labels: [],
+      created_at: "2026-08-11T10:00:00Z",
+      updated_at: "2026-08-11T10:00:00Z",
+      comments: null,
+    },
+  ];
+}
+
 export function marketingCiByBranch(): Record<string, PrCiStatus | null> {
   return {
     [STACK_PARENT_BRANCH]: ci(),
@@ -158,4 +208,29 @@ export function marketingCiByBranch(): Record<string, PrCiStatus | null> {
     }),
     [SIBLING_BRANCHES[1]]: ci(),
   };
+}
+
+/** Resolved GitHub review thread on the marketing client.ts commit. */
+export function marketingReviewThreads(): GhReviewThread[] {
+  return [
+    {
+      id: "PRRT_client_stringify",
+      is_resolved: true,
+      is_outdated: false,
+      path: "packages/web/src/lib/client.ts",
+      line: 7,
+      diff_side: "RIGHT",
+      comments: [
+        {
+          id: "PRRC_client_stringify",
+          body: "JSON.stringify is the right fallback when event_message is empty.",
+          author: { login: "octocat", avatar_url: null },
+          created_at: "2026-08-12T14:22:00Z",
+          diff_hunk:
+            "@@ -0,0 +1,14 @@\n+import type { EventBody } from \"../../../api/src/schema\";\n+\n+export async function postEvent(body: EventBody): Promise<Response> {\n+  const message =\n+    typeof body.event_message === \"string\" && body.event_message.length > 0\n+      ? body.event_message\n+      : JSON.stringify(body);",
+          url: "https://github.com/lorem-ipsum/event-bus/pull/418#discussion_r1",
+        },
+      ],
+    },
+  ];
 }

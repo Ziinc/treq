@@ -477,6 +477,7 @@ export const ChangesDiffViewer = memo(
       return (
         <div
           className="flex h-full overflow-hidden"
+          data-testid="changes-diff-viewer"
           onClick={handleBackgroundClick}
         >
           <FileSidebar
