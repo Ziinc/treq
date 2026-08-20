@@ -37,6 +37,7 @@ export const CommentEditInput: React.FC<CommentEditInputProps> = memo(
         if (e.key === "Escape") {
           onCancel();
         } else if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+          e.preventDefault();
           handleSave();
         }
       },
