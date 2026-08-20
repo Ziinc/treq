@@ -471,25 +471,25 @@ export function SendAssetLightbox({
         />
       </div>
       <AlertDialog open={discardOpen} onOpenChange={setDiscardOpen}>
-          <AlertDialogContent data-testid="treq-send-unsaved-dialog">
-            <AlertDialogHeader>
-              <AlertDialogTitle>Discard unsent comments?</AlertDialogTitle>
-              <AlertDialogDescription>
-                You have review comments that have not been sent to the agent.
-                Close anyway and lose them?
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Keep reviewing</AlertDialogCancel>
-              <AlertDialogAction
-                data-testid="treq-send-unsaved-discard"
-                onClick={onClose}
-              >
-                Discard comments
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <AlertDialogContent data-testid="treq-send-unsaved-dialog">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard unsent comments?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have review comments that have not been sent to the agent.
+              Close anyway and lose them?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep reviewing</AlertDialogCancel>
+            <AlertDialogAction
+              data-testid="treq-send-unsaved-discard"
+              onClick={onClose}
+            >
+              Discard comments
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
