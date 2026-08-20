@@ -14,6 +14,8 @@ on:
       - "package.json"
       - "package-lock.json"
       - "vitest*.config.ts"
+      - "eslint.config.ts"
+      - "knip.json"
       - ".github/workflows/ci.yml"
 
 jobs:
@@ -208,6 +210,7 @@ jobs:
             npm run check
             npm run check:format
             npm run lint
+            npm run knip
           elif [ "${{ matrix.task }}" = "test:integration" ]; then
             npm run test:integration:run
           else
