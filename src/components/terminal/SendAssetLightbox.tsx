@@ -425,7 +425,7 @@ export function SendAssetLightbox({
     >
       <button
         type="button"
-        aria-label="Close preview"
+        aria-label="Close preview backdrop"
         className="absolute inset-0 cursor-default bg-black/55 backdrop-blur-md"
         onClick={requestClose}
       />

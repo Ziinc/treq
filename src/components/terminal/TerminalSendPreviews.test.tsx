@@ -117,8 +117,11 @@ describe("TerminalSendPreviews", () => {
       /bg-zinc-900\/\d+/,
     );
     expect(screen.getByTestId("treq-send-preview-lightbox").className).toMatch(
-      /bg-black\/\d+/,
+      /fixed inset-0/,
     );
+    expect(
+      screen.getByRole("button", { name: "Close preview backdrop" }).className,
+    ).toMatch(/bg-black\/\d+/);
     expect(screen.queryByTestId("treq-send-preview-modal")).toBeNull();
     expect(api.readFile).toHaveBeenCalledWith("/tmp/repo/.treq/send/note.txt");
   });
