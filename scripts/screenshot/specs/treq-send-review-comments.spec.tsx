@@ -125,7 +125,7 @@ it("captures attachment review comments in the send lightbox", async () => {
     expectations: [
       "The lightbox shows review-note.txt with numbered lines and a saved inline comment 'Rename beta' under line 2.",
       "A review comment input sits next to the copy/reveal/close toolbar above the text.",
-      "No zoom controls are shown for the text asset.",
+      "The text panel is fully opaque; only the lightbox backdrop behind it is dimmed.",
     ],
   });
 
@@ -151,9 +151,26 @@ it("captures attachment review comments in the send lightbox", async () => {
     expect(screen.queryByTestId("treq-send-preview-lightbox")).toBeNull();
   });
 
+  await user.hover(
+    screen
+      .getByTestId("terminal-send-preview-qa-review-text")
+      .closest('[data-slot="attachment"]') as HTMLElement,
+  );
+  await user.click(screen.getByTestId("terminal-send-dismiss-qa-review-text"));
+  await waitFor(() => {
+    expect(
+      screen.queryByTestId("terminal-send-preview-qa-review-text"),
+    ).toBeNull();
+  });
+
   await user.click(
     await screen.findByTestId("terminal-send-preview-qa-review-image"),
   );
+  await screen.findByTestId("treq-send-preview-lightbox");
+  expect(screen.getByTestId("treq-send-preview-header").textContent).toContain(
+    "review-shot.svg",
+  );
+  expect(screen.queryByTestId("treq-send-text-preview")).toBeNull();
   const surface = await screen.findByTestId("treq-send-highlight-surface");
   vi.spyOn(surface, "getBoundingClientRect").mockReturnValue({
     x: 0,

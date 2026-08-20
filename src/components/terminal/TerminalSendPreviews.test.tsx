@@ -107,6 +107,15 @@ describe("TerminalSendPreviews", () => {
         screen.getByTestId("treq-send-text-preview").textContent,
       ).toContain("hello from send");
     });
+    expect(screen.getByTestId("treq-send-text-preview").className).toContain(
+      "bg-zinc-950",
+    );
+    expect(screen.getByTestId("treq-send-text-preview").className).not.toMatch(
+      /bg-zinc-950\/\d+/,
+    );
+    expect(screen.getByTestId("treq-send-preview-lightbox").className).toMatch(
+      /bg-black\/\d+/,
+    );
     expect(screen.queryByTestId("treq-send-preview-modal")).toBeNull();
     expect(api.readFile).toHaveBeenCalledWith("/tmp/repo/.treq/send/note.txt");
   });
