@@ -333,10 +333,7 @@ export function SendAssetLightbox({
 
   const lightboxControls = (
     <div className="flex max-w-full flex-wrap items-center justify-center gap-2">
-      <div
-        className="flex shrink-0 items-center gap-1 rounded-full border border-white/15 bg-black/40 p-1 shadow-lg backdrop-blur"
-        onClick={(event) => event.stopPropagation()}
-      >
+      <div className="flex shrink-0 items-center gap-1 rounded-full border border-white/15 bg-black/40 p-1 shadow-lg backdrop-blur">
         {showingImage && (
           <>
             <Button
@@ -406,11 +403,7 @@ export function SendAssetLightbox({
           <X className="h-4 w-4" />
         </Button>
       </div>
-      <form
-        className="min-w-56 max-w-md flex-1"
-        onSubmit={onReviewSubmit}
-        onClick={(event) => event.stopPropagation()}
-      >
+      <form className="min-w-56 max-w-md flex-1" onSubmit={onReviewSubmit}>
         <Input
           value={generalComment}
           onChange={(event) => setGeneralComment(event.target.value)}
@@ -428,13 +421,17 @@ export function SendAssetLightbox({
   return (
     <div
       data-testid="treq-send-preview-lightbox"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-md"
-      onClick={requestClose}
+      className="fixed inset-0 z-50 flex items-center justify-center"
     >
+      <button
+        type="button"
+        aria-label="Close preview"
+        className="absolute inset-0 cursor-default bg-black/55 backdrop-blur-md"
+        onClick={requestClose}
+      />
       <div
         data-testid="treq-send-preview-carousel-shell"
-        className="relative min-w-[75vw] w-[90vw] px-3"
-        onClick={(event) => event.stopPropagation()}
+        className="relative z-10 min-w-[75vw] w-[90vw] px-3"
       >
         <div
           data-testid="treq-send-preview-header"
@@ -473,12 +470,8 @@ export function SendAssetLightbox({
           onToggleImageZoom={toggleImageZoom}
         />
       </div>
-      <div onClick={(event) => event.stopPropagation()}>
-        <AlertDialog open={discardOpen} onOpenChange={setDiscardOpen}>
-          <AlertDialogContent
-            data-testid="treq-send-unsaved-dialog"
-            onClick={(event) => event.stopPropagation()}
-          >
+      <AlertDialog open={discardOpen} onOpenChange={setDiscardOpen}>
+          <AlertDialogContent data-testid="treq-send-unsaved-dialog">
             <AlertDialogHeader>
               <AlertDialogTitle>Discard unsent comments?</AlertDialogTitle>
               <AlertDialogDescription>
@@ -497,7 +490,6 @@ export function SendAssetLightbox({
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-      </div>
     </div>
   );
 }
