@@ -72,8 +72,6 @@ describe("Inline comment editing — save", () => {
 
     const textarea = await startEditingComment("Original comment text");
     await user.clear(textarea);
-    // Send the shortcut to the textarea. `{Meta>}` on document-level
-    // `user.keyboard` can hang under CI (Linux jsdom) until the 120s timeout.
     await user.type(textarea, "Keyboard saved text{Control>}{Enter}{/Control}");
 
     await screen.findByText("Keyboard saved text");
