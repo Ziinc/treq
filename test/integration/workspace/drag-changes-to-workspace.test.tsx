@@ -115,6 +115,10 @@ describe("Review tab - drag changes to workspace sidebar", () => {
     await user.click(await screen.findByRole("button", { name: /^Move$/ }));
 
     await waitFor(() => {
+      expect(fs.existsSync(path.join(sourcePath, fileName))).toBe(false);
+      expect(fs.existsSync(path.join(destPath, fileName))).toBe(true);
+    });
+    await waitFor(() => {
       expect(screen.queryAllByText(fileName)).toHaveLength(0);
     });
 
@@ -179,6 +183,12 @@ describe("Review tab - drag changes to workspace sidebar", () => {
     await screen.findByText(/Move 2 files to feat\/multi-dest\?/);
     await user.click(await screen.findByRole("button", { name: /^Move$/ }));
 
+    await waitFor(() => {
+      expect(fs.existsSync(path.join(sourcePath, "a.txt"))).toBe(false);
+      expect(fs.existsSync(path.join(sourcePath, "b.txt"))).toBe(false);
+      expect(fs.existsSync(path.join(destPath, "a.txt"))).toBe(true);
+      expect(fs.existsSync(path.join(destPath, "b.txt"))).toBe(true);
+    });
     await waitFor(() => {
       expect(screen.queryAllByText("a.txt")).toHaveLength(0);
       expect(screen.queryAllByText("b.txt")).toHaveLength(0);

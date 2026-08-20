@@ -74,7 +74,7 @@ describe("readonly git submodules", () => {
       expect(
         screen.getByRole("checkbox", { name: "Sync vendor/lib" }),
       ).toBeChecked();
+      expect(fs.existsSync(path.join(repoPath, "vendor/lib/.git"))).toBe(true);
     });
-    expect(fs.existsSync(path.join(repoPath, "vendor/lib/.git"))).toBe(true);
   });
 });

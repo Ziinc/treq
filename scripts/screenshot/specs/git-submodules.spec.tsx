@@ -34,7 +34,10 @@ it("captures nested submodule path with GitHub-style pin and Sync toggle", async
     { cwd: repoPath, encoding: "utf8" },
   );
   git(repoPath, ["commit", "-m", "add submodule"]);
-  fs.rmSync(path.join(repoPath, "vendor/lib"), { recursive: true, force: true });
+  fs.rmSync(path.join(repoPath, "vendor/lib"), {
+    recursive: true,
+    force: true,
+  });
   openRepo(repoPath);
 
   const user = userEvent.setup();
@@ -62,6 +65,7 @@ it("captures nested submodule path with GitHub-style pin and Sync toggle", async
     expect(
       screen.getByRole("checkbox", { name: "Sync vendor/lib" }),
     ).toBeChecked();
+    expect(fs.existsSync(path.join(repoPath, "vendor/lib/.git"))).toBe(true);
   });
 
   await captureDocument(document, {
