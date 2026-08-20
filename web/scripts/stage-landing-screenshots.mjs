@@ -8,24 +8,24 @@
  * 3. If a landing crop is still missing, copy the hero so /img/landing/*.png
  *    never 404s when capture did not run.
  */
-import fs from 'node:fs';
-import path from 'node:path';
-import {fileURLToPath} from 'node:url';
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const webRoot = path.join(__dirname, '..');
-const repoRoot = path.join(webRoot, '..');
-const destImg = path.join(webRoot, 'static', 'img');
-const destLanding = path.join(destImg, 'landing');
-const destHero = path.join(destImg, 'code.png');
-const committedHero = path.join(repoRoot, 'assets', 'screenshots', 'code.png');
-const listPath = path.join(webRoot, 'src', 'data', 'landing-screenshots.json');
-const names = JSON.parse(fs.readFileSync(listPath, 'utf8'));
+const webRoot = path.join(__dirname, "..");
+const repoRoot = path.join(webRoot, "..");
+const destImg = path.join(webRoot, "static", "img");
+const destLanding = path.join(destImg, "landing");
+const destHero = path.join(destImg, "code.png");
+const committedHero = path.join(repoRoot, "assets", "screenshots", "code.png");
+const listPath = path.join(webRoot, "src", "data", "landing-screenshots.json");
+const names = JSON.parse(fs.readFileSync(listPath, "utf8"));
 const srcRoot = process.argv[2];
 
 function walk(dir, acc = []) {
   if (!fs.existsSync(dir)) return acc;
-  for (const ent of fs.readdirSync(dir, {withFileTypes: true})) {
+  for (const ent of fs.readdirSync(dir, { withFileTypes: true })) {
     const next = path.join(dir, ent.name);
     if (ent.isDirectory()) walk(next, acc);
     else acc.push(next);
@@ -34,11 +34,11 @@ function walk(dir, acc = []) {
 }
 
 function copyFile(from, to) {
-  fs.mkdirSync(path.dirname(to), {recursive: true});
+  fs.mkdirSync(path.dirname(to), { recursive: true });
   fs.copyFileSync(from, to);
 }
 
-fs.mkdirSync(destLanding, {recursive: true});
+fs.mkdirSync(destLanding, { recursive: true });
 
 function findNamed(root, filename) {
   return walk(root).find((file) => path.basename(file) === filename);
@@ -46,7 +46,7 @@ function findNamed(root, filename) {
 
 let fromArtifact = 0;
 if (srcRoot) {
-  const hero = findNamed(srcRoot, 'code.png');
+  const hero = findNamed(srcRoot, "code.png");
   if (hero) {
     copyFile(hero, destHero);
     fromArtifact += 1;
