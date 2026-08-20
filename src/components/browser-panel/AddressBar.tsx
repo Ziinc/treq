@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { MousePointerClick, RotateCw, Send } from "lucide-react";
+import { useEffect, useState } from "react";
+import { MousePointerClick, RotateCw } from "lucide-react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { cn } from "../../lib/utils";
@@ -26,18 +26,18 @@ export function AddressBar({
 	const isValid =
 		draft.trim().length === 0 || isAllowedBrowserUrl(draft.trim());
 
-	const handleSubmit = (event: React.FormEvent) => {
-		event.preventDefault();
+	useEffect(() => {
+		setDraft(url);
+	}, [url]);
+
+	const handleNavigate = () => {
 		const trimmed = draft.trim();
 		if (!trimmed || !isAllowedBrowserUrl(trimmed)) return;
 		onNavigate(trimmed);
 	};
 
 	return (
-		<form
-			className="flex items-center gap-2 border-b px-3 py-2"
-			onSubmit={handleSubmit}
-		>
+		<div className="flex items-center gap-2 border-b px-3 py-2">
 			<Button
 				type="button"
 				variant="ghost"
@@ -51,6 +51,12 @@ export function AddressBar({
 			<Input
 				value={draft}
 				onChange={(e) => setDraft(e.target.value)}
+				onKeyDown={(e) => {
+					if (e.key === "Enter") {
+						e.preventDefault();
+						handleNavigate();
+					}
+				}}
 				placeholder="http://localhost:3000 or file:///path/to/index.html"
 				aria-label="Browser URL"
 				className={cn(
@@ -58,14 +64,6 @@ export function AddressBar({
 				)}
 				disabled={disabled}
 			/>
-			<Button
-				type="submit"
-				size="sm"
-				disabled={disabled || !draft.trim() || !isValid}
-			>
-				<Send className="w-3 h-3" />
-				Go
-			</Button>
 			<Button
 				type="button"
 				size="sm"
@@ -83,6 +81,6 @@ export function AddressBar({
 					Only http://localhost, http://127.0.0.1 and file:// URLs are supported
 				</span>
 			)}
-		</form>
+		</div>
 	);
 }

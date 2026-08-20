@@ -22,6 +22,7 @@ export function BrowserPanel({
 	workspaceId,
 	onCreateAgentWithReview,
 	onReviewSubmitted,
+	openRequest,
 }: BrowserPanelProps) {
 	const { addToast } = useToast();
 	const [url, setUrl] = useState(DEFAULT_URL);
@@ -128,6 +129,12 @@ export function BrowserPanel({
 	const handleReload = useCallback(() => {
 		handleNavigate(url);
 	}, [handleNavigate, url]);
+
+	// External navigation requests, e.g. from `treq send --browser`.
+	useEffect(() => {
+		if (!openRequest) return;
+		handleNavigate(openRequest.url);
+	}, [openRequest?.id, handleNavigate]);
 
 	const handleSubmitComment = useCallback(
 		(text: string) => {

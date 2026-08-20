@@ -59,8 +59,7 @@ async function openBrowserTab(
 async function loadPage(user: ReturnType<typeof userEvent.setup>, url: string) {
 	const input = await screen.findByLabelText(/browser url/i);
 	await user.clear(input);
-	await user.type(input, url);
-	await user.click(screen.getByRole("button", { name: /^go$/i }));
+	await user.type(input, `${url}{Enter}`);
 }
 
 async function pickElement(
@@ -112,14 +111,12 @@ describe("BrowserPanel - page review integration", () => {
 
 		const input = await screen.findByLabelText(/browser url/i);
 		await user.clear(input);
-		await user.type(input, "https://example.com");
-		expect(screen.getByRole("button", { name: /^go$/i })).toBeDisabled();
+		await user.type(input, "https://example.com{Enter}");
+		await screen.findByText(/only http:\/\/localhost/i);
 		expect(api.openBrowserWebview).not.toHaveBeenCalled();
 
 		await user.clear(input);
-		await user.type(input, "http://localhost:5173/app");
-		expect(screen.getByRole("button", { name: /^go$/i })).toBeEnabled();
-		await user.click(screen.getByRole("button", { name: /^go$/i }));
+		await user.type(input, "http://localhost:5173/app{Enter}");
 
 		await waitFor(() => {
 			expect(api.openBrowserWebview).toHaveBeenCalledWith(

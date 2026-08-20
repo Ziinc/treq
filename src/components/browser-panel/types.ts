@@ -23,6 +23,12 @@ export interface PickedElement {
 	height: number;
 }
 
+/** An externally requested navigation, e.g. from `treq send --browser`. */
+export interface BrowserOpenRequest {
+	id: string;
+	url: string;
+}
+
 export interface BrowserPanelProps {
 	repoPath?: string;
 	workspaceId?: number;
@@ -31,4 +37,5 @@ export interface BrowserPanelProps {
 		mode: "plan" | "acceptEdits",
 	) => Promise<void>;
 	onReviewSubmitted?: () => void;
+	openRequest?: BrowserOpenRequest | null;
 }

@@ -149,13 +149,12 @@ it("captures the in-app browser page review flow", async () => {
 		name: "browser-panel-review-02-invalid-url",
 		expectations: [
 			'The address bar contains "https://example.com" styled as invalid (red/destructive border) with a helper message that only localhost/127.0.0.1/file URLs are supported.',
-			'The "Go" button is disabled.',
+			"Pressing Enter with this invalid URL does not navigate.",
 		],
 	});
 
 	await user.clear(input);
-	await user.type(input, fixtureUrl);
-	await user.click(screen.getByRole("button", { name: /^go$/i }));
+	await user.type(input, `${fixtureUrl}{Enter}`);
 	await user.click(
 		await screen.findByRole("button", { name: /select element/i }),
 	);
