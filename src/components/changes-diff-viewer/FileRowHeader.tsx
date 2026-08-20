@@ -78,7 +78,7 @@ const FileRowHeader: React.FC<FileRowHeaderProps> = ({
             <span className="w-3 h-3 flex-shrink-0" />
           ) : (
             <button
-              role="button"
+              type="button"
               aria-label={
                 isCollapsed ? "Expand file diff" : "Collapse file diff"
               }

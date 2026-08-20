@@ -14,7 +14,10 @@ import preferClickByQueryRule from "./eslint-rules/prefer-click-by-query.js";
 import noBannedClassSelectorRule from "./eslint-rules/no-banned-class-selector.js";
 import requireTauriApiExportsUsedRule from "./eslint-rules/require-tauri-api-exports-used.js";
 import requireTauriApiCommandWrappersRule from "./eslint-rules/require-tauri-api-command-wrappers.js";
+import eslintReact from "@eslint-react/eslint-plugin";
 import pluginReact from "eslint-plugin-react";
+import reactHooks from "eslint-plugin-react-hooks";
+import jsxA11y from "eslint-plugin-jsx-a11y";
 import tseslint from "typescript-eslint";
 
 const ignoredGlobs = [
@@ -65,7 +68,7 @@ export default defineConfig([{
   settings: {
     react: { version: "detect" },
   },
-}, {
+}, eslintReact.configs["recommended-typescript"], eslintReact.configs["disable-conflict-eslint-plugin-react"], reactHooks.configs.flat.recommended, jsxA11y.flatConfigs.recommended, {
   rules: {
     "@typescript-eslint/no-unused-vars": [
       "error",
@@ -107,6 +110,21 @@ export default defineConfig([{
     "react/display-name": "off",
     "react/prop-types": "off",
     "react/react-in-jsx-scope": "off",
+    "react-hooks/error-boundaries": "warn",
+    "react-hooks/gating": "warn",
+    "react-hooks/globals": "warn",
+    "react-hooks/immutability": "warn",
+    "react-hooks/purity": "warn",
+    "react-hooks/preserve-manual-memoization": "warn",
+    "react-hooks/refs": "warn",
+    "react-hooks/set-state-in-effect": "warn",
+    "react-hooks/set-state-in-render": "warn",
+    "react-hooks/static-components": "warn",
+    "react-hooks/use-memo": "warn",
+    "jsx-a11y/click-events-have-key-events": "warn",
+    "jsx-a11y/no-autofocus": "warn",
+    "jsx-a11y/no-static-element-interactions": "warn",
+    "jsx-a11y/tabindex-no-positive": "warn",
     "require-atomic-updates": "error",
     "vars-on-top": "error",
   },
@@ -137,6 +155,12 @@ export default defineConfig([{
   files: ["src/hooks/useKeyboard.ts"],
   rules: {
     "max-params": "off",
+  },
+}, {
+  files: ["src/components/ui/**/*.{ts,tsx}"],
+  rules: {
+    "jsx-a11y/heading-has-content": "off",
+    "jsx-a11y/label-has-associated-control": "off",
   },
 }, {
   files: ["test/**/*.{ts,tsx}"],

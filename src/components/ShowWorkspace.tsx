@@ -172,6 +172,16 @@ interface ShowWorkspaceProps {
   queryClient?: QueryClient;
 }
 
+const StatusPip = ({ status }: { status?: string }) =>
+  status ? (
+    <span
+      className={cn(
+        "w-2 h-2 rounded-full flex-shrink-0",
+        getStatusBgColor(status),
+      )}
+    />
+  ) : null;
+
 export const ShowWorkspace = memo<ShowWorkspaceProps>(
   ({
     repositoryPath,
@@ -1276,17 +1286,6 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 
     // Display all files in the list
     const displayedEntries = rootEntries;
-
-    // Status pip component for file/directory indicators
-    const StatusPip = ({ status }: { status?: string }) =>
-      status ? (
-        <span
-          className={cn(
-            "w-2 h-2 rounded-full flex-shrink-0",
-            getStatusBgColor(status),
-          )}
-        />
-      ) : null;
 
     const executionPanel = workingDirectory ? (
       <div className="flex flex-col h-full">
