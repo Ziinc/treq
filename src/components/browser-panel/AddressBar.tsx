@@ -38,32 +38,36 @@ export function AddressBar({
 
 	return (
 		<div className="flex items-center gap-2 border-b px-3 py-2">
-			<Button
-				type="button"
-				variant="ghost"
-				size="icon"
-				aria-label="Reload page"
-				onClick={onReload}
-				disabled={disabled}
-			>
-				<RotateCw className="w-4 h-4" />
-			</Button>
-			<Input
-				value={draft}
-				onChange={(e) => setDraft(e.target.value)}
-				onKeyDown={(e) => {
-					if (e.key === "Enter") {
-						e.preventDefault();
-						handleNavigate();
-					}
-				}}
-				placeholder="http://localhost:3000 or file:///path/to/index.html"
-				aria-label="Browser URL"
-				className={cn(
-					!isValid && "border-destructive focus-visible:ring-destructive",
-				)}
-				disabled={disabled}
-			/>
+			<div className="relative flex-1">
+				<Input
+					value={draft}
+					onChange={(e) => setDraft(e.target.value)}
+					onKeyDown={(e) => {
+						if (e.key === "Enter") {
+							e.preventDefault();
+							handleNavigate();
+						}
+					}}
+					placeholder="http://localhost:3000 or file:///path/to/index.html"
+					aria-label="Browser URL"
+					className={cn(
+						"pr-8",
+						!isValid && "border-destructive focus-visible:ring-destructive",
+					)}
+					disabled={disabled}
+				/>
+				<Button
+					type="button"
+					variant="ghost"
+					size="icon-xs"
+					aria-label="Reload page"
+					onClick={onReload}
+					disabled={disabled}
+					className="absolute right-1 top-1/2 -translate-y-1/2"
+				>
+					<RotateCw className="w-3.5 h-3.5" />
+				</Button>
+			</div>
 			<Button
 				type="button"
 				size="sm"
