@@ -159,6 +159,9 @@ export function ReviewActionBar({
                       onClick={handleCopyReview}
                       className="gap-2"
                       disabled={sendingReview}
+                      aria-label={
+                        copiedReview ? "Copied review" : "Copy review"
+                      }
                     >
                       {copiedReview ? (
                         <>

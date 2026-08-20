@@ -76,9 +76,7 @@ describe("Copy button in Finish Review popover", () => {
   });
 
   it("should copy review to clipboard when clicked", async () => {
-    const clipboardSpy = vi
-      .spyOn(navigator.clipboard, "writeText")
-      .mockResolvedValue();
+    const clipboardSpy = vi.spyOn(navigator.clipboard, "writeText");
 
     await setupReviewMode(user, "feat/copy-clipboard");
 
@@ -93,16 +91,13 @@ describe("Copy button in Finish Review popover", () => {
     await user.click(findReviewCopyButton());
 
     await waitFor(() => {
-      expect(clipboardSpy).toHaveBeenCalled();
-      expect(clipboardSpy.mock.calls[0][0]).toContain("Test comment");
+      expect(clipboardSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Test comment"),
+      );
     });
-
-    clipboardSpy.mockRestore();
   });
 
   it("should show 'Copied' state after copying", async () => {
-    vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
-
     await setupReviewMode(user, "feat/copied-state");
 
     const finishButton = await screen.findByRole("button", {
@@ -115,13 +110,7 @@ describe("Copy button in Finish Review popover", () => {
     });
     await user.click(findReviewCopyButton());
 
-    await waitFor(() => {
-      const copiedButtons = screen.getAllByRole("button", { name: /copied/i });
-      const reviewCopiedButton = copiedButtons.find((btn) =>
-        btn.textContent?.includes("Copied"),
-      );
-      expect(reviewCopiedButton).toBeInTheDocument();
-    });
+    await screen.findByRole("button", { name: /^copied review$/i });
   });
 
   it("should show close button at top-right of popover", async () => {

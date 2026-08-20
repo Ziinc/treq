@@ -17,8 +17,9 @@ type UseAutoUpdateOptions = {
 
 function isAutoUpdateDisabledInTests(): boolean {
   return (
-    typeof process !== "undefined" &&
-    process.env.TREQ_DISABLE_AUTO_UPDATE === "1"
+    import.meta.env.MODE === "test" ||
+    (typeof process !== "undefined" &&
+      process.env.TREQ_DISABLE_AUTO_UPDATE === "1")
   );
 }
 
@@ -150,7 +151,7 @@ export function useAutoUpdate(options: UseAutoUpdateOptions = {}) {
 
   // Help → Check for Updates… (manual, with feedback toasts).
   useEffect(() => {
-    if (!listenMenu) {
+    if (!listenMenu || isAutoUpdateDisabledInTests()) {
       return;
     }
     let unlisten: (() => void) | undefined;

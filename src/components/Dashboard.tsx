@@ -201,7 +201,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   const queryClient = useQueryClient();
   const { addToast } = useToast();
-  useAutoUpdate();
+  useAutoUpdate({
+    autoCheck: import.meta.env.MODE !== "test",
+    listenMenu: import.meta.env.MODE !== "test",
+  });
   const handleReturnToDashboard = useCallback(() => {
     // Navigate to main repo ShowWorkspace > Code
     setSelectedWorkspace(null);
