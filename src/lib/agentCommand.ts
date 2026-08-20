@@ -51,36 +51,42 @@ export const buildTreqAgentSystemPrompt = ({
   ].join(" ");
 };
 
-/** Build per-session Claude sandbox settings for the resolved working directory. */
-export const buildClaudeSandboxSettings = ({
+/** Build per-session Claude filesystem allow/deny lists for the working directory. */
+export const buildClaudeSandboxFilesystemSettings = ({
   workspacePath,
   repoPath,
 }: AgentPathContext) => ({
-  sandbox: {
-    enabled: true,
-    failIfUnavailable: false,
-    allowUnsandboxedCommands: false,
-    filesystem: workspacePath
-      ? {
-          denyRead: [repoPath],
-          allowRead: [workspacePath],
-          allowWrite: [workspacePath],
-        }
-      : {
-          allowRead: [repoPath],
-          allowWrite: [repoPath],
-        },
-  },
+  filesystem: workspacePath
+    ? {
+        denyRead: [repoPath],
+        allowRead: [workspacePath],
+        allowWrite: [workspacePath],
+      }
+    : {
+        allowRead: [repoPath],
+        allowWrite: [repoPath],
+      },
 });
 
-/** Overlay Treq sandbox config onto a copy of `.claude/settings.local.json`. */
+/** Overlay Treq filesystem restrictions onto a copy of `.claude/settings.local.json`. */
 export const mergeClaudeLocalSettings = (
   existing: Record<string, unknown> | null,
-  sandboxSettings: ReturnType<typeof buildClaudeSandboxSettings>,
-): Record<string, unknown> => ({
-  ...existing,
-  sandbox: sandboxSettings.sandbox,
-});
+  filesystemSettings: ReturnType<typeof buildClaudeSandboxFilesystemSettings>,
+): Record<string, unknown> => {
+  const existingSandbox =
+    existing?.sandbox &&
+    typeof existing.sandbox === "object" &&
+    !Array.isArray(existing.sandbox)
+      ? (existing.sandbox as Record<string, unknown>)
+      : {};
+  return {
+    ...existing,
+    sandbox: {
+      ...existingSandbox,
+      filesystem: filesystemSettings.filesystem,
+    },
+  };
+};
 
 export const claudeLocalSettingsPath = (cwd: string): string =>
   `${cwd.replace(/\/+$/, "")}/.claude/settings.local.json`;

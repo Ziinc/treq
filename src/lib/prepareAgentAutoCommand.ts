@@ -1,7 +1,7 @@
 import {
   type AgentKind,
   buildAgentAutoCommand,
-  buildClaudeSandboxSettings,
+  buildClaudeSandboxFilesystemSettings,
   buildTreqAgentSystemPrompt,
   claudeLocalSettingsPath,
   cursorPromptFileContents,
@@ -62,7 +62,7 @@ export const prepareAgentAutoCommand = async ({
     settingsJson = JSON.stringify(
       mergeClaudeLocalSettings(
         existing,
-        buildClaudeSandboxSettings(agentPathContext),
+        buildClaudeSandboxFilesystemSettings(agentPathContext),
       ),
       null,
       2,

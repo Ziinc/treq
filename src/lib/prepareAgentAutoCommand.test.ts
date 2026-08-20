@@ -41,6 +41,29 @@ describe("prepareAgentAutoCommand", () => {
     vi.mocked(api.writeAgentCliFiles).mockReset();
   });
 
+  it("writes filesystem restrictions without forcing sandbox enablement", async () => {
+    vi.mocked(api.writeAgentCliFiles).mockResolvedValueOnce(writtenFiles);
+
+    await prepareAgentAutoCommand({
+      agent: "claude",
+      workspacePath: "/ws",
+      repoPath: "/repo",
+      sessionModel: null,
+      treqBinDir: null,
+    });
+
+    const settingsJson = vi.mocked(api.writeAgentCliFiles).mock.calls[0]?.[1];
+    expect(JSON.parse(settingsJson as string)).toEqual({
+      sandbox: {
+        filesystem: {
+          denyRead: ["/repo"],
+          allowRead: ["/ws"],
+          allowWrite: ["/ws"],
+        },
+      },
+    });
+  });
+
   it("retries without cwd when writing project skills fails", async () => {
     vi.mocked(api.writeAgentCliFiles)
       .mockRejectedValueOnce(
