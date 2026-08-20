@@ -251,7 +251,8 @@ test.describe("Skill detail page on mobile", () => {
     // The navbar collapses to a hamburger at this width.
     await page.getByLabel("Toggle navigation bar").click();
     await page
-      .getByRole("link", { name: "Skills" })
+      .getByRole("navigation", { name: "Main" })
+      .getByRole("link", { name: "Skills", exact: true })
       .filter({ visible: true })
       .click();
     await page
