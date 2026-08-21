@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import useSWR from "swr";
 import { ghListPrReviewThreads } from "../../../lib/api";
 import type { GhReviewThread } from "../../../lib/api-types";
 import {
@@ -34,19 +34,21 @@ export function useGithubReviewThreads({
 
   const enabled = Boolean(remoteInfo) && Boolean(prInfo);
 
-  const { data: threads = [] } = useQuery<GhReviewThread[]>({
-    queryKey: ["gh-pr-review-threads", remoteInfo?.full_name, prInfo?.number],
-    queryFn: () =>
+  const { data: threads = [] } = useSWR<GhReviewThread[]>(
+    enabled
+      ? ["gh-pr-review-threads", remoteInfo?.full_name, prInfo?.number]
+      : null,
+    () =>
       ghListPrReviewThreads(
         remoteInfo!.owner,
         remoteInfo!.repo,
         prInfo!.number,
       ),
-    enabled,
-    staleTime: 60_000,
-    // Low-urgency read; keep off the ShowWorkspace hot path cadence.
-    refetchInterval: 2 * 60_000,
-  });
+    {
+      dedupingInterval: 60_000,
+      refreshInterval: 2 * 60_000,
+    },
+  );
 
   const { threadsByLineKey, unplacedThreadsByFile } = useMemo(() => {
     const hunkMaps: Array<Map<string, FileHunksData>> = [allFileHunks];

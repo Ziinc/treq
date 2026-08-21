@@ -1,6 +1,7 @@
 /* eslint-disable max-lines, max-params, max-nested-callbacks, no-await-in-loop */
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import useSWR from "swr";
+import { invalidateQueries } from "../lib/swr-cache";
 import { ask } from "@tauri-apps/plugin-dialog";
 import {
   Archive,
@@ -201,7 +202,6 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
       new Set(),
     );
     const { addToast } = useToast();
-    const queryClient = useQueryClient();
     const [shiftingToNow, setShiftingToNow] = useState(false);
 
     // Edit description dialog state
@@ -221,10 +221,8 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
     }, []);
 
     const handleDescriptionEdited = useCallback(() => {
-      queryClient.invalidateQueries({
-        queryKey: ["commit-diff-viewer-commits", repoPath, workspaceId],
-      });
-    }, [queryClient, repoPath, workspaceId]);
+      void invalidateQueries(["commit-diff-viewer-commits", repoPath, workspaceId]);
+    }, [repoPath, workspaceId]);
 
     const handleShiftToNow = useCallback(async () => {
       if (workspaceId == null || shiftingToNow) return;
@@ -264,20 +262,20 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
 
     const {
       data: commitsResult,
-      isPending: loading,
-      isFetching,
-    } = useQuery({
-      queryKey: [
-        "commit-diff-viewer-commits",
-        repoPath,
-        workspaceId,
-        isHomeRepo,
-        targetBranchLimit,
-        homeRepoLimit,
-      ],
-      enabled: Boolean(repoPath),
-      placeholderData: (previousData) => previousData,
-      queryFn: () => {
+      isLoading: loading,
+      isValidating: isFetching,
+    } = useSWR(
+      repoPath
+        ? [
+            "commit-diff-viewer-commits",
+            repoPath,
+            workspaceId,
+            isHomeRepo,
+            targetBranchLimit,
+            homeRepoLimit,
+          ]
+        : null,
+      () => {
         if (isHomeRepo) {
           return listCommits(
             repoPath,
@@ -294,7 +292,8 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
           targetBranchLimit > 10 ? targetBranchLimit : undefined,
         );
       },
-    });
+      { keepPreviousData: true },
+    );
     const loadingMore = isFetching && !loading;
 
     const {
@@ -532,13 +531,11 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
                       next.delete(commit.commit_id);
                       return next;
                     });
-                    await queryClient.invalidateQueries({
-                      queryKey: [
+                    await invalidateQueries([
                         "commit-diff-viewer-commits",
                         repoPath,
                         workspaceId,
-                      ],
-                    });
+                      ]);
                     addToast({
                       title: "Restored",
                       description: `Restored commit ${commit.short_id}`,
@@ -567,7 +564,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
           });
         }
       },
-      [repoPath, workspaceId, onCommitAbandoned, addToast, queryClient],
+      [repoPath, workspaceId, onCommitAbandoned, addToast],
     );
 
     const handleStashCommit = useCallback(
@@ -593,12 +590,8 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
             onCommitAbandoned?.();
           }, REMOVE_ANIMATION_MS);
 
-          void queryClient.invalidateQueries({
-            queryKey: ["stashes", repoPath],
-          });
-          void queryClient.invalidateQueries({
-            queryKey: ["commit-diff-viewer-commits", repoPath, workspaceId],
-          });
+          void invalidateQueries(["stashes", repoPath]);
+          void invalidateQueries(["commit-diff-viewer-commits", repoPath, workspaceId]);
 
           addToast({
             title: "Commit stashed",
@@ -620,7 +613,6 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
         onCommitAbandoned,
         onCommitStashed,
         addToast,
-        queryClient,
       ],
     );
 

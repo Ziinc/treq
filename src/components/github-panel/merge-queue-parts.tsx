@@ -1,5 +1,5 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
-import type { UseMutationResult } from "@tanstack/react-query";
+import type { MutationResult } from "../../hooks/useMutation";
 import {
   ArrowDown,
   Check,
@@ -265,7 +265,7 @@ export function MergeQueueDisabled({
 
 interface QueueStackBlockProps {
   stack: QueueStack;
-  dequeueBranches: UseMutationResult<string[], Error, string[]>;
+  dequeueBranches: MutationResult<string[], string[]>;
   /** History stacks are read-only — no Remove controls. */
   showRemove?: boolean;
 }

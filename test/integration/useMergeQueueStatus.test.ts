@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { SWRConfig } from "swr";
+import { SWRMutateScope, testSWRConfig } from "../../src/lib/swr-cache";
 import { renderHook, waitFor } from "@testing-library/react";
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -52,11 +53,12 @@ vi.mock("../../src/lib/api", async () => {
 });
 
 function makeWrapper() {
-  const qc = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
   return ({ children }: { children: React.ReactNode }) =>
-    React.createElement(QueryClientProvider, { client: qc }, children);
+    React.createElement(
+      SWRConfig,
+      { value: testSWRConfig },
+      React.createElement(SWRMutateScope, null, children),
+    );
 }
 
 const OPEN_PR: PrInfo = {

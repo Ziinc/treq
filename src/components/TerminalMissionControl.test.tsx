@@ -1,4 +1,5 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { SWRConfig } from "swr";
+import { SWRMutateScope, testSWRConfig } from "../lib/swr-cache";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
@@ -7,13 +8,12 @@ import type { TerminalSessionSummary } from "./terminal/types";
 import { TooltipProvider } from "./ui/tooltip";
 
 function renderMissionControl(ui: React.ReactElement) {
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
   return render(
-    <QueryClientProvider client={client}>
+    <SWRConfig value={testSWRConfig}>
+      <SWRMutateScope>
       <TooltipProvider>{ui}</TooltipProvider>
-    </QueryClientProvider>,
+      </SWRMutateScope>
+    </SWRConfig>,
   );
 }
 

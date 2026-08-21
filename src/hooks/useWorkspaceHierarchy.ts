@@ -1,11 +1,11 @@
 import { useCallback } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import {
   type Workspace,
   getWorkspaces,
   setWorkspaceTargetBranch,
 } from "../lib/api";
 import { getFullWorkspacePath } from "../lib/utils";
+import { invalidateQueries } from "../lib/swr-cache";
 import { useCreateStackedWorkspace } from "./useCreateStackedWorkspace";
 
 interface UseWorkspaceHierarchyOptions {
@@ -18,15 +18,12 @@ export function useWorkspaceHierarchy({
   repoPath,
   defaultBranch = "main",
 }: UseWorkspaceHierarchyOptions) {
-  const queryClient = useQueryClient();
   const { createStackedWorkspace } = useCreateStackedWorkspace();
 
   const invalidate = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
-    queryClient.invalidateQueries({
-      queryKey: ["workspace-statuses", repoPath],
-    });
-  }, [queryClient, repoPath]);
+    void invalidateQueries(["workspaces", repoPath]);
+    void invalidateQueries(["workspace-statuses", repoPath]);
+  }, [repoPath]);
 
   // Add a new workspace after (as a child of) the given workspace.
   const addAfter = useCallback(

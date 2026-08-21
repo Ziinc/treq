@@ -13,7 +13,7 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { useToast } from "./ui/toast";
 import { type Workspace, renameWorkspace } from "../lib/api";
-import { useQueryClient } from "@tanstack/react-query";
+import { invalidateQueries } from "../lib/swr-cache";
 
 interface RenameWorkspaceDialogProps {
   open: boolean;
@@ -38,7 +38,6 @@ export const RenameWorkspaceDialog: React.FC<RenameWorkspaceDialogProps> = ({
   } | null>(null);
   const checkTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { addToast } = useToast();
-  const queryClient = useQueryClient();
 
   // Reset state when dialog opens
   useEffect(() => {
@@ -115,8 +114,8 @@ export const RenameWorkspaceDialog: React.FC<RenameWorkspaceDialogProps> = ({
           type: "success",
         });
 
-        queryClient.invalidateQueries({ queryKey: ["workspaces"] });
-        queryClient.invalidateQueries({ queryKey: ["workspace-statuses"] });
+        void invalidateQueries(["workspaces"]);
+        void invalidateQueries(["workspace-statuses"]);
         onSuccess();
         onOpenChange(false);
         return "";

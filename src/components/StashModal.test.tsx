@@ -1,7 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, within, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { SWRConfig } from "swr";
+import { SWRMutateScope, testSWRConfig } from "../lib/swr-cache";
 import { StashModal } from "./StashModal";
 import type { StashEntry, JjRevisionDiff } from "../lib/api";
 import * as api from "../lib/api";
@@ -80,11 +81,9 @@ const emptyDiff: JjRevisionDiff = {
 function renderModal(
   props: Partial<React.ComponentProps<typeof StashModal>> = {},
 ) {
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
   return render(
-    <QueryClientProvider client={client}>
+    <SWRConfig value={testSWRConfig}>
+      <SWRMutateScope>
       <StashModal
         open
         onOpenChange={vi.fn()}
@@ -103,7 +102,8 @@ function renderModal(
         ]}
         {...props}
       />
-    </QueryClientProvider>,
+      </SWRMutateScope>
+    </SWRConfig>,
   );
 }
 

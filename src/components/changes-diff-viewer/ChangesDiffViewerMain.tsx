@@ -28,7 +28,7 @@ import { filesEqual } from "./utils";
 import { HOME_MOVE_ENDPOINT } from "../../lib/change-file-drag";
 import { stashWorkspaceChanges } from "../../lib/api";
 import { invalidateReviewChangeCount } from "../../lib/review-change-count";
-import { useQueryClient } from "@tanstack/react-query";
+import { invalidateQueries } from "../../lib/swr-cache";
 import type {
   ChangesDiffViewerProps,
   CommitInputHandle,
@@ -57,7 +57,6 @@ export const ChangesDiffViewer = memo(
     ref,
   }: ChangesDiffViewerProps) => {
     const { addToast } = useToast();
-    const queryClient = useQueryClient();
     const { fontSize: diffFontSize } = useDiffSettingsStore();
 
     const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
@@ -449,10 +448,8 @@ export const ChangesDiffViewer = memo(
         });
         await invalidateCache();
         await loadChangedFiles();
-        await invalidateReviewChangeCount(queryClient, repoPath, workspaceId);
-        await queryClient.invalidateQueries({
-          queryKey: ["stashes", repoPath],
-        });
+        await invalidateReviewChangeCount(repoPath, workspaceId);
+        await invalidateQueries(["stashes", repoPath]);
       } catch (error) {
         addToast({
           description: error instanceof Error ? error.message : String(error),
@@ -467,7 +464,6 @@ export const ChangesDiffViewer = memo(
       addToast,
       invalidateCache,
       loadChangedFiles,
-      queryClient,
     ]);
 
     const hasConflicts = actualConflictedFiles.length > 0;

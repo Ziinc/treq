@@ -1,4 +1,4 @@
-import type { QueryClient } from "@tanstack/react-query";
+import { invalidateQueries } from "./swr-cache";
 
 export function reviewChangeCountQueryKey(
   repoPath: string | undefined,
@@ -8,11 +8,10 @@ export function reviewChangeCountQueryKey(
 }
 
 export function invalidateReviewChangeCount(
-  queryClient: QueryClient,
   repoPath: string | undefined,
   workspaceId: number | null | undefined,
 ) {
-  return queryClient.invalidateQueries({
-    queryKey: reviewChangeCountQueryKey(repoPath, workspaceId ?? null),
-  });
+  return invalidateQueries([
+    ...reviewChangeCountQueryKey(repoPath, workspaceId ?? null),
+  ]);
 }

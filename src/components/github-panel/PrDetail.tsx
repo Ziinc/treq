@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import useSWR from "swr";
+import { useMutation } from "../../hooks/useMutation";
+import { invalidateQueries } from "../../lib/swr-cache";
 import {
   GitBranch,
   ListChecks,
@@ -65,20 +67,18 @@ export function PrDetailPanel({
   onClose: () => void;
   onOpenWorkspace?: (workspaceId: number) => void;
 }) {
-  const qc = useQueryClient();
   const { addToast } = useToast();
   const [commentBody, setCommentBody] = useState("");
 
-  const { data: pr, isLoading } = useQuery({
-    queryKey: ["gh-pr", repoFullName, prNumber],
-    queryFn: () => ghViewPr(repoFullName, prNumber),
-  });
+  const { data: pr, isLoading } = useSWR(
+    ["gh-pr", repoFullName, prNumber],
+    () => ghViewPr(repoFullName, prNumber),
+  );
 
-  const { data: workspaces = [] } = useQuery({
-    queryKey: ["workspaces", repoPath],
-    queryFn: () => getWorkspaces(repoPath),
-    enabled: !!repoPath,
-  });
+  const { data: workspaces = [] } = useSWR(
+    repoPath ? ["workspaces", repoPath] : null,
+    () => getWorkspaces(repoPath),
+  );
 
   const existingWorkspace = pr
     ? (workspaces.find((w) => w.branch_name === pr.head_ref_name) ?? null)
@@ -98,7 +98,7 @@ export function PrDetailPanel({
       );
     },
     onSuccess: async (result) => {
-      await qc.invalidateQueries({ queryKey: ["workspaces", repoPath] });
+      await invalidateQueries(["workspaces", repoPath]);
       addToast({
         title: result.created ? "Workspace created" : "Workspace opened",
         description: result.created
@@ -121,40 +121,32 @@ export function PrDetailPanel({
     mutationFn: () => ghCreatePrComment(repoFullName, prNumber, commentBody),
     onSuccess: () => {
       setCommentBody("");
-      void qc.invalidateQueries({
-        queryKey: ["gh-pr", repoFullName, prNumber],
-      });
+      void invalidateQueries(["gh-pr", repoFullName, prNumber]);
     },
   });
 
   const closePr = useMutation({
     mutationFn: () => ghClosePr(repoFullName, prNumber),
     onSuccess: () => {
-      void qc.invalidateQueries({
-        queryKey: ["gh-pr", repoFullName, prNumber],
-      });
-      void qc.invalidateQueries({ queryKey: ["gh-prs", repoFullName] });
+      void invalidateQueries(["gh-pr", repoFullName, prNumber]);
+      void invalidateQueries(["gh-prs", repoFullName]);
     },
   });
 
   const reopenPr = useMutation({
     mutationFn: () => ghReopenPr(repoFullName, prNumber),
     onSuccess: () => {
-      void qc.invalidateQueries({
-        queryKey: ["gh-pr", repoFullName, prNumber],
-      });
-      void qc.invalidateQueries({ queryKey: ["gh-prs", repoFullName] });
+      void invalidateQueries(["gh-pr", repoFullName, prNumber]);
+      void invalidateQueries(["gh-prs", repoFullName]);
     },
   });
 
   const setDraft = useMutation({
     mutationFn: (draft: boolean) => ghSetPrDraft(repoFullName, prNumber, draft),
     onSuccess: () => {
-      void qc.invalidateQueries({
-        queryKey: ["gh-pr", repoFullName, prNumber],
-      });
-      void qc.invalidateQueries({ queryKey: ["gh-prs", repoFullName] });
-      void qc.invalidateQueries({ queryKey: ["pr-info-gh"] });
+      void invalidateQueries(["gh-pr", repoFullName, prNumber]);
+      void invalidateQueries(["gh-prs", repoFullName]);
+      void invalidateQueries(["pr-info-gh"]);
     },
   });
 
@@ -379,12 +371,11 @@ export function CreatePrForm({
   const [body, setBody] = useState("");
   const [base, setBase] = useState("main");
   const [head, setHead] = useState("");
-  const qc = useQueryClient();
 
   const create = useMutation({
     mutationFn: () => ghCreatePr(repoFullName, title, body, base, head),
     onSuccess: (prNumber) => {
-      void qc.invalidateQueries({ queryKey: ["gh-prs", repoFullName] });
+      void invalidateQueries(["gh-prs", repoFullName]);
       onSuccess(prNumber);
     },
   });

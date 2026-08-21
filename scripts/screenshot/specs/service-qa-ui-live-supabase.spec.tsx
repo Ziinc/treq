@@ -7,7 +7,7 @@
  * updating through the real get_repo_branch_queue_statuses RPC.
  */
 import * as React from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { invalidateQueries } from "../../../src/lib/swr-cache";
 import userEvent from "@testing-library/user-event";
 import { expect, it, vi } from "vitest";
 import { SettingsPage } from "../../../src/components/SettingsPage";
@@ -147,20 +147,15 @@ function RefetchBridge({
   repoFullName: string;
   onReady: (refetch: () => Promise<void>) => void;
 }) {
-  const qc = useQueryClient();
   React.useEffect(() => {
     onReady(async () => {
-      await qc.invalidateQueries({
-        queryKey: ["repo-branch-queue-statuses-panel", repoFullName],
-      });
-      await qc.invalidateQueries({
-        queryKey: ["merge-queue-enabled", repoFullName],
-      });
-      await qc.refetchQueries({
-        queryKey: ["repo-branch-queue-statuses-panel", repoFullName],
-      });
+      await invalidateQueries([
+        "repo-branch-queue-statuses-panel",
+        repoFullName,
+      ]);
+      await invalidateQueries(["merge-queue-enabled", repoFullName]);
     });
-  }, [qc, repoFullName, onReady]);
+  }, [repoFullName, onReady]);
   return null;
 }
 

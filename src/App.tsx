@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { SWRConfig } from "swr";
 import { Router } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import { Dashboard } from "./components/Dashboard";
@@ -6,16 +6,8 @@ import { ToastProvider } from "./components/ui/toast";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { PrismThemeLoader } from "./components/PrismThemeLoader";
 import { AppStoreEffects } from "./stores/AppStoreEffects";
+import { defaultSWRConfig, SWRMutateScope } from "./lib/swr-cache";
 import "./index.css";
-
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnWindowFocus: false,
-      retry: 1,
-    },
-  },
-});
 
 function AppContent() {
   return (
@@ -44,15 +36,17 @@ function App() {
         }
       }}
     >
-      <QueryClientProvider client={queryClient}>
-        <AppStoreEffects />
-        <PrismThemeLoader />
-        <ToastProvider>
-          <Router hook={useHashLocation}>
-            <AppContent />
-          </Router>
-        </ToastProvider>
-      </QueryClientProvider>
+      <SWRConfig value={defaultSWRConfig}>
+        <SWRMutateScope>
+          <AppStoreEffects />
+          <PrismThemeLoader />
+          <ToastProvider>
+            <Router hook={useHashLocation}>
+              <AppContent />
+            </Router>
+          </ToastProvider>
+        </SWRMutateScope>
+      </SWRConfig>
     </ErrorBoundary>
   );
 }

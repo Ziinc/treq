@@ -1,4 +1,3 @@
-import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import {
   AlertCircle,
   Check,
@@ -10,6 +9,8 @@ import {
   RefreshCw,
 } from "lucide-react";
 import { useState } from "react";
+import useSWR from "swr";
+import useSWRInfinite from "swr/infinite";
 import { useLocation, useRoute } from "wouter";
 import { useAuthStore } from "../stores/authStore";
 import {
@@ -122,49 +123,62 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
   const isListTab = activeTab === "issues" || activeTab === "prs";
 
   const {
-    data: issuesData,
+    data: issuesPages,
     isLoading: issuesLoading,
-    isFetchingNextPage: issuesFetchingNext,
-    hasNextPage: issuesHasNextPage,
-    fetchNextPage: fetchNextIssues,
-    refetch: refetchIssues,
-  } = useInfiniteQuery({
-    queryKey: ["gh-issues", repoFullName, currentFilter],
-    queryFn: ({ pageParam }) =>
-      ghListIssues(repoFullName, currentFilter, GH_LIST_PAGE_SIZE, pageParam),
-    initialPageParam: 1,
-    getNextPageParam: (lastPage, _pages, lastPageParam) =>
-      lastPage.hasMore ? lastPageParam + 1 : undefined,
-    enabled: !!repoFullName && activeTab === "issues",
-  });
+    isValidating: issuesValidating,
+    size: issuesSize,
+    setSize: setIssuesSize,
+    mutate: refetchIssues,
+  } = useSWRInfinite(
+    (pageIndex, previousPageData) => {
+      if (!repoFullName || activeTab !== "issues") return null;
+      if (previousPageData && !previousPageData.hasMore) return null;
+      return ["gh-issues", repoFullName, currentFilter, pageIndex + 1] as const;
+    },
+    ([, fullName, filter, page]) =>
+      ghListIssues(fullName, filter, GH_LIST_PAGE_SIZE, page),
+  );
 
   const {
-    data: prsData,
+    data: prsPages,
     isLoading: prsLoading,
-    isFetchingNextPage: prsFetchingNext,
-    hasNextPage: prsHasNextPage,
-    fetchNextPage: fetchNextPrs,
-    refetch: refetchPrs,
-  } = useInfiniteQuery({
-    queryKey: ["gh-prs", repoFullName, currentFilter],
-    queryFn: ({ pageParam }) =>
-      ghListPrs(repoFullName, currentFilter, GH_LIST_PAGE_SIZE, pageParam),
-    initialPageParam: 1,
-    getNextPageParam: (lastPage, _pages, lastPageParam) =>
-      lastPage.hasMore ? lastPageParam + 1 : undefined,
-    enabled: !!repoFullName && activeTab === "prs",
-  });
+    isValidating: prsValidating,
+    size: prsSize,
+    setSize: setPrsSize,
+    mutate: refetchPrs,
+  } = useSWRInfinite(
+    (pageIndex, previousPageData) => {
+      if (!repoFullName || activeTab !== "prs") return null;
+      if (previousPageData && !previousPageData.hasMore) return null;
+      return ["gh-prs", repoFullName, currentFilter, pageIndex + 1] as const;
+    },
+    ([, fullName, filter, page]) =>
+      ghListPrs(fullName, filter, GH_LIST_PAGE_SIZE, page),
+  );
 
-  const issues = issuesData?.pages.flatMap((page) => page.items) ?? [];
-  const prs = prsData?.pages.flatMap((page) => page.items) ?? [];
+  const issuesFetchingNext = issuesValidating && issuesSize > 1;
+  const prsFetchingNext = prsValidating && prsSize > 1;
+  const issuesHasNextPage = Boolean(issuesPages?.at(-1)?.hasMore);
+  const prsHasNextPage = Boolean(prsPages?.at(-1)?.hasMore);
+  const fetchNextIssues = () => setIssuesSize((size) => size + 1);
+  const fetchNextPrs = () => setPrsSize((size) => size + 1);
+
+  const issues = issuesPages?.flatMap((page) => page.items) ?? [];
+  const prs = prsPages?.flatMap((page) => page.items) ?? [];
 
   const {
     data: queueEntries = [],
     isLoading: queueLoading,
-    refetch: refetchQueue,
-  } = useQuery({
-    queryKey: ["repo-branch-queue-statuses-panel", repoFullName],
-    queryFn: async () => {
+    mutate: refetchQueue,
+  } = useSWR(
+    FEATURES.mergeQueue &&
+      queueEnabled === true &&
+      repoFullName &&
+      activeTab === "merge-queue" &&
+      isPro
+      ? ["repo-branch-queue-statuses-panel", repoFullName]
+      : null,
+    async () => {
       const { data, error } = await supabase.rpc(
         "get_repo_branch_queue_statuses",
         { p_repo_full_name: repoFullName },
@@ -175,14 +189,8 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
         return a.branch_name.localeCompare(b.branch_name);
       });
     },
-    enabled:
-      FEATURES.mergeQueue &&
-      queueEnabled === true &&
-      !!repoFullName &&
-      activeTab === "merge-queue" &&
-      isPro,
-    refetchInterval: 30_000,
-  });
+    { refreshInterval: 30_000 },
+  );
 
   const isListLoading = activeTab === "issues" ? issuesLoading : prsLoading;
 

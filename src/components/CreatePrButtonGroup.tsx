@@ -1,8 +1,5 @@
-import {
-  useIsMutating,
-  useMutation,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useIsMutating, useMutation } from "../hooks/useMutation";
+import { invalidateQueries } from "../lib/swr-cache";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ChevronDown, Github, Loader2 } from "lucide-react";
 import { useState } from "react";
@@ -47,7 +44,6 @@ export function CreatePrButtonGroup({
   hasCommits,
 }: CreatePrButtonGroupProps) {
   const { addToast } = useToast();
-  const queryClient = useQueryClient();
   const { data: remoteInfo } = useGitRemoteInfo(repoPath);
   const { data: prInfo, isLoading: prInfoLoading } = usePrInfoViaGh(
     repoPath,
@@ -80,10 +76,9 @@ export function CreatePrButtonGroup({
       );
     },
   });
-  const otherCreatePrActive =
-    useIsMutating({
-      mutationKey: createPrMutationKey(repoPath, workspace.id),
-    }) > 0;
+  const otherCreatePrActive = useIsMutating(
+    createPrMutationKey(repoPath, workspace.id),
+  );
 
   if (!remoteInfo || prInfoLoading || prInfo) {
     return null;
@@ -92,10 +87,10 @@ export function CreatePrButtonGroup({
   const createPr = async (draft: boolean) => {
     try {
       const number = await createPrMutation.mutateAsync(draft);
-      await invalidatePrStatuses(queryClient, repoPath, workspace.branch_name);
+      await invalidatePrStatuses(repoPath, workspace.branch_name);
       // Broad refresh so `not_on_remote`/sync status update everywhere,
       // matching the existing manual "Push to remote" flow.
-      queryClient.invalidateQueries();
+      void invalidateQueries();
       const prUrl = `https://github.com/${remoteInfo.full_name}/pull/${number}`;
       addToast({
         title: draft ? "Draft PR created" : "Pull request created",
@@ -120,7 +115,7 @@ export function CreatePrButtonGroup({
     try {
       if (workspace.not_on_remote) {
         await pushWorkspaceToRemote(repoPath, workspace.id);
-        queryClient.invalidateQueries();
+        void invalidateQueries();
       }
       openUrl(
         buildGitHubComparePrUrl({

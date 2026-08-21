@@ -1,6 +1,12 @@
 /* eslint-disable max-lines */
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import useSWR from "swr";
+import { useMutation } from "../hooks/useMutation";
+import {
+  clearSWRCache,
+  fetchAndCache,
+  invalidateQueries,
+} from "../lib/swr-cache";
 import { listen } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { ask } from "@tauri-apps/plugin-dialog";
@@ -197,7 +203,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   const terminalPaneRef = useRef<WorkspaceTerminalPaneHandle>(null);
 
-  const queryClient = useQueryClient();
   const { addToast } = useToast();
   useAutoUpdate({
     autoCheck: import.meta.env.MODE !== "test",
@@ -303,16 +308,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
     }
   }, [selectedWorkspace]);
 
-  const { data: repoBranch } = useQuery({
-    queryKey: ["repo-branch", repoPath],
-    queryFn: () => getRepoCurrentBranch(repoPath),
-    enabled: !!repoPath,
-  });
-  const { data: repoDefaultBranch } = useQuery({
-    queryKey: ["repo-default-branch", repoPath],
-    queryFn: () => getRepoDefaultBranch(repoPath),
-    enabled: !!repoPath,
-  });
+  const { data: repoBranch } = useSWR(
+    repoPath ? ["repo-branch", repoPath] : null,
+    () => getRepoCurrentBranch(repoPath),
+  );
+  const { data: repoDefaultBranch } = useSWR(
+    repoPath ? ["repo-default-branch", repoPath] : null,
+    () => getRepoDefaultBranch(repoPath),
+  );
 
   useEffect(() => {
     if (!repoPath) return;
@@ -445,13 +448,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   const {
     data: availableBranches = [],
-    isFetching: branchesLoading,
-    refetch: loadAvailableBranches,
-  } = useQuery<BranchListItem[]>({
-    queryKey: ["repo-branches", repoPath],
-    enabled: false,
-    staleTime: 5 * 60 * 1000,
-    queryFn: async () => {
+    isValidating: branchesLoading,
+    mutate: loadAvailableBranches,
+  } = useSWR<BranchListItem[]>(
+    repoPath ? ["repo-branches", repoPath] : null,
+    async () => {
       const jjBranches = await listRepoBranches(repoPath);
       return jjBranches.map((branch) => ({
         name: branch.name,
@@ -459,7 +460,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
         isCurrent: branch.is_current,
       }));
     },
-  });
+    {
+      revalidateOnMount: false,
+      revalidateIfStale: false,
+      revalidateOnFocus: false,
+      revalidateOnReconnect: false,
+      dedupingInterval: 5 * 60 * 1000,
+    },
+  );
 
   const handleLoadAvailableBranches = useCallback(() => {
     if (!repoPath) return;
@@ -493,19 +501,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
   // 	selectedWorkspace?.workspace_path,
   // ]);
 
-  const { data: sessions = [] } = useQuery({
-    queryKey: ["sessions", repoPath],
-    queryFn: () => getSessions(repoPath),
-    refetchInterval: 30000,
-    enabled: !!repoPath,
-  });
+  const { data: sessions = [] } = useSWR(
+    repoPath ? ["sessions", repoPath] : null,
+    () => getSessions(repoPath),
+    { refreshInterval: 30000 },
+  );
 
-  const { data: workspaces = [] } = useQuery({
-    queryKey: ["workspaces", repoPath],
-    queryFn: () => getWorkspaces(repoPath),
-    refetchInterval: 10000,
-    enabled: !!repoPath,
-  });
+  const { data: workspaces = [] } = useSWR(
+    repoPath ? ["workspaces", repoPath] : null,
+    () => getWorkspaces(repoPath),
+    { refreshInterval: 10000 },
+  );
 
   // `workspaces` is refetched (e.g. after a push, or on its 10s interval) and
   // returns fresh object references every time, but `selectedWorkspace` is a
@@ -525,12 +531,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
     });
   }, [workspaces]);
 
-  const { data: workspaceStatuses = [] } = useQuery({
-    queryKey: ["workspace-statuses", repoPath],
-    queryFn: () => listWorkspaceStatuses(repoPath),
-    refetchInterval: 10000,
-    enabled: !!repoPath,
-  });
+  const { data: workspaceStatuses = [] } = useSWR(
+    repoPath ? ["workspace-statuses", repoPath] : null,
+    () => listWorkspaceStatuses(repoPath),
+    { refreshInterval: 10000 },
+  );
 
   const visibleWorkspaces = useMemo(() => {
     if (workspaceStatuses.length === 0) {
@@ -551,10 +556,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
       terminalPaneRef.current?.closeTerminalsForWorkspace(
         getFullWorkspacePath(workspace),
       );
-      queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
-      queryClient.invalidateQueries({
-        queryKey: ["workspace-statuses", repoPath],
-      });
+      void invalidateQueries(["workspaces", repoPath]);
+      invalidateQueries(["workspace-statuses", repoPath]);
       handleReturnToDashboard(); // Navigate to dashboard & clear selected workspace
       addToast({
         title: "Workspace Deleted",
@@ -592,18 +595,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
     setSelectedWorkspace(null);
     setActiveSessionId(null);
     setSessionSelectedFile(null);
-    queryClient.invalidateQueries({ queryKey: ["workspaces"] });
-    queryClient.invalidateQueries({ queryKey: ["workspace-statuses"] });
-    queryClient.invalidateQueries({ queryKey: ["sessions"] });
-    queryClient.invalidateQueries({ queryKey: ["repo-status"] });
-    queryClient.invalidateQueries({ queryKey: ["repo-branch"] });
+    void invalidateQueries(["workspaces"]);
+    void invalidateQueries(["workspace-statuses"]);
+    void invalidateQueries(["sessions"]);
+    void invalidateQueries(["repo-status"]);
+    void invalidateQueries(["repo-branch"]);
 
     addToast({
       title: "Repository Opened",
       description: `Now viewing ${selected.split("/").pop() || selected}`,
       type: "success",
     });
-  }, [addToast, queryClient]);
+  }, [addToast]);
 
   // Consolidate all Tauri event listeners
   useEffect(() => {
@@ -645,7 +648,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         setSelectedWorkspace(null);
         setActiveSessionId(null);
         setSessionSelectedFile(null);
-        queryClient.clear();
+        void clearSWRCache();
 
         addToast({
           title: "Factory Reset Complete",
@@ -681,10 +684,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
             true,
           );
 
-          queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
-          queryClient.invalidateQueries({
-            queryKey: ["workspace-statuses", repoPath],
-          });
+          void invalidateQueries(["workspaces", repoPath]);
+          invalidateQueries(["workspace-statuses", repoPath]);
 
           addToast({
             title: result.success
@@ -714,7 +715,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
     selectedWorkspace,
     effectiveDefaultBranch,
     addToast,
-    queryClient,
     deleteWorkspaceMutation,
     handleOpenRepository,
     openSettings,
@@ -775,10 +775,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
         console.warn("Failed to set default model for session:", error);
       }
 
-      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      void invalidateQueries(["sessions"]);
       return sessionId;
     },
-    [queryClient, workspaces, repoPath],
+    [workspaces, repoPath],
   );
 
   const handleOpenSession = useCallback(
@@ -798,7 +798,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       permissionMode?: "plan" | "acceptEdits";
       agent?: "claude" | "codex" | "cursor";
     }) => {
-      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      void invalidateQueries(["sessions"]);
       setActiveSessionId(sessionData.sessionId);
       if (
         sessionData.pendingPrompt ||
@@ -826,17 +826,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
           sessionData.agent,
         )
           .then(() => {
-            queryClient.invalidateQueries({ queryKey: ["prompt-history"] });
-            queryClient.invalidateQueries({
-              queryKey: ["workspace-starting-prompt"],
-            });
+            void invalidateQueries(["prompt-history"]);
+            invalidateQueries(["workspace-starting-prompt"]);
           })
           .catch((error) => {
             console.error("Failed to record prompt history:", error);
           });
       }
     },
-    [queryClient, repoPath],
+    [repoPath],
   );
 
   const handleViewFullPrompt = useCallback((promptId: number) => {
@@ -906,13 +904,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
       setViewMode("show-workspace");
       if (repoPath) {
         void invalidateReviewChangeCount(
-          queryClient,
           repoPath,
           next?.id ?? null,
         );
       }
     },
-    [queryClient, repoPath],
+    [repoPath],
   );
 
   const { moveWorkspace } = useWorkspaceHierarchy({
@@ -983,14 +980,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
         type: "success",
       });
       setPendingChangeMove(null);
-      await queryClient.invalidateQueries({
-        queryKey: ["workspaces", repoPath],
-      });
-      await queryClient.invalidateQueries({
-        queryKey: ["workspace-statuses", repoPath],
-      });
+      await invalidateQueries(["workspaces", repoPath]);
+      await invalidateQueries(["workspace-statuses", repoPath]);
       await invalidateReviewChangeCount(
-        queryClient,
         repoPath,
         selectedWorkspace?.id ?? null,
       );
@@ -1008,7 +1000,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
     pendingChangeMove,
     repoPath,
     addToast,
-    queryClient,
     selectedWorkspace?.id,
   ]);
 
@@ -1054,7 +1045,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         forceNew: true,
         agent: resolvedAgent,
       });
-      queryClient.invalidateQueries({ queryKey: ["sessions"] });
+      void invalidateQueries(["sessions"]);
       setActiveSessionId(sessionId);
       setSelectedWorkspace(workspace);
       if (resolvedAgent) {
@@ -1065,7 +1056,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         });
       }
     },
-    [getOrCreateSession, workspaces, repoPath, queryClient],
+    [getOrCreateSession, workspaces, repoPath],
   );
 
   const handleStartShellFromSidebar = useCallback((workspace: Workspace) => {
@@ -1181,10 +1172,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
             request.agent,
           )
             .then(() => {
-              queryClient.invalidateQueries({ queryKey: ["prompt-history"] });
-              queryClient.invalidateQueries({
-                queryKey: ["workspace-starting-prompt"],
-              });
+              void invalidateQueries(["prompt-history"]);
+              invalidateQueries(["workspace-starting-prompt"]);
             })
             .catch((error) => {
               console.error("Failed to record prompt history:", error);
@@ -1197,7 +1186,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         await acknowledgeAgentDispatch(request.requestId, "rejected", reason);
       }
     },
-    [addToast, getOrCreateSession, workspaces, repoPath, queryClient],
+    [addToast, getOrCreateSession, workspaces, repoPath],
   );
 
   useEffect(() => {
@@ -1333,10 +1322,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
           );
         }
         // Show single toast and refresh after all deletions
-        queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
-        queryClient.invalidateQueries({
-          queryKey: ["workspace-statuses", repoPath],
-        });
+        void invalidateQueries(["workspaces", repoPath]);
+        invalidateQueries(["workspace-statuses", repoPath]);
         handleReturnToDashboard();
         addToast({
           title: `${count} Workspace${count > 1 ? "s" : ""} Deleted`,
@@ -1373,23 +1360,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
         setCurrentBranch(branchName);
         setHomeRepoDisplayRef(branchName);
       }
-      void queryClient.invalidateQueries({
-        queryKey: ["repo-status", repoPath],
-      });
-      void queryClient.invalidateQueries({
-        queryKey: ["repo-branch", repoPath],
-      });
+      void invalidateQueries(["repo-status", repoPath]);
+      void invalidateQueries(["repo-branch", repoPath]);
       // Refresh workspace data
-      queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
-      queryClient.invalidateQueries({
-        queryKey: ["workspace-statuses", repoPath],
-      });
-      void queryClient.invalidateQueries({
-        queryKey: ["workspace-review-change-count", repoPath],
-      });
+      void invalidateQueries(["workspaces", repoPath]);
+      invalidateQueries(["workspace-statuses", repoPath]);
+      void invalidateQueries(["workspace-review-change-count", repoPath]);
       dispatchRefreshWorkspaceChanges();
     },
-    [repoPath, queryClient],
+    [repoPath],
   );
 
   const isSessionView = viewMode === "session" || viewMode === "show-workspace";
@@ -1548,7 +1527,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       activeTab: "changes",
                     });
                   }}
-                  queryClient={queryClient}
                   onSessionCreated={handleSessionCreated}
                   onViewFullPrompt={handleViewFullPrompt}
                 />
@@ -1651,13 +1629,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
               onOpenSettings={openSettings}
               onStartPromptFromIssue={handleStartPromptFromIssue}
               onOpenWorkspace={async (workspaceId) => {
-                await queryClient.invalidateQueries({
-                  queryKey: ["workspaces", repoPath],
-                });
-                const updatedWorkspaces = await queryClient.fetchQuery({
-                  queryKey: ["workspaces", repoPath],
-                  queryFn: () => getWorkspaces(repoPath),
-                });
+                await invalidateQueries(["workspaces", repoPath]);
+                const updatedWorkspaces = await fetchAndCache(["workspaces", repoPath], () => getWorkspaces(repoPath));
                 const workspace = updatedWorkspaces.find(
                   (w) => w.id === workspaceId,
                 );
@@ -1687,7 +1660,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 //     mergeWorkspace.id
                 //   );
                 //   // Invalidate workspace queries
-                //   queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+                //   void invalidateQueries(["workspaces"]);
                 // } catch (error) {
                 //   addToast({
                 //     title: "Merge succeeded but workspace deletion failed",
@@ -1698,18 +1671,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 setMergeWorkspace(null);
                 setViewMode("show-workspace");
                 handleReturnToDashboard();
-                void queryClient.invalidateQueries({
-                  queryKey: ["repo-status", repoPath],
-                });
-                void queryClient.invalidateQueries({
-                  queryKey: ["repo-branch", repoPath],
-                });
-                void queryClient.invalidateQueries({
-                  queryKey: ["workspaces", repoPath],
-                });
-                void queryClient.invalidateQueries({
-                  queryKey: ["workspace-statuses", repoPath],
-                });
+                void invalidateQueries(["repo-status", repoPath]);
+                void invalidateQueries(["repo-branch", repoPath]);
+                void invalidateQueries(["workspaces", repoPath]);
+                void invalidateQueries(["workspace-statuses", repoPath]);
                 // }
               }}
             />
@@ -1768,16 +1733,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
         repoPath={repoPath}
         defaults={unifiedDialogDefaults ?? {}}
         onSuccess={async (workspaceId) => {
-          await queryClient.invalidateQueries({
-            queryKey: ["workspaces", repoPath],
-          });
-          queryClient.invalidateQueries({
-            queryKey: ["workspace-statuses", repoPath],
-          });
-          const updatedWorkspaces = await queryClient.fetchQuery({
-            queryKey: ["workspaces", repoPath],
-            queryFn: () => getWorkspaces(repoPath),
-          });
+          await invalidateQueries(["workspaces", repoPath]);
+          invalidateQueries(["workspace-statuses", repoPath]);
+          const updatedWorkspaces = await fetchAndCache(["workspaces", repoPath], () => getWorkspaces(repoPath));
           const newWorkspace = updatedWorkspaces.find(
             (w) => w.id === workspaceId,
           );
@@ -1865,12 +1823,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
         repoPath={repoPath}
         workspaces={visibleWorkspaces}
         onApplied={() => {
-          void queryClient.invalidateQueries({
-            queryKey: ["workspace-changed-files"],
-          });
-          void queryClient.invalidateQueries({
-            queryKey: ["workspace-diff"],
-          });
+          void invalidateQueries(["workspace-changed-files"]);
+          void invalidateQueries(["workspace-diff"]);
         }}
         onApplyToNewWorkspace={(entry) => {
           setShowStashModal(false);

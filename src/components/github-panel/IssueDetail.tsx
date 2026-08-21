@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import useSWR from "swr";
+import { useMutation } from "../../hooks/useMutation";
+import { invalidateQueries } from "../../lib/swr-cache";
 import { Loader2, MessageSquare, Sparkles, X } from "lucide-react";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -26,42 +28,35 @@ export function IssueDetailPanel({
   onClose: () => void;
   onStartPrompt?: (issue: GitHubIssueAttachment) => void;
 }) {
-  const qc = useQueryClient();
   const [commentBody, setCommentBody] = useState("");
 
-  const { data: issue, isLoading } = useQuery({
-    queryKey: ["gh-issue", repoFullName, issueNumber],
-    queryFn: () => ghViewIssue(repoFullName, issueNumber),
-  });
+  const { data: issue, isLoading } = useSWR(
+    ["gh-issue", repoFullName, issueNumber],
+    () => ghViewIssue(repoFullName, issueNumber),
+  );
 
   const addComment = useMutation({
     mutationFn: () =>
       ghCreateIssueComment(repoFullName, issueNumber, commentBody),
     onSuccess: () => {
       setCommentBody("");
-      void qc.invalidateQueries({
-        queryKey: ["gh-issue", repoFullName, issueNumber],
-      });
+      void invalidateQueries(["gh-issue", repoFullName, issueNumber]);
     },
   });
 
   const closeIssue = useMutation({
     mutationFn: () => ghCloseIssue(repoFullName, issueNumber),
     onSuccess: () => {
-      void qc.invalidateQueries({
-        queryKey: ["gh-issue", repoFullName, issueNumber],
-      });
-      void qc.invalidateQueries({ queryKey: ["gh-issues", repoFullName] });
+      void invalidateQueries(["gh-issue", repoFullName, issueNumber]);
+      void invalidateQueries(["gh-issues", repoFullName]);
     },
   });
 
   const reopenIssue = useMutation({
     mutationFn: () => ghReopenIssue(repoFullName, issueNumber),
     onSuccess: () => {
-      void qc.invalidateQueries({
-        queryKey: ["gh-issue", repoFullName, issueNumber],
-      });
-      void qc.invalidateQueries({ queryKey: ["gh-issues", repoFullName] });
+      void invalidateQueries(["gh-issue", repoFullName, issueNumber]);
+      void invalidateQueries(["gh-issues", repoFullName]);
     },
   });
 
@@ -241,12 +236,11 @@ export function CreateIssueForm({
 }) {
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
-  const qc = useQueryClient();
 
   const create = useMutation({
     mutationFn: () => ghCreateIssue(repoFullName, title, body),
     onSuccess: (issueNumber) => {
-      void qc.invalidateQueries({ queryKey: ["gh-issues", repoFullName] });
+      void invalidateQueries(["gh-issues", repoFullName]);
       onSuccess(issueNumber);
     },
   });

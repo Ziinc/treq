@@ -24,7 +24,7 @@ export default defineConfig(async () => ({
             '@xterm/addon-clipboard',
             '@xterm/addon-image',
           ],
-          'vendor': ['react', 'react-dom', '@tanstack/react-query'],
+          'vendor': ['react', 'react-dom', 'swr'],
         },
       },
     },

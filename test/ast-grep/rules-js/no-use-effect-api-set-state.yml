@@ -2,7 +2,7 @@ id: no-use-effect-api-set-state
 language: tsx
 severity: warning
 message: >
-  Load server data with useQuery or useMutation, not useEffect plus setState.
+  Load server data with useSWR or useMutation, not useEffect plus setState.
   Subscribe to DOM/Tauri events, matchMedia, debounce, and xterm/monaco layout
   in effects; keep Tauri API reads and writes in query functions.
 files:

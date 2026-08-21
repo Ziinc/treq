@@ -43,7 +43,7 @@ treq/
 **React 18** with no client-side router. Navigation is URL-search-param driven (`?repo=...`) and sidebar-based.
 
 **State management** — two layers:
-- **TanStack Query** for all async server state (Tauri commands, file watching, commit history)
+- **SWR (`useSWR`)** for all async server state (Tauri commands, file watching, commit history)
 - **Zustand** for ambient client state (theme, zoom, diff/terminal settings, auth, editor apps, toasts, treq-send). Components select from `use*Store` directly. `AppStoreEffects` hydrates settings and attaches DOM/Tauri listeners. `ToastProvider` is a viewport over the toast store.
 
 **Key components:**

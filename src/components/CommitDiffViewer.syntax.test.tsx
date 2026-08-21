@@ -1,4 +1,5 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { SWRConfig } from "swr";
+import { SWRMutateScope, testSWRConfig } from "../lib/swr-cache";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { JjRevisionDiff } from "../lib/api";
@@ -67,15 +68,14 @@ describe("CommitDiffViewer syntax highlighting", () => {
   });
 
   it("highlights review source lines based on the file extension", async () => {
-    const queryClient = new QueryClient({
-      defaultOptions: { queries: { retry: false } },
-    });
     const { container } = render(
-      <QueryClientProvider client={queryClient}>
+      <SWRConfig value={testSWRConfig}>
+        <SWRMutateScope>
         <ToastProvider>
           <CommitDiffViewer repoPath="/repo" workspaceId={1} />
         </ToastProvider>
-      </QueryClientProvider>,
+        </SWRMutateScope>
+      </SWRConfig>,
     );
     fireEvent.click(await screen.findByText("Typed change"));
     await waitFor(() => expect(screen.getByText("src/main.ts")).toBeTruthy());
