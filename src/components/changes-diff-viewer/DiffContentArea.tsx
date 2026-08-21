@@ -1,16 +1,16 @@
-import React, { useCallback, useMemo } from "react";
+import React, { useLayoutEffect, useMemo, useRef } from "react";
 import { CheckCircle2, FileText, Loader2 } from "lucide-react";
+import type { VirtuosoHandle } from "react-virtuoso";
 import type {
   ConflictRegion,
   GhReviewThread,
-  JjDiffHunk,
   JjFileChange,
 } from "../../lib/api";
 import type { ParsedFileChange } from "../../lib/git-utils";
 import { Button } from "../ui/button";
 import { SearchOverlay } from "../SearchOverlay";
-import { FileRowComponent } from "./FileRowComponent";
-import { HunkLines } from "./HunkLines";
+import type { DiffVirtuosoIndexMaps } from "./buildDiffVirtuosoItems";
+import { DiffVirtuosoList } from "./DiffVirtuoso";
 import type {
   CommentLineQuery,
   ConflictComment,
@@ -25,7 +25,7 @@ import type {
 import type { useToast } from "../ui/toast";
 import { filterVisibleCommittedFiles } from "./utils";
 
-interface DiffContentAreaProps {
+export interface DiffContentAreaProps {
   // search
   isSearchOpen: boolean;
   searchQuery: string;
@@ -120,6 +120,10 @@ interface DiffContentAreaProps {
   getOutdatedCommentsForFile: (filePath: string) => LineComment[];
   getFileCommentsForFile: (filePath: string) => LineComment[];
   diffContainerRef: React.RefObject<HTMLDivElement>;
+  diffScrollApiRef: React.MutableRefObject<{
+    scrollToFile: (path: string) => void;
+    scrollToSearchId: (id: string) => void;
+  } | null>;
 }
 
 export function DiffContentArea({
@@ -200,7 +204,53 @@ export function DiffContentArea({
   getOutdatedCommentsForFile,
   getFileCommentsForFile,
   diffContainerRef,
+  diffScrollApiRef,
 }: DiffContentAreaProps) {
+  const virtuosoRef = useRef<VirtuosoHandle>(null);
+  const indexMapsRef = useRef<DiffVirtuosoIndexMaps>({
+    filePathToIndex: new Map(),
+    searchIdToIndex: new Map(),
+  });
+
+  useLayoutEffect(() => {
+    diffScrollApiRef.current = {
+      scrollToFile: (filePath) => {
+        const index = indexMapsRef.current.filePathToIndex.get(filePath);
+        if (index !== undefined) {
+          virtuosoRef.current?.scrollToIndex({
+            index,
+            align: "start",
+            behavior: "smooth",
+          });
+        }
+        const fileId = `file-section-${filePath.replace(/[^a-zA-Z0-9]/g, "-")}`;
+        document.getElementById(fileId)?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      },
+      scrollToSearchId: (searchId) => {
+        const index = indexMapsRef.current.searchIdToIndex.get(searchId);
+        if (index !== undefined) {
+          virtuosoRef.current?.scrollToIndex({
+            index,
+            align: "center",
+            behavior: "smooth",
+          });
+        }
+        const el = diffContainerRef.current?.querySelector(
+          `[data-search-id="${CSS.escape(searchId)}"]`,
+        );
+        if (el instanceof HTMLElement) {
+          el.scrollIntoView({ behavior: "smooth", block: "center" });
+        }
+      },
+    };
+    return () => {
+      diffScrollApiRef.current = null;
+    };
+  }, [diffScrollApiRef]);
+
   const alwaysVisibleCommittedPaths = useMemo(() => {
     const paths = new Set<string>(actualConflictedFiles);
     for (const file of files) paths.add(file.path);
@@ -215,110 +265,6 @@ export function DiffContentArea({
         alwaysVisibleCommittedPaths,
       ),
     [committedFiles, showCommittedChanges, alwaysVisibleCommittedPaths],
-  );
-
-  const hunkLinesProps = useMemo(
-    () => ({
-      conflictedFilePaths: new Set(actualConflictedFiles),
-      conflictLineLookups,
-      firstConflictRegionIdByFile,
-      expandedContext,
-      conflictComments,
-      openConflictComments,
-      editingConflictCommentId,
-      searchData,
-      debouncedSearchQuery,
-      currentMatchIndex,
-      diffLineSelection,
-      showCommentInput,
-      pendingComment,
-      editingCommentId,
-      comments,
-      conflictFileRefs,
-      diffFontSize,
-      handleExpandContext,
-      handleLineMouseDown,
-      handleLineMouseEnter,
-      handleLineMouseUp,
-      handleAddCommentFromSelection,
-      isLineSelected,
-      saveConflictComment,
-      clearConflictComment,
-      toggleConflictComment,
-      setOpenConflictComments,
-      startEditConflictComment,
-      cancelEditConflictComment,
-      saveEditConflictComment,
-      addComment,
-      cancelComment,
-      deleteComment,
-      startEditComment,
-      cancelEditComment,
-      saveEditComment,
-      setPendingComment,
-      setShowCommentInput,
-      getCommentsForLine,
-      getThreadsForLine,
-      collapsedThreadIds,
-      toggleThreadCollapse,
-    }),
-    [
-      actualConflictedFiles,
-      conflictLineLookups,
-      firstConflictRegionIdByFile,
-      expandedContext,
-      conflictComments,
-      openConflictComments,
-      editingConflictCommentId,
-      searchData,
-      debouncedSearchQuery,
-      currentMatchIndex,
-      diffLineSelection,
-      showCommentInput,
-      pendingComment,
-      editingCommentId,
-      comments,
-      conflictFileRefs,
-      diffFontSize,
-      handleExpandContext,
-      handleLineMouseDown,
-      handleLineMouseEnter,
-      handleLineMouseUp,
-      handleAddCommentFromSelection,
-      isLineSelected,
-      saveConflictComment,
-      clearConflictComment,
-      toggleConflictComment,
-      setOpenConflictComments,
-      startEditConflictComment,
-      cancelEditConflictComment,
-      saveEditConflictComment,
-      addComment,
-      cancelComment,
-      deleteComment,
-      startEditComment,
-      cancelEditComment,
-      saveEditComment,
-      setPendingComment,
-      setShowCommentInput,
-      getCommentsForLine,
-      getThreadsForLine,
-      collapsedThreadIds,
-      toggleThreadCollapse,
-    ],
-  );
-
-  const renderHunkLines = useCallback(
-    (hunk: JjDiffHunk, hunkIndex: number, fPath: string) => (
-      <HunkLines
-        key={`${fPath}:${hunkIndex}`}
-        hunk={hunk}
-        hunkIndex={hunkIndex}
-        filePath={fPath}
-        {...hunkLinesProps}
-      />
-    ),
-    [hunkLinesProps],
   );
 
   return (
@@ -378,100 +324,92 @@ export function DiffContentArea({
             );
           }
           return (
-            <div ref={diffContainerRef} className="h-full overflow-y-auto">
-              <div className="p-4 space-y-4">
-                {files.map((file) => (
-                  <FileRowComponent
-                    key={file.path}
-                    file={file}
-                    allFileHunks={allFileHunks}
-                    collapsedFiles={collapsedFiles}
-                    viewedFiles={viewedFiles}
-                    expandedLargeDiffs={expandedLargeDiffs}
-                    diffFontSize={diffFontSize}
-                    readOnly={readOnly}
-                    fileActionTarget={fileActionTarget}
-                    selectedUnstagedFiles={selectedUnstagedFiles}
-                    actualConflictedFiles={actualConflictedFiles}
-                    workspacePath={workspacePath}
-                    toggleFileCollapse={toggleFileCollapse}
-                    toggleLargeDiff={toggleLargeDiff}
-                    handleMarkFileViewed={handleMarkFileViewed}
-                    handleUnmarkFileViewed={handleUnmarkFileViewed}
-                    handleDiscardFiles={handleDiscardFiles}
-                    handleContextMenu={handleContextMenu}
-                    renderHunkLines={renderHunkLines}
-                    addToast={addToast}
-                    getOutdatedCommentsForFile={getOutdatedCommentsForFile}
-                    getFileCommentsForFile={getFileCommentsForFile}
-                    deleteComment={deleteComment}
-                    getThreadsForLine={getThreadsForLine}
-                    getUnplacedThreadsForFile={getUnplacedThreadsForFile}
-                    collapsedThreadIds={collapsedThreadIds}
-                    toggleThreadCollapse={toggleThreadCollapse}
-                    showCommentInput={showCommentInput}
-                    pendingComment={pendingComment}
-                    editingCommentId={editingCommentId}
-                    setPendingComment={setPendingComment}
-                    setShowCommentInput={setShowCommentInput}
-                    addComment={addComment}
-                    cancelComment={cancelComment}
-                    startEditComment={startEditComment}
-                    cancelEditComment={cancelEditComment}
-                    saveEditComment={saveEditComment}
-                  />
-                ))}
-                {visibleCommittedFiles.map((file) => (
-                  <FileRowComponent
-                    key={`committed-${file.path}`}
-                    file={
-                      {
-                        ...file,
-                        stagedStatus: "",
-                        workspaceStatus: file.status,
-                        isUntracked: false,
-                      } as ParsedFileChange
-                    }
-                    allFileHunks={allFileHunks}
-                    overrideFileHunks={committedFileHunks}
-                    collapsedFiles={collapsedFiles}
-                    viewedFiles={viewedFiles}
-                    expandedLargeDiffs={expandedLargeDiffs}
-                    diffFontSize={diffFontSize}
-                    readOnly={true}
-                    isCommitted={true}
-                    fileActionTarget={null}
-                    selectedUnstagedFiles={new Set()}
-                    actualConflictedFiles={actualConflictedFiles}
-                    workspacePath={workspacePath}
-                    toggleFileCollapse={toggleFileCollapse}
-                    toggleLargeDiff={toggleLargeDiff}
-                    handleMarkFileViewed={handleMarkFileViewed}
-                    handleUnmarkFileViewed={handleUnmarkFileViewed}
-                    handleDiscardFiles={handleDiscardFiles}
-                    handleContextMenu={handleContextMenu}
-                    renderHunkLines={renderHunkLines}
-                    addToast={addToast}
-                    getOutdatedCommentsForFile={getOutdatedCommentsForFile}
-                    getFileCommentsForFile={getFileCommentsForFile}
-                    deleteComment={deleteComment}
-                    getThreadsForLine={getThreadsForLine}
-                    getUnplacedThreadsForFile={getUnplacedThreadsForFile}
-                    collapsedThreadIds={collapsedThreadIds}
-                    toggleThreadCollapse={toggleThreadCollapse}
-                    showCommentInput={showCommentInput}
-                    pendingComment={pendingComment}
-                    editingCommentId={editingCommentId}
-                    setPendingComment={setPendingComment}
-                    setShowCommentInput={setShowCommentInput}
-                    addComment={addComment}
-                    cancelComment={cancelComment}
-                    startEditComment={startEditComment}
-                    cancelEditComment={cancelEditComment}
-                    saveEditComment={saveEditComment}
-                  />
-                ))}
-              </div>
+            <div className="h-full px-4">
+              <DiffVirtuosoList
+                props={{
+                  isSearchOpen,
+                  searchQuery,
+                  setSearchQuery,
+                  currentMatchIndex,
+                  setCurrentMatchIndex,
+                  handleSearchNext,
+                  handleSearchPrevious,
+                  handleSearchClose,
+                  searchFocusTrigger,
+                  searchData,
+                  debouncedSearchQuery,
+                  initialLoading,
+                  loadingAllHunks,
+                  files,
+                  allFileHunks,
+                  committedFileHunks,
+                  committedFiles,
+                  showCommittedChanges,
+                  largeChangesetExpanded,
+                  setLargeChangesetExpanded,
+                  actualConflictedFiles,
+                  conflictLineLookups,
+                  firstConflictRegionIdByFile,
+                  expandedContext,
+                  conflictComments,
+                  openConflictComments,
+                  editingConflictCommentId,
+                  diffLineSelection,
+                  showCommentInput,
+                  pendingComment,
+                  editingCommentId,
+                  comments,
+                  conflictFileRefs,
+                  diffFontSize,
+                  handleExpandContext,
+                  handleLineMouseDown,
+                  handleLineMouseEnter,
+                  handleLineMouseUp,
+                  handleAddCommentFromSelection,
+                  isLineSelected,
+                  saveConflictComment,
+                  clearConflictComment,
+                  toggleConflictComment,
+                  setOpenConflictComments,
+                  startEditConflictComment,
+                  cancelEditConflictComment,
+                  saveEditConflictComment,
+                  addComment,
+                  cancelComment,
+                  deleteComment,
+                  startEditComment,
+                  cancelEditComment,
+                  saveEditComment,
+                  setPendingComment,
+                  setShowCommentInput,
+                  getCommentsForLine,
+                  getThreadsForLine,
+                  getUnplacedThreadsForFile,
+                  collapsedThreadIds,
+                  toggleThreadCollapse,
+                  collapsedFiles,
+                  viewedFiles,
+                  expandedLargeDiffs,
+                  readOnly,
+                  fileActionTarget,
+                  selectedUnstagedFiles,
+                  workspacePath,
+                  toggleFileCollapse,
+                  toggleLargeDiff,
+                  handleMarkFileViewed,
+                  handleUnmarkFileViewed,
+                  handleDiscardFiles,
+                  handleContextMenu,
+                  addToast,
+                  getOutdatedCommentsForFile,
+                  getFileCommentsForFile,
+                  diffContainerRef,
+                  diffScrollApiRef,
+                }}
+                virtuosoRef={virtuosoRef}
+                indexMapsRef={indexMapsRef}
+                scrollerRef={diffContainerRef}
+              />
             </div>
           );
         })()

@@ -71,6 +71,10 @@ export const ChangesDiffViewer = memo(
       const conflictFileRefs = useRef<Map<string, HTMLDivElement>>(new Map());
       const commitInputRef = useRef<CommitInputHandle>(null);
       const diffContainerRef = useRef<HTMLDivElement>(null);
+      const diffScrollApiRef = useRef<{
+        scrollToFile: (path: string) => void;
+        scrollToSearchId: (id: string) => void;
+      } | null>(null);
       const isReloadingRef = useRef<boolean>(false);
       const applyChangedFilesRef = useRef<
         (parsed: ParsedFileChange[], forceApply?: boolean) => void
@@ -157,7 +161,7 @@ export const ChangesDiffViewer = memo(
         handleStageAllFiles,
         handleSelectAllUnstaged,
         handleSelectAllStaged,
-      } = useFileStaging({ files, diffContainerRef });
+      } = useFileStaging({ files, diffContainerRef, diffScrollApiRef });
       setLargeChangesetExpandedRef.current = setLargeChangesetExpanded;
 
       const {
@@ -184,6 +188,7 @@ export const ChangesDiffViewer = memo(
         conflictLineLookups,
         workspacePath,
         diffContainerRef,
+        diffScrollApiRef,
       });
 
       const {
@@ -633,6 +638,7 @@ export const ChangesDiffViewer = memo(
               getOutdatedCommentsForFile={getOutdatedCommentsForFile}
               getFileCommentsForFile={getFileCommentsForFile}
               diffContainerRef={diffContainerRef}
+              diffScrollApiRef={diffScrollApiRef}
             />
           </div>
 

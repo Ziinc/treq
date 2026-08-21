@@ -19,6 +19,10 @@ interface UseDiffSearchParams {
   conflictLineLookups: Map<string, Map<number, ConflictRegion>>;
   workspacePath: string;
   diffContainerRef: React.RefObject<HTMLDivElement>;
+  diffScrollApiRef?: React.RefObject<{
+    scrollToFile: (path: string) => void;
+    scrollToSearchId: (id: string) => void;
+  } | null>;
 }
 
 export function useDiffSearch({
@@ -33,6 +37,7 @@ export function useDiffSearch({
   conflictLineLookups,
   workspacePath,
   diffContainerRef,
+  diffScrollApiRef,
 }: UseDiffSearchParams) {
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -189,12 +194,17 @@ export function useDiffSearch({
         match.hunkIndex === -1
           ? `conflict:${match.filePath}:${match.lineIndex}`
           : `${match.filePath}:${match.hunkIndex}:${match.lineIndex}`;
+      const api = diffScrollApiRef?.current;
+      if (api) {
+        api.scrollToSearchId(searchId);
+        return;
+      }
       const el = diffContainerRef.current.querySelector(
         `[data-search-id="${CSS.escape(searchId)}"]`,
       );
       if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
     },
-    [searchData.matches],
+    [searchData.matches, diffContainerRef, diffScrollApiRef],
   );
 
   const handleSearchNext = useCallback(() => {

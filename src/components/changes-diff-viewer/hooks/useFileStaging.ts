@@ -5,11 +5,16 @@ import { useKeyboardShortcut } from "../../../hooks/useKeyboard";
 interface UseFileStagingParams {
   files: ParsedFileChange[];
   diffContainerRef: React.RefObject<HTMLDivElement>;
+  diffScrollApiRef?: React.RefObject<{
+    scrollToFile: (path: string) => void;
+    scrollToSearchId: (id: string) => void;
+  } | null>;
 }
 
 export function useFileStaging({
   files,
   diffContainerRef,
+  diffScrollApiRef,
 }: UseFileStagingParams) {
   const [stagedFiles, setStagedFiles] = useState<Set<string>>(new Set());
   const [selectedUnstagedFiles, setSelectedUnstagedFiles] = useState<
@@ -51,6 +56,11 @@ export function useFileStaging({
         return next;
       });
       setTimeout(() => {
+        const api = diffScrollApiRef?.current;
+        if (api) {
+          api.scrollToFile(filePath);
+          return;
+        }
         const container = diffContainerRef.current;
         if (!container) return;
         const fileId = `file-section-${filePath.replace(/[^a-zA-Z0-9]/g, "-")}`;
@@ -59,7 +69,7 @@ export function useFileStaging({
           fileElement.scrollIntoView({ behavior: "smooth", block: "start" });
       }, 50);
     },
-    [diffContainerRef],
+    [diffContainerRef, diffScrollApiRef],
   );
 
   const handleFileSelect = useCallback(
