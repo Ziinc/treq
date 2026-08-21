@@ -2,6 +2,39 @@ import { useCallback, useRef } from "react";
 import type { Workspace } from "../lib/api";
 import type { FlattenedWorkspaceNode } from "../lib/workspace-tree";
 
+const heldModifiers = {
+  shift: false,
+  meta: false,
+  ctrl: false,
+};
+
+let modifierListenersBound = false;
+
+function bindModifierKeyListeners() {
+  if (modifierListenersBound || typeof window === "undefined") return;
+  modifierListenersBound = true;
+  const onKeyDown = (event: KeyboardEvent) => {
+    if (event.key === "Shift") heldModifiers.shift = true;
+    if (event.key === "Meta") heldModifiers.meta = true;
+    if (event.key === "Control") heldModifiers.ctrl = true;
+  };
+  const onKeyUp = (event: KeyboardEvent) => {
+    if (event.key === "Shift") heldModifiers.shift = false;
+    if (event.key === "Meta") heldModifiers.meta = false;
+    if (event.key === "Control") heldModifiers.ctrl = false;
+  };
+  const onBlur = () => {
+    heldModifiers.shift = false;
+    heldModifiers.meta = false;
+    heldModifiers.ctrl = false;
+  };
+  window.addEventListener("keydown", onKeyDown);
+  window.addEventListener("keyup", onKeyUp);
+  window.addEventListener("blur", onBlur);
+}
+
+bindModifierKeyListeners();
+
 export function isModifierMouseEvent(
   event: React.MouseEvent | React.PointerEvent,
 ): boolean {
@@ -11,7 +44,10 @@ export function isModifierMouseEvent(
     event.ctrlKey ||
     event.getModifierState("Shift") ||
     event.getModifierState("Meta") ||
-    event.getModifierState("Control")
+    event.getModifierState("Control") ||
+    heldModifiers.shift ||
+    heldModifiers.meta ||
+    heldModifiers.ctrl
   );
 }
 
@@ -55,7 +91,11 @@ export function useWorkspaceSidebarMultiSelect({
       event: React.MouseEvent | React.PointerEvent,
       index: number,
     ) => {
-      if (event.shiftKey || event.getModifierState("Shift")) {
+      if (
+        event.shiftKey ||
+        event.getModifierState("Shift") ||
+        heldModifiers.shift
+      ) {
         if (lastSelectedIndexRef.current !== null && onSelectStack) {
           onSelectStack(
             idsInVisibleRange(

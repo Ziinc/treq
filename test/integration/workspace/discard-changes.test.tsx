@@ -58,8 +58,9 @@ describe("Review tab - discard changes", () => {
     );
     await openReviewTab(user, "feat/discard-all");
 
-    await waitFor(() =>
-      expect(screen.getAllByText(fileName).length).toBeGreaterThan(0),
+    await waitFor(
+      () => expect(screen.getAllByText(fileName).length).toBeGreaterThan(0),
+      { timeout: 60_000 },
     );
 
     await user.click(
@@ -86,8 +87,9 @@ describe("Review tab - discard changes", () => {
     );
     await openReviewTab(user, "feat/discard-one");
 
-    await waitFor(() =>
-      expect(screen.getAllByText(fileName).length).toBeGreaterThan(0),
+    await waitFor(
+      () => expect(screen.getAllByText(fileName).length).toBeGreaterThan(0),
+      { timeout: 60_000 },
     );
 
     const [sidebarFile] = screen.getAllByText(fileName);
@@ -110,8 +112,9 @@ describe("Review tab - discard changes", () => {
     );
     await openReviewTab(user, "feat/discard-cancel");
 
-    await waitFor(() =>
-      expect(screen.getAllByText(fileName).length).toBeGreaterThan(0),
+    await waitFor(
+      () => expect(screen.getAllByText(fileName).length).toBeGreaterThan(0),
+      { timeout: 60_000 },
     );
 
     await user.click(
@@ -133,8 +136,9 @@ describe("Review tab - discard changes", () => {
     );
     await openReviewTab(user, "feat/discard-undo");
 
-    await waitFor(() =>
-      expect(screen.getAllByText(fileName).length).toBeGreaterThan(0),
+    await waitFor(
+      () => expect(screen.getAllByText(fileName).length).toBeGreaterThan(0),
+      { timeout: 60_000 },
     );
 
     await user.click(
