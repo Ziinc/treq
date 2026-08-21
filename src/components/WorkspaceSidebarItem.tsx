@@ -244,6 +244,7 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                   <TooltipTrigger asChild>
                     <div
                       data-testid={`workspace-sidebar-item-${workspace.branch_name}`}
+                      data-sidebar-index={index}
                       style={indentStyle}
                       className={cn(
                         "relative flex items-center  tracking-wide pr-4 rounded-sm transition-colors cursor-pointer p-0.5",

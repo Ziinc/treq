@@ -77,12 +77,7 @@ describe("ChangesDiffViewer workspace diff contract", () => {
     });
     expect(screen.getByRole("button", { name: "Conflicts" })).toBeTruthy();
     await waitFor(() => {
-      expect(
-        screen.getAllByText(
-          (_, element) =>
-            element?.textContent?.includes("added = true") ?? false,
-        ).length,
-      ).toBeGreaterThan(0);
+      expect(document.body.textContent).toContain("added = true");
     });
     await waitFor(() => {
       expect(screen.getByText("local.ts")).toBeInTheDocument();
