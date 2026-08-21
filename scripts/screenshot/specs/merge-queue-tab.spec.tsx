@@ -5,7 +5,6 @@ import type { QueueEntryStatus } from "../../../src/lib/api-types";
 import { render, screen, waitFor, within } from "../../../test/test-utils";
 import { createTestRepo } from "../../../test/utils";
 import { captureDocument } from "../capture";
-import { createAuthStoreMock } from "../../../test/mocks/zustandAuthStore";
 
 // The GitHub panel's Merge Queue tab reads entirely from Supabase (queue
 // contents + the per-repo opt-in) and from `gh` for the repo's remote, none of
@@ -47,9 +46,12 @@ vi.mock("../../../src/lib/features", () => ({
   },
 }));
 
-vi.mock("../../../src/stores/authStore", () => ({
-  useAuthStore: createAuthStoreMock(auth),
-}));
+vi.mock("../../../src/stores/authStore", async () => {
+  const { createAuthStoreMock } = await import(
+    "../../../test/mocks/zustandAuthStore"
+  );
+  return { useAuthStore: createAuthStoreMock(auth) };
+});
 
 vi.mock("../../../src/lib/supabase", () => ({
   supabase: {

@@ -4,7 +4,6 @@ import { SettingsPage } from "../../../src/components/SettingsPage";
 import { render, screen, waitFor, within } from "../../../test/test-utils";
 import { createTestRepo, openRepo } from "../../../test/utils";
 import { captureDocument } from "../capture";
-import { createAuthStoreMock } from "../../../test/mocks/zustandAuthStore";
 
 // The merge queue opt-in lives in Settings › Integrations and is stored in
 // Postgres. Supabase and the repo's GitHub remote are stubbed (neither is
@@ -45,9 +44,12 @@ vi.mock("../../../src/lib/features", () => ({
   },
 }));
 
-vi.mock("../../../src/stores/authStore", () => ({
-  useAuthStore: createAuthStoreMock(auth),
-}));
+vi.mock("../../../src/stores/authStore", async () => {
+  const { createAuthStoreMock } = await import(
+    "../../../test/mocks/zustandAuthStore"
+  );
+  return { useAuthStore: createAuthStoreMock(auth) };
+});
 
 vi.mock("../../../src/lib/supabase", () => ({
   supabase: {

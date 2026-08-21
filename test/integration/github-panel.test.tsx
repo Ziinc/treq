@@ -3,7 +3,6 @@ import * as React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { GitHubPanel } from "../../src/components/GitHubPanel";
 import { render, screen, within } from "../test-utils";
-import { createAuthStoreMock } from "../mocks/zustandAuthStore";
 
 const auth = vi.hoisted(() => ({
   user: { id: "user-1" } as object | null,
@@ -38,9 +37,10 @@ const queueEnabled = vi.hoisted(() => ({
   dequeue: vi.fn(),
 }));
 
-vi.mock("../../src/stores/authStore", () => ({
-  useAuthStore: createAuthStoreMock(auth),
-}));
+vi.mock("../../src/stores/authStore", async () => {
+  const { createAuthStoreMock } = await import("../mocks/zustandAuthStore");
+  return { useAuthStore: createAuthStoreMock(auth) };
+});
 vi.mock("../../src/hooks/useMergeQueueStatus", () => ({
   useGitRemoteInfo: () => remoteInfo,
   usePrChecksForPr: () => ({ data: null, isLoading: false }),
