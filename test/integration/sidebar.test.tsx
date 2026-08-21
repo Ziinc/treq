@@ -493,9 +493,17 @@ describe("Dashboard - workspace list", () => {
           Number(anchorRow.dataset.sidebarIndex) -
             Number(targetRow.dataset.sidebarIndex),
         ) + 1;
+      expect(rangeCount).toBeGreaterThan(1);
 
-      fireEvent.click(anchorRow, { metaKey: true });
-      fireEvent.click(targetRow, { shiftKey: true });
+      const anchorLabel = within(anchorRow).getByText(anchorBranch);
+      const targetLabel = within(targetRow).getByText(targetBranch);
+
+      await user.keyboard("{Meta>}");
+      await user.click(anchorLabel);
+      await user.keyboard("{/Meta}");
+      await user.keyboard("{Shift>}");
+      await user.click(targetLabel);
+      await user.keyboard("{/Shift}");
 
       await waitFor(() => {
         const start = Math.min(
@@ -507,7 +515,7 @@ describe("Dashboard - workspace list", () => {
           Number(targetRow.dataset.sidebarIndex),
         );
         for (const row of sidebarRoot.querySelectorAll<HTMLElement>(
-          "[data-sidebar-index]",
+          "[data-testid^='workspace-sidebar-item-']",
         )) {
           const index = Number(row.dataset.sidebarIndex);
           if (index >= start && index <= end) {
@@ -516,13 +524,9 @@ describe("Dashboard - workspace list", () => {
         }
       });
 
-      await waitFor(() => {
-        expect(
-          within(sidebarRoot).getByRole("button", {
-            name: new RegExp(`archive ${rangeCount} workspaces`, "i"),
-          }),
-        ).toBeTruthy();
-      });
+      await screen.findByText(
+        new RegExp(`archive ${rangeCount} workspaces`, "i"),
+      );
     });
   });
 
