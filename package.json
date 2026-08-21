@@ -101,6 +101,7 @@
     "react-dom": "^18.3.1",
     "react-hook-form": "^7.74.0",
     "react-markdown": "^10.1.0",
+    "react-virtuoso": "^4.18.12",
     "react-window": "^2.2.3",
     "rehype-raw": "^7.0.0",
     "remark-gfm": "^4.0.1",

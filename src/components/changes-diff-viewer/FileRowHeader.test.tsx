@@ -236,7 +236,7 @@ describe("Review tab deleted file collapsible", () => {
       />,
     );
 
-    await screen.findByText("gone.txt");
+    await screen.findByTestId("file-row-gone.txt");
     expect(await screen.findByText("Deleted")).toBeInTheDocument();
     expect(
       await screen.findByTestId("deleted-file-placeholder"),

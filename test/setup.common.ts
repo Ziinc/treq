@@ -238,6 +238,48 @@ vi.mock(
   async () => await import("./mocks/radix-dialog"),
 );
 
+vi.mock("react-virtuoso", async () => {
+  const React = await import("react");
+  const Virtuoso = React.forwardRef(
+    (
+      {
+        data,
+        itemContent,
+        scrollerRef,
+        computeItemKey,
+      }: {
+        data?: unknown[];
+        itemContent?: (index: number, item: unknown) => React.ReactNode;
+        scrollerRef?: (el: HTMLElement | Window | null) => void;
+        computeItemKey?: (index: number, item: unknown) => React.Key;
+      },
+      ref: React.Ref<{ scrollToIndex: (opts: unknown) => void }>,
+    ) => {
+      React.useImperativeHandle(ref, () => ({
+        scrollToIndex: () => undefined,
+      }));
+      React.useEffect(() => {
+        if (typeof scrollerRef === "function") {
+          scrollerRef(document.createElement("div"));
+        }
+      }, [scrollerRef]);
+      return React.createElement(
+        "div",
+        { "data-testid": "diff-virtuoso", className: "h-full overflow-auto" },
+        (data ?? []).map((item, index) =>
+          React.createElement(
+            "div",
+            { key: computeItemKey ? computeItemKey(index, item) : index },
+            itemContent?.(index, item),
+          ),
+        ),
+      );
+    },
+  );
+  Virtuoso.displayName = "VirtuosoMock";
+  return { Virtuoso };
+});
+
 // ── Hook mocks ────────────────────────────────────────────────────────────────
 
 vi.mock("../src/hooks/useWorkspaceGitStatus", () => ({
