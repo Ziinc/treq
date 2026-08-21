@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { isTauri } from "@tauri-apps/api/core";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { v4 as uuidv4 } from "uuid";
 import {
 	closeBrowserWebview,
@@ -28,6 +29,12 @@ export function BrowserPanel({
 	const [url, setUrl] = useState(DEFAULT_URL);
 	const [webviewOpen, setWebviewOpen] = useState(false);
 	const previewRef = useRef<HTMLDivElement | null>(null);
+	// Outside a real Tauri window (dev preview in a plain browser, or the
+	// screenshot/test harness) there's no native child webview to create --
+	// render an <iframe> instead so the preview is still visible. The real
+	// packaged app always runs inside Tauri and keeps using the native
+	// webview, which is what makes click-to-select possible.
+	const runningInTauri = useMemo(() => isTauri(), []);
 
 	const {
 		comments,
@@ -54,6 +61,7 @@ export function BrowserPanel({
 	const [showCancelDialog, setShowCancelDialog] = useState(false);
 
 	const syncBounds = useCallback(() => {
+		if (!runningInTauri) return;
 		const el = previewRef.current;
 		if (!el) return;
 		const rect = el.getBoundingClientRect();
@@ -62,7 +70,7 @@ export function BrowserPanel({
 				// best-effort: webview may not be open yet
 			},
 		);
-	}, []);
+	}, [runningInTauri]);
 
 	useEffect(() => {
 		const el = previewRef.current;
@@ -74,9 +82,11 @@ export function BrowserPanel({
 
 	useEffect(
 		() => () => {
-			closeBrowserWebview().catch(() => {});
+			if (runningInTauri) {
+				closeBrowserWebview().catch(() => {});
+			}
 		},
-		[],
+		[runningInTauri],
 	);
 
 	// Keep the address bar in sync when the user navigates within the
@@ -99,6 +109,11 @@ export function BrowserPanel({
 
 	const handleNavigate = useCallback(
 		async (nextUrl: string) => {
+			if (!runningInTauri) {
+				setUrl(nextUrl);
+				setWebviewOpen(true);
+				return;
+			}
 			const el = previewRef.current;
 			const rect = el?.getBoundingClientRect();
 			try {
@@ -123,7 +138,7 @@ export function BrowserPanel({
 				});
 			}
 		},
-		[webviewOpen, addToast],
+		[webviewOpen, addToast, runningInTauri],
 	);
 
 	const handleReload = useCallback(() => {
@@ -172,6 +187,13 @@ export function BrowserPanel({
 					<div className="h-full flex items-center justify-center text-sm text-muted-foreground">
 						Enter a localhost URL or a local HTML file to start reviewing.
 					</div>
+				)}
+				{webviewOpen && !runningInTauri && (
+					<iframe
+						src={url}
+						title="Browser preview"
+						className="w-full h-full border-0"
+					/>
 				)}
 			</div>
 			{pendingPick && (
