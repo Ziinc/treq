@@ -27,14 +27,18 @@ export function AppStoreEffects() {
   const zoom = useZoomSettingsStore((s) => s.zoom);
   const actualTheme = theme === "system" ? systemTheme : theme;
 
-  useSWR("settings-batch-hydrate", () => getSettingsBatch([...SETTINGS_BATCH_KEYS]), {
-    onSuccess: (record) => {
-      if (record) applySettingsRecord(record);
+  useSWR(
+    "settings-batch-hydrate",
+    () => getSettingsBatch([...SETTINGS_BATCH_KEYS]),
+    {
+      onSuccess: (record) => {
+        if (record) applySettingsRecord(record);
+      },
+      onError: (error) => {
+        console.error("Failed to preload settings:", error);
+      },
     },
-    onError: (error) => {
-      console.error("Failed to preload settings:", error);
-    },
-  });
+  );
 
   useSWR("detect-editor-apps", detectEditorApps, {
     onSuccess: (apps) => {
