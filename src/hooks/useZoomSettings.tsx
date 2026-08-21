@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import {
   DEFAULT_ZOOM,
   MAX_ZOOM,
@@ -15,8 +14,4 @@ export function useZoomSettings() {
   const zoomIn = useZoomSettingsStore((s) => s.zoomIn);
   const zoomOut = useZoomSettingsStore((s) => s.zoomOut);
   return { zoom, setZoom, zoomIn, zoomOut };
-}
-
-export function ZoomSettingsProvider({ children }: { children: ReactNode }) {
-  return children;
 }

@@ -25,7 +25,7 @@ function parseIntInRange(
 export function applySettingsRecord(
   settings: Record<string, string | null | undefined>,
 ) {
-  const theme = settings.theme;
+  const { theme } = settings;
   if (theme === "light" || theme === "dark" || theme === "system") {
     useThemeStore.getState().hydrateTheme(theme as Theme);
   }

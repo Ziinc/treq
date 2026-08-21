@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import { useThemeStore } from "../stores/themeStore";
 
 export const useTheme = () => {
@@ -11,8 +10,3 @@ export const useTheme = () => {
     actualTheme: (theme === "system" ? systemTheme : theme) as "light" | "dark",
   };
 };
-
-/** No-op: theme lives in Zustand. Kept for existing test wrappers. */
-export const ThemeProvider: React.FC<{ children: ReactNode }> = ({
-  children,
-}) => children;

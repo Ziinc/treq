@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import { useEditorAppsStore } from "../stores/editorAppsStore";
 
 export const useEditorApps = () => {
@@ -8,7 +7,3 @@ export const useEditorApps = () => {
   const isLoading = useEditorAppsStore((s) => s.isLoading);
   return { cursor, vscode, zed, isLoading };
 };
-
-export const EditorAppsProvider: React.FC<{ children: ReactNode }> = ({
-  children,
-}) => children;

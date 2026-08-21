@@ -32,6 +32,13 @@ export function clearToastTimers() {
   toastTimers.clear();
 }
 
+function expireToast(id: string) {
+  toastTimers.delete(id);
+  useToastStore.setState((state) => ({
+    toasts: state.toasts.filter((item) => item.id !== id),
+  }));
+}
+
 export const useToastStore = create<ToastState>((set) => ({
   ...defaultToastState,
   addToast: (toast) => {
@@ -39,12 +46,7 @@ export const useToastStore = create<ToastState>((set) => ({
     set((state) => ({ toasts: [...state.toasts, { ...toast, id }] }));
 
     const durationMs = toast.action ? 12000 : 5000;
-    const timer = setTimeout(() => {
-      toastTimers.delete(id);
-      set((state) => ({
-        toasts: state.toasts.filter((item) => item.id !== id),
-      }));
-    }, durationMs);
+    const timer = setTimeout(() => expireToast(id), durationMs);
     toastTimers.set(id, timer);
     return id;
   },

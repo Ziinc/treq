@@ -1,4 +1,3 @@
-import type { ReactNode } from "react";
 import { useAuthStore, type Subscription } from "../stores/authStore";
 
 export type { Subscription };
@@ -23,6 +22,3 @@ export const useAuth = () => {
     exchangeToken,
   };
 };
-
-export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
-  children;
