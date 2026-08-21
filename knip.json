@@ -38,7 +38,12 @@
     "monaco-editor",
     "react-hook-form",
     "vite-plugin-monaco-editor",
+<<<<<<< HEAD
     "zod"
+=======
+    "zod",
+    "react-compiler-runtime"
+>>>>>>> 86a21f6c (Stop ignoring babel-plugin-react-compiler in knip.)
   ],
   "rules": {
     "files": "off",
