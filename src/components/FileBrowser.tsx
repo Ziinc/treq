@@ -17,11 +17,7 @@ import {
   Send,
   X,
 } from "lucide-react";
-import {
-  List,
-  type ListImperativeAPI,
-  type RowComponentProps,
-} from "react-window";
+import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import {
   type DirectoryEntry,
   type Workspace,
@@ -162,10 +158,6 @@ function filterHiddenEntries(entries: DirectoryEntry[]): DirectoryEntry[] {
 
 // Virtualization constants
 const LINE_HEIGHT = 18;
-const COMMENT_INPUT_HEIGHT = 165;
-const COMMENT_CARD_HEIGHT = 90;
-// FileCommentSection wraps its cards in a padded container (px-4 py-3).
-const COMMENT_SECTION_PADDING = 24;
 
 /** One virtualized row: either a code line, or a comment-thread row inserted after it. */
 type FileBrowserRow =
@@ -201,7 +193,6 @@ interface CodeLineProps {
   lineNumberWidth: number;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
-  style: React.CSSProperties;
   fontSize: number;
   hoveredLine: number | null;
   isLineSelected: boolean;
@@ -226,7 +217,6 @@ const CodeLine = memo(
     lineNumberWidth,
     onMouseEnter,
     onMouseLeave,
-    style,
     fontSize,
     hoveredLine,
     isLineSelected,
@@ -236,7 +226,7 @@ const CodeLine = memo(
     onLineMouseUp,
     onAddComment,
   }: CodeLineProps) => (
-    <div style={{ ...style, fontSize, overflow: "hidden" }}>
+    <div style={{ fontSize, overflow: "hidden" }}>
       <div
         data-testid="code-line"
         className={cn(
@@ -316,7 +306,7 @@ const CodeLine = memo(
 );
 
 interface FileBrowserListRowProps {
-  rows: FileBrowserRow[];
+  row: FileBrowserRow;
   lines: string[];
   lineNumberWidth: number;
   fileHunks: Map<number, "add" | "modify" | "delete">;
@@ -357,9 +347,7 @@ interface FileBrowserListRowProps {
 }
 
 function FileBrowserListRow({
-  index,
-  style,
-  rows,
+  row,
   lines,
   lineNumberWidth,
   fileHunks,
@@ -389,10 +377,7 @@ function FileBrowserListRow({
   onLineMouseUp,
   isLineSelected,
   onAddComment,
-}: RowComponentProps<FileBrowserListRowProps>): React.ReactElement | null {
-  const row = rows[index];
-  if (!row) return null;
-
+}: FileBrowserListRowProps): React.ReactElement | null {
   if (row.type === "comment") {
     const { lineNum } = row;
     const showInputHere =
@@ -400,21 +385,19 @@ function FileBrowserListRow({
       pendingComment !== null &&
       pendingComment.endLine === lineNum;
     return (
-      <div style={style}>
-        <FileCommentSection
-          comments={commentsByEndLine.get(lineNum) ?? []}
-          editingCommentId={editingCommentId}
-          showInput={showInputHere}
-          onSubmit={onSubmitComment}
-          onCancel={onCancelComment}
-          onStartEdit={onStartEditComment}
-          onCancelEdit={onCancelEditComment}
-          onSaveEdit={onSaveEditComment}
-          onDelete={onDeleteComment}
-          commentDraft={commentDraft}
-          onCommentDraftChange={onCommentDraftChange}
-        />
-      </div>
+      <FileCommentSection
+        comments={commentsByEndLine.get(lineNum) ?? []}
+        editingCommentId={editingCommentId}
+        showInput={showInputHere}
+        onSubmit={onSubmitComment}
+        onCancel={onCancelComment}
+        onStartEdit={onStartEditComment}
+        onCancelEdit={onCancelEditComment}
+        onSaveEdit={onSaveEditComment}
+        onDelete={onDeleteComment}
+        commentDraft={commentDraft}
+        onCommentDraftChange={onCommentDraftChange}
+      />
     );
   }
 
@@ -451,7 +434,6 @@ function FileBrowserListRow({
       lineNumberWidth={lineNumberWidth}
       onMouseEnter={() => onSetHoveredLine(lineNum)}
       onMouseLeave={() => onSetHoveredLine(null)}
-      style={style}
       fontSize={fontSize}
       hoveredLine={hoveredLine}
       isLineSelected={isLineSelected(lineNum)}
@@ -479,7 +461,6 @@ interface FileContentViewProps {
   basePath: string;
   fileHunks: Map<number, "add" | "modify" | "delete">;
   deletionMarkers: Set<number>;
-  getItemHeight: (index: number) => number;
   onSetHoveredLine: (lineNum: number | null) => void;
   fontSize: number;
   hoveredLine: number | null;
@@ -511,7 +492,7 @@ interface FileContentViewProps {
   onDeleteComment: (commentId: string) => void;
   commentDraft: string;
   onCommentDraftChange: (text: string) => void;
-  listRef: React.RefObject<ListImperativeAPI>;
+  listRef: React.RefObject<VirtuosoHandle>;
   // Search props
   isSearchOpen: boolean;
   searchQuery: string;
@@ -535,7 +516,6 @@ const FileContentView = memo(
     basePath,
     fileHunks,
     deletionMarkers,
-    getItemHeight,
     onSetHoveredLine,
     fontSize,
     hoveredLine,
@@ -766,43 +746,51 @@ const FileContentView = memo(
             </div>
           ) : (
             <>
-              <List
-                listRef={listRef}
-                rowCount={rows.length}
-                rowHeight={getItemHeight}
-                rowComponent={FileBrowserListRow}
-                rowProps={{
-                  rows,
-                  lines,
-                  lineNumberWidth,
-                  fileHunks,
-                  deletionMarkers,
-                  linesWithComments,
-                  commentsByEndLine,
-                  showCommentInput,
-                  pendingComment,
-                  editingCommentId,
-                  commentDraft,
-                  onCommentDraftChange,
-                  onSubmitComment,
-                  onCancelComment,
-                  onStartEditComment,
-                  onCancelEditComment,
-                  onSaveEditComment,
-                  onDeleteComment,
-                  fontSize,
-                  hoveredLine,
-                  isSelecting,
-                  searchQuery,
-                  searchMatches,
-                  currentMatchIndex,
-                  onSetHoveredLine,
-                  onLineMouseDown,
-                  onLineMouseEnter,
-                  onLineMouseUp,
-                  isLineSelected,
-                  onAddComment,
-                }}
+              <Virtuoso
+                ref={listRef}
+                className="h-full"
+                data={rows}
+                defaultItemHeight={LINE_HEIGHT}
+                increaseViewportBy={400}
+                computeItemKey={(_index, row) =>
+                  row.type === "comment"
+                    ? `comment:${row.lineNum}`
+                    : `line:${row.lineNum}`
+                }
+                itemContent={(_index, row) => (
+                  <FileBrowserListRow
+                    row={row}
+                    lines={lines}
+                    lineNumberWidth={lineNumberWidth}
+                    fileHunks={fileHunks}
+                    deletionMarkers={deletionMarkers}
+                    linesWithComments={linesWithComments}
+                    commentsByEndLine={commentsByEndLine}
+                    showCommentInput={showCommentInput}
+                    pendingComment={pendingComment}
+                    editingCommentId={editingCommentId}
+                    commentDraft={commentDraft}
+                    onCommentDraftChange={onCommentDraftChange}
+                    onSubmitComment={onSubmitComment}
+                    onCancelComment={onCancelComment}
+                    onStartEditComment={onStartEditComment}
+                    onCancelEditComment={onCancelEditComment}
+                    onSaveEditComment={onSaveEditComment}
+                    onDeleteComment={onDeleteComment}
+                    fontSize={fontSize}
+                    hoveredLine={hoveredLine}
+                    isSelecting={isSelecting}
+                    searchQuery={searchQuery}
+                    searchMatches={searchMatches}
+                    currentMatchIndex={currentMatchIndex}
+                    onSetHoveredLine={onSetHoveredLine}
+                    onLineMouseDown={onLineMouseDown}
+                    onLineMouseEnter={onLineMouseEnter}
+                    onLineMouseUp={onLineMouseUp}
+                    isLineSelected={isLineSelected}
+                    onAddComment={onAddComment}
+                  />
+                )}
               />
               {/* Search overlay */}
               <SearchOverlay
@@ -1197,7 +1185,7 @@ export const FileBrowser = memo(
     const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
     const { addToast } = useToast();
     const { fontSize } = useTerminalSettingsStore();
-    const listRef = useRef<ListImperativeAPI>(null);
+    const listRef = useRef<VirtuosoHandle>(null);
     const fileBrowserReview = useFileBrowserReview({
       repoPath,
       workspaceId: workspace?.id,
@@ -1293,7 +1281,7 @@ export const FileBrowser = memo(
       // Scroll to the match
       const match = searchMatches[newIndex];
       if (match && listRef.current) {
-        listRef.current.scrollToRow({
+        listRef.current.scrollToIndex({
           index: match.lineNumber,
           align: "center",
         });
@@ -1309,7 +1297,7 @@ export const FileBrowser = memo(
       // Scroll to the match
       const match = searchMatches[newIndex];
       if (match && listRef.current) {
-        listRef.current.scrollToRow({
+        listRef.current.scrollToIndex({
           index: match.lineNumber,
           align: "center",
         });
@@ -1865,25 +1853,6 @@ export const FileBrowser = memo(
       pendingComment,
     ]);
 
-    // Calculate item height for virtualization
-    const getItemHeight = useCallback(
-      (index: number) => {
-        const row = rows[index];
-        if (!row || row.type === "line") return LINE_HEIGHT;
-        const existingCount = commentsByEndLine.get(row.lineNum)?.length ?? 0;
-        const showInputHere =
-          showCommentInput &&
-          pendingComment !== null &&
-          pendingComment.endLine === row.lineNum;
-        return (
-          COMMENT_SECTION_PADDING +
-          existingCount * COMMENT_CARD_HEIGHT +
-          (showInputHere ? COMMENT_INPUT_HEIGHT : 0)
-        );
-      },
-      [rows, commentsByEndLine, showCommentInput, pendingComment],
-    );
-
     // Memoize sorted root entries to avoid re-sorting on every render
     const sortedRootEntries = useMemo(
       () =>
@@ -1907,7 +1876,6 @@ export const FileBrowser = memo(
         basePath={basePath}
         fileHunks={fileHunks}
         deletionMarkers={deletionMarkers}
-        getItemHeight={getItemHeight}
         onSetHoveredLine={handleSetHoveredLine}
         fontSize={fontSize}
         hoveredLine={hoveredLine}
