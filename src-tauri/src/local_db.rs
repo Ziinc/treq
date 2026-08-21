@@ -1827,9 +1827,9 @@ pub fn clear_file_browser_review(repo_path: &str, workspace_id: i64) -> Result<(
 /// same path, simulating a fresh process start.
 #[cfg(test)]
 pub(crate) fn clear_db_cache_for_testing(repo_path: &str) {
-    if let Some(initialized) = INITIALIZED_DBS.get() {
-        initialized.lock().unwrap().remove(repo_path);
-    }
+  if let Some(initialized) = INITIALIZED_DBS.get() {
+    initialized.lock().unwrap().remove(repo_path);
+  }
 }
 
 /// Store a `RepoConfig` in the local DB, replacing any previously cached values.
@@ -1839,81 +1839,80 @@ pub(crate) fn clear_db_cache_for_testing(repo_path: &str) {
 /// from the cache so that a subsequent `get_cached_repo_config` returns `None`
 /// for those keys rather than stale data.
 pub fn cache_repo_config(
-    repo_path: &str,
-    config: &crate::repo_config::RepoConfig,
+  repo_path: &str,
+  config: &crate::repo_config::RepoConfig,
 ) -> Result<(), String> {
-    let conn = get_connection(repo_path)?;
-    let now = Utc::now().to_rfc3339();
+  let conn = get_connection(repo_path)?;
+  let now = Utc::now().to_rfc3339();
 
-    let mut pairs: Vec<(&str, Option<String>)> = vec![
-        ("branch_name_pattern", config.branch_name_pattern.clone()),
-        ("default_model", config.default_model.clone()),
-        ("default_agent", config.default_agent.clone()),
-        ("target_branch", config.target_branch.clone()),
-        (
-            "included_copy_files",
-            config
-                .included_copy_files
-                .as_ref()
-                .map(|v| serde_json::to_string(v).unwrap_or_default()),
-        ),
-    ];
+  let mut pairs: Vec<(&str, Option<String>)> = vec![
+    ("branch_name_pattern", config.branch_name_pattern.clone()),
+    ("default_model", config.default_model.clone()),
+    ("default_agent", config.default_agent.clone()),
+    ("target_branch", config.target_branch.clone()),
+    (
+      "included_copy_files",
+      config
+        .included_copy_files
+        .as_ref()
+        .map(|v| serde_json::to_string(v).unwrap_or_default()),
+    ),
+  ];
 
-    for (key, value) in pairs.drain(..) {
-        match value {
-            Some(val) => {
-                conn.execute(
-                    "INSERT INTO repo_config_cache (key, value, updated_at)
+  for (key, value) in pairs.drain(..) {
+    match value {
+      Some(val) => {
+        conn
+          .execute(
+            "INSERT INTO repo_config_cache (key, value, updated_at)
                      VALUES (?1, ?2, ?3)
                      ON CONFLICT(key) DO UPDATE SET value = excluded.value,
                                                     updated_at = excluded.updated_at",
-                    params![key, val, now],
-                )
-                .map_err(|e| format!("Failed to cache repo config key '{key}': {e}"))?;
-            }
-            None => {
-                conn.execute(
-                    "DELETE FROM repo_config_cache WHERE key = ?1",
-                    params![key],
-                )
-                .map_err(|e| format!("Failed to delete stale repo config key '{key}': {e}"))?;
-            }
-        }
+            params![key, val, now],
+          )
+          .map_err(|e| format!("Failed to cache repo config key '{key}': {e}"))?;
+      }
+      None => {
+        conn
+          .execute("DELETE FROM repo_config_cache WHERE key = ?1", params![key])
+          .map_err(|e| format!("Failed to delete stale repo config key '{key}': {e}"))?;
+      }
     }
-    Ok(())
+  }
+  Ok(())
 }
 
 /// Read the cached `RepoConfig` from the local DB.
 ///
 /// Returns a default (all-`None`) `RepoConfig` when no cache exists yet.
 pub fn get_cached_repo_config(repo_path: &str) -> Result<crate::repo_config::RepoConfig, String> {
-    let conn = get_connection(repo_path)?;
-    let mut stmt = conn
-        .prepare("SELECT key, value FROM repo_config_cache")
-        .map_err(|e| format!("Failed to prepare repo_config_cache query: {e}"))?;
+  let conn = get_connection(repo_path)?;
+  let mut stmt = conn
+    .prepare("SELECT key, value FROM repo_config_cache")
+    .map_err(|e| format!("Failed to prepare repo_config_cache query: {e}"))?;
 
-    let mut map = std::collections::HashMap::<String, String>::new();
-    let mut rows = stmt
-        .query([])
-        .map_err(|e| format!("Failed to query repo_config_cache: {e}"))?;
-    while let Some(row) = rows
-        .next()
-        .map_err(|e| format!("Failed to read repo_config_cache row: {e}"))?
-    {
-        let key: String = row.get(0).map_err(|e| e.to_string())?;
-        let value: String = row.get(1).map_err(|e| e.to_string())?;
-        map.insert(key, value);
-    }
+  let mut map = std::collections::HashMap::<String, String>::new();
+  let mut rows = stmt
+    .query([])
+    .map_err(|e| format!("Failed to query repo_config_cache: {e}"))?;
+  while let Some(row) = rows
+    .next()
+    .map_err(|e| format!("Failed to read repo_config_cache row: {e}"))?
+  {
+    let key: String = row.get(0).map_err(|e| e.to_string())?;
+    let value: String = row.get(1).map_err(|e| e.to_string())?;
+    map.insert(key, value);
+  }
 
-    Ok(crate::repo_config::RepoConfig {
-        branch_name_pattern: map.remove("branch_name_pattern"),
-        default_model: map.remove("default_model"),
-        default_agent: map.remove("default_agent"),
-        target_branch: map.remove("target_branch"),
-        included_copy_files: map
-            .remove("included_copy_files")
-            .and_then(|v| serde_json::from_str::<Vec<String>>(&v).ok()),
-    })
+  Ok(crate::repo_config::RepoConfig {
+    branch_name_pattern: map.remove("branch_name_pattern"),
+    default_model: map.remove("default_model"),
+    default_agent: map.remove("default_agent"),
+    target_branch: map.remove("target_branch"),
+    included_copy_files: map
+      .remove("included_copy_files")
+      .and_then(|v| serde_json::from_str::<Vec<String>>(&v).ok()),
+  })
 }
 
 #[cfg(test)]

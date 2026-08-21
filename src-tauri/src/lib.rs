@@ -1,7 +1,6 @@
 mod agent_dispatch;
 mod agent_runtime;
 pub mod auto_rebase;
-pub mod repo_config;
 pub mod binary_paths;
 mod cli;
 mod commands;
@@ -16,6 +15,7 @@ pub mod local_db;
 mod open_new_window;
 pub mod pr_status;
 pub mod pty;
+pub mod repo_config;
 pub mod send_dispatch;
 pub mod telemetry;
 
