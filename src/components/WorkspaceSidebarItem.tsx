@@ -447,7 +447,9 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                   <ContextMenuItem
                     data-testid="remove-schedule-menu-item"
                     onClick={() => {
-                      void clearWorkspaceSchedule(repoPath, [workspace.id]).then(() => {
+                      void clearWorkspaceSchedule(repoPath, [
+                        workspace.id,
+                      ]).then(() => {
                         addToast({
                           title: "Workspace unscheduled",
                           description: "Shown in the sidebar again.",

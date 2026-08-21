@@ -78,7 +78,9 @@ export function useFileActions({
 
   // Shared across surfaces (this dropdown item and the header's Create PR
   // button) so either one's in-flight PR creation shows as pending here too.
-  const createPrActive = useIsMutating(createPrMutationKey(repoPath, workspaceId));
+  const createPrActive = useIsMutating(
+    createPrMutationKey(repoPath, workspaceId),
+  );
   const pendingAction: CommitAction | null = createPrActive
     ? "pr"
     : localPendingAction;
@@ -309,9 +311,17 @@ export function useFileActions({
         // hints / sidebar indicators clear in the same turn as the commit
         // (resolve+commit must not leave a stale Conflicts section).
         await Promise.all([
-          invalidateQueries(["workspace-status", repoPath, workspaceId ?? null]),
+          invalidateQueries([
+            "workspace-status",
+            repoPath,
+            workspaceId ?? null,
+          ]),
           invalidateQueries(["workspace-statuses", repoPath]),
-          invalidateQueries(["workspace-commits", repoPath, workspaceId ?? null]),
+          invalidateQueries([
+            "workspace-commits",
+            repoPath,
+            workspaceId ?? null,
+          ]),
           invalidateReviewChangeCount(repoPath, workspaceId),
         ]);
         // Force-apply so an in-progress review refreshes instead of parking
@@ -338,7 +348,7 @@ export function useFileActions({
       setCommittedSectionCollapsed,
       repoPath,
       workspaceId,
-      ],
+    ],
   );
 
   const handleCommit = useCallback(
@@ -421,13 +431,7 @@ export function useFileActions({
         });
       }
     },
-    [
-      createPrMutation,
-      remoteInfo,
-      workspace,
-      baseBranch,
-      addToast,
-    ],
+    [createPrMutation, remoteInfo, workspace, baseBranch, addToast],
   );
 
   const handleExpandContext = useCallback(

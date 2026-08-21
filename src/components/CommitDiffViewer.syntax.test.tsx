@@ -71,9 +71,9 @@ describe("CommitDiffViewer syntax highlighting", () => {
     const { container } = render(
       <SWRConfig value={testSWRConfig}>
         <SWRMutateScope>
-        <ToastProvider>
-          <CommitDiffViewer repoPath="/repo" workspaceId={1} />
-        </ToastProvider>
+          <ToastProvider>
+            <CommitDiffViewer repoPath="/repo" workspaceId={1} />
+          </ToastProvider>
         </SWRMutateScope>
       </SWRConfig>,
     );

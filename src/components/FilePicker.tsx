@@ -29,7 +29,14 @@ export const FilePicker: React.FC<FilePickerProps> = ({
   const debouncedQuery = useDebounce(query, 150);
 
   const { data: indexed } = useSWR(
-    open ? ["ensure-workspace-indexed", repoPath, workspaceId, workspacePath || repoPath] : null,
+    open
+      ? [
+          "ensure-workspace-indexed",
+          repoPath,
+          workspaceId,
+          workspacePath || repoPath,
+        ]
+      : null,
     () =>
       ensureWorkspaceIndexed(
         repoPath,

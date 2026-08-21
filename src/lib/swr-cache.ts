@@ -1,6 +1,5 @@
 import { useLayoutEffect, type ReactNode } from "react";
-import { mutate as defaultMutate, useSWRConfig } from "swr";
-import type { Key } from "swr";
+import { mutate as defaultMutate, useSWRConfig, type Key } from "swr";
 
 type ScopedMutate = typeof defaultMutate;
 

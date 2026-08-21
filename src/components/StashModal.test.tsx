@@ -84,24 +84,24 @@ function renderModal(
   return render(
     <SWRConfig value={testSWRConfig}>
       <SWRMutateScope>
-      <StashModal
-        open
-        onOpenChange={vi.fn()}
-        repoPath="/repo"
-        workspaces={[
-          {
-            id: 10,
-            repo_path: "/repo",
-            workspace_name: "feat-alpha",
-            workspace_path: "feat-alpha",
-            branch_name: "feat/alpha",
-            created_at: "2026-01-01T00:00:00Z",
-            title: "feat/alpha",
-            not_on_remote: false,
-          },
-        ]}
-        {...props}
-      />
+        <StashModal
+          open
+          onOpenChange={vi.fn()}
+          repoPath="/repo"
+          workspaces={[
+            {
+              id: 10,
+              repo_path: "/repo",
+              workspace_name: "feat-alpha",
+              workspace_path: "feat-alpha",
+              branch_name: "feat/alpha",
+              created_at: "2026-01-01T00:00:00Z",
+              title: "feat/alpha",
+              not_on_remote: false,
+            },
+          ]}
+          {...props}
+        />
       </SWRMutateScope>
     </SWRConfig>,
   );

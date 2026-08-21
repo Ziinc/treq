@@ -128,7 +128,8 @@ export const TaskInput: React.FC<TaskInputProps> = ({
     debouncedMentionQuery !== null
       ? ["task-mentions", repoPath, workspaceId, debouncedMentionQuery]
       : null,
-    () => searchWorkspaceFiles(repoPath, workspaceId, debouncedMentionQuery!, 4),
+    () =>
+      searchWorkspaceFiles(repoPath, workspaceId, debouncedMentionQuery!, 4),
   );
 
   useEffect(() => {

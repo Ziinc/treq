@@ -1,10 +1,6 @@
 import { memo, useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
-import {
-  type JjLogCommit,
-  type JjLogResult,
-  listCommits,
-} from "../lib/api";
+import { type JjLogCommit, type JjLogResult, listCommits } from "../lib/api";
 import {
   cn,
   formatDayLabel,
@@ -101,7 +97,11 @@ export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
       setLimit(14);
     }, [repoPath, workspaceId]);
 
-    const { data: commitsResult, isLoading: loading, isValidating } = useSWR(
+    const {
+      data: commitsResult,
+      isLoading: loading,
+      isValidating,
+    } = useSWR(
       repoPath
         ? [
             "linear-commits",

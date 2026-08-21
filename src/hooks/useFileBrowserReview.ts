@@ -37,9 +37,7 @@ export function useFileBrowserReview({
   addToast,
 }: UseFileBrowserReviewParams) {
   const loadKey =
-    repoPath && workspaceId !== undefined
-      ? `${repoPath}:${workspaceId}`
-      : null;
+    repoPath && workspaceId !== undefined ? `${repoPath}:${workspaceId}` : null;
   const { data: saved } = useSWR(
     loadKey ? ["file-browser-review", repoPath, workspaceId] : null,
     () => loadFileBrowserReview(repoPath!, workspaceId!),
@@ -62,10 +60,8 @@ export function useFileBrowserReview({
     (next: LineComment[] | ((prev: LineComment[]) => LineComment[])) => {
       if (!loadKey) return;
       setDraft((prev) => {
-        const current =
-          prev?.key === loadKey ? prev.comments : loadedComments;
-        const commentsNext =
-          typeof next === "function" ? next(current) : next;
+        const current = prev?.key === loadKey ? prev.comments : loadedComments;
+        const commentsNext = typeof next === "function" ? next(current) : next;
         const summary = prev?.key === loadKey ? prev.summary : loadedSummary;
         return { key: loadKey, comments: commentsNext, summary };
       });

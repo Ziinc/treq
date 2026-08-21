@@ -351,10 +351,7 @@ export function useMergeQueueStatus(
   const { data: queueEnabled } = useMergeQueueEnabled(repoPath);
 
   return useSWR<WorkspaceQueueStatus | null>(
-    FEATURES.mergeQueue &&
-      queueEnabled === true &&
-      remoteInfo &&
-      branchName
+    FEATURES.mergeQueue && queueEnabled === true && remoteInfo && branchName
       ? ["merge-queue-status", remoteInfo.full_name, branchName]
       : null,
     async () => {

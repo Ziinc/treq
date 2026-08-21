@@ -882,10 +882,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       setSelectedWorkspace(next);
       setViewMode("show-workspace");
       if (repoPath) {
-        void invalidateReviewChangeCount(
-          repoPath,
-          next?.id ?? null,
-        );
+        void invalidateReviewChangeCount(repoPath, next?.id ?? null);
       }
     },
     [repoPath],
@@ -975,12 +972,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     } finally {
       setChangeMovePending(false);
     }
-  }, [
-    pendingChangeMove,
-    repoPath,
-    addToast,
-    selectedWorkspace?.id,
-  ]);
+  }, [pendingChangeMove, repoPath, addToast, selectedWorkspace?.id]);
 
   const handleSelectStack = useCallback((workspaceIds: Set<number>) => {
     setSelectedWorkspaceIds(workspaceIds);
@@ -1607,7 +1599,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
               onStartPromptFromIssue={handleStartPromptFromIssue}
               onOpenWorkspace={async (workspaceId) => {
                 await invalidateQueries(["workspaces", repoPath]);
-                const updatedWorkspaces = await fetchAndCache(["workspaces", repoPath], () => getWorkspaces(repoPath));
+                const updatedWorkspaces = await fetchAndCache(
+                  ["workspaces", repoPath],
+                  () => getWorkspaces(repoPath),
+                );
                 const workspace = updatedWorkspaces.find(
                   (w) => w.id === workspaceId,
                 );
@@ -1712,7 +1707,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
         onSuccess={async (workspaceId) => {
           await invalidateQueries(["workspaces", repoPath]);
           invalidateQueries(["workspace-statuses", repoPath]);
-          const updatedWorkspaces = await fetchAndCache(["workspaces", repoPath], () => getWorkspaces(repoPath));
+          const updatedWorkspaces = await fetchAndCache(
+            ["workspaces", repoPath],
+            () => getWorkspaces(repoPath),
+          );
           const newWorkspace = updatedWorkspaces.find(
             (w) => w.id === workspaceId,
           );

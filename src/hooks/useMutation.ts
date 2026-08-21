@@ -87,5 +87,11 @@ export function useMutation<TData, TVariables = void>(options: {
     [mutateAsync],
   );
 
-  return { mutate, mutateAsync, isPending, isError: error !== undefined, error };
+  return {
+    mutate,
+    mutateAsync,
+    isPending,
+    isError: error !== undefined,
+    error,
+  };
 }

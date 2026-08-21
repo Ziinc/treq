@@ -52,8 +52,18 @@ export const MergePreviewPage = memo<MergePreviewPageProps>(
     const targetBranch = workspace.target_branch || "main";
     const fullPath = getFullWorkspacePath(workspace);
 
-    const { data: preview, isLoading: loading, error: previewError } = useSWR(
-      ["merge-preview", fullPath, workspace.repo_path, workspace.id, targetBranch],
+    const {
+      data: preview,
+      isLoading: loading,
+      error: previewError,
+    } = useSWR(
+      [
+        "merge-preview",
+        fullPath,
+        workspace.repo_path,
+        workspace.id,
+        targetBranch,
+      ],
       async () => {
         const [commits, diffData] = await Promise.all([
           jjGetCommitsAhead(fullPath, targetBranch),

@@ -1,9 +1,4 @@
-import {
-  type Dispatch,
-  type SetStateAction,
-  useEffect,
-  useMemo,
-} from "react";
+import { type Dispatch, type SetStateAction, useEffect, useMemo } from "react";
 import useSWR from "swr";
 import {
   type BranchStatus,
@@ -200,7 +195,12 @@ export function useWorkspaceDialogEffects(
         void jjGitFetchBackground(repoPath);
         branches = mapBranches(await listRepoBranches(repoPath));
       }
-      return { status: null, files: [] as JjFileChange[], workspaceList, branches };
+      return {
+        status: null,
+        files: [] as JjFileChange[],
+        workspaceList,
+        branches,
+      };
     },
   );
 

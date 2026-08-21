@@ -21,7 +21,9 @@ export const useAgentAutoCommand = (sessionData: ClaudeSessionData) => {
   );
 
   const sessionModel =
-    sessionModelOverride === undefined ? (loadedModel ?? null) : sessionModelOverride;
+    sessionModelOverride === undefined
+      ? (loadedModel ?? null)
+      : sessionModelOverride;
   const isModelLoaded = !modelLoading;
   const treqBinDirReady = !binLoading;
 

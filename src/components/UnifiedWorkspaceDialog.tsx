@@ -315,9 +315,7 @@ export const UnifiedWorkspaceDialog: React.FC<UnifiedWorkspaceDialogProps> = ({
 
   // Load gitignore suggestions for symlink chips when the create dialog opens.
   const { data: gitignoreSuggestions = [] } = useSWR(
-    open && !sourceWorkspace
-      ? ["gitignore-suggestions", repoPath]
-      : null,
+    open && !sourceWorkspace ? ["gitignore-suggestions", repoPath] : null,
     () => listGitignoredPathSuggestions(repoPath),
   );
 

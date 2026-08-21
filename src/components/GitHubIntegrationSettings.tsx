@@ -153,16 +153,13 @@ export const GitHubIntegrationSettings: React.FC<
     data: repositories = [],
     isLoading: loading,
     error: reposError,
-  } = useSWR(
-    isSignedIn ? ["github-repositories", userId] : null,
-    async () => {
-      const { data, error } = await supabase
-        .from("github_repositories")
-        .select("id, full_name, private, default_branch, installation_id");
-      if (error) throw error;
-      return (data ?? []) as GitHubRepository[];
-    },
-  );
+  } = useSWR(isSignedIn ? ["github-repositories", userId] : null, async () => {
+    const { data, error } = await supabase
+      .from("github_repositories")
+      .select("id, full_name, private, default_branch, installation_id");
+    if (error) throw error;
+    return (data ?? []) as GitHubRepository[];
+  });
   const failed = Boolean(reposError);
 
   if (authLoading) {

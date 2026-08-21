@@ -51,7 +51,9 @@ export function useMissionControlDiffStats({
       ? ["workspace-commits-mission", repoPath, fetchableIds.join(",")]
       : null,
     () =>
-      Promise.all(fetchableIds.map((workspaceId) => listCommits(repoPath!, workspaceId))),
+      Promise.all(
+        fetchableIds.map((workspaceId) => listCommits(repoPath!, workspaceId)),
+      ),
   );
 
   return useMemo(() => {

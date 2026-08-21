@@ -11,7 +11,7 @@ function renderMissionControl(ui: React.ReactElement) {
   return render(
     <SWRConfig value={testSWRConfig}>
       <SWRMutateScope>
-      <TooltipProvider>{ui}</TooltipProvider>
+        <TooltipProvider>{ui}</TooltipProvider>
       </SWRMutateScope>
     </SWRConfig>,
   );

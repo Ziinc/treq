@@ -373,11 +373,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
           ]
         : null,
       () =>
-        dryRunHomeRepoRebase(
-          effectiveRepoPath,
-          mainRepoBranch!,
-          defaultBranch,
-        ),
+        dryRunHomeRepoRebase(effectiveRepoPath, mainRepoBranch!, defaultBranch),
     );
 
     useEffect(() => {
@@ -422,7 +418,10 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
       useSWR<number>(
         effectiveRepoPath
           ? [
-              ...reviewChangeCountQueryKey(effectiveRepoPath, reviewWorkspaceId),
+              ...reviewChangeCountQueryKey(
+                effectiveRepoPath,
+                reviewWorkspaceId,
+              ),
               includeCommittedInReviewCount,
               defaultTargetBranch,
             ]
@@ -503,11 +502,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 
     const { data: overviewData, isLoading: overviewPending } = useSWR(
       effectiveRepoPath && activeTab === "overview"
-        ? [
-            "workspace-overview",
-            effectiveRepoPath,
-            workspace?.id ?? null,
-          ]
+        ? ["workspace-overview", effectiveRepoPath, workspace?.id ?? null]
         : null,
       async () => {
         try {
@@ -598,10 +593,10 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
         setGitSubmoduleSynced(effectiveRepoPath, path, enabled),
       onSuccess: () => {
         void invalidateQueries([
-            "workspace-overview",
-            effectiveRepoPath,
-            workspace?.id ?? null,
-          ]);
+          "workspace-overview",
+          effectiveRepoPath,
+          workspace?.id ?? null,
+        ]);
       },
     });
 
@@ -640,7 +635,11 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
         if (target === "changes-diff" && workspace?.id !== undefined) {
           // Diff reload is handled by ChangesDiffViewer; refresh status metadata
           // so the Review pill tone and overview conflict alerts stay in sync.
-          void invalidateQueries(["workspace-status", effectiveRepoPath, workspace.id]);
+          void invalidateQueries([
+            "workspace-status",
+            effectiveRepoPath,
+            workspace.id,
+          ]);
           void invalidateQueries(["workspace-statuses", effectiveRepoPath]);
           void invalidateQueries(
             reviewChangeCountQueryKey(effectiveRepoPath, workspace.id),
@@ -648,27 +647,22 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
         }
         if (target === "commits-list") {
           void invalidateQueries([
-              "commit-diff-viewer-commits",
-              effectiveRepoPath,
-              workspace?.id ?? null,
-            ]);
+            "commit-diff-viewer-commits",
+            effectiveRepoPath,
+            workspace?.id ?? null,
+          ]);
           void invalidateQueries([
-              "workspace-commits",
-              effectiveRepoPath,
-              workspace?.id ?? null,
-            ]);
+            "workspace-commits",
+            effectiveRepoPath,
+            workspace?.id ?? null,
+          ]);
         }
       };
       window.addEventListener(REFRESH_WORKSPACE_CHANGES_EVENT, handler);
       return () => {
         window.removeEventListener(REFRESH_WORKSPACE_CHANGES_EVENT, handler);
       };
-    }, [
-      activeTab,
-      showFileBrowserInCode,
-      workspace?.id,
-      effectiveRepoPath,
-      ]);
+    }, [activeTab, showFileBrowserInCode, workspace?.id, effectiveRepoPath]);
 
     useEffect(() => {
       if (!workspaceStatusData) return;
@@ -722,7 +716,11 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
           // Invalidate sidebar queries so hierarchy updates
           void invalidateQueries(["workspaces", effectiveRepoPath]);
           void invalidateQueries(["workspace-statuses", effectiveRepoPath]);
-          void invalidateQueries(["workspace-status", effectiveRepoPath, workspace.id]);
+          void invalidateQueries([
+            "workspace-status",
+            effectiveRepoPath,
+            workspace.id,
+          ]);
 
           setTargetBranch(branch);
         } catch (error) {
@@ -801,12 +799,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
       } finally {
         _setActionPending(null);
       }
-    }, [
-      workspace,
-      effectiveRepoPath,
-      addToast,
-      refetchWorkspaceStatus,
-      ]);
+    }, [workspace, effectiveRepoPath, addToast, refetchWorkspaceStatus]);
 
     const handleSync = useCallback(async () => {
       if (!effectiveRepoPath) return;
@@ -847,12 +840,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
         void invalidateQueries();
         _setActionPending(null);
       }
-    }, [
-      workspace,
-      effectiveRepoPath,
-      addToast,
-      refetchWorkspaceStatus,
-      ]);
+    }, [workspace, effectiveRepoPath, addToast, refetchWorkspaceStatus]);
 
     const handleViewTentativeChanges = useCallback(() => {
       setActiveTab("changes");
@@ -877,20 +865,20 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
                   await Promise.all([
                     refetchWorkspaceStatus(),
                     void invalidateQueries([
-                        "commit-diff-viewer-commits",
-                        effectiveRepoPath,
-                        workspace.id,
-                      ]),
+                      "commit-diff-viewer-commits",
+                      effectiveRepoPath,
+                      workspace.id,
+                    ]),
                     void invalidateQueries([
-                        "workspace-status",
-                        effectiveRepoPath,
-                        workspace.id,
-                      ]),
+                      "workspace-status",
+                      effectiveRepoPath,
+                      workspace.id,
+                    ]),
                     void invalidateQueries([
-                        "workspace-overview",
-                        effectiveRepoPath,
-                        workspace.id,
-                      ]),
+                      "workspace-overview",
+                      effectiveRepoPath,
+                      workspace.id,
+                    ]),
                   ]);
                   addToast({
                     title: "Restored",
@@ -914,12 +902,20 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
         await Promise.all([
           refetchWorkspaceStatus(),
           void invalidateQueries([
-              "commit-diff-viewer-commits",
-              effectiveRepoPath,
-              workspace.id,
-            ]),
-          void invalidateQueries(["workspace-status", effectiveRepoPath, workspace.id]),
-          void invalidateQueries(["workspace-overview", effectiveRepoPath, workspace.id]),
+            "commit-diff-viewer-commits",
+            effectiveRepoPath,
+            workspace.id,
+          ]),
+          void invalidateQueries([
+            "workspace-status",
+            effectiveRepoPath,
+            workspace.id,
+          ]),
+          void invalidateQueries([
+            "workspace-overview",
+            effectiveRepoPath,
+            workspace.id,
+          ]),
         ]);
       } catch (error) {
         addToast({
@@ -970,12 +966,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
       } finally {
         setHomeRebasing(false);
       }
-    }, [
-      effectiveRepoPath,
-      mainRepoBranch,
-      defaultBranch,
-      addToast,
-      ]);
+    }, [effectiveRepoPath, mainRepoBranch, defaultBranch, addToast]);
 
     const handleForceRebaseWorkspace = useCallback(async () => {
       if (!workspace || !effectiveRepoPath) return;
@@ -1024,7 +1015,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
       defaultTargetBranch,
       handleBookmarkConflictsFromResult,
       addToast,
-      ]);
+    ]);
 
     const handleResolveBookmarkConflict = useCallback(async () => {
       if (

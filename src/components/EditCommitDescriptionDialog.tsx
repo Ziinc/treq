@@ -30,13 +30,16 @@ export const EditCommitDescriptionDialog: React.FC<
   EditCommitDescriptionDialogProps
 > = ({ open, onOpenChange, repoPath, workspaceId, commit, onSuccess }) => {
   const changeId = commit?.change_id;
-  const { data: loadedDescription, error: loadError, isLoading: fetching } =
-    useSWR(
-      open && changeId
-        ? ["commit-description", repoPath, workspaceId, changeId]
-        : null,
-      () => getCommitDescription(repoPath, workspaceId, changeId!),
-    );
+  const {
+    data: loadedDescription,
+    error: loadError,
+    isLoading: fetching,
+  } = useSWR(
+    open && changeId
+      ? ["commit-description", repoPath, workspaceId, changeId]
+      : null,
+    () => getCommitDescription(repoPath, workspaceId, changeId!),
+  );
   const [draft, setDraft] = useState<{ key: string; text: string } | null>(
     null,
   );

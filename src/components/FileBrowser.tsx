@@ -1211,13 +1211,24 @@ export const FileBrowser = memo(
       ? getFullWorkspacePath(workspace)
       : basePath;
     useSWR(
-      repoPath ? ["ensure-workspace-indexed", repoPath, workspace?.id ?? null, workspacePath] : null,
-      () => ensureWorkspaceIndexed(repoPath!, workspace?.id ?? null, workspacePath),
+      repoPath
+        ? [
+            "ensure-workspace-indexed",
+            repoPath,
+            workspace?.id ?? null,
+            workspacePath,
+          ]
+        : null,
+      () =>
+        ensureWorkspaceIndexed(repoPath!, workspace?.id ?? null, workspacePath),
     );
 
-    const { data: rootEntries = [], isLoading: isLoadingDir, mutate: mutateRootEntries } = useSWR(
-      basePath ? ["list-directory", basePath] : null,
-      async () => filterHiddenEntries(await listDirectory(basePath)),
+    const {
+      data: rootEntries = [],
+      isLoading: isLoadingDir,
+      mutate: mutateRootEntries,
+    } = useSWR(basePath ? ["list-directory", basePath] : null, async () =>
+      filterHiddenEntries(await listDirectory(basePath)),
     );
 
     useEffect(() => {
@@ -1225,7 +1236,9 @@ export const FileBrowser = memo(
     }, [basePath, rootEntries]);
 
     const { data: jjChangedFiles } = useSWR(
-      repoPath ? ["workspace-changed-files", repoPath, workspace?.id ?? null] : null,
+      repoPath
+        ? ["workspace-changed-files", repoPath, workspace?.id ?? null]
+        : null,
       () => getWorkspaceChangedFiles(repoPath!, workspace?.id ?? null),
     );
 

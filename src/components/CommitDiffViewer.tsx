@@ -221,7 +221,11 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
     }, []);
 
     const handleDescriptionEdited = useCallback(() => {
-      void invalidateQueries(["commit-diff-viewer-commits", repoPath, workspaceId]);
+      void invalidateQueries([
+        "commit-diff-viewer-commits",
+        repoPath,
+        workspaceId,
+      ]);
     }, [repoPath, workspaceId]);
 
     const handleShiftToNow = useCallback(async () => {
@@ -532,10 +536,10 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
                       return next;
                     });
                     await invalidateQueries([
-                        "commit-diff-viewer-commits",
-                        repoPath,
-                        workspaceId,
-                      ]);
+                      "commit-diff-viewer-commits",
+                      repoPath,
+                      workspaceId,
+                    ]);
                     addToast({
                       title: "Restored",
                       description: `Restored commit ${commit.short_id}`,
@@ -591,7 +595,11 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
           }, REMOVE_ANIMATION_MS);
 
           void invalidateQueries(["stashes", repoPath]);
-          void invalidateQueries(["commit-diff-viewer-commits", repoPath, workspaceId]);
+          void invalidateQueries([
+            "commit-diff-viewer-commits",
+            repoPath,
+            workspaceId,
+          ]);
 
           addToast({
             title: "Commit stashed",
@@ -607,13 +615,7 @@ export const CommitDiffViewer = memo<CommitDiffViewerProps>(
           });
         }
       },
-      [
-        repoPath,
-        workspaceId,
-        onCommitAbandoned,
-        onCommitStashed,
-        addToast,
-      ],
+      [repoPath, workspaceId, onCommitAbandoned, onCommitStashed, addToast],
     );
 
     // Scroll to commit when scrollToCommitId changes

@@ -146,9 +146,8 @@ export const StashModal: React.FC<StashModalProps> = ({
     data: entries = [],
     isLoading: isPending,
     mutate: refetch,
-  } = useSWR(
-    open && repoPath ? ["stashes", repoPath] : null,
-    () => listStashes(repoPath),
+  } = useSWR(open && repoPath ? ["stashes", repoPath] : null, () =>
+    listStashes(repoPath),
   );
 
   useEffect(() => {

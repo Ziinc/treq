@@ -46,7 +46,12 @@ export const RenameWorkspaceDialog: React.FC<RenameWorkspaceDialogProps> = ({
     open &&
       debouncedBranchName.trim() &&
       debouncedBranchName !== workspace.branch_name
-      ? ["rename-workspace-dry-run", repoPath, workspace.id, debouncedBranchName]
+      ? [
+          "rename-workspace-dry-run",
+          repoPath,
+          workspace.id,
+          debouncedBranchName,
+        ]
       : null,
     async () => {
       try {

@@ -69,11 +69,13 @@ export const RepositorySettingsContent = ({
           defaultAgent: "",
           autoPush: false,
         });
-  const branchNamePattern = settings.branchNamePattern;
-  const includedFiles = settings.includedFiles;
-  const defaultModel = settings.defaultModel;
-  const defaultAgent = settings.defaultAgent;
-  const autoPush = settings.autoPush;
+  const {
+    branchNamePattern,
+    includedFiles,
+    defaultModel,
+    defaultAgent,
+    autoPush,
+  } = settings;
   const error =
     saveError ??
     (loadError ? `Failed to load settings: ${loadError}` : null);

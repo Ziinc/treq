@@ -129,10 +129,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
     onCreateShellTerminal,
     onDropChangeFiles,
   }) => {
-    const {
-      data: workspaces = [],
-      isLoading: workspacesPending,
-    } = useSWR(
+    const { data: workspaces = [], isLoading: workspacesPending } = useSWR(
       repoPath ? ["workspaces", repoPath] : null,
       () => getWorkspaces(repoPath || ""),
       { keepPreviousData: true },
