@@ -495,15 +495,10 @@ describe("Dashboard - workspace list", () => {
         ) + 1;
       expect(rangeCount).toBeGreaterThan(1);
 
-      const anchorLabel = within(anchorRow).getByText(anchorBranch);
-      const targetLabel = within(targetRow).getByText(targetBranch);
-
-      await user.keyboard("{Meta>}");
-      await user.click(anchorLabel);
-      await user.keyboard("{/Meta}");
-      await user.keyboard("{Shift>}");
-      await user.click(targetLabel);
-      await user.keyboard("{/Shift}");
+      fireEvent.pointerDown(anchorRow, { button: 0, metaKey: true });
+      fireEvent.click(anchorRow, { metaKey: true });
+      fireEvent.pointerDown(targetRow, { button: 0, shiftKey: true });
+      fireEvent.click(targetRow, { shiftKey: true });
 
       await waitFor(() => {
         const start = Math.min(
