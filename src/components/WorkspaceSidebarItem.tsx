@@ -229,16 +229,15 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
   const workspaceTitle = getWorkspaceTitleFromUtils(workspace);
   const prStatus = hasRemote && prInfo ? prIconStyle(prInfo) : null;
   const [isChangeDropTarget, setIsChangeDropTarget] = useState(false);
-  const { onPointerDown, onMouseDown, onClick } =
-    useWorkspaceRowPointerHandlers({
-      onSelect: (event) => {
-        if (onWorkspaceMultiSelect) {
-          onWorkspaceMultiSelect(workspace, event, index);
-          return;
-        }
-        onWorkspaceClick?.(workspace);
-      },
-    });
+  const { onPointerDown, onClick } = useWorkspaceRowPointerHandlers({
+    onSelect: (event) => {
+      if (onWorkspaceMultiSelect) {
+        onWorkspaceMultiSelect(workspace, event, index);
+        return;
+      }
+      onWorkspaceClick?.(workspace);
+    },
+  });
 
   return (
     <SidebarMenuItem>
@@ -270,7 +269,6 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                         },
                       )}
                       onPointerDown={onPointerDown}
-                      onMouseDown={onMouseDown}
                       onClick={onClick}
                       onDoubleClick={(e) => onDoubleClick?.(workspace, e)}
                       onDragOver={(e) => {

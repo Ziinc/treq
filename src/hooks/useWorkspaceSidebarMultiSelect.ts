@@ -94,13 +94,6 @@ export function useWorkspaceRowPointerHandlers({
     onSelect(event);
   };
 
-  const onMouseDown = (event: React.MouseEvent) => {
-    if (event.button !== 0) return;
-    if (!isModifierMouseEvent(event)) return;
-    skipClickRef.current = true;
-    onSelect(event);
-  };
-
   const onClick = (event: React.MouseEvent) => {
     if (skipClickRef.current) {
       skipClickRef.current = false;
@@ -111,5 +104,5 @@ export function useWorkspaceRowPointerHandlers({
     onSelect(event);
   };
 
-  return { onPointerDown, onMouseDown, onClick };
+  return { onPointerDown, onClick };
 }
