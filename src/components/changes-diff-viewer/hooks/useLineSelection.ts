@@ -20,8 +20,6 @@ export function useLineSelection({
   const [diffLineSelection, setDiffLineSelection] =
     useState<DiffLineSelection | null>(null);
   const [isSelecting, setIsSelecting] = useState(false);
-  const [selectionAnchor, setSelectionAnchor] =
-    useState<DiffLinePointer | null>(null);
   const [, setCurrentDragLine] = useState<DiffLinePointer | null>(null);
   const [contextMenuPosition, setContextMenuPosition] = useState<{
     x: number;
@@ -55,7 +53,6 @@ export function useLineSelection({
       isSelectingRef.current = true;
       selectionAnchorRef.current = anchor;
       setIsSelecting(true);
-      setSelectionAnchor(anchor);
       setDiffLineSelection({
         filePath,
         lines: [{ hunkIndex, lineIndex, content: lineContent, isStaged }],

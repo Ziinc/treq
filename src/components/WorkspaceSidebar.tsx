@@ -1,7 +1,7 @@
 import { DragDropContext, Droppable, type DropResult } from "@hello-pangea/dnd";
 import { useQuery } from "@tanstack/react-query";
 import { Archive, CalendarClock, Github, Search } from "lucide-react";
-import { memo, useCallback, useMemo, useState } from "react";
+import { memo, useCallback, useMemo, useRef, useState } from "react";
 import {
   useGitRemoteInfo,
   useMergeQueueEnabled,
@@ -216,6 +216,35 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
       return flattenWorkspaceTree(tree);
     }, [visibleStatuses]);
 
+    const lastSelectedIndexRef = useRef<number | null>(null);
+
+    const handleItemSelect = useCallback(
+      (workspace: Workspace, event: React.MouseEvent, index: number) => {
+        const isShiftKey = event.shiftKey;
+        if (
+          isShiftKey &&
+          lastSelectedIndexRef.current !== null &&
+          onSelectStack
+        ) {
+          const start = Math.min(lastSelectedIndexRef.current, index);
+          const end = Math.max(lastSelectedIndexRef.current, index);
+          const ids = new Set<number>();
+          for (let i = start; i <= end; i++) {
+            ids.add(flattenedNodes[i].status.current.id);
+          }
+          onSelectStack(ids);
+          return;
+        }
+        lastSelectedIndexRef.current = index;
+        if (onWorkspaceMultiSelect) {
+          onWorkspaceMultiSelect(workspace, event);
+          return;
+        }
+        onWorkspaceClick?.(workspace);
+      },
+      [flattenedNodes, onSelectStack, onWorkspaceMultiSelect, onWorkspaceClick],
+    );
+
     const handleContainerClick = useCallback(
       (e: React.MouseEvent) => {
         if (
@@ -228,6 +257,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
             null as Parameters<NonNullable<typeof onWorkspaceMultiSelect>>[0],
             e,
           );
+          lastSelectedIndexRef.current = null;
         }
       },
       [selectedWorkspaceIds, onWorkspaceMultiSelect],
@@ -442,7 +472,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                             selectedWorkspaceId={activeSelectedWorkspaceId}
                             selectedWorkspaceIds={activeSelectedWorkspaceIds}
                             onWorkspaceClick={onWorkspaceClick}
-                            onWorkspaceMultiSelect={onWorkspaceMultiSelect}
+                            onWorkspaceMultiSelect={handleItemSelect}
                             onAddAfter={onAddAfter}
                             onStartAgent={onStartAgent}
                             onStartShell={onStartShell}

@@ -65,8 +65,8 @@ describe("useLineSelection drag", () => {
       });
     });
 
-    expect(result.current.diffLineSelection?.lines.map((l) => l.lineIndex)).toEqual(
-      [0, 1, 2],
-    );
+    expect(
+      result.current.diffLineSelection?.lines.map((l) => l.lineIndex),
+    ).toEqual([0, 1, 2]);
   });
 });

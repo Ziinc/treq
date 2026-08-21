@@ -131,8 +131,9 @@ interface WorkspaceSidebarItemProps {
   selectedWorkspaceIds?: Set<number>;
   onWorkspaceClick?: (workspace: Workspace) => void;
   onWorkspaceMultiSelect?: (
-    workspace: Workspace | null,
+    workspace: Workspace,
     event: React.MouseEvent,
+    index: number,
   ) => void;
   onAddAfter?: (workspace: Workspace) => void;
   onStartAgent?: (workspace: Workspace) => void;
@@ -258,7 +259,7 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                       )}
                       onClick={(e) =>
                         onWorkspaceMultiSelect
-                          ? onWorkspaceMultiSelect(workspace, e)
+                          ? onWorkspaceMultiSelect(workspace, e, index)
                           : onWorkspaceClick?.(workspace)
                       }
                       onDoubleClick={(e) => onDoubleClick?.(workspace, e)}

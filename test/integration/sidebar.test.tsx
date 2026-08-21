@@ -476,8 +476,9 @@ describe("Dashboard - workspace list", () => {
           "[data-testid^='workspace-sidebar-item-']",
         ),
       )
-        .map((el) =>
-          el.dataset.testid?.replace("workspace-sidebar-item-", "") ?? "",
+        .map(
+          (el) =>
+            el.dataset.testid?.replace("workspace-sidebar-item-", "") ?? "",
         )
         .filter((name) => expectedBranches.includes(name));
 
