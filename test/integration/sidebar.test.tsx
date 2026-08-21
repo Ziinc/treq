@@ -494,8 +494,12 @@ describe("Dashboard - workspace list", () => {
       const anchorRow = getWorkspaceRow(anchorBranch);
       const targetRow = getWorkspaceRow(targetBranch);
 
-      fireEvent.click(anchorRow, { metaKey: true });
-      fireEvent.click(targetRow, { shiftKey: true });
+      await user.keyboard("{Meta>}");
+      await user.click(anchorRow);
+      await user.keyboard("{/Meta}");
+      await user.keyboard("{Shift>}");
+      await user.click(targetRow);
+      await user.keyboard("{/Shift}");
 
       await waitFor(() => {
         for (const branchName of selectedRange) {
