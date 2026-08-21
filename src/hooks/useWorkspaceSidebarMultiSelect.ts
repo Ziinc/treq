@@ -2,7 +2,9 @@ import { useCallback, useRef } from "react";
 import type { Workspace } from "../lib/api";
 import type { FlattenedWorkspaceNode } from "../lib/workspace-tree";
 
-export function isModifierMouseEvent(event: React.MouseEvent): boolean {
+export function isModifierMouseEvent(
+  event: React.MouseEvent | React.PointerEvent,
+): boolean {
   return (
     event.shiftKey ||
     event.metaKey ||
@@ -48,7 +50,11 @@ export function useWorkspaceSidebarMultiSelect({
   }, []);
 
   const handleItemSelect = useCallback(
-    (workspace: Workspace, event: React.MouseEvent, index: number) => {
+    (
+      workspace: Workspace,
+      event: React.MouseEvent | React.PointerEvent,
+      index: number,
+    ) => {
       if (event.shiftKey || event.getModifierState("Shift")) {
         if (lastSelectedIndexRef.current !== null && onSelectStack) {
           onSelectStack(
@@ -77,9 +83,16 @@ export function useWorkspaceSidebarMultiSelect({
 export function useWorkspaceRowPointerHandlers({
   onSelect,
 }: {
-  onSelect: (event: React.MouseEvent) => void;
+  onSelect: (event: React.MouseEvent | React.PointerEvent) => void;
 }) {
   const skipClickRef = useRef(false);
+
+  const onPointerDown = (event: React.PointerEvent) => {
+    if (event.button !== 0) return;
+    if (!isModifierMouseEvent(event)) return;
+    skipClickRef.current = true;
+    onSelect(event);
+  };
 
   const onMouseDown = (event: React.MouseEvent) => {
     if (event.button !== 0) return;
@@ -98,5 +111,5 @@ export function useWorkspaceRowPointerHandlers({
     onSelect(event);
   };
 
-  return { onMouseDown, onClick };
+  return { onPointerDown, onMouseDown, onClick };
 }

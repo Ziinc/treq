@@ -133,7 +133,7 @@ interface WorkspaceSidebarItemProps {
   onWorkspaceClick?: (workspace: Workspace) => void;
   onWorkspaceMultiSelect?: (
     workspace: Workspace,
-    event: React.MouseEvent,
+    event: React.MouseEvent | React.PointerEvent,
     index: number,
   ) => void;
   onAddAfter?: (workspace: Workspace) => void;
@@ -229,15 +229,16 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
   const workspaceTitle = getWorkspaceTitleFromUtils(workspace);
   const prStatus = hasRemote && prInfo ? prIconStyle(prInfo) : null;
   const [isChangeDropTarget, setIsChangeDropTarget] = useState(false);
-  const { onMouseDown, onClick } = useWorkspaceRowPointerHandlers({
-    onSelect: (event) => {
-      if (onWorkspaceMultiSelect) {
-        onWorkspaceMultiSelect(workspace, event, index);
-        return;
-      }
-      onWorkspaceClick?.(workspace);
-    },
-  });
+  const { onPointerDown, onMouseDown, onClick } =
+    useWorkspaceRowPointerHandlers({
+      onSelect: (event) => {
+        if (onWorkspaceMultiSelect) {
+          onWorkspaceMultiSelect(workspace, event, index);
+          return;
+        }
+        onWorkspaceClick?.(workspace);
+      },
+    });
 
   return (
     <SidebarMenuItem>
@@ -268,6 +269,7 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                           "text-destructive": isConflicted,
                         },
                       )}
+                      onPointerDown={onPointerDown}
                       onMouseDown={onMouseDown}
                       onClick={onClick}
                       onDoubleClick={(e) => onDoubleClick?.(workspace, e)}
