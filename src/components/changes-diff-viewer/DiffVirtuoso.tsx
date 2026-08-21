@@ -13,14 +13,16 @@ import {
 } from "./buildDiffVirtuosoItems";
 import { filterVisibleCommittedFiles } from "./utils";
 
-const VirtuosoList = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ style, children, ...listProps }, ref) => (
+const VirtuosoList = ({
+  style,
+  children,
+  ref,
+  ...listProps
+}: React.ComponentProps<"div">) => (
   <div ref={ref} {...listProps} style={{ ...style, padding: "16px 0" }}>
     {children}
   </div>
-));
+);
 VirtuosoList.displayName = "VirtuosoList";
 
 export function DiffVirtuosoList({
@@ -30,9 +32,9 @@ export function DiffVirtuosoList({
   scrollerRef,
 }: {
   props: DiffContentAreaProps;
-  virtuosoRef: React.RefObject<VirtuosoHandle>;
+  virtuosoRef: React.RefObject<VirtuosoHandle | null>;
   indexMapsRef: React.MutableRefObject<DiffVirtuosoIndexMaps>;
-  scrollerRef: React.RefObject<HTMLDivElement>;
+  scrollerRef: React.RefObject<HTMLDivElement | null>;
 }) {
   const visibleCommittedFiles = useMemo(() => {
     const paths = new Set<string>(props.actualConflictedFiles);

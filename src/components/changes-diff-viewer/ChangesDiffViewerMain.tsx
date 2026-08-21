@@ -30,7 +30,6 @@ import { stashWorkspaceChanges } from "../../lib/api";
 import { invalidateReviewChangeCount } from "../../lib/review-change-count";
 import { useQueryClient } from "@tanstack/react-query";
 import type {
-  ChangesDiffViewerHandle,
   ChangesDiffViewerProps,
   CommitInputHandle,
   FileHunksData,
