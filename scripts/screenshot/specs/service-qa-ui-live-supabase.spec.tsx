@@ -59,11 +59,13 @@ vi.mock("../../../src/lib/features", () => ({
   },
 }));
 
-vi.mock("../../../src/stores/authStore", async () => {
+vi.mock("../../../src/stores/authStore", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../../../src/stores/authStore")>();
   const { createAuthStoreMock } = await import(
     "../../../test/mocks/zustandAuthStore"
   );
-  return { useAuthStore: createAuthStoreMock(auth) };
+  return { ...actual, useAuthStore: createAuthStoreMock(auth) };
 });
 
 vi.mock("../../../src/lib/api", async () => {

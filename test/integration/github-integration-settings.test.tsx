@@ -14,9 +14,11 @@ const auth = vi.hoisted(() => ({
 }));
 const query = vi.hoisted(() => vi.fn());
 
-vi.mock("../../src/stores/authStore", async () => {
+vi.mock("../../src/stores/authStore", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("../../src/stores/authStore")>();
   const { createAuthStoreMock } = await import("../mocks/zustandAuthStore");
-  return { useAuthStore: createAuthStoreMock(auth) };
+  return { ...actual, useAuthStore: createAuthStoreMock(auth) };
 });
 vi.mock("../../src/lib/supabase", async (importOriginal) => {
   const original =
