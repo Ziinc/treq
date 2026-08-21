@@ -10,14 +10,14 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { WEB_URL } from "../lib/supabase";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { useAuth } from "../hooks/useAuth";
+import { useAuthStore } from "../stores/authStore";
 import { useState } from "react";
 
 const isDev = import.meta.env.DEV;
 
 export const AccountSettings: React.FC = () => {
   const { user, loading, subscription, signIn, signOut, exchangeToken } =
-    useAuth();
+    useAuthStore();
   const [callbackUrl, setCallbackUrl] = useState("");
   const [devError, setDevError] = useState<string | null>(null);
   const [devLoading, setDevLoading] = useState(false);

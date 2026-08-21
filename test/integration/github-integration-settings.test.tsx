@@ -14,7 +14,10 @@ const auth = vi.hoisted(() => ({
 }));
 const query = vi.hoisted(() => vi.fn());
 
-vi.mock("../../src/hooks/useAuth", () => ({ useAuth: () => auth }));
+vi.mock("../../src/stores/authStore", () => ({
+  useAuthStore: (selector?: (state: typeof auth) => unknown) =>
+    typeof selector === "function" ? selector(auth) : auth,
+}));
 vi.mock("../../src/lib/supabase", async (importOriginal) => {
   const original =
     await importOriginal<typeof import("../../src/lib/supabase")>();

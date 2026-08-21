@@ -37,7 +37,7 @@ import {
   useMergeQueueStatus,
   usePrCiStatus,
 } from "../hooks/useMergeQueueStatus";
-import { useTerminalSettings } from "../hooks/useTerminalSettings";
+import { useTerminalSettingsStore } from "../stores/terminalSettingsStore";
 import { listen } from "@tauri-apps/api/event";
 import {
   checkAndRebaseWorkspaces,
@@ -213,7 +213,7 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
     const effectiveRepoPath = workspace?.repo_path || repositoryPath || "";
 
     const { addToast } = useToast();
-    const { fontSize } = useTerminalSettings();
+    const { fontSize } = useTerminalSettingsStore();
 
     const { data: remoteInfo } = useGitRemoteInfo(
       effectiveRepoPath || undefined,

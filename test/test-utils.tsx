@@ -3,7 +3,6 @@ import React, { ReactNode } from "react";
 import { Router } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import { ToastProvider } from "../src/components/ui/toast";
-import { TreqSendProvider } from "../src/hooks/useTreqSend";
 import { AppStoreEffects } from "../src/stores/AppStoreEffects";
 import {
   RenderOptions,
@@ -28,13 +27,11 @@ const AllTheProviders = ({ children }: { children: ReactNode }) => {
   return (
     <Router hook={useHashLocation}>
       <AppStoreEffects />
-      <TreqSendProvider>
-        <ToastProvider>
-          <QueryClientProvider client={queryClient}>
-            {children}
-          </QueryClientProvider>
-        </ToastProvider>
-      </TreqSendProvider>
+      <ToastProvider>
+        <QueryClientProvider client={queryClient}>
+          {children}
+        </QueryClientProvider>
+      </ToastProvider>
     </Router>
   );
 };

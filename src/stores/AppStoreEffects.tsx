@@ -1,10 +1,12 @@
 import { useEffect } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { detectEditorApps, getSettingsBatch } from "../lib/api";
+import { TREQ_SEND_EVENT, type TreqSendPayload } from "../lib/treqSend";
 import { useAuthStore } from "./authStore";
 import { useEditorAppsStore } from "./editorAppsStore";
 import { applySettingsRecord } from "./settingsHydration";
 import { useThemeStore } from "./themeStore";
+import { useTreqSendStore } from "./treqSendStore";
 import { applyZoomToDocument, useZoomSettingsStore } from "./zoomSettingsStore";
 
 /**
@@ -73,6 +75,7 @@ export function AppStoreEffects() {
     void useAuthStore.getState().restoreSession();
 
     let unlistenDeepLink: (() => void) | undefined;
+    let unlistenSend: (() => void) | undefined;
 
     listen<string[]>("deep-link-received", async (event) => {
       try {
@@ -90,10 +93,21 @@ export function AppStoreEffects() {
       })
       .catch(() => {});
 
+    listen<TreqSendPayload>(TREQ_SEND_EVENT, (event) => {
+      useTreqSendStore.getState().ingestPayload(event.payload);
+    })
+      .then((fn) => {
+        unlistenSend = fn;
+      })
+      .catch((error) => {
+        console.error("Failed to listen for treq send events:", error);
+      });
+
     return () => {
       mediaQuery.removeEventListener("change", onSchemeChange);
       window.removeEventListener("keydown", onZoomKeyDown, true);
       unlistenDeepLink?.();
+      unlistenSend?.();
     };
   }, []);
 

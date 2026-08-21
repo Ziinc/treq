@@ -8,7 +8,7 @@ description: >-
   RPCs, webhooks, or other Supabase-backed flows. ALSO use proactively, without
   being asked, right after implementing or modifying anything that changes the
   service contract: supabase/migrations/**, supabase/functions/**,
-  supabase/config.toml, src/lib/supabase.ts, src/hooks/useAuth.tsx,
+  supabase/config.toml, src/lib/supabase.ts, src/stores/authStore.ts,
   src/hooks/useMergeQueueStatus.ts, or web auth/callback/GitHub-install pages
   that call Supabase. Do this before telling the user the change is done. A
   PostToolUse hook (.claude/hooks/post-edit-service-qa.sh) injects a reminder

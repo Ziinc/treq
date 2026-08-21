@@ -59,8 +59,9 @@ vi.mock("../../../src/lib/features", () => ({
   },
 }));
 
-vi.mock("../../../src/hooks/useAuth", () => ({
-  useAuth: () => auth,
+vi.mock("../../../src/stores/authStore", () => ({
+  useAuthStore: (selector?: (state: typeof auth) => unknown) =>
+    typeof selector === "function" ? selector(auth) : auth,
 }));
 
 vi.mock("../../../src/lib/api", async () => {
@@ -408,7 +409,9 @@ it("captures a 2-stack + independent + 3-stack with siblings through drain", asy
     expect(
       await screen.findByTestId("merge-queue-stack-feat/three-base"),
     ).toBeTruthy();
-    expect(await screen.findByTestId("merge-queue-single-fix/solo")).toBeTruthy();
+    expect(
+      await screen.findByTestId("merge-queue-single-fix/solo"),
+    ).toBeTruthy();
     expect(
       await screen.findByTestId("merge-queue-single-feat/three-sib"),
     ).toBeTruthy();

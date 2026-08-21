@@ -37,7 +37,10 @@ const queueEnabled = vi.hoisted(() => ({
   dequeue: vi.fn(),
 }));
 
-vi.mock("../../src/hooks/useAuth", () => ({ useAuth: () => auth }));
+vi.mock("../../src/stores/authStore", () => ({
+  useAuthStore: (selector?: (state: typeof auth) => unknown) =>
+    typeof selector === "function" ? selector(auth) : auth,
+}));
 vi.mock("../../src/hooks/useMergeQueueStatus", () => ({
   useGitRemoteInfo: () => remoteInfo,
   usePrChecksForPr: () => ({ data: null, isLoading: false }),

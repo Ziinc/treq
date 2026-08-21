@@ -8,7 +8,7 @@ import {
   treqSendFileSrc,
   type TreqSendAsset,
 } from "../lib/treqSend";
-import { useTreqSendOptional } from "../hooks/useTreqSend";
+import { useTreqSendStore } from "../stores/treqSendStore";
 import { SendAssetLightbox } from "./terminal/SendAssetLightbox";
 import { Button } from "./ui/button";
 
@@ -21,7 +21,7 @@ export const ArtifactsPage: React.FC<ArtifactsPageProps> = ({
   repoPath,
   onClose,
 }) => {
-  const send = useTreqSendOptional();
+  const sendAssets = useTreqSendStore((s) => s.assets);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
 
   const { data: historical = [] } = useQuery({
@@ -32,8 +32,8 @@ export const ArtifactsPage: React.FC<ArtifactsPageProps> = ({
 
   const assets = useMemo(() => {
     const fromDisk = historical.map(sendRecordToAsset);
-    return mergeSendAssets(fromDisk, send?.assets ?? []);
-  }, [historical, send?.assets]);
+    return mergeSendAssets(fromDisk, sendAssets);
+  }, [historical, sendAssets]);
 
   return (
     <div className="flex flex-col h-full bg-background">

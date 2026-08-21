@@ -23,7 +23,7 @@ import {
   ptyWriteSuppressEcho,
 } from "../lib/api";
 import { consumePtyEcho } from "./terminal/consumePtyEcho";
-import { useTerminalSettings } from "../hooks/useTerminalSettings";
+import { useTerminalSettingsStore } from "../stores/terminalSettingsStore";
 import { cn } from "../lib/utils";
 import { Loader2 } from "lucide-react";
 import { Button } from "./ui/button";
@@ -114,7 +114,9 @@ export const ConsolidatedTerminal = forwardRef<
     const onTerminalInputRef = useRef(onTerminalInput);
     const onTerminalIdleRef = useRef(onTerminalIdle);
 
-    const fontSize = Math.round(useTerminalSettings().fontSize * 0.8125);
+    const fontSize = Math.round(
+      useTerminalSettingsStore((s) => s.fontSize) * 0.8125,
+    );
 
     // Sync isPtyReady state with ref for use in callbacks
     useEffect(() => {

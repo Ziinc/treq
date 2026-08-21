@@ -1,14 +1,14 @@
 import { FolderGit2, GitBranch, Plug, Settings, User } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { useTerminalSettings } from "../hooks/useTerminalSettings";
 import { useAutoUpdate } from "../hooks/useAutoUpdate";
+import { useThemeStore } from "../stores/themeStore";
+import { useTerminalSettingsStore } from "../stores/terminalSettingsStore";
 import {
   MAX_ZOOM,
   MIN_ZOOM,
   ZOOM_STEP,
-  useZoomSettings,
-} from "../hooks/useZoomSettings";
-import { useTheme } from "../hooks/useTheme";
+  useZoomSettingsStore,
+} from "../stores/zoomSettingsStore";
 import { getSetting, setSetting } from "../lib/api";
 import { AccountSettings } from "./AccountSettings";
 import { GitHubIntegrationSettings } from "./GitHubIntegrationSettings";
@@ -46,9 +46,12 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const [savingRepository, setSavingRepository] = useState(false);
   const repositorySettingsRef = useRef<RepositorySettingsContentHandle>(null);
 
-  const { theme, setTheme } = useTheme();
-  const { fontSize, setFontSize } = useTerminalSettings();
-  const { zoom, setZoom } = useZoomSettings();
+  const theme = useThemeStore((s) => s.theme);
+  const setTheme = useThemeStore((s) => s.setTheme);
+  const fontSize = useTerminalSettingsStore((s) => s.fontSize);
+  const setFontSize = useTerminalSettingsStore((s) => s.setFontSize);
+  const zoom = useZoomSettingsStore((s) => s.zoom);
+  const setZoom = useZoomSettingsStore((s) => s.setZoom);
   const { addToast } = useToast();
   const { checkForUpdate } = useAutoUpdate({
     autoCheck: false,

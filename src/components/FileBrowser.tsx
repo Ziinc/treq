@@ -58,7 +58,7 @@ import {
   getFileStatusTextColor,
   getStatusBgColor,
 } from "../lib/git-status-colors";
-import { useTerminalSettings } from "../hooks/useTerminalSettings";
+import { useTerminalSettingsStore } from "../stores/terminalSettingsStore";
 import { type ParsedFileChange, parseJjChangedFiles } from "../lib/git-utils";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
 import { useDebounce } from "../hooks/useDebounce";
@@ -79,7 +79,7 @@ import {
   ContextMenuTrigger,
 } from "./ui/context-menu";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
-import { useEditorApps } from "../hooks/useEditorApps";
+import { useEditorAppsStore } from "../stores/editorAppsStore";
 import { useFileBrowserReview } from "../hooks/useFileBrowserReview";
 import {
   AlertDialog,
@@ -840,7 +840,7 @@ const FileTreeContextMenu = memo(
     getRelativePath: (path: string) => string;
     addToast: ReturnType<typeof useToast>["addToast"];
   }) => {
-    const editorApps = useEditorApps();
+    const editorApps = useEditorAppsStore();
 
     return (
       <ContextMenu>
@@ -1196,7 +1196,7 @@ export const FileBrowser = memo(
     const [searchFocusTrigger, setSearchFocusTrigger] = useState(0);
     const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
     const { addToast } = useToast();
-    const { fontSize } = useTerminalSettings();
+    const { fontSize } = useTerminalSettingsStore();
     const listRef = useRef<ListImperativeAPI>(null);
     const fileBrowserReview = useFileBrowserReview({
       repoPath,

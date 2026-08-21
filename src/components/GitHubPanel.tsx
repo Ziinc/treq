@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { useLocation, useRoute } from "wouter";
-import { useAuth } from "../hooks/useAuth";
+import { useAuthStore } from "../stores/authStore";
 import {
   useDequeueBranches,
   useGitRemoteInfo,
@@ -68,7 +68,7 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
   onStartPromptFromIssue,
   onOpenWorkspace,
 }) => {
-  const { subscription } = useAuth();
+  const { subscription } = useAuthStore();
   const isPro =
     subscription?.plan === "pro" && subscription.status === "active";
   const { data: remoteInfo, isLoading: remoteLoading } =
