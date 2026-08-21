@@ -20,7 +20,7 @@ import { CommitInput } from "./CommitInput";
 import type { CommitAction, CommitInputHandle } from "./types";
 
 interface FileSidebarProps {
-  commitInputRef: React.RefObject<CommitInputHandle>;
+  commitInputRef: React.RefObject<CommitInputHandle | null>;
   handleCommit: (msg: string) => void;
   handleCommitAndPush: (msg: string) => void;
   handleCommitAndCreatePR: (msg: string) => void;

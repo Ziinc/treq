@@ -18,7 +18,7 @@ function getResizeEntryWidth(entry: ResizeObserverEntry): number {
 }
 
 export function useScrollContainerWidth(
-  scrollContainerRef: RefObject<HTMLDivElement>,
+  scrollContainerRef: RefObject<HTMLDivElement | null>,
   collapsed: boolean,
 ): number {
   const [containerWidth, setContainerWidth] = useState(0);

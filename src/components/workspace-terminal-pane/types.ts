@@ -1,3 +1,4 @@
+import type { Ref } from "react";
 import {
   type ClaudeSessionData,
   type TerminalSessionSummary,
@@ -9,6 +10,7 @@ export interface ShellTerminalData {
 }
 
 export interface WorkspaceTerminalPaneProps {
+  ref?: Ref<WorkspaceTerminalPaneHandle>;
   workingDirectory: string;
   onSessionError?: (message: string) => void;
   currentBranch?: string | null;

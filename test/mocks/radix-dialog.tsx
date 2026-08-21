@@ -5,52 +5,56 @@ const Root: React.FC<{
   onOpenChange?: (open: boolean) => void;
   children?: React.ReactNode;
 }> = ({ children }) => <>{children}</>;
-const Trigger = React.forwardRef<
-  HTMLButtonElement,
-  React.ButtonHTMLAttributes<HTMLButtonElement>
->(({ children, ...props }, ref) => (
+const Trigger = ({
+  children,
+  ref,
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
   <button ref={ref} {...props}>
     {children}
   </button>
-));
+);
 const Portal: React.FC<{ children?: React.ReactNode }> = ({ children }) => (
   <>{children}</>
 );
-const Overlay = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->((props, ref) => <div ref={ref} {...props} />);
-const Content = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ children, ...props }, ref) => (
+const Overlay = ({ ref, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
+  <div ref={ref} {...props} />
+);
+const Content = ({
+  children,
+  ref,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) => (
   <div ref={ref} {...props}>
     {children}
   </div>
-));
-const Title = React.forwardRef<
-  HTMLHeadingElement,
-  React.HTMLAttributes<HTMLHeadingElement>
->(({ children, ...props }, ref) => (
+);
+const Title = ({
+  children,
+  ref,
+  ...props
+}: React.HTMLAttributes<HTMLHeadingElement>) => (
   <h2 ref={ref} {...props}>
     {children}
   </h2>
-));
-const Description = React.forwardRef<
-  HTMLParagraphElement,
-  React.HTMLAttributes<HTMLParagraphElement>
->(({ children, ...props }, ref) => (
+);
+const Description = ({
+  children,
+  ref,
+  ...props
+}: React.HTMLAttributes<HTMLParagraphElement>) => (
   <p ref={ref} {...props}>
     {children}
   </p>
-));
-const Close = React.forwardRef<
-  HTMLButtonElement,
-  React.ButtonHTMLAttributes<HTMLButtonElement>
->(({ children, ...props }, ref) => (
+);
+const Close = ({
+  children,
+  ref,
+  ...props
+}: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
   <button ref={ref} {...props}>
     {children}
   </button>
-));
+);
 
 export { Root, Trigger, Portal, Overlay, Content, Title, Description, Close };

@@ -18,7 +18,7 @@ interface UseDiffSearchParams {
   conflictRegionsByFile: Map<string, ConflictRegion[]>;
   conflictLineLookups: Map<string, Map<number, ConflictRegion>>;
   workspacePath: string;
-  diffContainerRef: React.RefObject<HTMLDivElement>;
+  diffContainerRef: React.RefObject<HTMLDivElement | null>;
   diffScrollApiRef?: React.RefObject<{
     scrollToFile: (path: string) => void;
     scrollToSearchId: (id: string) => void;

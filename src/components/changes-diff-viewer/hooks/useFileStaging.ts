@@ -4,7 +4,7 @@ import { useKeyboardShortcut } from "../../../hooks/useKeyboard";
 
 interface UseFileStagingParams {
   files: ParsedFileChange[];
-  diffContainerRef: React.RefObject<HTMLDivElement>;
+  diffContainerRef: React.RefObject<HTMLDivElement | null>;
   diffScrollApiRef?: React.RefObject<{
     scrollToFile: (path: string) => void;
     scrollToSearchId: (id: string) => void;

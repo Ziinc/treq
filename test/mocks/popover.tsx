@@ -85,103 +85,96 @@ function inTreeSideStyles(
   return { top: "100%", marginTop: sideOffset, ...alignStyles };
 }
 
-export const PopoverContent = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement> & {
-    align?: string;
-    side?: "top" | "right" | "bottom" | "left";
-    sideOffset?: number;
-    avoidCollisions?: boolean;
-  }
->(
-  (
-    {
-      className,
-      align = "center",
-      side = "bottom",
-      sideOffset = 4,
-      avoidCollisions: _avoidCollisions,
-      style,
-      ...props
-    },
-    ref,
-  ) => {
-    const { open, triggerRef } = React.useContext(PopoverContext);
-    const [portalStyle, setPortalStyle] =
-      React.useState<React.CSSProperties | null>(null);
+export const PopoverContent = ({
+  className,
+  align = "center",
+  side = "bottom",
+  sideOffset = 4,
+  avoidCollisions: _avoidCollisions,
+  style,
+  ref,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement> & {
+  align?: string;
+  side?: "top" | "right" | "bottom" | "left";
+  sideOffset?: number;
+  avoidCollisions?: boolean;
+}) => {
+  const { open, triggerRef } = React.useContext(PopoverContext);
+  const [portalStyle, setPortalStyle] =
+    React.useState<React.CSSProperties | null>(null);
 
-    React.useLayoutEffect(() => {
-      if (!open) {
-        setPortalStyle(null);
-        return;
+  React.useLayoutEffect(() => {
+    if (!open) {
+      setPortalStyle(null);
+      return;
+    }
+    const el = triggerRef.current;
+    if (!el) {
+      setPortalStyle(null);
+      return;
+    }
+    const rect = el.getBoundingClientRect();
+    // jsdom returns zeros — fall back to in-tree absolute positioning.
+    if (rect.width === 0 && rect.height === 0) {
+      setPortalStyle(null);
+      return;
+    }
+
+    let top = rect.bottom + sideOffset;
+    let left = rect.left;
+    let transform = "";
+
+    if (side === "top") {
+      top = rect.top - sideOffset;
+      transform = "translateY(-100%)";
+    } else if (side === "left") {
+      top = rect.top;
+      left = rect.left - sideOffset;
+      transform = "translateX(-100%)";
+    } else if (side === "right") {
+      top = rect.top;
+      left = rect.right + sideOffset;
+    }
+
+    if (side === "top" || side === "bottom") {
+      if (align === "end") {
+        left = rect.right;
+        transform = `${transform} translateX(-100%)`.trim();
+      } else if (align === "center") {
+        left = rect.left + rect.width / 2;
+        transform = `${transform} translateX(-50%)`.trim();
       }
-      const el = triggerRef.current;
-      if (!el) {
-        setPortalStyle(null);
-        return;
-      }
-      const rect = el.getBoundingClientRect();
-      // jsdom returns zeros — fall back to in-tree absolute positioning.
-      if (rect.width === 0 && rect.height === 0) {
-        setPortalStyle(null);
-        return;
-      }
+    }
 
-      let top = rect.bottom + sideOffset;
-      let left = rect.left;
-      let transform = "";
+    setPortalStyle({
+      position: "fixed",
+      zIndex: 50,
+      top,
+      left,
+      transform: transform || undefined,
+    });
+  }, [open, align, side, sideOffset, triggerRef]);
 
-      if (side === "top") {
-        top = rect.top - sideOffset;
-        transform = "translateY(-100%)";
-      } else if (side === "left") {
-        top = rect.top;
-        left = rect.left - sideOffset;
-        transform = "translateX(-100%)";
-      } else if (side === "right") {
-        top = rect.top;
-        left = rect.right + sideOffset;
-      }
+  if (!open) return null;
 
-      if (side === "top" || side === "bottom") {
-        if (align === "end") {
-          left = rect.right;
-          transform = `${transform} translateX(-100%)`.trim();
-        } else if (align === "center") {
-          left = rect.left + rect.width / 2;
-          transform = `${transform} translateX(-50%)`.trim();
-        }
-      }
+  const content = (
+    <div
+      ref={ref}
+      data-state="open"
+      data-side={side}
+      className={[DEFAULT_CONTENT_CLASS, className].filter(Boolean).join(" ")}
+      style={{
+        ...(portalStyle ?? {
+          position: "absolute",
+          zIndex: 50,
+          ...inTreeSideStyles(side, align, sideOffset),
+        }),
+        ...style,
+      }}
+      {...props}
+    />
+  );
 
-      setPortalStyle({
-        position: "fixed",
-        zIndex: 50,
-        top,
-        left,
-        transform: transform || undefined,
-      });
-    }, [open, align, side, sideOffset, triggerRef]);
-
-    if (!open) return null;
-
-    const content = (
-      <div
-        ref={ref}
-        data-state="open"
-        data-side={side}
-        className={[DEFAULT_CONTENT_CLASS, className].filter(Boolean).join(" ")}
-        style={{
-          ...(portalStyle ?? {
-            position: "absolute",
-            zIndex: 50,
-            ...inTreeSideStyles(side, align, sideOffset),
-          }),
-          ...style,
-        }}
-        {...props}
-      />
-    );
-
-    return portalStyle ? createPortal(content, document.body) : content;
-  },
-);
+  return portalStyle ? createPortal(content, document.body) : content;
+};

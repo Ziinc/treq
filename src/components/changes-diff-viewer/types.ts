@@ -1,3 +1,4 @@
+import type { ReactElement, Ref } from "react";
 import type {
   ConflictRegion,
   GhReviewThread,
@@ -18,6 +19,7 @@ export { FILE_COMMENT_HUNK_ID };
 export type { LineComment, PendingComment };
 
 export interface ChangesDiffViewerProps {
+  ref?: Ref<ChangesDiffViewerHandle>;
   workspacePath: string;
   repoPath?: string;
   workspaceId?: number;
@@ -107,6 +109,7 @@ export interface CommitInputHandle {
 export type CommitAction = "commit" | "push" | "pr";
 
 export interface CommitInputProps {
+  ref?: Ref<CommitInputHandle>;
   onCommit: (message: string) => void;
   onCommitAndPush: (message: string) => void;
   onCommitAndCreatePR: (message: string) => void;
@@ -152,7 +155,7 @@ export interface FileRowComponentProps {
     hunk: JjDiffHunk,
     hunkIndex: number,
     filePath: string,
-  ) => JSX.Element;
+  ) => ReactElement;
   addToast: ReturnType<typeof useToast>["addToast"];
   getOutdatedCommentsForFile: (filePath: string) => LineComment[];
   getFileCommentsForFile: (filePath: string) => LineComment[];

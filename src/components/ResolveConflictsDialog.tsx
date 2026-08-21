@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
 import { CircleHelp, ExternalLink, Loader2 } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
@@ -12,6 +12,7 @@ import {
 import { WEB_URL } from "../lib/supabase";
 import type { SessionCreationInfo } from "../types/sessions";
 import { Button } from "./ui/button";
+import { FormPendingButton } from "./ui/form-pending-button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { useToast } from "./ui/toast";
 import {
@@ -42,7 +43,6 @@ export const ResolveConflictsDialog: React.FC<ResolveConflictsDialogProps> = ({
   onSessionCreated,
 }) => {
   const [prompt, setPrompt] = useState("");
-  const [submitting, setSubmitting] = useState(false);
   const [preparing, setPreparing] = useState(false);
   const [session, setSession] = useState<ResolveConflictsSession | null>(null);
   const { addToast } = useToast();
@@ -51,7 +51,6 @@ export const ResolveConflictsDialog: React.FC<ResolveConflictsDialogProps> = ({
     if (!open) {
       setPrompt("");
       setSession(null);
-      setSubmitting(false);
       setPreparing(false);
       return;
     }
@@ -80,8 +79,7 @@ export const ResolveConflictsDialog: React.FC<ResolveConflictsDialogProps> = ({
     };
   }, [open, repoPath, workspaceId, changeIds, addToast]);
 
-  const handleResolve = async () => {
-    setSubmitting(true);
+  const [, resolveAction, submitting] = useActionState(async () => {
     try {
       const resolveSession =
         session ??
@@ -117,8 +115,6 @@ export const ResolveConflictsDialog: React.FC<ResolveConflictsDialogProps> = ({
 
       const dbSessionId = await createSession(
         repoPath,
-        // Bind the agent session to the product workspace when available so
-        // sidebar/session UI stays on the user's stack, not a hidden resolve WC.
         resolveSession.source_workspace_id ?? primary.workspace_id,
         sessionName,
       );
@@ -127,7 +123,6 @@ export const ResolveConflictsDialog: React.FC<ResolveConflictsDialogProps> = ({
         sessionId: dbSessionId,
         sessionName,
         workspaceId: resolveSession.source_workspace_id ?? primary.workspace_id,
-        // Agent cwd is the resolve slug root; change-id dirs live under it.
         workspacePath: resolveSession.agent_cwd,
         repoPath,
         pendingPrompt: fullPrompt,
@@ -149,10 +144,9 @@ export const ResolveConflictsDialog: React.FC<ResolveConflictsDialogProps> = ({
         description: error instanceof Error ? error.message : String(error),
         type: "error",
       });
-    } finally {
-      setSubmitting(false);
     }
-  };
+    return null;
+  }, null);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -195,40 +189,42 @@ export const ResolveConflictsDialog: React.FC<ResolveConflictsDialogProps> = ({
           </DialogTitle>
         </DialogHeader>
 
-        <textarea
-          className="min-h-[120px] w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
-          placeholder="e.g. Prefer the workspace-side changes in README, keep both imports in lib.rs…"
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          disabled={submitting}
-          data-testid="resolve-conflicts-prompt"
-        />
-
-        <div className="flex items-center justify-end gap-2">
-          <Button
-            type="button"
-            variant="ghost"
-            onClick={() => onOpenChange(false)}
+        <form action={resolveAction} className="contents">
+          <textarea
+            className="min-h-[120px] w-full rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-1 focus-visible:ring-ring"
+            placeholder="e.g. Prefer the workspace-side changes in README, keep both imports in lib.rs…"
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
             disabled={submitting}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            onClick={() => void handleResolve()}
-            disabled={submitting || preparing || !session}
-            data-testid="resolve-conflicts-submit"
-          >
-            {submitting || preparing ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {preparing ? "Preparing…" : "Starting…"}
-              </>
-            ) : (
-              "Resolve"
-            )}
-          </Button>
-        </div>
+            name="prompt"
+            data-testid="resolve-conflicts-prompt"
+          />
+
+          <div className="flex items-center justify-end gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => onOpenChange(false)}
+              disabled={submitting}
+            >
+              Cancel
+            </Button>
+            <FormPendingButton
+              pendingLabel="Starting…"
+              disabled={preparing || !session}
+              data-testid="resolve-conflicts-submit"
+            >
+              {preparing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Preparing…
+                </>
+              ) : (
+                "Resolve"
+              )}
+            </FormPendingButton>
+          </div>
+        </form>
       </DialogContent>
     </Dialog>
   );

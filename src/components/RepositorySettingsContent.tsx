@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useImperativeHandle, useState } from "react";
+import { useEffect, useImperativeHandle, useState, type Ref } from "react";
 import { getRepoSetting, setRepoSetting } from "../lib/api";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -9,16 +9,18 @@ import { useToast } from "./ui/toast";
 interface RepositorySettingsContentProps {
   repoPath: string;
   onSavingChange?: (saving: boolean) => void;
+  ref?: Ref<RepositorySettingsContentHandle>;
 }
 
 export interface RepositorySettingsContentHandle {
   save: () => Promise<void>;
 }
 
-export const RepositorySettingsContent = forwardRef<
-  RepositorySettingsContentHandle,
-  RepositorySettingsContentProps
->(({ repoPath, onSavingChange }, ref) => {
+export const RepositorySettingsContent = ({
+  repoPath,
+  onSavingChange,
+  ref,
+}: RepositorySettingsContentProps) => {
   const [branchNamePattern, setBranchNamePattern] = useState("treq/{name}");
   const [includedFiles, setIncludedFiles] = useState("");
   const [defaultModel, setDefaultModel] = useState<string>("");
@@ -201,6 +203,6 @@ export const RepositorySettingsContent = forwardRef<
       {error && <div className="text-sm text-destructive">{error}</div>}
     </div>
   );
-});
+};
 
 RepositorySettingsContent.displayName = "RepositorySettingsContent";

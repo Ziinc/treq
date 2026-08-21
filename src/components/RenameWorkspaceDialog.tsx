@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { AlertCircle, Check, Loader2 } from "lucide-react";
 import {
   Dialog,
@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from "./ui/dialog";
 import { Button } from "./ui/button";
+import { FormPendingButton } from "./ui/form-pending-button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { useToast } from "./ui/toast";
@@ -30,8 +31,6 @@ export const RenameWorkspaceDialog: React.FC<RenameWorkspaceDialogProps> = ({
   onSuccess,
 }) => {
   const [branchName, setBranchName] = useState(workspace.branch_name);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
   const [isChecking, setIsChecking] = useState(false);
   const [validationResult, setValidationResult] = useState<{
     success: boolean;
@@ -45,7 +44,6 @@ export const RenameWorkspaceDialog: React.FC<RenameWorkspaceDialogProps> = ({
   useEffect(() => {
     if (open) {
       setBranchName(workspace.branch_name);
-      setError("");
       setValidationResult(null);
       setIsChecking(false);
     }
@@ -94,52 +92,51 @@ export const RenameWorkspaceDialog: React.FC<RenameWorkspaceDialogProps> = ({
     };
   }, [branchName, repoPath, workspace.id, workspace.branch_name]);
 
-  const handleRename = async () => {
-    if (!branchName.trim() || branchName === workspace.branch_name) return;
+  const [error, renameAction, isPending] = useActionState(
+    async (_prev: string, formData: FormData) => {
+      const nextName = String(formData.get("branchName") ?? "").trim();
+      if (!nextName || nextName === workspace.branch_name) return "";
 
-    setLoading(true);
-    setError("");
+      try {
+        const result = await renameWorkspace(
+          repoPath,
+          workspace.id,
+          nextName,
+          false,
+        );
 
-    try {
-      const result = await renameWorkspace(
-        repoPath,
-        workspace.id,
-        branchName,
-        false,
-      );
+        if (!result.success) {
+          return result.message;
+        }
 
-      if (!result.success) {
-        setError(result.message);
-        return;
+        addToast({
+          title: "Workspace renamed",
+          description: `Renamed to ${nextName}`,
+          type: "success",
+        });
+
+        queryClient.invalidateQueries({ queryKey: ["workspaces"] });
+        queryClient.invalidateQueries({ queryKey: ["workspace-statuses"] });
+        onSuccess();
+        onOpenChange(false);
+        return "";
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        addToast({
+          title: "Failed to rename workspace",
+          description: errorMsg,
+          type: "error",
+        });
+        return errorMsg;
       }
-
-      addToast({
-        title: "Workspace renamed",
-        description: `Renamed to ${branchName}`,
-        type: "success",
-      });
-
-      queryClient.invalidateQueries({ queryKey: ["workspaces"] });
-      queryClient.invalidateQueries({ queryKey: ["workspace-statuses"] });
-      onSuccess();
-      onOpenChange(false);
-    } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : String(err);
-      setError(errorMsg);
-      addToast({
-        title: "Failed to rename workspace",
-        description: errorMsg,
-        type: "error",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+    },
+    "",
+  );
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
       e.preventDefault();
-      handleRename();
+      e.currentTarget.closest("form")?.requestSubmit();
     }
     if (e.key === "Escape") {
       e.preventDefault();
@@ -152,7 +149,7 @@ export const RenameWorkspaceDialog: React.FC<RenameWorkspaceDialogProps> = ({
     branchName !== workspace.branch_name &&
     !isChecking &&
     validationResult?.success &&
-    !loading;
+    !isPending;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -164,55 +161,59 @@ export const RenameWorkspaceDialog: React.FC<RenameWorkspaceDialogProps> = ({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-4 py-4">
-          <div className="grid gap-2">
-            <Label htmlFor="branch-name">Branch Name</Label>
-            <div className="relative">
-              <Input
-                id="branch-name"
-                value={branchName}
-                onChange={(e) => setBranchName(e.target.value)}
-                placeholder="e.g., feat/new-name"
-                className={isChecking || validationResult ? "pr-10" : ""}
-                autoFocus
-              />
-              <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                {isChecking && (
-                  <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                )}
-                {!isChecking && validationResult?.success && (
-                  <Check className="w-4 h-4 text-green-500" />
-                )}
-                {!isChecking &&
-                  validationResult &&
-                  !validationResult.success && (
-                    <AlertCircle className="w-4 h-4 text-destructive" />
+        <form action={renameAction} className="contents">
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="branch-name">Branch Name</Label>
+              <div className="relative">
+                <Input
+                  id="branch-name"
+                  name="branchName"
+                  value={branchName}
+                  onChange={(e) => setBranchName(e.target.value)}
+                  placeholder="e.g., feat/new-name"
+                  className={isChecking || validationResult ? "pr-10" : ""}
+                  autoFocus
+                />
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  {isChecking && (
+                    <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
                   )}
+                  {!isChecking && validationResult?.success && (
+                    <Check className="w-4 h-4 text-green-500" />
+                  )}
+                  {!isChecking &&
+                    validationResult &&
+                    !validationResult.success && (
+                      <AlertCircle className="w-4 h-4 text-destructive" />
+                    )}
+                </div>
               </div>
+              {!isChecking && validationResult && !validationResult.success && (
+                <p className="text-sm text-destructive flex items-center gap-2">
+                  <AlertCircle className="w-3 h-3 shrink-0" />
+                  {validationResult.message}
+                </p>
+              )}
             </div>
-            {!isChecking && validationResult && !validationResult.success && (
-              <p className="text-sm text-destructive flex items-center gap-2">
-                <AlertCircle className="w-3 h-3 shrink-0" />
-                {validationResult.message}
-              </p>
-            )}
+
+            {error && <div className="text-sm text-destructive">{error}</div>}
           </div>
 
-          {error && <div className="text-sm text-destructive">{error}</div>}
-        </div>
-
-        <div className="flex justify-end gap-2">
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={loading}
-          >
-            Cancel
-          </Button>
-          <Button onClick={handleRename} disabled={!canSubmit}>
-            {loading ? "Renaming..." : "Rename"}
-          </Button>
-        </div>
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={isPending}
+            >
+              Cancel
+            </Button>
+            <FormPendingButton pendingLabel="Renaming..." disabled={!canSubmit}>
+              Rename
+            </FormPendingButton>
+          </div>
+        </form>
       </DialogContent>
     </Dialog>
   );

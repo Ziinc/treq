@@ -1,7 +1,6 @@
 /* eslint-disable max-lines */
 
 import React, {
-  forwardRef,
   memo,
   useCallback,
   useImperativeHandle,
@@ -38,29 +37,26 @@ import type {
 } from "./types";
 
 export const ChangesDiffViewer = memo(
-  forwardRef<ChangesDiffViewerHandle, ChangesDiffViewerProps>(
-    (
-      {
-        workspacePath,
-        repoPath,
-        workspaceId,
-        branchName,
-        readOnly = false,
-        onStagedFilesChange,
-        onChangedFilesChange,
-        onRefreshingChange,
-        initialSelectedFile,
-        onReviewSubmitted,
-        onCreateAgentWithReview,
-        conflictedFiles = [],
-        showCommittedChanges = false,
-        onShowCommittedChangesChange,
-        onMoveFilesToNewWorkspace,
-        workspace,
-        baseBranch,
-      },
-      ref,
-    ) => {
+  ({
+    workspacePath,
+    repoPath,
+    workspaceId,
+    branchName,
+    readOnly = false,
+    onStagedFilesChange,
+    onChangedFilesChange,
+    onRefreshingChange,
+    initialSelectedFile,
+    onReviewSubmitted,
+    onCreateAgentWithReview,
+    conflictedFiles = [],
+    showCommittedChanges = false,
+    onShowCommittedChangesChange,
+    onMoveFilesToNewWorkspace,
+    workspace,
+    baseBranch,
+    ref,
+  }: ChangesDiffViewerProps) => {
       const { addToast } = useToast();
       const queryClient = useQueryClient();
       const { fontSize: diffFontSize } = useDiffSettingsStore();
@@ -655,7 +651,6 @@ export const ChangesDiffViewer = memo(
         </div>
       );
     },
-  ),
 );
 
 ChangesDiffViewer.displayName = "ChangesDiffViewer";

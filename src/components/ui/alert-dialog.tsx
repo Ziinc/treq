@@ -31,14 +31,16 @@ const AlertDialog: React.FC<AlertDialogProps> = ({
   </AlertDialogContext.Provider>
 );
 
-const AlertDialogContent = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, children, ...props }, ref) => (
+const AlertDialogContent = ({
+  className,
+  children,
+  ref,
+  ...props
+}: React.ComponentProps<"div">) => (
   <DialogContent ref={ref} className={className} {...props}>
     {children}
   </DialogContent>
-));
+);
 AlertDialogContent.displayName = "AlertDialogContent";
 
 const AlertDialogHeader = DialogHeader;
@@ -53,7 +55,7 @@ AlertDialogDescription.displayName = "AlertDialogDescription";
 const AlertDialogFooter = ({
   className,
   ...props
-}: React.HTMLAttributes<HTMLDivElement>) => (
+}: React.ComponentProps<"div">) => (
   <div
     className={cn(
       "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 mt-4",
@@ -64,10 +66,13 @@ const AlertDialogFooter = ({
 );
 AlertDialogFooter.displayName = "AlertDialogFooter";
 
-const AlertDialogCancel = React.forwardRef<
-  HTMLButtonElement,
-  React.ButtonHTMLAttributes<HTMLButtonElement>
->(({ className, children, onClick, ...props }, ref) => {
+const AlertDialogCancel = ({
+  className,
+  children,
+  onClick,
+  ref,
+  ...props
+}: React.ComponentProps<"button">) => {
   const { onOpenChange } = React.useContext(AlertDialogContext);
 
   const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -86,13 +91,16 @@ const AlertDialogCancel = React.forwardRef<
       {children}
     </Button>
   );
-});
+};
 AlertDialogCancel.displayName = "AlertDialogCancel";
 
-const AlertDialogAction = React.forwardRef<
-  HTMLButtonElement,
-  React.ButtonHTMLAttributes<HTMLButtonElement>
->(({ className, children, onClick, ...props }, ref) => (
+const AlertDialogAction = ({
+  className,
+  children,
+  onClick,
+  ref,
+  ...props
+}: React.ComponentProps<"button">) => (
   <Button
     ref={ref}
     variant="default"
@@ -102,7 +110,7 @@ const AlertDialogAction = React.forwardRef<
   >
     {children}
   </Button>
-));
+);
 AlertDialogAction.displayName = "AlertDialogAction";
 
 export {
