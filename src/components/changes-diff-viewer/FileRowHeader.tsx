@@ -21,7 +21,7 @@ import type { useToast } from "../ui/toast";
 import { cn, copyTextToClipboard } from "../../lib/utils";
 import { isBinaryFile, type ParsedFileChange } from "../../lib/git-utils";
 import { isDeletedFileStatus } from "../../lib/conflict-deleted-sides";
-import { useEditorApps } from "../../hooks/useEditorApps";
+import { useEditorAppsStore } from "../../stores/editorAppsStore";
 
 interface FileRowHeaderProps {
   file: ParsedFileChange;
@@ -68,7 +68,7 @@ const FileRowHeader: React.FC<FileRowHeaderProps> = ({
   const isDeleted =
     isDeletedFileStatus(file.workspaceStatus) ||
     isDeletedFileStatus(file.stagedStatus);
-  const editorApps = useEditorApps();
+  const editorApps = useEditorAppsStore();
 
   return (
     <FileContextMenu filePath={filePath} workspacePath={workspacePath}>

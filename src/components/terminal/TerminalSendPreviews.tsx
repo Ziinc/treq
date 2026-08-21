@@ -2,7 +2,7 @@ import { useState } from "react";
 import { FileText, X } from "lucide-react";
 import { assetsForPtySession, treqSendFileSrc } from "../../lib/treqSend";
 import { cn } from "../../lib/utils";
-import { useTreqSendOptional } from "../../hooks/useTreqSend";
+import { useTreqSendStore } from "../../stores/treqSendStore";
 import {
   Attachment,
   AttachmentAction,
@@ -27,13 +27,12 @@ export function TerminalSendPreviews({
   className,
   onSendReview,
 }: TerminalSendPreviewsProps) {
-  const send = useTreqSendOptional();
+  const sendAssets = useTreqSendStore((s) => s.assets);
+  const dismissAsset = useTreqSendStore((s) => s.dismissAsset);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
-  if (!send) return null;
-
-  const assets = assetsForPtySession(send.assets, ptySessionId, isActive);
+  const assets = assetsForPtySession(sendAssets, ptySessionId, isActive);
   if (assets.length === 0 && previewIndex == null) return null;
 
   const openPreview = (assetId: string) => {
@@ -103,7 +102,7 @@ export function TerminalSendPreviews({
                       aria-label={`Dismiss ${asset.title}`}
                       className="h-5 w-5 rounded-full border border-zinc-500 bg-[#c4c4c4] text-zinc-900 shadow-md hover:bg-[#d4d4d4]"
                       onClick={() => {
-                        send.dismissAsset(asset.id);
+                        dismissAsset(asset.id);
                         setHoveredId(null);
                         setPreviewIndex((current) => {
                           if (current == null) return null;

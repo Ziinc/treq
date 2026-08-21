@@ -1,7 +1,7 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ExternalLink, Github, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
-import { useAuth } from "../hooks/useAuth";
+import { useAuthStore } from "../stores/authStore";
 import {
   useGitRemoteInfo,
   useMergeQueueEnabled,
@@ -143,7 +143,7 @@ export const GitHubIntegrationSettings: React.FC<
     loading: authLoading,
     subscription,
     signIn,
-  } = useAuth();
+  } = useAuthStore();
   const [repositories, setRepositories] = useState<GitHubRepository[]>([]);
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState(false);

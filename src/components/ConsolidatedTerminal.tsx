@@ -23,7 +23,7 @@ import {
   ptyWriteSuppressEcho,
 } from "../lib/api";
 import { consumePtyEcho } from "./terminal/consumePtyEcho";
-import { useTerminalSettings } from "../hooks/useTerminalSettings";
+import { useTerminalSettingsStore } from "../stores/terminalSettingsStore";
 import { cn } from "../lib/utils";
 import { Loader2 } from "lucide-react";
 import { Button } from "./ui/button";
@@ -108,35 +108,27 @@ export const ConsolidatedTerminal = forwardRef<
     const [terminalError, setTerminalError] = useState<string | null>(null);
     const [instanceKey, setInstanceKey] = useState(0);
 
-    // Store callbacks in refs to avoid effect re-runs
     const onSessionErrorRef = useRef(onSessionError);
     const onTerminalOutputRef = useRef(onTerminalOutput);
     const onTerminalInputRef = useRef(onTerminalInput);
     const onTerminalIdleRef = useRef(onTerminalIdle);
+    const fontSize = Math.round(
+      useTerminalSettingsStore((s) => s.fontSize) * 0.8125,
+    );
 
-    const fontSize = Math.round(useTerminalSettings().fontSize * 0.8125);
-
-    // Sync isPtyReady state with ref for use in callbacks
     useEffect(() => {
       isPtyReadyRef.current = isPtyReady;
-    }, [isPtyReady]);
-
-    // Keep callback refs in sync
-    useEffect(() => {
       onSessionErrorRef.current = onSessionError;
-    }, [onSessionError]);
-
-    useEffect(() => {
       onTerminalOutputRef.current = onTerminalOutput;
-    }, [onTerminalOutput]);
-
-    useEffect(() => {
       onTerminalInputRef.current = onTerminalInput;
-    }, [onTerminalInput]);
-
-    useEffect(() => {
       onTerminalIdleRef.current = onTerminalIdle;
-    }, [onTerminalIdle]);
+    }, [
+      isPtyReady,
+      onSessionError,
+      onTerminalOutput,
+      onTerminalInput,
+      onTerminalIdle,
+    ]);
 
     // Reset output and error when session changes
     useEffect(() => {

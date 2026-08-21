@@ -12,7 +12,7 @@ import {
 } from "./ui/context-menu";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import { useToast } from "./ui/toast";
-import { useEditorApps } from "../hooks/useEditorApps";
+import { useEditorAppsStore } from "../stores/editorAppsStore";
 
 interface FileContextMenuProps {
   filePath: string;
@@ -23,7 +23,7 @@ interface FileContextMenuProps {
 export const FileContextMenu = memo(
   ({ filePath, workspacePath, children }: FileContextMenuProps) => {
     const { addToast } = useToast();
-    const editorApps = useEditorApps();
+    const editorApps = useEditorAppsStore();
 
     const getRelativePath = useCallback(
       (fullPath: string): string => {

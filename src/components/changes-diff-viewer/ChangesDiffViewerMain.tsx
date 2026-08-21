@@ -10,7 +10,7 @@ import React, {
   useState,
 } from "react";
 import { type ParsedFileChange } from "../../lib/git-utils";
-import { useDiffSettings } from "../../hooks/useDiffSettings";
+import { useDiffSettingsStore } from "../../stores/diffSettingsStore";
 import { useDiffSearch } from "./hooks/useDiffSearch";
 import { useLineSelection } from "./hooks/useLineSelection";
 import { useComments } from "./hooks/useComments";
@@ -63,7 +63,7 @@ export const ChangesDiffViewer = memo(
     ) => {
       const { addToast } = useToast();
       const queryClient = useQueryClient();
-      const { fontSize: diffFontSize } = useDiffSettings();
+      const { fontSize: diffFontSize } = useDiffSettingsStore();
 
       const [activeFilePath, setActiveFilePath] = useState<string | null>(null);
       const [committedSectionCollapsed, setCommittedSectionCollapsed] =

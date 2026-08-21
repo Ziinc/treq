@@ -8,6 +8,21 @@ import { Dashboard } from "../../src/components/Dashboard";
 import { createTestRepo, openRepo } from "../utils";
 import { createWorkspace, getSessions } from "../../src/lib/api";
 
+async function fireDeepLink(payload: string[]) {
+  await waitFor(() =>
+    expect(
+      vi
+        .mocked(listen)
+        .mock.calls.filter((args) => args[0] === "deep-link-received").length,
+    ).toBeGreaterThanOrEqual(2),
+  );
+  const callbacks = vi
+    .mocked(listen)
+    .mock.calls.filter((args) => args[0] === "deep-link-received")
+    .map((args) => args[1] as (event: { payload: string[] }) => unknown);
+  await Promise.all(callbacks.map((callback) => callback({ payload })));
+}
+
 describe("agent deep-link integration", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -21,28 +36,20 @@ describe("agent deep-link integration", () => {
 
     render(<Dashboard />);
 
-    const listenMock = vi.mocked(listen);
-    const deepLinkCall = listenMock.mock.calls.find(
-      (args) => args[0] === "deep-link-received",
-    );
-    expect(deepLinkCall).toBeTruthy();
-    const callback = deepLinkCall?.[1] as (event: {
-      payload: string[];
-    }) => void;
     const url = `treq://agent/start?repo=${encodeURIComponent(
       repoPath,
     )}&branch=feat%2Fagent-link&prompt=${encodeURIComponent(
       "Investigate regression",
     )}&mode=edit&agent=codex&request_id=req-link-1`;
 
-    await callback({ payload: [url] });
+    await fireDeepLink([url]);
     await waitFor(async () => {
       const sessions = await getSessions(repoPath);
       expect(sessions.some((s) => s.workspace_id === workspaceId)).toBe(true);
     });
     const sessionCountAfterFirst = (await getSessions(repoPath)).length;
 
-    await callback({ payload: [url] });
+    await fireDeepLink([url]);
     await waitFor(async () => {
       const sessions = await getSessions(repoPath);
       expect(sessions.length).toBe(sessionCountAfterFirst);
@@ -55,18 +62,10 @@ describe("agent deep-link integration", () => {
     openRepo(repoPath);
     render(<Dashboard />);
 
-    const listenMock = vi.mocked(listen);
-    const deepLinkCall = listenMock.mock.calls.find(
-      (args) => args[0] === "deep-link-received",
-    );
-    expect(deepLinkCall).toBeTruthy();
-    const callback = deepLinkCall?.[1] as (event: {
-      payload: string[];
-    }) => void;
     const url = `treq://agent/start?repo=${encodeURIComponent(
       otherRepoPath,
     )}&branch=feat%2Fmissing&prompt=hello&mode=plan&agent=claude&request_id=req-link-2`;
-    await callback({ payload: [url] });
+    await fireDeepLink([url]);
 
     await waitFor(() => expect(WebviewWindow).toHaveBeenCalled());
     expect(vi.mocked(invoke)).not.toHaveBeenCalledWith(
@@ -80,22 +79,9 @@ describe("agent deep-link integration", () => {
     openRepo(repoPath);
     await createWorkspace(repoPath, "feat/existing");
     render(<Dashboard />);
-    await waitFor(() =>
-      expect(
-        vi
-          .mocked(listen)
-          .mock.calls.filter((args) => args[0] === "deep-link-received").length,
-      ).toBeGreaterThan(1),
-    );
-    const callback = vi
-      .mocked(listen)
-      .mock.calls.filter((args) => args[0] === "deep-link-received")
-      .at(-1)?.[1] as (event: { payload: string[] }) => Promise<void>;
-    await callback({
-      payload: [
-        `treq://agent/start?repo=${encodeURIComponent(repoPath)}&branch=missing&prompt=hello&mode=plan&agent=claude&request_id=req-missing`,
-      ],
-    });
+    await fireDeepLink([
+      `treq://agent/start?repo=${encodeURIComponent(repoPath)}&branch=missing&prompt=hello&mode=plan&agent=claude&request_id=req-missing`,
+    ]);
     await waitFor(() =>
       expect(vi.mocked(invoke)).toHaveBeenCalledWith(
         "acknowledge_agent_dispatch",
@@ -120,16 +106,9 @@ describe("agent deep-link integration", () => {
         ? Promise.reject(new Error("session creation failed"))
         : originalInvoke!(cmd, args),
     );
-    const callback = vi
-      .mocked(listen)
-      .mock.calls.find(
-        (args) => args[0] === "deep-link-received",
-      )?.[1] as (event: { payload: string[] }) => Promise<void>;
-    await callback({
-      payload: [
-        `treq://agent/start?repo=${encodeURIComponent(repoPath)}&branch=feat%2Ffailure&prompt=hello&mode=edit&agent=codex&request_id=req-failure`,
-      ],
-    });
+    await fireDeepLink([
+      `treq://agent/start?repo=${encodeURIComponent(repoPath)}&branch=feat%2Ffailure&prompt=hello&mode=edit&agent=codex&request_id=req-failure`,
+    ]);
     await waitFor(() =>
       expect(invokeMock).toHaveBeenCalledWith(
         "acknowledge_agent_dispatch",

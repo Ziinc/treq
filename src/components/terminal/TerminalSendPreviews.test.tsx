@@ -5,8 +5,9 @@ import { listen } from "@tauri-apps/api/event";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { render, screen, waitFor } from "@testing-library/react";
 import { TerminalSendPreviews } from "./TerminalSendPreviews";
-import { TreqSendProvider, useTreqSend } from "../../hooks/useTreqSend";
 import { ToastProvider } from "../ui/toast";
+import { AppStoreEffects } from "../../stores/AppStoreEffects";
+import { useTreqSendStore } from "../../stores/treqSendStore";
 import { TREQ_SEND_EVENT } from "../../lib/treqSend";
 import * as api from "../../lib/api";
 import * as treqSend from "../../lib/treqSend";
@@ -28,7 +29,7 @@ function SendHarness({
   isActive?: boolean;
   onSendReview?: (prompt: string) => void;
 }) {
-  const { ingestPayload } = useTreqSend();
+  const ingestPayload = useTreqSendStore((s) => s.ingestPayload);
   return (
     <div>
       <button
@@ -75,7 +76,8 @@ function SendHarness({
 function renderSend(ui: ReactElement) {
   return render(
     <ToastProvider>
-      <TreqSendProvider>{ui}</TreqSendProvider>
+      <AppStoreEffects />
+      {ui}
     </ToastProvider>,
   );
 }

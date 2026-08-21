@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useTheme } from "../hooks/useTheme";
+import { useThemeStore } from "../stores/themeStore";
 import prismVsUrl from "prism-themes/themes/prism-vs.css?url";
 import prismVscDarkPlusUrl from "prism-themes/themes/prism-vsc-dark-plus.css?url";
 
@@ -12,7 +12,9 @@ import prismVscDarkPlusUrl from "prism-themes/themes/prism-vsc-dark-plus.css?url
  * build instead of relying on a non-existent `/prism-themes/...` public path.
  */
 export function PrismThemeLoader() {
-  const { actualTheme } = useTheme();
+  const actualTheme = useThemeStore((s) =>
+    s.theme === "system" ? s.systemTheme : s.theme,
+  );
 
   useEffect(() => {
     // Remove any existing Prism theme

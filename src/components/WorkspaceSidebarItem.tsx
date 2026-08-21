@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { ClaudeIcon } from "./icons/AgentIcons";
 import { useState } from "react";
-import { useEditorApps } from "../hooks/useEditorApps";
+import { useEditorAppsStore } from "../stores/editorAppsStore";
 import { type QueueEntryStatus, type Workspace } from "../lib/api";
 import { clearWorkspaceSchedule } from "../lib/clear-workspace-schedule";
 import type { PrInfo } from "../lib/api-types";
@@ -50,7 +50,7 @@ export const PathContextMenuItems: React.FC<{
   fullPath: string;
   additionalItems?: React.ReactNode;
 }> = ({ relativePath, fullPath, additionalItems }) => {
-  const editorApps = useEditorApps();
+  const editorApps = useEditorAppsStore();
 
   return (
     <>

@@ -72,6 +72,8 @@ afterEach(async () => {
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
   });
   cleanup();
+  const { resetAllStores } = await import("../src/stores/resetStores");
+  resetAllStores();
 });
 
 // ── DOM polyfills / browser API stubs ────────────────────────────────────────

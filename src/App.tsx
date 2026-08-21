@@ -2,17 +2,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Router } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import { Dashboard } from "./components/Dashboard";
-import { TreqSendProvider } from "./hooks/useTreqSend";
 import { ToastProvider } from "./components/ui/toast";
-import { ThemeProvider } from "./hooks/useTheme";
-import { TerminalSettingsProvider } from "./hooks/useTerminalSettings";
-import { ZoomSettingsProvider } from "./hooks/useZoomSettings";
-import { DiffSettingsProvider } from "./hooks/useDiffSettings";
-import { EditorAppsProvider } from "./hooks/useEditorApps";
-import { AuthProvider } from "./hooks/useAuth";
-import { useSettingsPreloader } from "./hooks/useSettingsPreloader";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { PrismThemeLoader } from "./components/PrismThemeLoader";
+import { AppStoreEffects } from "./stores/AppStoreEffects";
 import "./index.css";
 
 const queryClient = new QueryClient({
@@ -25,9 +18,6 @@ const queryClient = new QueryClient({
 });
 
 function AppContent() {
-  // Pre-load all settings in a single batch request
-  useSettingsPreloader();
-
   return (
     <div className="flex h-screen">
       <ErrorBoundary
@@ -55,26 +45,13 @@ function App() {
       }}
     >
       <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <ThemeProvider>
-            <PrismThemeLoader />
-            <ZoomSettingsProvider>
-              <TerminalSettingsProvider>
-                <DiffSettingsProvider>
-                  <EditorAppsProvider>
-                    <TreqSendProvider>
-                      <ToastProvider>
-                        <Router hook={useHashLocation}>
-                          <AppContent />
-                        </Router>
-                      </ToastProvider>
-                    </TreqSendProvider>
-                  </EditorAppsProvider>
-                </DiffSettingsProvider>
-              </TerminalSettingsProvider>
-            </ZoomSettingsProvider>
-          </ThemeProvider>
-        </AuthProvider>
+        <AppStoreEffects />
+        <PrismThemeLoader />
+        <ToastProvider>
+          <Router hook={useHashLocation}>
+            <AppContent />
+          </Router>
+        </ToastProvider>
       </QueryClientProvider>
     </ErrorBoundary>
   );
