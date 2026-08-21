@@ -20,7 +20,6 @@ async function fireDeepLink(payload: string[]) {
     .mocked(listen)
     .mock.calls.filter((args) => args[0] === "deep-link-received")
     .map((args) => args[1] as (event: { payload: string[] }) => unknown);
-  // AppStoreEffects and Dashboard both subscribe; Tauri would notify every listener.
   await Promise.all(callbacks.map((callback) => callback({ payload })));
 }
 
@@ -50,7 +49,7 @@ describe("agent deep-link integration", () => {
     });
     const sessionCountAfterFirst = (await getSessions(repoPath)).length;
 
-    await callback({ payload: [url] });
+    await fireDeepLink([url]);
     await waitFor(async () => {
       const sessions = await getSessions(repoPath);
       expect(sessions.length).toBe(sessionCountAfterFirst);
