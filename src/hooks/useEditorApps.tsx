@@ -1,70 +1,14 @@
-import {
-  ReactNode,
-  createContext,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
-import { detectEditorApps } from "../lib/api";
+import type { ReactNode } from "react";
+import { useEditorAppsStore } from "../stores/editorAppsStore";
 
-interface EditorAppsContextType {
-  cursor: boolean;
-  vscode: boolean;
-  zed: boolean;
-  isLoading: boolean;
-}
-
-const defaultContextValue: EditorAppsContextType = {
-  cursor: false,
-  vscode: false,
-  zed: false,
-  isLoading: true,
+export const useEditorApps = () => {
+  const cursor = useEditorAppsStore((s) => s.cursor);
+  const vscode = useEditorAppsStore((s) => s.vscode);
+  const zed = useEditorAppsStore((s) => s.zed);
+  const isLoading = useEditorAppsStore((s) => s.isLoading);
+  return { cursor, vscode, zed, isLoading };
 };
-
-const EditorAppsContext =
-  createContext<EditorAppsContextType>(defaultContextValue);
-
-EditorAppsContext.displayName = "EditorAppsContext";
-
-export const useEditorApps = (): EditorAppsContextType =>
-  useContext(EditorAppsContext);
 
 export const EditorAppsProvider: React.FC<{ children: ReactNode }> = ({
   children,
-}) => {
-  const [editorApps, setEditorApps] = useState({
-    cursor: false,
-    vscode: false,
-    zed: false,
-  });
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    // Detect editor apps on mount
-    detectEditorApps()
-      .then((apps) => {
-        setEditorApps(apps);
-        setIsLoading(false);
-      })
-      .catch((error) => {
-        console.error("Failed to detect editor apps:", error);
-        setIsLoading(false);
-        // Keep defaults (all false) on error
-      });
-  }, []);
-
-  const value = useMemo(
-    () => ({
-      ...editorApps,
-      isLoading,
-    }),
-    [editorApps, isLoading],
-  );
-
-  return (
-    <EditorAppsContext.Provider value={value}>
-      {children}
-    </EditorAppsContext.Provider>
-  );
-};
+}) => children;

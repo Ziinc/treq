@@ -3,11 +3,8 @@ import React, { ReactNode } from "react";
 import { Router } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import { ToastProvider } from "../src/components/ui/toast";
-import { TerminalSettingsProvider } from "../src/hooks/useTerminalSettings";
-import { ZoomSettingsProvider } from "../src/hooks/useZoomSettings";
-import { ThemeProvider } from "../src/hooks/useTheme";
-import { DiffSettingsProvider } from "../src/hooks/useDiffSettings";
 import { TreqSendProvider } from "../src/hooks/useTreqSend";
+import { AppStoreEffects } from "../src/stores/AppStoreEffects";
 import {
   RenderOptions,
   act,
@@ -17,36 +14,27 @@ import {
 } from "@testing-library/react";
 
 /**
- * Creates a wrapper component with QueryClientProvider and ToastProvider
- * for testing React components that use React Query hooks and toasts.
+ * Creates a wrapper with QueryClient, toast host, and Zustand store effects.
  */
 const AllTheProviders = ({ children }: { children: ReactNode }) => {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: {
         retry: false,
-        // cacheTime: 0,
       },
     },
   });
 
   return (
     <Router hook={useHashLocation}>
-      <ThemeProvider>
-        <TreqSendProvider>
-          <ToastProvider>
-            <QueryClientProvider client={queryClient}>
-              <DiffSettingsProvider>
-                <ZoomSettingsProvider>
-                  <TerminalSettingsProvider>
-                    {children}
-                  </TerminalSettingsProvider>
-                </ZoomSettingsProvider>
-              </DiffSettingsProvider>
-            </QueryClientProvider>
-          </ToastProvider>
-        </TreqSendProvider>
-      </ThemeProvider>
+      <AppStoreEffects />
+      <TreqSendProvider>
+        <ToastProvider>
+          <QueryClientProvider client={queryClient}>
+            {children}
+          </QueryClientProvider>
+        </ToastProvider>
+      </TreqSendProvider>
     </Router>
   );
 };
@@ -75,8 +63,6 @@ const screen = {
   },
 };
 
-// re-export everything
 export * from "@testing-library/react";
 
-// override render method and screen
 export { customRender as render, screen, settleReactUpdates };

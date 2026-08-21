@@ -44,7 +44,7 @@ treq/
 
 **State management** — two layers:
 - **TanStack Query** for all async server state (Tauri commands, file watching, commit history)
-- **React Context** for ambient app state: `AuthProvider`, `ThemeProvider`, `TerminalSettingsProvider`, `DiffSettingsProvider`, `EditorAppsProvider`, `ToastProvider`
+- **Zustand** for ambient client state (theme, zoom, diff/terminal settings, auth, editor apps, toasts, treq-send). `AppStoreEffects` hydrates settings and attaches DOM/Tauri listeners. TanStack Query still owns server/async repo state. `ToastProvider` is a viewport over the toast store.
 
 **Key components:**
 | Component | Responsibility |
