@@ -44,6 +44,7 @@ import {
   ContextMenuTrigger,
 } from "./ui/context-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+import { useWorkspaceRowPointerHandlers } from "../hooks/useWorkspaceSidebarMultiSelect";
 
 export const PathContextMenuItems: React.FC<{
   relativePath: string;
@@ -228,6 +229,15 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
   const workspaceTitle = getWorkspaceTitleFromUtils(workspace);
   const prStatus = hasRemote && prInfo ? prIconStyle(prInfo) : null;
   const [isChangeDropTarget, setIsChangeDropTarget] = useState(false);
+  const { onMouseDown, onClick } = useWorkspaceRowPointerHandlers({
+    onSelect: (event) => {
+      if (onWorkspaceMultiSelect) {
+        onWorkspaceMultiSelect(workspace, event, index);
+        return;
+      }
+      onWorkspaceClick?.(workspace);
+    },
+  });
 
   return (
     <SidebarMenuItem>
@@ -258,11 +268,8 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                           "text-destructive": isConflicted,
                         },
                       )}
-                      onClick={(e) =>
-                        onWorkspaceMultiSelect
-                          ? onWorkspaceMultiSelect(workspace, e, index)
-                          : onWorkspaceClick?.(workspace)
-                      }
+                      onMouseDown={onMouseDown}
+                      onClick={onClick}
                       onDoubleClick={(e) => onDoubleClick?.(workspace, e)}
                       onDragOver={(e) => {
                         if (

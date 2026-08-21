@@ -2,6 +2,17 @@ import { useCallback, useRef } from "react";
 import type { Workspace } from "../lib/api";
 import type { FlattenedWorkspaceNode } from "../lib/workspace-tree";
 
+export function isModifierMouseEvent(event: React.MouseEvent): boolean {
+  return (
+    event.shiftKey ||
+    event.metaKey ||
+    event.ctrlKey ||
+    event.getModifierState("Shift") ||
+    event.getModifierState("Meta") ||
+    event.getModifierState("Control")
+  );
+}
+
 export function idsInVisibleRange(
   nodes: FlattenedWorkspaceNode[],
   fromIndex: number,
@@ -38,19 +49,17 @@ export function useWorkspaceSidebarMultiSelect({
 
   const handleItemSelect = useCallback(
     (workspace: Workspace, event: React.MouseEvent, index: number) => {
-      if (
-        event.shiftKey &&
-        lastSelectedIndexRef.current !== null &&
-        onSelectStack
-      ) {
-        onSelectStack(
-          idsInVisibleRange(
-            flattenedNodes,
-            lastSelectedIndexRef.current,
-            index,
-          ),
-        );
-        return;
+      if (event.shiftKey || event.getModifierState("Shift")) {
+        if (lastSelectedIndexRef.current !== null && onSelectStack) {
+          onSelectStack(
+            idsInVisibleRange(
+              flattenedNodes,
+              lastSelectedIndexRef.current,
+              index,
+            ),
+          );
+          return;
+        }
       }
       lastSelectedIndexRef.current = index;
       if (onWorkspaceMultiSelect) {
@@ -63,4 +72,31 @@ export function useWorkspaceSidebarMultiSelect({
   );
 
   return { handleItemSelect, clearLastSelectedIndex };
+}
+
+export function useWorkspaceRowPointerHandlers({
+  onSelect,
+}: {
+  onSelect: (event: React.MouseEvent) => void;
+}) {
+  const skipClickRef = useRef(false);
+
+  const onMouseDown = (event: React.MouseEvent) => {
+    if (event.button !== 0) return;
+    if (!isModifierMouseEvent(event)) return;
+    skipClickRef.current = true;
+    onSelect(event);
+  };
+
+  const onClick = (event: React.MouseEvent) => {
+    if (skipClickRef.current) {
+      skipClickRef.current = false;
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    onSelect(event);
+  };
+
+  return { onMouseDown, onClick };
 }
