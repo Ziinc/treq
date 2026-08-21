@@ -16,6 +16,7 @@ import { supabase } from "../../../src/lib/supabase";
 import { render, screen, waitFor, within } from "../../../test/test-utils";
 import { createTestRepo, openRepo } from "../../../test/utils";
 import { captureDocument } from "../capture";
+import { createAuthStoreMock } from "../../../test/mocks/zustandAuthStore";
 import { getServiceClient } from "../../service-qa/clients";
 import { FEATURES as SERVICE_QA_FEATURES } from "../../service-qa/features";
 import {
@@ -60,8 +61,7 @@ vi.mock("../../../src/lib/features", () => ({
 }));
 
 vi.mock("../../../src/stores/authStore", () => ({
-  useAuthStore: (selector?: (state: typeof auth) => unknown) =>
-    typeof selector === "function" ? selector(auth) : auth,
+  useAuthStore: createAuthStoreMock(auth),
 }));
 
 vi.mock("../../../src/lib/api", async () => {

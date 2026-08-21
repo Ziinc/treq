@@ -5,12 +5,13 @@ import type { QueueEntryStatus } from "../../../src/lib/api-types";
 import { render, screen, waitFor, within } from "../../../test/test-utils";
 import { createTestRepo } from "../../../test/utils";
 import { captureDocument } from "../capture";
+import { createAuthStoreMock } from "../../../test/mocks/zustandAuthStore";
 
 // The GitHub panel's Merge Queue tab reads entirely from Supabase (queue
 // contents + the per-repo opt-in) and from `gh` for the repo's remote, none of
 // which the desktop harness can reach. Those two boundaries are stubbed; the
 // panel, its tabs and its rendering are the real components.
-const { queueState, mockGetGitRemoteUrl, mockSetEnabled, mockInvoke } =
+const { queueState, mockGetGitRemoteUrl, mockSetEnabled, mockInvoke, auth } =
   vi.hoisted(() => ({
     queueState: {
       enabled: false,
@@ -28,6 +29,13 @@ const { queueState, mockGetGitRemoteUrl, mockSetEnabled, mockInvoke } =
     mockGetGitRemoteUrl: vi.fn(),
     mockSetEnabled: vi.fn(),
     mockInvoke: vi.fn(),
+    auth: {
+      user: { id: "user-1" },
+      session: { access_token: "token" },
+      loading: false,
+      subscription: { plan: "pro", status: "active" },
+      signIn: vi.fn(),
+    },
   }));
 
 vi.mock("../../../src/lib/features", () => ({
@@ -40,16 +48,7 @@ vi.mock("../../../src/lib/features", () => ({
 }));
 
 vi.mock("../../../src/stores/authStore", () => ({
-  useAuthStore: (selector?: (state: Record<string, unknown>) => unknown) => {
-    const state = {
-      user: { id: "user-1" },
-      session: { access_token: "token" },
-      loading: false,
-      subscription: { plan: "pro", status: "active" },
-      signIn: vi.fn(),
-    };
-    return typeof selector === "function" ? selector(state) : state;
-  },
+  useAuthStore: createAuthStoreMock(auth),
 }));
 
 vi.mock("../../../src/lib/supabase", () => ({

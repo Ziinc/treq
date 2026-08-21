@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { GitHubIntegrationSettings } from "../../src/components/GitHubIntegrationSettings";
+import { createAuthStoreMock } from "../mocks/zustandAuthStore";
 
 const auth = vi.hoisted(() => ({
   user: { id: "user-1" } as object | null,
@@ -15,8 +16,7 @@ const auth = vi.hoisted(() => ({
 const query = vi.hoisted(() => vi.fn());
 
 vi.mock("../../src/stores/authStore", () => ({
-  useAuthStore: (selector?: (state: typeof auth) => unknown) =>
-    typeof selector === "function" ? selector(auth) : auth,
+  useAuthStore: createAuthStoreMock(auth),
 }));
 vi.mock("../../src/lib/supabase", async (importOriginal) => {
   const original =
