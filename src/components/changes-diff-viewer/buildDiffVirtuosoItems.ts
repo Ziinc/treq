@@ -125,6 +125,67 @@ export function committedFileToParsed(file: JjFileChange): ParsedFileChange {
   };
 }
 
+function indexConflictSearchIds(
+  maps: DiffVirtuosoIndexMaps,
+  args: {
+    filePath: string;
+    index: number;
+    lineIndex: number;
+    region: ConflictRegion;
+  },
+) {
+  maps.searchIdToIndex.set(
+    `conflict:${args.filePath}:${args.lineIndex}`,
+    args.index,
+  );
+  const regionLineCount = Math.max(
+    args.region.lines?.length ?? 0,
+    args.region.content.split("\n").length,
+  );
+  for (let idx = 0; idx < regionLineCount; idx++) {
+    maps.searchIdToIndex.set(`conflict:${args.region.id}:${idx}`, args.index);
+  }
+}
+
+function pushConflictOrSkipLine(args: {
+  conflictLineMap: Map<number, ConflictRegion> | undefined;
+  filePath: string;
+  hunkIndex: number;
+  isCommitted: boolean;
+  items: DiffVirtuosoItem[];
+  lineIndex: number;
+  maps: DiffVirtuosoIndexMaps;
+  newLineNumber: number | undefined;
+  prefix: string;
+  renderedConflictIds: Set<string>;
+}): boolean {
+  if (args.newLineNumber === undefined || !args.conflictLineMap) return false;
+  const conflictRegion = args.conflictLineMap.get(args.newLineNumber);
+  if (!conflictRegion) return false;
+  if (
+    !args.renderedConflictIds.has(conflictRegion.id) &&
+    conflictRegion.start_line === args.newLineNumber
+  ) {
+    args.renderedConflictIds.add(conflictRegion.id);
+    const index = args.items.length;
+    args.items.push({
+      type: "conflict",
+      key: `${args.prefix}:conflict:${conflictRegion.id}`,
+      filePath: args.filePath,
+      isCommitted: args.isCommitted,
+      hunkIndex: args.hunkIndex,
+      regionId: conflictRegion.id,
+    });
+    indexConflictSearchIds(args.maps, {
+      filePath: args.filePath,
+      index,
+      lineIndex: args.lineIndex,
+      region: conflictRegion,
+    });
+  }
+  return true;
+}
+
 function pushHunkItems(
   items: DiffVirtuosoItem[],
   maps: DiffVirtuosoIndexMaps,
@@ -178,40 +239,19 @@ function pushHunkItems(
   const lineNumbers = computeHunkLineNumbers(hunk);
   const renderedConflictIds = new Set<string>();
   for (let lineIndex = 0; lineIndex < hunk.lines.length; lineIndex++) {
-    const newLineNumber = lineNumbers[lineIndex]?.new;
-    if (newLineNumber !== undefined && args.conflictLineMap) {
-      const conflictRegion = args.conflictLineMap.get(newLineNumber);
-      if (conflictRegion) {
-        if (
-          !renderedConflictIds.has(conflictRegion.id) &&
-          conflictRegion.start_line === newLineNumber
-        ) {
-          renderedConflictIds.add(conflictRegion.id);
-          const index = items.length;
-          items.push({
-            type: "conflict",
-            key: `${prefix}:conflict:${conflictRegion.id}`,
-            filePath,
-            isCommitted,
-            hunkIndex,
-            regionId: conflictRegion.id,
-          });
-          maps.searchIdToIndex.set(`conflict:${filePath}:${lineIndex}`, index);
-          const regionLineCount = Math.max(
-            conflictRegion.lines?.length ?? 0,
-            conflictRegion.content.split("\n").length,
-          );
-          for (let idx = 0; idx < regionLineCount; idx++) {
-            maps.searchIdToIndex.set(
-              `conflict:${conflictRegion.id}:${idx}`,
-              index,
-            );
-          }
-        }
-        continue;
-      }
-    }
-
+    const skippedConflict = pushConflictOrSkipLine({
+      conflictLineMap: args.conflictLineMap,
+      filePath,
+      hunkIndex,
+      isCommitted,
+      items,
+      lineIndex,
+      maps,
+      newLineNumber: lineNumbers[lineIndex]?.new,
+      prefix,
+      renderedConflictIds,
+    });
+    if (skippedConflict) continue;
     const index = items.length;
     items.push({
       type: "diff-line",
@@ -248,25 +288,26 @@ function pushHunkItems(
   }
 }
 
-function pushFileItems(
-  items: DiffVirtuosoItem[],
-  maps: DiffVirtuosoIndexMaps,
-  file: ParsedFileChange,
-  isCommitted: boolean,
-  hunksMap: Map<string, FileHunksData>,
-  args: BuildDiffVirtuosoItemsArgs,
-) {
+function pushFileItems(args: {
+  build: BuildDiffVirtuosoItemsArgs;
+  file: ParsedFileChange;
+  hunksMap: Map<string, FileHunksData>;
+  isCommitted: boolean;
+  items: DiffVirtuosoItem[];
+  maps: DiffVirtuosoIndexMaps;
+}) {
+  const { file, hunksMap, isCommitted, items, maps, build } = args;
   const filePath = file.path;
   const display = getFileDisplayState({
-    actualConflictedFiles: args.actualConflictedFiles,
-    collapsedFiles: args.collapsedFiles,
-    expandedLargeDiffs: args.expandedLargeDiffs,
+    actualConflictedFiles: build.actualConflictedFiles,
+    collapsedFiles: build.collapsedFiles,
+    expandedLargeDiffs: build.expandedLargeDiffs,
     file,
     fileHunks: hunksMap.get(filePath),
-    getFileCommentsForFile: args.getFileCommentsForFile,
-    pendingComment: args.pendingComment,
-    showCommentInput: args.showCommentInput,
-    viewedFiles: args.viewedFiles,
+    getFileCommentsForFile: build.getFileCommentsForFile,
+    pendingComment: build.pendingComment,
+    showCommentInput: build.showCommentInput,
+    viewedFiles: build.viewedFiles,
   });
   const ns = isCommitted ? "c" : "u";
   maps.filePathToIndex.set(filePath, items.length);
@@ -311,7 +352,7 @@ function pushFileItems(
     return;
   }
 
-  const unplaced = args.getUnplacedThreadsForFile(filePath);
+  const unplaced = build.getUnplacedThreadsForFile(filePath);
   if (unplaced.length > 0) {
     items.push({
       type: "unplaced-threads",
@@ -320,7 +361,7 @@ function pushFileItems(
       isCommitted,
     });
   }
-  const outdated = args.getOutdatedCommentsForFile(filePath);
+  const outdated = build.getOutdatedCommentsForFile(filePath);
   if (outdated.length > 0) {
     items.push({
       type: "outdated-comments",
@@ -331,11 +372,11 @@ function pushFileItems(
   }
 
   const hunks = display.fileData?.hunks ?? [];
-  const conflictLineMap = args.conflictLineLookups.get(filePath);
+  const conflictLineMap = build.conflictLineLookups.get(filePath);
   for (let hunkIndex = 0; hunkIndex < hunks.length; hunkIndex++) {
     pushHunkItems(items, maps, {
       conflictLineMap,
-      expandedContext: args.expandedContext,
+      expandedContext: build.expandedContext,
       filePath,
       hunk: hunks[hunkIndex],
       hunkIndex,
@@ -361,10 +402,24 @@ export function buildDiffVirtuosoItems(args: BuildDiffVirtuosoItemsArgs): {
     searchIdToIndex: new Map(),
   };
   for (const file of args.files) {
-    pushFileItems(items, maps, file, false, args.allFileHunks, args);
+    pushFileItems({
+      build: args,
+      file,
+      hunksMap: args.allFileHunks,
+      isCommitted: false,
+      items,
+      maps,
+    });
   }
   for (const file of args.committedFiles) {
-    pushFileItems(items, maps, file, true, args.committedFileHunks, args);
+    pushFileItems({
+      build: args,
+      file,
+      hunksMap: args.committedFileHunks,
+      isCommitted: true,
+      items,
+      maps,
+    });
   }
   return { items, maps };
 }

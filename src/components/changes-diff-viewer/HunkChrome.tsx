@@ -78,15 +78,15 @@ export function HunkContextLineRow({
   );
 }
 
-export function contextLineNumber(
-  hunk: JjDiffHunk,
-  direction: "before" | "after",
-  ctxIdx: number,
-  beforeLength: number,
-): number {
-  const { newStart, newCount } = parseHunkHeader(hunk.header);
-  if (direction === "before") {
-    return newStart - beforeLength + ctxIdx;
+export function contextLineNumber(args: {
+  hunk: JjDiffHunk;
+  direction: "before" | "after";
+  ctxIdx: number;
+  beforeLength: number;
+}): number {
+  const { newStart, newCount } = parseHunkHeader(args.hunk.header);
+  if (args.direction === "before") {
+    return newStart - args.beforeLength + args.ctxIdx;
   }
-  return newStart + newCount + ctxIdx;
+  return newStart + newCount + args.ctxIdx;
 }
