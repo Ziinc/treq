@@ -1,6 +1,7 @@
 import { FolderGit2, GitBranch, Plug, Settings, User } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTerminalSettings } from "../hooks/useTerminalSettings";
+import { useAutoUpdate } from "../hooks/useAutoUpdate";
 import {
   MAX_ZOOM,
   MIN_ZOOM,
@@ -49,6 +50,11 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const { fontSize, setFontSize } = useTerminalSettings();
   const { zoom, setZoom } = useZoomSettings();
   const { addToast } = useToast();
+  const { checkForUpdate } = useAutoUpdate({
+    autoCheck: false,
+    listenMenu: false,
+  });
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
 
   // Load settings on mount
   useEffect(() => {
@@ -297,6 +303,31 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                         Style of conflict markers written to files during
                         rebase. Git Diff3 is compatible with most editors.
                       </p>
+                    </div>
+
+                    <div>
+                      <Label>Updates</Label>
+                      <p className="text-sm text-muted-foreground mt-1 mb-3">
+                        Compare this build against the published version at
+                        treq.dev/version. Automatic install is available on
+                        macOS.
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={checkingUpdate}
+                        onClick={async () => {
+                          setCheckingUpdate(true);
+                          try {
+                            await checkForUpdate();
+                          } finally {
+                            setCheckingUpdate(false);
+                          }
+                        }}
+                      >
+                        {checkingUpdate ? "Checking…" : "Check for updates"}
+                      </Button>
                     </div>
                   </div>
                 </TabsContent>

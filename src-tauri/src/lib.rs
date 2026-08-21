@@ -455,10 +455,14 @@ pub fn run() {
                 let view_logs_item =
                     MenuItemBuilder::with_id("view_logs", "View Logs").build(app)?;
 
+                let check_for_updates_item =
+                    MenuItemBuilder::with_id("check_for_updates", "Check for Updates...").build(app)?;
+
                 let learn_more_item =
                     MenuItemBuilder::with_id("learn_more", "Learn More").build(app)?;
 
                 let help_menu = SubmenuBuilder::new(app, "Help")
+                    .item(&check_for_updates_item)
                     .item(&view_logs_item)
                     .separator()
                     .item(&learn_more_item)
@@ -591,6 +595,7 @@ pub fn run() {
                         let _ = app.opener().open_path(dir.to_string_lossy(), None::<&str>);
                     }
                 }
+                "check_for_updates" => emit_to_focused(app, "menu-check-for-updates", ()),
                 "learn_more" => {
                     #[cfg(target_os = "macos")]
                     {
@@ -632,6 +637,8 @@ pub fn run() {
             commands::set_setting,
             commands::get_repo_setting,
             commands::set_repo_setting,
+            commands::check_for_app_update,
+            commands::install_app_update,
             commands::get_workspace_file_hunks,
             commands::get_workspace_file_lines,
             commands::jj_restore_file,

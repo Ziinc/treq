@@ -72,8 +72,7 @@ describe("Inline comment editing — save", () => {
 
     const textarea = await startEditingComment("Original comment text");
     await user.clear(textarea);
-    await user.type(textarea, "Keyboard saved text");
-    await user.keyboard("{Meta>}{Enter}{/Meta}");
+    await user.type(textarea, "Keyboard saved text{Control>}{Enter}{/Control}");
 
     await screen.findByText("Keyboard saved text");
   });

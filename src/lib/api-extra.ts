@@ -579,3 +579,22 @@ export const openOrCreateWorkspaceFromPr = (
     title: title ?? null,
     description: description ?? null,
   });
+
+export type AppUpdateCheckResult = {
+  supported: boolean;
+  available: boolean;
+  currentVersion: string;
+  latestVersion: string | null;
+  downloadUrl: string | null;
+};
+
+/** Compare the running build against https://treq.dev/version (Mac install only). */
+export const checkForAppUpdate = (): Promise<AppUpdateCheckResult> =>
+  invoke("check_for_app_update");
+
+/**
+ * Download + replace the macOS .app bundle, then relaunch.
+ * Rejects on non-macOS builds.
+ */
+export const installAppUpdate = (downloadUrl: string): Promise<void> =>
+  invoke("install_app_update", { downloadUrl });

@@ -172,9 +172,5 @@ export async function setupReviewMode(
 }
 
 export function findReviewCopyButton() {
-  const copyButtons = screen.getAllByRole("button", { name: /copy/i });
-  return copyButtons.find(
-    (btn) =>
-      btn.textContent?.includes("Copy") && !btn.textContent?.includes("path"),
-  )!;
+  return screen.getByRole("button", { name: /^copy review$/i });
 }

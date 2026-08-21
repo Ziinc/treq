@@ -22,6 +22,7 @@ import { afterEach, vi } from "vitest";
 import "./setup.common";
 
 process.env.TREQ_DISABLE_AUTO_REBASE = "1";
+process.env.TREQ_DISABLE_AUTO_UPDATE = "1";
 
 const testDbPath = path.join(os.tmpdir(), `treq-screenshot-${Date.now()}.db`);
 process.env.TREQ_APP_DB_PATH = testDbPath;
