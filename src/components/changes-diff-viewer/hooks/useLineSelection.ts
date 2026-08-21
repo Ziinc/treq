@@ -28,8 +28,12 @@ export function useLineSelection({
     y: number;
   } | null>(null);
   const isDraggingRef = useRef<boolean>(false);
+  const isSelectingRef = useRef(false);
+  const selectionAnchorRef = useRef<DiffLinePointer | null>(null);
 
   const clearSelection = useCallback(() => {
+    isSelectingRef.current = false;
+    selectionAnchorRef.current = null;
     setDiffLineSelection(null);
     setContextMenuPosition(null);
   }, []);
@@ -47,13 +51,16 @@ export function useLineSelection({
       event.preventDefault();
       event.stopPropagation();
       isDraggingRef.current = false;
+      const anchor = { filePath, hunkIndex, lineIndex };
+      isSelectingRef.current = true;
+      selectionAnchorRef.current = anchor;
       setIsSelecting(true);
-      setSelectionAnchor({ filePath, hunkIndex, lineIndex });
+      setSelectionAnchor(anchor);
       setDiffLineSelection({
         filePath,
         lines: [{ hunkIndex, lineIndex, content: lineContent, isStaged }],
       });
-      setCurrentDragLine({ filePath, hunkIndex, lineIndex });
+      setCurrentDragLine(anchor);
       setContextMenuPosition(null);
     },
     [],
@@ -61,8 +68,9 @@ export function useLineSelection({
 
   const handleLineMouseEnter = useCallback(
     ({ filePath, hunkIndex, lineIndex }: DiffLinePointer) => {
+      const selectionAnchor = selectionAnchorRef.current;
       if (
-        !isSelecting ||
+        !isSelectingRef.current ||
         !selectionAnchor ||
         selectionAnchor.filePath !== filePath
       )
@@ -127,16 +135,11 @@ export function useLineSelection({
       setDiffLineSelection({ filePath, lines: newLines });
       setCurrentDragLine({ filePath, hunkIndex, lineIndex });
     },
-    [
-      isSelecting,
-      selectionAnchor,
-      allFileHunks,
-      committedFileHunks,
-      diffLineSelection,
-    ],
+    [allFileHunks, committedFileHunks, diffLineSelection],
   );
 
   const handleLineMouseUp = useCallback(() => {
+    isSelectingRef.current = false;
     setIsSelecting(false);
   }, []);
 
@@ -200,6 +203,7 @@ export function useLineSelection({
 
   useEffect(() => {
     const handleGlobalMouseUp = () => {
+      isSelectingRef.current = false;
       if (isSelecting) setIsSelecting(false);
     };
     document.addEventListener("mouseup", handleGlobalMouseUp);

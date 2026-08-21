@@ -31,7 +31,9 @@ describe("Multi-line selection in diff viewer", () => {
     const [, line2, line3, line4] = getDiffLines();
 
     fireEvent.mouseDown(getClickableArea(line2), { button: 0 });
+    fireEvent.mouseOver(line3);
     fireEvent.mouseEnter(line3);
+    fireEvent.mouseOver(line4);
     fireEvent.mouseEnter(line4);
     fireEvent.mouseUp(line4);
 
@@ -50,6 +52,7 @@ describe("Multi-line selection in diff viewer", () => {
     const [, line2, , line4] = getDiffLines();
 
     fireEvent.mouseDown(getClickableArea(line4), { button: 0 });
+    fireEvent.mouseOver(line2);
     fireEvent.mouseEnter(line2);
     fireEvent.mouseUp(line2);
 
@@ -67,7 +70,9 @@ describe("Multi-line selection in diff viewer", () => {
     const [, line2, line3, line4] = getDiffLines();
 
     fireEvent.mouseDown(getClickableArea(line2), { button: 0 });
+    fireEvent.mouseOver(line3);
     fireEvent.mouseEnter(line3);
+    fireEvent.mouseOver(line4);
     fireEvent.mouseEnter(line4);
     fireEvent.mouseUp(getClickableArea(line4));
     fireEvent.click(getClickableArea(line4));
@@ -93,6 +98,7 @@ describe("Multi-line selection in diff viewer", () => {
     const [, line2, , line4] = getDiffLines();
 
     fireEvent.mouseDown(getClickableArea(line2), { button: 0 });
+    fireEvent.mouseOver(line4);
     fireEvent.mouseEnter(line4);
     fireEvent.mouseUp(line4);
 
@@ -143,7 +149,9 @@ describe("Multi-line selection on committed Review-tab files", () => {
     const [, line2, line3, line4] = getDiffLines();
 
     fireEvent.mouseDown(getClickableArea(line2), { button: 0 });
+    fireEvent.mouseOver(line3);
     fireEvent.mouseEnter(line3);
+    fireEvent.mouseOver(line4);
     fireEvent.mouseEnter(line4);
     fireEvent.mouseUp(line4);
 
@@ -162,6 +170,7 @@ describe("Multi-line selection on committed Review-tab files", () => {
     const [, line2, , line4] = getDiffLines();
 
     fireEvent.mouseDown(getClickableArea(line2), { button: 0 });
+    fireEvent.mouseOver(line4);
     fireEvent.mouseEnter(line4);
     fireEvent.mouseUp(line4);
 

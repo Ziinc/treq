@@ -459,24 +459,27 @@ describe("Dashboard - workspace list", () => {
       await waitFor(() => {
         for (const branchName of expectedBranches) {
           expect(
-            within(sidebarRoot).getAllByText(branchName).length,
-          ).toBeGreaterThan(0);
+            sidebarRoot.querySelector(
+              `[data-testid="workspace-sidebar-item-${branchName}"]`,
+            ),
+          ).toBeTruthy();
         }
       });
 
-      const getWorkspaceRow = (branchName: string) => {
-        const [branchElement] = within(sidebarRoot).getAllByText(branchName);
-        return branchElement.closest("div") as HTMLElement;
-      };
+      const getWorkspaceRow = (branchName: string) =>
+        sidebarRoot.querySelector(
+          `[data-testid="workspace-sidebar-item-${branchName}"]`,
+        ) as HTMLElement;
 
-      const visibleOrder: string[] = [];
-      for (const el of Array.from(sidebarRoot.querySelectorAll("*"))) {
-        if (el.children.length > 0) continue;
-        const text = el.textContent?.trim() ?? "";
-        if (expectedBranches.includes(text) && !visibleOrder.includes(text)) {
-          visibleOrder.push(text);
-        }
-      }
+      const visibleOrder = Array.from(
+        sidebarRoot.querySelectorAll<HTMLElement>(
+          "[data-testid^='workspace-sidebar-item-']",
+        ),
+      )
+        .map((el) =>
+          el.dataset.testid?.replace("workspace-sidebar-item-", "") ?? "",
+        )
+        .filter((name) => expectedBranches.includes(name));
 
       expect(visibleOrder).toHaveLength(expectedBranches.length);
 
@@ -494,12 +497,8 @@ describe("Dashboard - workspace list", () => {
       const anchorRow = getWorkspaceRow(anchorBranch);
       const targetRow = getWorkspaceRow(targetBranch);
 
-      await user.keyboard("{Meta>}");
-      await user.click(anchorRow);
-      await user.keyboard("{/Meta}");
-      await user.keyboard("{Shift>}");
-      await user.click(targetRow);
-      await user.keyboard("{/Shift}");
+      fireEvent.click(anchorRow, { metaKey: true });
+      fireEvent.click(targetRow, { shiftKey: true });
 
       await waitFor(() => {
         for (const branchName of selectedRange) {
