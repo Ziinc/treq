@@ -1,5 +1,5 @@
 import { listen } from "@tauri-apps/api/event";
-import { useCallback, useEffect } from "react";
+import { useEffect } from "react";
 import useSWR from "swr";
 import {
   getCachedPrCiStatus,
@@ -378,49 +378,46 @@ export function useEnqueueWorkspace(
   );
   const { data: queueEnabled } = useMergeQueueEnabled(repoPath);
 
-  const mutate = useCallback(
-    async (action: "enqueue" | "dequeue") => {
-      if (!remoteInfo || !branchName)
-        throw new Error("Repository or branch not detected");
-      if (action === "enqueue" && !queueEnabled)
+  const mutate = async (action: "enqueue" | "dequeue") => {
+    if (!remoteInfo || !branchName)
+      throw new Error("Repository or branch not detected");
+    if (action === "enqueue" && !queueEnabled)
+      throw new Error(
+        "The merge queue is not enabled for this repository. Turn it on in the GitHub panel's Merge Queue tab.",
+      );
+    if (action === "enqueue" && prInfoGhError) throw prInfoGhError;
+
+    if (prInfoGh !== undefined && prInfoGh !== null) {
+      if (prInfoGh.state !== "OPEN" && action === "enqueue") {
         throw new Error(
-          "The merge queue is not enabled for this repository. Turn it on in the GitHub panel's Merge Queue tab.",
+          `No open PR found for branch '${branchName}' (gh reports: ${prInfoGh.state})`,
         );
-      if (action === "enqueue" && prInfoGhError) throw prInfoGhError;
-
-      if (prInfoGh !== undefined && prInfoGh !== null) {
-        if (prInfoGh.state !== "OPEN" && action === "enqueue") {
-          throw new Error(
-            `No open PR found for branch '${branchName}' (gh reports: ${prInfoGh.state})`,
-          );
-        }
       }
+    }
 
-      const { error } = await supabase.functions.invoke("enqueue-workspace", {
-        body: {
-          repo_full_name: remoteInfo.full_name,
-          branch_name: branchName,
-          action,
-        },
-      });
-      if (error) throw error;
+    const { error } = await supabase.functions.invoke("enqueue-workspace", {
+      body: {
+        repo_full_name: remoteInfo.full_name,
+        branch_name: branchName,
+        action,
+      },
+    });
+    if (error) throw error;
 
-      void invalidateQueries([
-        "merge-queue-status",
-        remoteInfo.full_name,
-        branchName,
-      ]);
-      void invalidateQueries([
-        "repo-branch-queue-statuses",
-        remoteInfo.full_name,
-      ]);
-      void invalidateQueries([
-        "repo-branch-queue-statuses-panel",
-        remoteInfo.full_name,
-      ]);
-    },
-    [remoteInfo, branchName, prInfoGh, prInfoGhError, queueEnabled],
-  );
+    void invalidateQueries([
+      "merge-queue-status",
+      remoteInfo.full_name,
+      branchName,
+    ]);
+    void invalidateQueries([
+      "repo-branch-queue-statuses",
+      remoteInfo.full_name,
+    ]);
+    void invalidateQueries([
+      "repo-branch-queue-statuses-panel",
+      remoteInfo.full_name,
+    ]);
+  };
 
   const enqueue = useMutation({ mutationFn: () => mutate("enqueue") });
   const dequeue = useMutation({ mutationFn: () => mutate("dequeue") });

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import {
   useGitRemoteInfo,
@@ -51,30 +51,24 @@ export function useGithubReviewThreads({
     },
   );
 
-  const { threadsByLineKey, unplacedThreadsByFile } = useMemo(() => {
+  const { threadsByLineKey, unplacedThreadsByFile } = (() => {
     const hunkMaps: Array<Map<string, FileHunksData>> = [allFileHunks];
     if (committedFileHunks && committedFileHunks.size > 0) {
       hunkMaps.push(committedFileHunks);
     }
     return placeGithubReviewThreads(threads, hunkMaps);
-  }, [threads, allFileHunks, committedFileHunks]);
+  })();
 
-  const getThreadsForLine = useCallback(
-    ({
-      filePath,
-      hunkId,
-      lineNumber,
-      side,
-    }: CommentLineQuery): GhReviewThread[] =>
-      threadsByLineKey.get(`${filePath}:${hunkId}:${lineNumber}:${side}`) ?? [],
-    [threadsByLineKey],
-  );
+  const getThreadsForLine = ({
+    filePath,
+    hunkId,
+    lineNumber,
+    side,
+  }: CommentLineQuery): GhReviewThread[] =>
+    threadsByLineKey.get(`${filePath}:${hunkId}:${lineNumber}:${side}`) ?? [];
 
-  const getUnplacedThreadsForFile = useCallback(
-    (filePath: string): GhReviewThread[] =>
-      unplacedThreadsByFile.get(filePath) ?? [],
-    [unplacedThreadsByFile],
-  );
+  const getUnplacedThreadsForFile = (filePath: string): GhReviewThread[] =>
+    unplacedThreadsByFile.get(filePath) ?? [];
 
   // Resolved threads start collapsed; unresolved start expanded. Only seed
   // collapse state the first time a thread is seen, so manual toggles survive
@@ -97,14 +91,14 @@ export function useGithubReviewThreads({
     }
   }, [threads]);
 
-  const toggleThreadCollapse = useCallback((threadId: string) => {
+  const toggleThreadCollapse = (threadId: string) => {
     setCollapsedThreadIds((prev) => {
       const next = new Set(prev);
       if (next.has(threadId)) next.delete(threadId);
       else next.add(threadId);
       return next;
     });
-  }, []);
+  };
 
   return {
     threads,
