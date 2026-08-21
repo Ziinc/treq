@@ -1,4 +1,5 @@
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useState } from "react";
+import useSWR from "swr";
 import { CircleHelp, ExternalLink, Loader2 } from "lucide-react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
@@ -7,7 +8,6 @@ import {
   getRepoSetting,
   getSetting,
   startResolveConflicts,
-  type ResolveConflictsSession,
 } from "../lib/api";
 import { WEB_URL } from "../lib/supabase";
 import type { SessionCreationInfo } from "../types/sessions";
@@ -43,48 +43,34 @@ export const ResolveConflictsDialog: React.FC<ResolveConflictsDialogProps> = ({
   onSessionCreated,
 }) => {
   const [prompt, setPrompt] = useState("");
-  const [preparing, setPreparing] = useState(false);
-  const [session, setSession] = useState<ResolveConflictsSession | null>(null);
   const { addToast } = useToast();
-
-  useEffect(() => {
-    if (!open) {
-      setPrompt("");
-      setSession(null);
-      setPreparing(false);
-      return;
-    }
-
-    let cancelled = false;
-    setPreparing(true);
-    startResolveConflicts(repoPath, workspaceId, changeIds)
-      .then((resolveSession) => {
-        if (!cancelled) setSession(resolveSession);
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          addToast({
-            title: "Failed to prepare resolve workspaces",
-            description: error instanceof Error ? error.message : String(error),
-            type: "error",
-          });
-        }
-      })
-      .finally(() => {
-        if (!cancelled) setPreparing(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [open, repoPath, workspaceId, changeIds, addToast]);
+  const changeIdsKey = JSON.stringify(changeIds ?? null);
+  const {
+    data: session,
+    isLoading: preparing,
+    error: prepareError,
+  } = useSWR(
+    open
+      ? ["start-resolve-conflicts", repoPath, workspaceId, changeIdsKey]
+      : null,
+    () => startResolveConflicts(repoPath, workspaceId, changeIds),
+    {
+      onError: (error) => {
+        addToast({
+          title: "Failed to prepare resolve workspaces",
+          description: error instanceof Error ? error.message : String(error),
+          type: "error",
+        });
+      },
+    },
+  );
+  void prepareError;
 
   const [, resolveAction, submitting] = useActionState(async () => {
     try {
       const resolveSession =
         session ??
         (await startResolveConflicts(repoPath, workspaceId, changeIds));
-      setSession(resolveSession);
 
       const fullPrompt = await buildResolveAgentPrompt(
         prompt.trim(),

@@ -1,8 +1,8 @@
 import { memo, useEffect, useMemo, useState } from "react";
+import useSWR from "swr";
 import {
   type JjLogCommit,
   type JjLogResult,
-  type JjTentativeWorkingCopy,
   listCommits,
 } from "../lib/api";
 import {
@@ -93,87 +93,69 @@ function getCommitHeadline(commit: JjLogCommit, isTentative: boolean): string {
 
 export const LinearCommitHistory = memo<LinearCommitHistoryProps>(
   ({ repoPath, workspaceId, onCommitClick, onCommitsLoaded }) => {
-    const [commits, setCommits] = useState<JjLogCommit[]>([]);
-    const [tentativeWorkingCopy, setTentativeWorkingCopy] =
-      useState<JjTentativeWorkingCopy | null>(null);
-    const [targetBranchCommits, setTargetBranchCommits] = useState<
-      JjLogCommit[]
-    >([]);
-    const [mergeBaseId, setMergeBaseId] = useState<string | null>(null);
-    const [targetBranch, setTargetBranch] = useState<string>("");
-    const [workspaceBranch, setWorkspaceBranch] = useState<string>("");
-    const [loading, setLoading] = useState(true);
     const [limit, setLimit] = useState(14);
-    const [loadingMore, setLoadingMore] = useState(false);
     const isHomeRepo = workspaceId == null;
     const includeTargetBranchHistory = workspaceId != null || isHomeRepo;
 
     useEffect(() => {
-      if (!repoPath) {
-        setLoading(false);
-        return;
-      }
-      setLoading(true);
       setLimit(14);
-      listCommits(
-        repoPath,
-        workspaceId,
-        includeTargetBranchHistory,
-        undefined,
-        14,
-      )
-        .then((result) => {
-          const { workspaceCommits, targetBranchCommits } =
-            splitCommitsByTarget(result?.commits ?? []);
-          setCommits(
-            normalizeCommits(filterWorkingCopyCommits(workspaceCommits)),
-          );
-          setTentativeWorkingCopy(result?.tentative_working_copy ?? null);
-          setTargetBranchCommits(targetBranchCommits);
-          setMergeBaseId(result?.merge_base_id ?? null);
-          setTargetBranch(result?.target_branch ?? "");
-          setWorkspaceBranch(result?.workspace_branch ?? "");
-          onCommitsLoaded?.(result);
-        })
-        .catch((err) => {
-          console.error("Failed to fetch commit history:", err);
-          setCommits([]);
-          setTentativeWorkingCopy(null);
-          setTargetBranchCommits([]);
-          setWorkspaceBranch("");
-        })
-        .finally(() => {
-          setLoading(false);
-        });
     }, [repoPath, workspaceId]);
 
-    // Re-fetch when limit increases (beyond initial load)
+    const { data: commitsResult, isLoading: loading, isValidating } = useSWR(
+      repoPath
+        ? [
+            "linear-commits",
+            repoPath,
+            workspaceId,
+            includeTargetBranchHistory,
+            isHomeRepo ? limit : 14,
+          ]
+        : null,
+      () =>
+        listCommits(
+          repoPath,
+          workspaceId,
+          includeTargetBranchHistory,
+          undefined,
+          isHomeRepo ? limit : 14,
+        ),
+    );
+    const loadingMore = isValidating && limit > 14 && !loading;
+
+    const {
+      commits,
+      tentativeWorkingCopy,
+      targetBranchCommits,
+      mergeBaseId,
+      targetBranch,
+      workspaceBranch,
+    } = useMemo(() => {
+      if (!commitsResult) {
+        return {
+          commits: [] as JjLogCommit[],
+          tentativeWorkingCopy: null,
+          targetBranchCommits: [] as JjLogCommit[],
+          mergeBaseId: null as string | null,
+          targetBranch: "",
+          workspaceBranch: "",
+        };
+      }
+      const split = splitCommitsByTarget(commitsResult.commits ?? []);
+      return {
+        commits: normalizeCommits(
+          filterWorkingCopyCommits(split.workspaceCommits),
+        ),
+        tentativeWorkingCopy: commitsResult.tentative_working_copy ?? null,
+        targetBranchCommits: split.targetBranchCommits,
+        mergeBaseId: commitsResult.merge_base_id ?? null,
+        targetBranch: commitsResult.target_branch ?? "",
+        workspaceBranch: commitsResult.workspace_branch ?? "",
+      };
+    }, [commitsResult]);
+
     useEffect(() => {
-      if (limit <= 14) return;
-      if (!isHomeRepo) return;
-      setLoadingMore(true);
-      listCommits(
-        repoPath,
-        workspaceId,
-        includeTargetBranchHistory,
-        undefined,
-        limit,
-      )
-        .then((result) => {
-          const { workspaceCommits, targetBranchCommits } =
-            splitCommitsByTarget(result?.commits ?? []);
-          setCommits(
-            normalizeCommits(filterWorkingCopyCommits(workspaceCommits)),
-          );
-          setTentativeWorkingCopy(result?.tentative_working_copy ?? null);
-          setTargetBranchCommits(targetBranchCommits);
-          setMergeBaseId(result?.merge_base_id ?? null);
-          setTargetBranch(result?.target_branch ?? "");
-          onCommitsLoaded?.(result);
-        })
-        .catch(() => {})
-        .finally(() => setLoadingMore(false));
-    }, [limit, repoPath, workspaceId, isHomeRepo]);
+      if (commitsResult) onCommitsLoaded?.(commitsResult);
+    }, [commitsResult, onCommitsLoaded]);
 
     const dayGroups = useMemo(() => groupCommitsByDay(commits), [commits]);
     const targetDayGroups = useMemo(

@@ -24,14 +24,26 @@ snapshots:
       style: secondary
       start: 66
       end: 116
+  ? |
+    useEffect(() => {
+      getSettingsBatch(["theme"]).catch((error) => {
+        console.error(error);
+      });
+    }, []);
+  : labels:
     - source: |-
-        (() => {
-          const load = async () => {
-            const review = await loadFileBrowserReview(repoPath, workspaceId);
-            setComments(review.comments);
-          };
-          load();
-        }, [repoPath, workspaceId])
+        useEffect(() => {
+          getSettingsBatch(["theme"]).catch((error) => {
+            console.error(error);
+          });
+        }, [])
+      style: primary
+      start: 0
+      end: 105
+    - source: |-
+        getSettingsBatch(["theme"]).catch((error) => {
+            console.error(error);
+          })
       style: secondary
-      start: 9
-      end: 194
+      start: 20
+      end: 97

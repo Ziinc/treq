@@ -47,3 +47,9 @@ invalid:
         setThemeState(savedTheme);
       });
     }, []);
+  - |
+    useEffect(() => {
+      getSettingsBatch(["theme"]).catch((error) => {
+        console.error(error);
+      });
+    }, []);

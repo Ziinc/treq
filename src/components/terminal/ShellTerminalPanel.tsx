@@ -1,4 +1,5 @@
-import React, { memo, useEffect, useState } from "react";
+import React, { memo } from "react";
+import useSWR from "swr";
 import { Terminal, X } from "lucide-react";
 import { ConsolidatedTerminal } from "../ConsolidatedTerminal";
 import {
@@ -47,19 +48,10 @@ export const ShellTerminalPanel = memo<ShellTerminalPanelProps>(
     width,
   }) => {
     const isHidden = collapsed;
-    const [pathAutoCommand, setPathAutoCommand] = useState<string | undefined>(
-      undefined,
-    );
-
-    useEffect(() => {
-      getTreqBinDir()
-        .then((binDir) => {
-          setPathAutoCommand(`export PATH="${binDir}:$PATH"`);
-        })
-        .catch(() => {
-          // silently ignore — treq PATH injection is best-effort
-        });
-    }, []);
+    const { data: binDir } = useSWR("treq-bin-dir", getTreqBinDir);
+    const pathAutoCommand = binDir
+      ? `export PATH="${binDir}:$PATH"`
+      : undefined;
 
     return (
       <div

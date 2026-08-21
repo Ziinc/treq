@@ -1,13 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+import useSWR from "swr";
 import { Command } from "cmdk";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import { FileText } from "lucide-react";
-import {
-  FileSearchResult,
-  ensureWorkspaceIndexed,
-  searchWorkspaceFiles,
-} from "../lib/api";
+import { ensureWorkspaceIndexed, searchWorkspaceFiles } from "../lib/api";
 import { useDebounce } from "../hooks/useDebounce";
 
 interface FilePickerProps {
@@ -29,57 +26,24 @@ export const FilePicker: React.FC<FilePickerProps> = ({
   onFileSelect,
 }) => {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<FileSearchResult[]>([]);
-  const [indexed, setIndexed] = useState(false);
-  const [, setIsLoading] = useState(false);
-
   const debouncedQuery = useDebounce(query, 150);
 
-  // Index the active checkout when the picker opens so search is not empty
-  // on workspaces that never mounted FileBrowser.
-  useEffect(() => {
-    if (!open) {
-      setQuery("");
-      setResults([]);
-      setIndexed(false);
-      return;
-    }
+  const { data: indexed } = useSWR(
+    open ? ["ensure-workspace-indexed", repoPath, workspaceId, workspacePath || repoPath] : null,
+    () =>
+      ensureWorkspaceIndexed(
+        repoPath,
+        workspaceId,
+        workspacePath || repoPath,
+      ).then(() => true),
+  );
 
-    let cancelled = false;
-    const pathToIndex = workspacePath || repoPath;
-    ensureWorkspaceIndexed(repoPath, workspaceId, pathToIndex)
-      .catch(() => undefined)
-      .finally(() => {
-        if (!cancelled) setIndexed(true);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [open, repoPath, workspaceId, workspacePath]);
-
-  useEffect(() => {
-    if (!open || !indexed) {
-      return;
-    }
-
-    let cancelled = false;
-    setIsLoading(true);
-    searchWorkspaceFiles(repoPath, workspaceId, debouncedQuery, 50)
-      .then((files) => {
-        if (!cancelled) setResults(files);
-      })
-      .catch(() => {
-        if (!cancelled) setResults([]);
-      })
-      .finally(() => {
-        if (!cancelled) setIsLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [open, indexed, debouncedQuery, repoPath, workspaceId]);
+  const { data: results = [] } = useSWR(
+    open && indexed
+      ? ["search-workspace-files", repoPath, workspaceId, debouncedQuery]
+      : null,
+    () => searchWorkspaceFiles(repoPath, workspaceId, debouncedQuery, 50),
+  );
 
   const handleSelect = useCallback(
     (filePath: string) => {

@@ -51,7 +51,6 @@ import {
   getWorkspaceReadme,
   getWorkspaceStartingPrompt,
   getWorkspaceStatus,
-  type HomeRebaseDryRunResult,
   type JjLogResult,
   listCommits,
   lsWorkspace,
@@ -266,8 +265,6 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 
     // Home-repo branch divergence: counts of target-ahead commits and conflict dry-run result
     const [homeRepoTargetAheadCount, setHomeRepoTargetAheadCount] = useState(0);
-    const [homeRebaseDryRun, setHomeRebaseDryRun] =
-      useState<HomeRebaseDryRunResult | null>(null);
     const [homeRebasing, setHomeRebasing] = useState(false);
 
     const [rebasing, setRebasing] = useState(false);
@@ -351,8 +348,6 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
       const targetAheadCount =
         result.commits?.filter((commit) => commit.on_target_only).length ?? 0;
       setHomeRepoTargetAheadCount(targetAheadCount);
-      // Reset dry-run when commit data changes
-      setHomeRebaseDryRun(null);
     }, []);
 
     useEffect(() => {
@@ -363,28 +358,27 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
       setTargetBranch(workspace.target_branch ?? defaultTargetBranch);
     }, [workspace?.id, workspace?.target_branch, defaultTargetBranch]);
 
-    // Run conflict dry-run when on a home-repo non-default branch with target-ahead commits
-    useEffect(() => {
-      const isHomeRepo = !workspace;
-      if (!isHomeRepo) return;
-      if (!effectiveRepoPath) return;
-      if (homeRepoTargetAheadCount === 0) {
-        setHomeRebaseDryRun(null);
-        return;
-      }
-      const currentBranch = mainRepoBranch;
-      if (!currentBranch) return;
-      const targetBranchName = defaultBranch;
-      dryRunHomeRepoRebase(effectiveRepoPath, currentBranch, targetBranchName)
-        .then(setHomeRebaseDryRun)
-        .catch(() => setHomeRebaseDryRun(null));
-    }, [
-      workspace,
-      effectiveRepoPath,
-      homeRepoTargetAheadCount,
-      mainRepoBranch,
-      defaultBranch,
-    ]);
+    const isHomeRepo = !workspace;
+    const { data: homeRebaseDryRun = null } = useSWR(
+      isHomeRepo &&
+        effectiveRepoPath &&
+        homeRepoTargetAheadCount > 0 &&
+        mainRepoBranch
+        ? [
+            "home-rebase-dry-run",
+            effectiveRepoPath,
+            mainRepoBranch,
+            defaultBranch,
+            homeRepoTargetAheadCount,
+          ]
+        : null,
+      () =>
+        dryRunHomeRepoRebase(
+          effectiveRepoPath,
+          mainRepoBranch!,
+          defaultBranch,
+        ),
+    );
 
     useEffect(() => {
       onActiveTabChange?.(activeTab);
@@ -960,7 +954,6 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
           void invalidateQueries();
           // Reset divergence state — LinearCommitHistory will refetch
           setHomeRepoTargetAheadCount(0);
-          setHomeRebaseDryRun(null);
         } else {
           addToast({
             title: "Rebase failed",
@@ -1594,7 +1587,6 @@ export const ShowWorkspace = memo<ShowWorkspaceProps>(
 
     // Display branch name as title: workspace branch if available, otherwise main repo branch
     const branchTitle = workspace?.branch_name || mainRepoBranch || "main";
-    const isHomeRepo = !workspace;
     const hasSyncChanges =
       !!syncStatus && (syncStatus.ahead > 0 || syncStatus.behind > 0);
 

@@ -408,36 +408,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
     onSwipeDown: () => setShowTerminalMissionControl(false),
   });
 
-  // Initialize repo from URL param (set by backend on startup, or by "Open in New Window")
-  useEffect(() => {
-    const loadInitialRepo = async () => {
-      if (repoPath) {
-        try {
-          await initRepo(repoPath);
-        } catch (e) {
-          console.error("Failed to init repo:", e);
-        }
-        await setWindowRepoPath(repoPath);
-      }
-    };
-
-    const loadAppFontSize = async () => {
-      // Load and apply font size to html element (sets base for rem units)
-      const savedSize = await getSetting("terminal_font_size");
-      if (savedSize) {
-        const parsed = parseInt(savedSize, 10);
-        if (!isNaN(parsed) && parsed >= 8 && parsed <= 32) {
-          document.documentElement.style.fontSize = `${parsed}px`;
-        }
-      } else {
-        // Default to 12px if no setting exists
-        document.documentElement.style.fontSize = "12px";
-      }
-    };
-
-    loadInitialRepo();
-    loadAppFontSize();
-  }, []);
+  useSWR(repoPath ? ["init-repo", repoPath] : null, async () => {
+    try {
+      await initRepo(repoPath);
+    } catch (e) {
+      console.error("Failed to init repo:", e);
+    }
+    await setWindowRepoPath(repoPath);
+    return true;
+  });
 
   useEffect(() => {
     if (!repoPath) {
@@ -1230,12 +1209,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
     if (queued.length === 0 && deferredAgentRequests.length === 0) return;
     const pending = [...queued, ...deferredAgentRequests];
     setDeferredAgentRequests([]);
-    void Promise.all(
-      pending.map(async (request) => {
-        if (isProcessedAgentRequest(request.requestId)) return;
-        await handleStartAgentRequest(request);
-      }),
-    );
+    for (const request of pending) {
+      if (isProcessedAgentRequest(request.requestId)) continue;
+      void handleStartAgentRequest(request);
+    }
   }, [
     deferredAgentRequests,
     handleStartAgentRequest,

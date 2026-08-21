@@ -5,6 +5,8 @@ valid:
       const handler = setTimeout(() => setDebouncedValue(value), delay);
       return () => clearTimeout(handler);
     }, [value, delay]);
+  - |
+    const { data } = useSWR(["commits", repoPath], () => listCommits(repoPath));
 invalid:
   - |
     useEffect(() => {
@@ -14,3 +16,9 @@ invalid:
       };
       load();
     }, [repoPath, workspaceId]);
+  - |
+    useEffect(() => {
+      getSettingsBatch(["theme"]).catch((error) => {
+        console.error(error);
+      });
+    }, []);

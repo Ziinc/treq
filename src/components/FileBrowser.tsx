@@ -9,6 +9,7 @@ import {
   useState,
   type ReactElement,
 } from "react";
+import useSWR from "swr";
 import {
   AlertCircle,
   Check,
@@ -1160,8 +1161,6 @@ export const FileBrowser = memo(
     const expandedDirsRef = useRef(expandedDirs);
     expandedDirsRef.current = expandedDirs;
     const [isLoadingFile, setIsLoadingFile] = useState(false);
-    const [isLoadingDir, setIsLoadingDir] = useState(false);
-    const [rootEntries, setRootEntries] = useState<DirectoryEntry[]>([]);
     const [changedFiles, setChangedFiles] = useState<
       Map<string, ParsedFileChange>
     >(new Map());
@@ -1208,56 +1207,40 @@ export const FileBrowser = memo(
       return counts;
     }, [fileBrowserReview.comments]);
 
-    // Ensure workspace is indexed on mount
-    useEffect(() => {
-      if (repoPath) {
-        const workspacePath = workspace
-          ? getFullWorkspacePath(workspace)
-          : basePath;
-        const workspaceId = workspace?.id ?? null;
-        ensureWorkspaceIndexed(repoPath, workspaceId, workspacePath).catch(
-          (error) => {
-            console.error("Failed to ensure workspace indexed:", error);
-          },
-        );
-      }
-    }, [repoPath, workspace?.id, workspace?.workspace_path, basePath]);
+    const workspacePath = workspace
+      ? getFullWorkspacePath(workspace)
+      : basePath;
+    useSWR(
+      repoPath ? ["ensure-workspace-indexed", repoPath, workspace?.id ?? null, workspacePath] : null,
+      () => ensureWorkspaceIndexed(repoPath!, workspace?.id ?? null, workspacePath),
+    );
 
-    // Load root directory on mount
-    useEffect(() => {
-      setIsLoadingDir(true);
-      listDirectory(basePath)
-        .then((entries) => {
-          const filtered = filterHiddenEntries(entries);
-          setRootEntries(filtered);
-          setDirectoryCache(new Map([[basePath, filtered]]));
-        })
-        .catch((error) => {
-          addToast({
-            title: "Failed to load directory",
-            description: error instanceof Error ? error.message : String(error),
-            type: "error",
-          });
-        })
-        .finally(() => setIsLoadingDir(false));
-    }, [basePath]);
+    const { data: rootEntries = [], isLoading: isLoadingDir, mutate: mutateRootEntries } = useSWR(
+      basePath ? ["list-directory", basePath] : null,
+      async () => filterHiddenEntries(await listDirectory(basePath)),
+    );
 
-    // Load changed files from JJ
     useEffect(() => {
-      if (repoPath) {
-        getWorkspaceChangedFiles(repoPath, workspace?.id ?? null)
-          .then((jjFiles) => {
-            const parsed = parseJjChangedFiles(jjFiles);
-            const map = new Map<string, ParsedFileChange>();
-            for (const file of parsed) {
-              // Store with relative path as key for consistent lookups
-              map.set(file.path, file);
-            }
-            setChangedFiles(map);
-          })
-          .catch(() => setChangedFiles(new Map()));
+      setDirectoryCache(new Map([[basePath, rootEntries]]));
+    }, [basePath, rootEntries]);
+
+    const { data: jjChangedFiles } = useSWR(
+      repoPath ? ["workspace-changed-files", repoPath, workspace?.id ?? null] : null,
+      () => getWorkspaceChangedFiles(repoPath!, workspace?.id ?? null),
+    );
+
+    useEffect(() => {
+      if (!jjChangedFiles) {
+        setChangedFiles(new Map());
+        return;
       }
-    }, [repoPath, workspace?.workspace_path, basePath]);
+      const parsed = parseJjChangedFiles(jjChangedFiles);
+      const map = new Map<string, ParsedFileChange>();
+      for (const file of parsed) {
+        map.set(file.path, file);
+      }
+      setChangedFiles(map);
+    }, [jjChangedFiles]);
 
     // Keyboard shortcut for search
     useKeyboardShortcut(
@@ -1639,7 +1622,7 @@ export const FileBrowser = memo(
           const filtered = filterHiddenEntries(entries);
           setDirectoryCache((prev) => new Map(prev).set(path, filtered));
           if (path === basePath) {
-            setRootEntries(filtered);
+            void mutateRootEntries(filtered, { revalidate: false });
           }
           return filtered;
         } catch (error) {
@@ -1651,7 +1634,7 @@ export const FileBrowser = memo(
           return [];
         }
       },
-      [workspace, repoPath, addToast, basePath],
+      [workspace, repoPath, addToast, basePath, mutateRootEntries],
     );
 
     useEffect(() => {
@@ -1689,17 +1672,18 @@ export const FileBrowser = memo(
     }, [initialSelectedFile]);
 
     // Handle initial directory expansion from external navigation
+    const { data: expandedDirEntries } = useSWR(
+      initialExpandedDir ? ["list-directory", initialExpandedDir] : null,
+      async () => filterHiddenEntries(await listDirectory(initialExpandedDir!)),
+    );
+
     useEffect(() => {
-      if (initialExpandedDir) {
-        loadDirectory(initialExpandedDir)
-          .then(() => {
-            setExpandedDirs((prev) => new Set([...prev, initialExpandedDir]));
-          })
-          .catch(() => {
-            // Silently fail if directory can't be loaded
-          });
-      }
-    }, [initialExpandedDir, loadDirectory]);
+      if (!initialExpandedDir || !expandedDirEntries) return;
+      setDirectoryCache((prev) =>
+        new Map(prev).set(initialExpandedDir, expandedDirEntries),
+      );
+      setExpandedDirs((prev) => new Set([...prev, initialExpandedDir]));
+    }, [initialExpandedDir, expandedDirEntries]);
 
     const hasChangedFilesInDirectory = useCallback(
       (dirPath: string): boolean => {

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
+import useSWR from "swr";
 import {
   type ConflictRegion,
   clearPendingReview,
@@ -88,53 +89,45 @@ export function useReview({
     Map<string, { viewedAt: string; contentHash: string }>
   >(new Map());
 
+  const { data: pendingReview } = useSWR(
+    repoPath && workspaceId !== undefined
+      ? ["pending-review", repoPath, workspaceId]
+      : null,
+    () => loadPendingReview(repoPath!, workspaceId!),
+  );
+
   useEffect(() => {
-    const loadReview = async () => {
-      if (repoPath && workspaceId !== undefined) {
-        try {
-          const pendingReview = await loadPendingReview(repoPath, workspaceId);
-          if (pendingReview) {
-            setComments(pendingReview.comments.map(toLocalLineComment));
-            if (pendingReview.summary_text)
-              setFinalReviewComment(pendingReview.summary_text);
-            setHasUserAddedComments(pendingReview.comments.length > 0);
-            const loadedComments = await loadPendingReview(
-              repoPath,
-              workspaceId,
-            );
-            if (loadedComments && loadedComments.comments.length > 0) {
-              setComments(loadedComments.comments.map(toLocalLineComment));
-            }
-          }
-        } catch (error) {
-          console.error("Failed to load pending review:", error);
-        }
-      }
-    };
-    loadReview();
-  }, [repoPath, workspaceId]);
+    if (!pendingReview) return;
+    setComments(pendingReview.comments.map(toLocalLineComment));
+    if (pendingReview.summary_text)
+      setFinalReviewComment(pendingReview.summary_text);
+    setHasUserAddedComments(pendingReview.comments.length > 0);
+  }, [pendingReview]);
 
   const debouncedComments = useDebounce(comments, 500);
   const debouncedSummary = useDebounce(finalReviewComment, 500);
 
-  useEffect(() => {
-    const saveReview = async () => {
-      if (!repoPath || workspaceId === undefined) return;
-      if (debouncedComments.length === 0 && !debouncedSummary.trim()) return;
-      try {
-        await savePendingReview(
+  useSWR(
+    repoPath &&
+      workspaceId !== undefined &&
+      (debouncedComments.length > 0 || Boolean(debouncedSummary.trim()))
+      ? [
+          "pending-review-save",
           repoPath,
           workspaceId,
-          debouncedComments.map(toApiLineComment),
-          undefined,
-          debouncedSummary.trim() || undefined,
-        );
-      } catch (error) {
-        console.error("Failed to auto-save review:", error);
-      }
-    };
-    saveReview();
-  }, [debouncedComments, debouncedSummary, repoPath, workspaceId]);
+          JSON.stringify(debouncedComments.map(toApiLineComment)),
+          debouncedSummary,
+        ]
+      : null,
+    () =>
+      savePendingReview(
+        repoPath!,
+        workspaceId!,
+        debouncedComments.map(toApiLineComment),
+        undefined,
+        debouncedSummary.trim() || undefined,
+      ),
+  );
 
   useEffect(() => {
     if (files.length === 0) return;
@@ -162,7 +155,7 @@ export function useReview({
       return hasChanges ? next : prev;
     });
     for (const filePath of staleViewedFiles) {
-      unmarkFileViewed(workspacePath, filePath).catch(() => {});
+      void unmarkFileViewed(workspacePath, filePath);
     }
   }, [files, allFileHunks, workspacePath]);
 

@@ -1,102 +1,80 @@
 import { useEffect, useRef, useState } from "react";
+import useSWR from "swr";
 import { getSessionModel, getTreqBinDir } from "../../lib/api";
-import {
-  discardAgentCliFiles,
-  prepareAgentAutoCommand,
-} from "../../lib/prepareAgentAutoCommand";
+import { prepareAgentAutoCommand } from "../../lib/prepareAgentAutoCommand";
 import { useToast } from "../ui/toast";
 import type { ClaudeSessionData } from "./types";
 
 export const useAgentAutoCommand = (sessionData: ClaudeSessionData) => {
   const { addToast } = useToast();
-  const [sessionModel, setSessionModelState] = useState<string | null>(null);
-  const [isModelLoaded, setIsModelLoaded] = useState(false);
-  const [treqBinDir, setTreqBinDir] = useState<string | null>(null);
-  const [treqBinDirReady, setTreqBinDirReady] = useState(false);
-  const [autoCommand, setAutoCommand] = useState<string | null>(null);
-  const [prepareError, setPrepareError] = useState<string | null>(null);
+  const [sessionModelOverride, setSessionModelState] = useState<
+    string | null | undefined
+  >(undefined);
+
+  const { data: loadedModel, isLoading: modelLoading } = useSWR(
+    ["session-model", sessionData.repoPath, sessionData.sessionId],
+    () => getSessionModel(sessionData.repoPath, sessionData.sessionId),
+  );
+  const { data: treqBinDir = null, isLoading: binLoading } = useSWR(
+    "treq-bin-dir",
+    getTreqBinDir,
+  );
+
+  const sessionModel =
+    sessionModelOverride === undefined ? (loadedModel ?? null) : sessionModelOverride;
+  const isModelLoaded = !modelLoading;
+  const treqBinDirReady = !binLoading;
 
   const pendingPromptRef = useRef(sessionData.pendingPrompt);
   const permissionModeRef = useRef(sessionData.permissionMode);
 
-  useEffect(() => {
-    const loadModel = async () => {
-      try {
-        const model = await getSessionModel(
+  const { data: prepared, error: prepareErr } = useSWR(
+    isModelLoaded && treqBinDirReady
+      ? [
+          "agent-auto-command",
+          sessionData.agent ?? "claude",
+          sessionData.workspacePath,
           sessionData.repoPath,
-          sessionData.sessionId,
-        );
-        setSessionModelState(model);
-      } catch (error) {
-        console.error("Failed to load session model:", error);
-      } finally {
-        setIsModelLoaded(true);
-      }
-    };
-    loadModel();
-    getTreqBinDir()
-      .then(setTreqBinDir)
-      .catch(() => {})
-      .finally(() => setTreqBinDirReady(true));
-  }, [sessionData.repoPath, sessionData.sessionId]);
+          sessionModel,
+          treqBinDir,
+        ]
+      : null,
+    () =>
+      prepareAgentAutoCommand({
+        agent: sessionData.agent ?? "claude",
+        workspacePath: sessionData.workspacePath,
+        repoPath: sessionData.repoPath,
+        sessionModel,
+        permissionMode: permissionModeRef.current,
+        pendingPrompt: pendingPromptRef.current,
+        treqBinDir,
+      }),
+  );
+
+  const [prepareError, setPrepareError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!isModelLoaded || !treqBinDirReady) return;
-
-    let cancelled = false;
-    setPrepareError(null);
-
-    prepareAgentAutoCommand({
-      agent: sessionData.agent ?? "claude",
-      workspacePath: sessionData.workspacePath,
-      repoPath: sessionData.repoPath,
-      sessionModel,
-      permissionMode: permissionModeRef.current,
-      pendingPrompt: pendingPromptRef.current,
-      treqBinDir,
-    })
-      .then(async ({ command, filePaths, skillWriteWarning }) => {
-        if (cancelled) {
-          await discardAgentCliFiles(filePaths);
-          return;
-        }
-        setAutoCommand(command);
-        if (skillWriteWarning) {
-          addToast({
-            type: "warning",
-            title: "Could not write Treq skills",
-            description: skillWriteWarning,
-          });
-        }
-      })
-      .catch((error) => {
-        console.error("Failed to prepare agent CLI files:", error);
-        if (!cancelled) {
-          setPrepareError(
-            error instanceof Error ? error.message : String(error),
-          );
-        }
+    if (prepareErr) {
+      setPrepareError(
+        prepareErr instanceof Error ? prepareErr.message : String(prepareErr),
+      );
+    } else {
+      setPrepareError(null);
+    }
+    if (prepared?.skillWriteWarning) {
+      addToast({
+        type: "warning",
+        title: "Could not write Treq skills",
+        description: prepared.skillWriteWarning,
       });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    isModelLoaded,
-    treqBinDirReady,
-    sessionData.agent,
-    sessionData.workspacePath,
-    sessionData.repoPath,
-    sessionModel,
-    treqBinDir,
-    addToast,
-  ]);
+    }
+  }, [prepareErr, prepared?.skillWriteWarning, addToast]);
 
   return {
     sessionModel,
     setSessionModelState,
     isModelLoaded,
-    autoCommand,
+    autoCommand: prepared?.command ?? null,
     prepareError,
   };
 };

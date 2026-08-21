@@ -1,5 +1,6 @@
 import { FolderGit2, GitBranch, Plug, Settings, User } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
+import useSWR from "swr";
 import { useAutoUpdate } from "../hooks/useAutoUpdate";
 import { useThemeStore } from "../stores/themeStore";
 import { useTerminalSettingsStore } from "../stores/terminalSettingsStore";
@@ -37,13 +38,13 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   currentBranch,
 }) => {
   const [currentTab, setCurrentTab] = useState<TabValue>("repository");
-  const [defaultModel, setDefaultModel] = useState<string>("");
-  const [defaultAgent, setDefaultAgent] = useState<string>("");
-  const [conflictMarkerStyle, setConflictMarkerStyle] = useState<string>("git");
-  const [originalFontSize, setOriginalFontSize] = useState<number | null>(null);
-  const [localFontSize, setLocalFontSize] = useState<number>(12);
-  const [localZoom, setLocalZoom] = useState<number>(100);
+  const [modelDraft, setModelDraft] = useState<string | null>(null);
+  const [agentDraft, setAgentDraft] = useState<string | null>(null);
+  const [conflictDraft, setConflictDraft] = useState<string | null>(null);
+  const [fontDraft, setFontDraft] = useState<number | null>(null);
+  const [zoomDraft, setZoomDraft] = useState<number | null>(null);
   const [savingRepository, setSavingRepository] = useState(false);
+  const [checkingUpdate, setCheckingUpdate] = useState(false);
   const repositorySettingsRef = useRef<RepositorySettingsContentHandle>(null);
 
   const theme = useThemeStore((s) => s.theme);
@@ -57,24 +58,27 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
     autoCheck: false,
     listenMenu: false,
   });
-  const [checkingUpdate, setCheckingUpdate] = useState(false);
-
-  // Load settings on mount
-  useEffect(() => {
-    getSetting("default_model").then((model: string | null) => {
-      if (model) setDefaultModel(model);
-    });
-    getSetting("default_agent").then((agent: string | null) => {
-      if (agent) setDefaultAgent(agent);
-    });
-    getSetting("conflict_marker_style").then((style: string | null) => {
-      if (style) setConflictMarkerStyle(style);
-    });
-    // Store original font size and initialize local font size
-    setOriginalFontSize(fontSize);
-    setLocalFontSize(fontSize);
-    setLocalZoom(zoom);
-  }, [fontSize, zoom]);
+  const { data: savedModel } = useSWR(["setting", "default_model"], () =>
+    getSetting("default_model"),
+  );
+  const { data: savedAgent } = useSWR(["setting", "default_agent"], () =>
+    getSetting("default_agent"),
+  );
+  const { data: savedConflict } = useSWR(
+    ["setting", "conflict_marker_style"],
+    () => getSetting("conflict_marker_style"),
+  );
+  const defaultModel = modelDraft ?? savedModel ?? "";
+  const defaultAgent = agentDraft ?? savedAgent ?? "";
+  const conflictMarkerStyle = conflictDraft ?? savedConflict ?? "git";
+  const localFontSize = fontDraft ?? fontSize;
+  const localZoom = zoomDraft ?? zoom;
+  const originalFontSize = fontSize;
+  const setDefaultModel = setModelDraft;
+  const setDefaultAgent = setAgentDraft;
+  const setConflictMarkerStyle = setConflictDraft;
+  const setLocalFontSize = setFontDraft;
+  const setLocalZoom = setZoomDraft;
 
   const handleSaveApplicationSettings = async () => {
     try {
