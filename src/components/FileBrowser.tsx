@@ -1129,6 +1129,8 @@ const TreeNode = memo(
   },
 );
 
+const EMPTY_DIRECTORY_ENTRIES: DirectoryEntry[] = [];
+
 export const FileBrowser = memo(
   ({
     workspace,
@@ -1224,16 +1226,18 @@ export const FileBrowser = memo(
     );
 
     const {
-      data: rootEntries = [],
+      data: loadedRootEntries,
       isLoading: isLoadingDir,
       mutate: mutateRootEntries,
     } = useSWR(basePath ? ["list-directory", basePath] : null, async () =>
       filterHiddenEntries(await listDirectory(basePath)),
     );
+    const rootEntries = loadedRootEntries ?? EMPTY_DIRECTORY_ENTRIES;
 
     useEffect(() => {
-      setDirectoryCache(new Map([[basePath, rootEntries]]));
-    }, [basePath, rootEntries]);
+      if (!loadedRootEntries) return;
+      setDirectoryCache(new Map([[basePath, loadedRootEntries]]));
+    }, [basePath, loadedRootEntries]);
 
     const { data: jjChangedFiles } = useSWR(
       repoPath
@@ -1244,7 +1248,7 @@ export const FileBrowser = memo(
 
     useEffect(() => {
       if (!jjChangedFiles) {
-        setChangedFiles(new Map());
+        setChangedFiles((prev) => (prev.size === 0 ? prev : new Map()));
         return;
       }
       const parsed = parseJjChangedFiles(jjChangedFiles);

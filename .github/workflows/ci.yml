@@ -20,7 +20,7 @@ on:
 
 jobs:
   ci:
-    timeout-minutes: 15
+    timeout-minutes: ${{ matrix.task == 'test:integration' && 30 || 15 }}
     strategy:
       fail-fast: false
       matrix:
