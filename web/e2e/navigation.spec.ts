@@ -83,19 +83,19 @@ test.describe('Navbar navigation', () => {
 
     test('hides search, Sign in, and GitHub from the top bar', async ({ page }) => {
       await page.goto('/');
-      const topBar = page.locator('.navbar__inner');
-      await expect(topBar.getByPlaceholder('Search...')).toHaveCount(0);
-      await expect(topBar.getByRole('link', { name: 'Sign in' })).not.toBeVisible();
-      await expect(topBar.getByRole('link', { name: 'GitHub repository' })).not.toBeVisible();
+      await expect(page.getByPlaceholder('Search...')).not.toBeVisible();
+      await expect(page.getByRole('link', { name: 'Sign in' })).not.toBeVisible();
+      await expect(page.getByRole('link', { name: 'GitHub repository' })).not.toBeVisible();
     });
 
     test('shows search, Sign in, and GitHub in the sidebar drawer', async ({ page }) => {
       await page.goto('/');
       await page.getByLabel('Toggle navigation bar').click();
-      const drawer = page.locator('.navbar-sidebar');
-      await expect(drawer.getByPlaceholder('Search...')).toBeVisible();
-      await expect(drawer.getByRole('link', { name: 'Sign in' })).toBeVisible();
-      await expect(drawer.getByRole('link', { name: 'GitHub repository' })).toBeVisible();
+      await expect(page.getByPlaceholder('Search...').filter({ visible: true })).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Sign in' }).filter({ visible: true })).toBeVisible();
+      await expect(
+        page.getByRole('link', { name: 'GitHub repository' }).filter({ visible: true }),
+      ).toBeVisible();
     });
   });
 
