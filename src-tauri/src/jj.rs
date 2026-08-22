@@ -6821,6 +6821,28 @@ fn too_large_revision_diff() -> JjRevisionDiff {
   }
 }
 
+pub fn empty_revision_diff() -> JjRevisionDiff {
+  JjRevisionDiff {
+    committed_files: Vec::new(),
+    hunks_by_file: Vec::new(),
+    uncommitted_files: Vec::new(),
+    conflicted_files: Vec::new(),
+    too_large_to_render: false,
+    render_block_reason: None,
+  }
+}
+
+/// None if the workspace dir exists; empty diff if it is already gone (test teardown).
+pub fn revision_diff_if_workspace_missing(
+  workspace_dir: &std::path::Path,
+) -> Option<JjRevisionDiff> {
+  if workspace_dir.exists() {
+    None
+  } else {
+    Some(empty_revision_diff())
+  }
+}
+
 fn resolve_commit_by_revision(
   loaded: &LoadedWorkspaceRepo,
   revision: &str,
