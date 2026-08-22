@@ -32,6 +32,16 @@ fn block_on<F: std::future::Future>(future: F) -> F::Output {
     }
   }
 }
+
+fn with_working_copy_lock<T>(f: impl FnOnce() -> T) -> T {
+  static LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+  let _guard = LOCK
+    .get_or_init(|| std::sync::Mutex::new(()))
+    .lock()
+    .unwrap_or_else(|poisoned| poisoned.into_inner());
+  f()
+}
+
 use gix::refs::transaction::{Change, PreviousValue, RefEdit};
 use gix::refs::Target;
 use imara_diff::intern::InternedInput;
@@ -303,6 +313,13 @@ fn import_colocated_git_state(
 }
 
 fn snapshot_loaded_working_copy(
+  loaded: &mut LoadedWorkspaceRepo,
+  workspace_path: &str,
+) -> Result<(), JjError> {
+  with_working_copy_lock(|| snapshot_loaded_working_copy_inner(loaded, workspace_path))
+}
+
+fn snapshot_loaded_working_copy_inner(
   loaded: &mut LoadedWorkspaceRepo,
   workspace_path: &str,
 ) -> Result<(), JjError> {
@@ -3251,6 +3268,7 @@ pub fn jj_get_changed_files(workspace_path: &str) -> Result<Vec<JjFileChange>, J
     Ok(s) => s,
     Err(_) => return Ok(Vec::new()),
   };
+  with_working_copy_lock(|| {
   let mut workspace = match Workspace::load(
     &settings,
     path,
@@ -3358,6 +3376,7 @@ pub fn jj_get_changed_files(workspace_path: &str) -> Result<Vec<JjFileChange>, J
   }
 
   Ok(changes)
+  })
 }
 
 /// Checks if the working copy is empty (no uncommitted changes)
@@ -7977,6 +7996,30 @@ mod tests {
   use std::fs;
   use std::process::Command;
   use tempfile::TempDir;
+
+  #[test]
+  fn working_copy_lock_serializes_threads() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::thread;
+    static CONCURRENT: AtomicUsize = AtomicUsize::new(0);
+    static MAX: AtomicUsize = AtomicUsize::new(0);
+    let threads: Vec<_> = (0..4)
+      .map(|_| {
+        thread::spawn(|| {
+          with_working_copy_lock(|| {
+            let now = CONCURRENT.fetch_add(1, Ordering::SeqCst) + 1;
+            MAX.fetch_max(now, Ordering::SeqCst);
+            thread::sleep(std::time::Duration::from_millis(15));
+            CONCURRENT.fetch_sub(1, Ordering::SeqCst);
+          })
+        })
+      })
+      .collect();
+    for t in threads {
+      t.join().unwrap();
+    }
+    assert_eq!(MAX.load(Ordering::SeqCst), 1);
+  }
 
   fn init_git_repo(temp: &TempDir) {
     let status = Command::new("git")

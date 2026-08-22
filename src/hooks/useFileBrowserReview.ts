@@ -6,6 +6,8 @@ import {
   loadFileBrowserReview,
   saveFileBrowserReview,
 } from "../lib/api-extra";
+import { shouldWritePendingReview } from "../lib/should-write-pending-review";
+import { setQueryData } from "../lib/swr-cache";
 import {
   formatReviewMarkdown,
   type LineComment,
@@ -92,7 +94,12 @@ export function useFileBrowserReview({
 
   useSWR(
     loadKey &&
-      (debouncedComments.length > 0 || Boolean(debouncedSummary.trim()))
+      shouldWritePendingReview({
+        liveCommentCount: comments.length,
+        liveSummary: finalReviewComment,
+        debouncedCommentCount: debouncedComments.length,
+        debouncedSummary,
+      })
       ? [
           "file-browser-review-save",
           repoPath,
@@ -182,8 +189,13 @@ export function useFileBrowserReview({
         setComments([]);
         setFinalReviewComment("");
         setReviewPopoverOpen(false);
-        if (repoPath && workspaceId !== undefined)
+        if (repoPath && workspaceId !== undefined) {
           await clearFileBrowserReview(repoPath, workspaceId);
+          await setQueryData(
+            ["file-browser-review", repoPath, workspaceId],
+            null,
+          );
+        }
       } catch (error) {
         addToast({
           description: error instanceof Error ? error.message : String(error),
@@ -211,8 +223,13 @@ export function useFileBrowserReview({
       setFinalReviewComment("");
       setShowCancelDialog(false);
       setReviewPopoverOpen(false);
-      if (repoPath && workspaceId !== undefined)
+      if (repoPath && workspaceId !== undefined) {
         await clearFileBrowserReview(repoPath, workspaceId);
+        await setQueryData(
+          ["file-browser-review", repoPath, workspaceId],
+          null,
+        );
+      }
       addToast({
         title: "Review canceled",
         description: "All comments have been discarded",

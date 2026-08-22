@@ -10,6 +10,8 @@ import {
   unmarkFileViewed,
 } from "../../../lib/api";
 import type { ParsedFileChange } from "../../../lib/git-utils";
+import { shouldWritePendingReview } from "../../../lib/should-write-pending-review";
+import { setQueryData } from "../../../lib/swr-cache";
 import {
   FILE_COMMENT_HUNK_ID,
   formatReviewMarkdown as formatReviewMarkdownShared,
@@ -130,17 +132,46 @@ export function useReview({
   const debouncedComments = useDebounce(comments, 500);
   const debouncedSummary = useDebounce(finalReviewComment, 500);
 
+  const persistSuppressedRef = useRef(false);
+  const persistGenRef = useRef(0);
+
   useEffect(() => {
     if (!repoPath || workspaceId === undefined) return;
-    if (debouncedComments.length === 0 && !debouncedSummary.trim()) return;
+    if (comments.length > 0 || finalReviewComment.trim()) {
+      persistSuppressedRef.current = false;
+    }
+    if (persistSuppressedRef.current) return;
+    if (
+      !shouldWritePendingReview({
+        liveCommentCount: comments.length,
+        liveSummary: finalReviewComment,
+        debouncedCommentCount: debouncedComments.length,
+        debouncedSummary,
+      })
+    ) {
+      return;
+    }
+    const gen = persistGenRef.current;
     void savePendingReview(
       repoPath,
       workspaceId,
       debouncedComments.map(toApiLineComment),
       undefined,
       debouncedSummary.trim() || undefined,
-    );
-  }, [repoPath, workspaceId, debouncedComments, debouncedSummary]);
+    ).then(async () => {
+      if (persistSuppressedRef.current || gen !== persistGenRef.current) {
+        await clearPendingReview(repoPath, workspaceId);
+        await setQueryData(["pending-review", repoPath, workspaceId], null);
+      }
+    });
+  }, [
+    repoPath,
+    workspaceId,
+    comments.length,
+    finalReviewComment,
+    debouncedComments,
+    debouncedSummary,
+  ]);
 
   useEffect(() => {
     if (files.length === 0) return;
@@ -252,13 +283,17 @@ export function useReview({
         setPendingFilesData(null);
         setPendingHunksData(null);
         setStaleFiles(new Set());
+        persistSuppressedRef.current = true;
+        persistGenRef.current += 1;
         setComments([]);
         setConflictComments(new Map());
         setHasUserAddedComments(false);
         setFinalReviewComment("");
         setReviewPopoverOpen(false);
-        if (repoPath && workspaceId !== undefined)
+        if (repoPath && workspaceId !== undefined) {
           await clearPendingReview(repoPath, workspaceId);
+          await setQueryData(["pending-review", repoPath, workspaceId], null);
+        }
         onReviewSubmitted?.();
       } catch (error) {
         addToast({
@@ -289,14 +324,18 @@ export function useReview({
 
   const handleCancelReview = useCallback(async () => {
     try {
+      persistSuppressedRef.current = true;
+      persistGenRef.current += 1;
       setComments([]);
       setConflictComments(new Map());
       setHasUserAddedComments(false);
       setFinalReviewComment("");
       setShowCancelDialog(false);
       setReviewPopoverOpen(false);
-      if (repoPath && workspaceId !== undefined)
+      if (repoPath && workspaceId !== undefined) {
         await clearPendingReview(repoPath, workspaceId);
+        await setQueryData(["pending-review", repoPath, workspaceId], null);
+      }
       addToast({
         title: "Review canceled",
         description: "All comments have been discarded",

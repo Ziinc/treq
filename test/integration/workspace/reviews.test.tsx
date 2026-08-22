@@ -18,6 +18,7 @@ import {
   addSingleReviewComment as addReviewComment,
   clickChangedFile,
   openReviewTab,
+  waitForChangedFile,
 } from "../review/comments-helpers";
 
 const REVIEW_FILE = "reviews-flow.txt";
@@ -95,6 +96,7 @@ describe("ShowWorkspace - Reviews integration", () => {
     const commitMessage = "Add integration reviews test commit";
     const { repoPath, workspace } = await openReviewWithChange(branchName);
     await openReviewTab(user, branchName);
+    await waitForChangedFile(REVIEW_FILE);
 
     await user.type(
       await screen.findByPlaceholderText("Message"),

@@ -107,7 +107,7 @@ describe("Multi-line selection in diff viewer", () => {
     });
 
     const commentBtn = line4.querySelector("[data-comment-button]")!;
-    await user.click(commentBtn as HTMLElement);
+    fireEvent.click(commentBtn as HTMLElement);
 
     await screen.findByPlaceholderText(/add a comment/i);
   });
@@ -180,7 +180,7 @@ describe("Multi-line selection on committed Review-tab files", () => {
     });
 
     const commentBtn = line4.querySelector("[data-comment-button]")!;
-    await user.click(commentBtn as HTMLElement);
+    fireEvent.click(commentBtn as HTMLElement);
 
     await screen.findByPlaceholderText(/add a comment/i);
   });

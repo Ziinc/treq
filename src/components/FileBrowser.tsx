@@ -1953,6 +1953,7 @@ export const FileBrowser = memo(
               <Button
                 size="sm"
                 variant="outline"
+                data-testid="discard-review"
                 onClick={() => fileBrowserReview.setShowCancelDialog(true)}
               >
                 Discard
@@ -2071,7 +2072,10 @@ export const FileBrowser = memo(
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Keep reviewing</AlertDialogCancel>
-              <AlertDialogAction onClick={fileBrowserReview.handleCancelReview}>
+              <AlertDialogAction
+                data-testid="confirm-discard-review"
+                onClick={fileBrowserReview.handleCancelReview}
+              >
                 Discard
               </AlertDialogAction>
             </AlertDialogFooter>

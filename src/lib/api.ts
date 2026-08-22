@@ -27,6 +27,7 @@ import type {
 
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { enqueueJjExclusive } from "./enqueue-jj-exclusive";
 
 function currentWindowLabel(): string {
   try {
@@ -139,7 +140,9 @@ export const getWorkspaceChangedFiles = (
   repoPath: string,
   workspaceId: number | null,
 ): Promise<JjFileChange[]> =>
-  invoke("get_workspace_changed_files", { repoPath, workspaceId });
+  enqueueJjExclusive(() =>
+    invoke("get_workspace_changed_files", { repoPath, workspaceId }),
+  );
 
 export const lsWorkspace = (
   repoPath: string,
@@ -163,11 +166,13 @@ export const getWorkspaceFileHunks = (
   workspaceId: number | null,
   filePath: string,
 ): Promise<JjDiffHunk[]> =>
-  invoke("get_workspace_file_hunks", {
-    repoPath,
-    workspaceId,
-    filePath,
-  });
+  enqueueJjExclusive(() =>
+    invoke("get_workspace_file_hunks", {
+      repoPath,
+      workspaceId,
+      filePath,
+    }),
+  );
 
 export const getWorkspaceFileLines = (
   repoPath: string,
@@ -312,7 +317,9 @@ export const getWorkspaceDiff = (
   repoPath: string,
   workspaceId: number,
 ): Promise<JjRevisionDiff> =>
-  invoke("get_workspace_diff", { repoPath, workspaceId });
+  enqueueJjExclusive(() =>
+    invoke("get_workspace_diff", { repoPath, workspaceId }),
+  );
 
 export interface HunkSpec {
   file_path: string;

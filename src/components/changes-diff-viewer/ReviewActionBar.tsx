@@ -88,6 +88,7 @@ export function ReviewActionBar({
             <Button
               size="sm"
               variant="outline"
+              data-testid="discard-review"
               onClick={() => setShowCancelDialog(true)}
             >
               {hasConflicts ? "Reset" : "Discard"}
@@ -211,7 +212,10 @@ export function ReviewActionBar({
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Keep reviewing</AlertDialogCancel>
-            <AlertDialogAction onClick={handleCancelReview}>
+            <AlertDialogAction
+              data-testid="confirm-discard-review"
+              onClick={handleCancelReview}
+            >
               Discard
             </AlertDialogAction>
           </AlertDialogFooter>

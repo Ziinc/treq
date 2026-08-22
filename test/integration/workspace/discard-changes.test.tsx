@@ -8,7 +8,7 @@ import {
   writeWorkspaceFile,
 } from "../../utils";
 import * as api from "../../../src/lib/api";
-import { openReviewTab } from "../review/comments-helpers";
+import { openReviewTab, waitForChangedFile } from "../review/comments-helpers";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -45,13 +45,7 @@ describe("Review tab - discard changes", () => {
       fileName,
     );
     await openReviewTab(user, "feat/discard-all");
-
-    await waitFor(
-      () => {
-        expect(screen.getByTestId(`file-row-${fileName}`)).toBeTruthy();
-      },
-      { timeout: 60_000 },
-    );
+    await waitForChangedFile(fileName);
 
     await user.click(
       await screen.findByRole("button", { name: /discard all changes/i }),
@@ -76,13 +70,7 @@ describe("Review tab - discard changes", () => {
       fileName,
     );
     await openReviewTab(user, "feat/discard-one");
-
-    await waitFor(
-      () => {
-        expect(screen.getByTestId(`file-row-${fileName}`)).toBeTruthy();
-      },
-      { timeout: 60_000 },
-    );
+    await waitForChangedFile(fileName);
 
     const [sidebarFile] = screen.getAllByText(fileName);
     await user.click(sidebarFile);
@@ -103,13 +91,7 @@ describe("Review tab - discard changes", () => {
       fileName,
     );
     await openReviewTab(user, "feat/discard-cancel");
-
-    await waitFor(
-      () => {
-        expect(screen.getByTestId(`file-row-${fileName}`)).toBeTruthy();
-      },
-      { timeout: 60_000 },
-    );
+    await waitForChangedFile(fileName);
 
     await user.click(
       await screen.findByRole("button", { name: /discard all changes/i }),
@@ -129,13 +111,7 @@ describe("Review tab - discard changes", () => {
       fileName,
     );
     await openReviewTab(user, "feat/discard-undo");
-
-    await waitFor(
-      () => {
-        expect(screen.getByTestId(`file-row-${fileName}`)).toBeTruthy();
-      },
-      { timeout: 60_000 },
-    );
+    await waitForChangedFile(fileName);
 
     await user.click(
       await screen.findByRole("button", { name: /discard all changes/i }),

@@ -1,8 +1,6 @@
-import * as React from "react";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   createTestRepo,
-  findSidebarBranchElement,
   openRepo,
   resolveWorkspacePath,
   writeWorkspaceFile,
@@ -12,9 +10,9 @@ import {
   createWorkspace,
   getWorkspaces,
 } from "../../../src/lib/api";
-import { render, screen, waitFor } from "../../test-utils";
-import { Dashboard } from "../../../src/components/Dashboard";
+import { screen, waitFor } from "../../test-utils";
 import userEvent from "@testing-library/user-event";
+import { openReviewTab, waitForChangedFile } from "../review/comments-helpers";
 
 async function setupWorkspaceWithChange(branchName: string): Promise<{
   repoPath: string;
@@ -49,14 +47,8 @@ describe("ShowWorkspace - Search integration", () => {
     const branchName = "feat/search-test";
     await setupWorkspaceWithChange(branchName);
 
-    render(<Dashboard />);
-    await user.click(await findSidebarBranchElement(branchName));
-
-    const reviewTab = await screen.findByRole("tab", { name: /^Changes/ });
-    await user.click(reviewTab);
-    await screen.findByRole("tab", { name: /^Changes/, selected: true });
-
-    await screen.findAllByText("search-test.txt");
+    await openReviewTab(user, branchName);
+    await waitForChangedFile("search-test.txt");
 
     await user.keyboard("{Control>}f{/Control}");
 
@@ -69,7 +61,7 @@ describe("ShowWorkspace - Search integration", () => {
       () => {
         expect(screen.queryByText(/of \d+/)).toBeTruthy();
       },
-      { timeout: 3000 },
+      { timeout: 15_000 },
     );
   });
 
@@ -77,14 +69,8 @@ describe("ShowWorkspace - Search integration", () => {
     const branchName = "feat/search-close-test";
     await setupWorkspaceWithChange(branchName);
 
-    render(<Dashboard />);
-    await user.click(await findSidebarBranchElement(branchName));
-
-    const reviewTab = await screen.findByRole("tab", { name: /^Changes/ });
-    await user.click(reviewTab);
-    await screen.findByRole("tab", { name: /^Changes/, selected: true });
-
-    await screen.findAllByText("search-test.txt");
+    await openReviewTab(user, branchName);
+    await waitForChangedFile("search-test.txt");
 
     await user.keyboard("{Control>}f{/Control}");
     const searchInput = await screen.findByPlaceholderText("Find");

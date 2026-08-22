@@ -122,17 +122,13 @@ describe("Pending review persistence", () => {
       { timeout: 60_000 },
     );
 
-    const actionBarBtns = await screen.findAllByRole("button", {
-      name: /^discard$/i,
-    });
+    const actionBarBtns = await screen.findAllByTestId("discard-review");
     await user.click(actionBarBtns[0]);
 
     await screen.findByText("Discard review?");
-
-    const allDiscardBtns = screen.getAllByRole("button", {
-      name: /^discard$/i,
-    });
-    await user.click(allDiscardBtns[allDiscardBtns.length - 1]);
+    await user.click(
+      (await screen.findAllByTestId("confirm-discard-review"))[0],
+    );
 
     await waitFor(
       async () => {
@@ -160,9 +156,7 @@ describe("Pending review persistence", () => {
       { timeout: 60_000 },
     );
 
-    const discardBtns = await screen.findAllByRole("button", {
-      name: /^discard$/i,
-    });
+    const discardBtns = await screen.findAllByTestId("discard-review");
     await user.click(discardBtns[0]);
 
     const keepButton = await screen.findByRole("button", {
@@ -173,6 +167,8 @@ describe("Pending review persistence", () => {
     const review = await loadPendingReview(repoPath, workspace.id);
     expect(review).not.toBeNull();
 
-    expect(screen.getAllByText("Comment to keep").length).toBeGreaterThan(0);
+    await waitFor(() => {
+      expect(screen.getAllByText("Comment to keep").length).toBeGreaterThan(0);
+    });
   });
 });
