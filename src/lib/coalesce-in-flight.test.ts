@@ -29,6 +29,25 @@ describe("createInFlightCoalescer", () => {
     expect(seen.length).toBeGreaterThanOrEqual(2);
   });
 
+  it("queued callers wait until the drain finishes", async () => {
+    const coalesce = createInFlightCoalescer();
+    let release!: () => void;
+    const order: string[] = [];
+    const first = coalesce(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    const second = coalesce(async () => {
+      order.push("second");
+    });
+    expect(order).toEqual([]);
+    release();
+    await Promise.all([first, second]);
+    expect(order).toEqual(["second"]);
+  });
+
   it("reset lets a new caller run without waiting on a stuck task", async () => {
     const coalesce = createInFlightCoalescer();
     let release!: () => void;

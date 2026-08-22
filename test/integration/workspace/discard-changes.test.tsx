@@ -73,7 +73,7 @@ describe("Review tab - discard changes", () => {
     await user.click(confirmButtons[confirmButtons.length - 1]);
 
     await waitFor(() => {
-      expect(screen.queryAllByText(fileName)).toHaveLength(0);
+      expect(screen.queryByTestId(`file-row-${fileName}`)).toBeNull();
     });
 
     expect(fs.existsSync(path.join(workspacePath, fileName))).toBe(false);
@@ -98,7 +98,7 @@ describe("Review tab - discard changes", () => {
     await user.click(await screen.findByTitle("Discard selected files"));
 
     await waitFor(() => {
-      expect(screen.queryAllByText(fileName)).toHaveLength(0);
+      expect(screen.queryByTestId(`file-row-${fileName}`)).toBeNull();
     });
 
     expect(fs.existsSync(path.join(workspacePath, fileName))).toBe(false);
@@ -151,7 +151,7 @@ describe("Review tab - discard changes", () => {
     await user.click(confirmButtons[confirmButtons.length - 1]);
 
     await waitFor(() => {
-      expect(screen.queryAllByText(fileName)).toHaveLength(0);
+      expect(screen.queryByTestId(`file-row-${fileName}`)).toBeNull();
     });
     expect(fs.existsSync(path.join(workspacePath, fileName))).toBe(false);
 
