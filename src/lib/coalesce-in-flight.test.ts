@@ -28,4 +28,23 @@ describe("createInFlightCoalescer", () => {
     expect(seen.at(-1)).toBe(3);
     expect(seen.length).toBeGreaterThanOrEqual(2);
   });
+
+  it("reset lets a new caller run without waiting on a stuck task", async () => {
+    const coalesce = createInFlightCoalescer();
+    let release!: () => void;
+    const stuck = coalesce(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+    );
+    coalesce.reset();
+    const seen: number[] = [];
+    await coalesce(async () => {
+      seen.push(1);
+    });
+    expect(seen).toEqual([1]);
+    release();
+    await stuck;
+  });
 });

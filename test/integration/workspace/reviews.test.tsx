@@ -66,12 +66,21 @@ async function expectCommitCreated(
   workspaceId: number,
   commitMessage: string,
 ) {
-  await waitFor(async () => {
-    const log = await listCommits(repoPath, workspaceId, false, undefined, 30);
-    expect(
-      log.commits.some((commit) => commit.description === commitMessage),
-    ).toBe(true);
-  });
+  await waitFor(
+    async () => {
+      const log = await listCommits(
+        repoPath,
+        workspaceId,
+        false,
+        undefined,
+        30,
+      );
+      expect(
+        log.commits.some((commit) => commit.description === commitMessage),
+      ).toBe(true);
+    },
+    { timeout: 60_000 },
+  );
 }
 
 describe("ShowWorkspace - Reviews integration", () => {

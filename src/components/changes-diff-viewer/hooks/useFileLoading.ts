@@ -21,10 +21,9 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { useToast } from "../../ui/toast";
 import type { FileHunksData } from "../types";
 import { hunksEqual, parseCachedHunks } from "../utils";
-import { createInFlightCoalescer } from "../../../lib/coalesce-in-flight";
+import { workspaceDiffCoalesce } from "../../../lib/coalesce-in-flight";
 
 // One in-flight workspace_diff per process. jj WC locks are process-global.
-const loadChangedFilesCoalesce = createInFlightCoalescer();
 
 interface UseFileLoadingParams {
   workspacePath: string;
@@ -117,7 +116,7 @@ export function useFileLoading({
   const loadChangedFiles = useCallback(
     async (forceApply = false) => {
       if (forceApply) pendingForceApplyRef.current = true;
-      await loadChangedFilesCoalesce(async () => {
+      await workspaceDiffCoalesce(async () => {
         const force = pendingForceApplyRef.current;
         pendingForceApplyRef.current = false;
         setRefreshing(true);
