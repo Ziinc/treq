@@ -10,14 +10,12 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import useSWR from "swr";
-import useSWRInfinite from "swr/infinite";
 import { useLocation, useRoute } from "wouter";
 import {
   useDequeueBranches,
   useGitRemoteInfo,
   useMergeQueueEnabled,
 } from "../hooks/useMergeQueueStatus";
-import { GH_LIST_PAGE_SIZE, ghListIssues, ghListPrs } from "../lib/api";
 import { FEATURES } from "../lib/features";
 import {
   type GitHubStateFilter,
@@ -40,6 +38,10 @@ import { CreateIssueForm, IssueDetailPanel } from "./github-panel/IssueDetail";
 import { MergeQueueTab } from "./github-panel/MergeQueueTab";
 import { CreatePrForm, PrDetailPanel } from "./github-panel/PrDetail";
 import { EmptyState, IssueListItem, PrListItem } from "./github-panel/shared";
+import {
+  useGithubIssuePages,
+  useGithubPrPages,
+} from "./github-panel/useGithubPagedList";
 import { Button } from "./ui/button";
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
 
@@ -124,50 +126,21 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
   const isListTab = activeTab === "issues" || activeTab === "prs";
 
   const {
-    data: issuesPages,
+    items: issues,
     isLoading: issuesLoading,
-    isValidating: issuesValidating,
-    size: issuesSize,
-    setSize: setIssuesSize,
-    mutate: refetchIssues,
-  } = useSWRInfinite(
-    (pageIndex, previousPageData) => {
-      if (!repoFullName || activeTab !== "issues") return null;
-      if (previousPageData && !previousPageData.hasMore) return null;
-      return ["gh-issues", repoFullName, currentFilter, pageIndex + 1] as const;
-    },
-    ([, fullName, filter, page]) =>
-      ghListIssues(fullName, filter, GH_LIST_PAGE_SIZE, page),
-    { revalidateFirstPage: false },
-  );
-
+    fetchingNext: issuesFetchingNext,
+    hasNextPage: issuesHasNextPage,
+    fetchNext: fetchNextIssues,
+    refetch: refetchIssues,
+  } = useGithubIssuePages(repoFullName, activeTab, currentFilter);
   const {
-    data: prsPages,
+    items: prs,
     isLoading: prsLoading,
-    isValidating: prsValidating,
-    size: prsSize,
-    setSize: setPrsSize,
-    mutate: refetchPrs,
-  } = useSWRInfinite(
-    (pageIndex, previousPageData) => {
-      if (!repoFullName || activeTab !== "prs") return null;
-      if (previousPageData && !previousPageData.hasMore) return null;
-      return ["gh-prs", repoFullName, currentFilter, pageIndex + 1] as const;
-    },
-    ([, fullName, filter, page]) =>
-      ghListPrs(fullName, filter, GH_LIST_PAGE_SIZE, page),
-    { revalidateFirstPage: false },
-  );
-
-  const issuesFetchingNext = issuesValidating && issuesSize > 1;
-  const prsFetchingNext = prsValidating && prsSize > 1;
-  const issuesHasNextPage = Boolean(issuesPages?.at(-1)?.hasMore);
-  const prsHasNextPage = Boolean(prsPages?.at(-1)?.hasMore);
-  const fetchNextIssues = () => setIssuesSize((size) => size + 1);
-  const fetchNextPrs = () => setPrsSize((size) => size + 1);
-
-  const issues = issuesPages?.flatMap((page) => page.items) ?? [];
-  const prs = prsPages?.flatMap((page) => page.items) ?? [];
+    fetchingNext: prsFetchingNext,
+    hasNextPage: prsHasNextPage,
+    fetchNext: fetchNextPrs,
+    refetch: refetchPrs,
+  } = useGithubPrPages(repoFullName, activeTab, currentFilter);
 
   const {
     data: queueEntries = [],
@@ -423,77 +396,75 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
             </div>
           )}
 
-          {remoteInfo && !isListLoading && activeTab === "issues" && (
-            <>
-              {issues.length === 0 ? (
-                <EmptyState icon={CircleDot} message="No issues found." />
-              ) : (
-                <>
-                  {issues.map((issue) => (
-                    <IssueListItem
-                      key={issue.number}
-                      issue={issue}
-                      selected={selectedIssue === issue.number}
-                      onClick={() => handleSelectIssue(issue.number)}
-                    />
-                  ))}
-                  {issuesHasNextPage && (
-                    <div className="p-3">
-                      <Button
-                        variant="outline"
-                        className="w-full text-base"
-                        disabled={issuesFetchingNext}
-                        onClick={() => void fetchNextIssues()}
-                      >
-                        {issuesFetchingNext ? (
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        ) : null}
-                        Load more
-                      </Button>
-                    </div>
-                  )}
-                </>
-              )}
-            </>
-          )}
+          {remoteInfo &&
+            !isListLoading &&
+            activeTab === "issues" &&
+            (issues.length === 0 ? (
+              <EmptyState icon={CircleDot} message="No issues found." />
+            ) : (
+              <>
+                {issues.map((issue) => (
+                  <IssueListItem
+                    key={issue.number}
+                    issue={issue}
+                    selected={selectedIssue === issue.number}
+                    onClick={() => handleSelectIssue(issue.number)}
+                  />
+                ))}
+                {issuesHasNextPage && (
+                  <div className="p-3">
+                    <Button
+                      variant="outline"
+                      className="w-full text-base"
+                      disabled={issuesFetchingNext}
+                      onClick={() => void fetchNextIssues()}
+                    >
+                      {issuesFetchingNext ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : null}
+                      Load more
+                    </Button>
+                  </div>
+                )}
+              </>
+            ))}
 
-          {remoteInfo && !isListLoading && activeTab === "prs" && (
-            <>
-              {prs.length === 0 ? (
-                <EmptyState
-                  icon={GitPullRequest}
-                  message="No pull requests found."
-                />
-              ) : (
-                <>
-                  {prs.map((pr) => (
-                    <PrListItem
-                      key={pr.number}
-                      pr={pr}
-                      selected={selectedPr === pr.number}
-                      onClick={() => handleSelectPr(pr.number)}
-                      hideBranches={showDetail}
-                    />
-                  ))}
-                  {prsHasNextPage && (
-                    <div className="p-3">
-                      <Button
-                        variant="outline"
-                        className="w-full text-base"
-                        disabled={prsFetchingNext}
-                        onClick={() => void fetchNextPrs()}
-                      >
-                        {prsFetchingNext ? (
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        ) : null}
-                        Load more
-                      </Button>
-                    </div>
-                  )}
-                </>
-              )}
-            </>
-          )}
+          {remoteInfo &&
+            !isListLoading &&
+            activeTab === "prs" &&
+            (prs.length === 0 ? (
+              <EmptyState
+                icon={GitPullRequest}
+                message="No pull requests found."
+              />
+            ) : (
+              <>
+                {prs.map((pr) => (
+                  <PrListItem
+                    key={pr.number}
+                    pr={pr}
+                    selected={selectedPr === pr.number}
+                    onClick={() => handleSelectPr(pr.number)}
+                    hideBranches={showDetail}
+                  />
+                ))}
+                {prsHasNextPage && (
+                  <div className="p-3">
+                    <Button
+                      variant="outline"
+                      className="w-full text-base"
+                      disabled={prsFetchingNext}
+                      onClick={() => void fetchNextPrs()}
+                    >
+                      {prsFetchingNext ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : null}
+                      Load more
+                    </Button>
+                  </div>
+                )}
+              </>
+            ))}
 
           {activeTab === "merge-queue" && (
             <MergeQueueTab
