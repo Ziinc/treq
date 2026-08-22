@@ -32,18 +32,18 @@ export function useGithubReviewThreads({
 }: UseGithubReviewThreadsParams) {
   const { data: remoteInfo } = useGitRemoteInfo(repoPath);
   const { data: prInfo } = usePrInfoViaGh(repoPath, branchName);
-
-  const enabled = Boolean(remoteInfo) && Boolean(prInfo);
+  const repoFullName = remoteInfo?.full_name;
+  const prNumber = prInfo?.number;
 
   const { data: threads = [] } = useSWR<GhReviewThread[]>(
-    enabled
-      ? ["gh-pr-review-threads", remoteInfo?.full_name, prInfo?.number]
+    repoFullName != null && prNumber != null
+      ? ["gh-pr-review-threads", repoFullName, prNumber]
       : null,
     () =>
       ghListPrReviewThreads(
         remoteInfo!.owner,
         remoteInfo!.repo,
-        prInfo!.number,
+        prNumber!,
       ),
     {
       dedupingInterval: 60_000,

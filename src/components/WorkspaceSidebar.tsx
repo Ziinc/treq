@@ -159,12 +159,13 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
 
   const { data: remoteInfo } = useGitRemoteInfo(repoPath);
   const { data: queueEnabled } = useMergeQueueEnabled(repoPath);
+  const repoFullName = remoteInfo?.full_name;
   // Single Rust-backed cache for all workspace PR statuses — no per-row
   // `gh pr view` polling from the WebView.
   const { data: prStatusesByBranch = {} } = usePrStatusPolling(repoPath);
   const { data: branchQueueStatuses } = useSWR(
-    FEATURES.mergeQueue && queueEnabled === true && remoteInfo
-      ? ["repo-branch-queue-statuses", remoteInfo.full_name]
+    FEATURES.mergeQueue && queueEnabled === true && repoFullName
+      ? ["repo-branch-queue-statuses", repoFullName]
       : null,
     async () => {
       const { data } = await supabase.rpc("get_repo_branch_queue_statuses", {

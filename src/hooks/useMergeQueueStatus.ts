@@ -268,14 +268,15 @@ export function usePrChecksForPr(
 
 export function useMergeQueueEnabled(repoPath: string | undefined) {
   const { data: remoteInfo } = useGitRemoteInfo(repoPath);
+  const repoFullName = remoteInfo?.full_name;
 
   return useSWR<boolean>(
-    FEATURES.mergeQueue && remoteInfo
-      ? mergeQueueEnabledKey(remoteInfo.full_name)
+    FEATURES.mergeQueue && repoFullName
+      ? mergeQueueEnabledKey(repoFullName)
       : null,
     async () => {
       const { data, error } = await supabase.rpc("get_merge_queue_enabled", {
-        p_repo_full_name: remoteInfo!.full_name,
+        p_repo_full_name: repoFullName!,
       });
       if (error) throw error;
       return data === true;
@@ -349,10 +350,11 @@ export function useMergeQueueStatus(
 ) {
   const { data: remoteInfo } = useGitRemoteInfo(repoPath);
   const { data: queueEnabled } = useMergeQueueEnabled(repoPath);
+  const repoFullName = remoteInfo?.full_name;
 
   return useSWR<WorkspaceQueueStatus | null>(
-    FEATURES.mergeQueue && queueEnabled === true && remoteInfo && branchName
-      ? ["merge-queue-status", remoteInfo.full_name, branchName]
+    FEATURES.mergeQueue && queueEnabled === true && repoFullName && branchName
+      ? ["merge-queue-status", repoFullName, branchName]
       : null,
     async () => {
       if (!remoteInfo || !branchName) return null;
