@@ -7,13 +7,10 @@ import {
 import { cn } from "../lib/utils";
 import {
   DEFAULT_SIDEBAR_WIDTH,
-  MAX_SIDEBAR_WIDTH,
-  MIN_SIDEBAR_WIDTH,
   useSidebarWidthStore,
 } from "../stores/sidebarWidthStore";
 
 export function WorkspaceSidebarResizeHandle() {
-  const width = useSidebarWidthStore((s) => s.width);
   const [isDragging, setIsDragging] = useState(false);
   const lastXRef = useRef(0);
 
@@ -58,16 +55,11 @@ export function WorkspaceSidebarResizeHandle() {
   }, [isDragging]);
 
   return (
-    <div
-      role="slider"
-      aria-orientation="vertical"
+    <button
+      type="button"
       aria-label="Resize workspace sidebar"
-      aria-valuenow={width}
-      aria-valuemin={MIN_SIDEBAR_WIDTH}
-      aria-valuemax={MAX_SIDEBAR_WIDTH}
       title="Drag to resize"
-      tabIndex={0}
-      className="absolute inset-y-0 right-0 z-20 w-1 cursor-ew-resize"
+      className="absolute inset-y-0 right-0 z-20 w-1 cursor-ew-resize border-0 bg-transparent p-0"
       onMouseDown={handleMouseDown}
       onDoubleClick={handleDoubleClick}
     >
@@ -79,6 +71,6 @@ export function WorkspaceSidebarResizeHandle() {
         )}
       />
       <div className="absolute inset-y-0 -right-1 w-3 cursor-ew-resize" />
-    </div>
+    </button>
   );
 }

@@ -30,7 +30,7 @@ describe("Dashboard - workspace sidebar resize", () => {
       `${DEFAULT_SIDEBAR_WIDTH}px`,
     );
 
-    const handle = screen.getByRole("slider", {
+    const handle = screen.getByRole("button", {
       name: "Resize workspace sidebar",
     });
     await user.pointer([

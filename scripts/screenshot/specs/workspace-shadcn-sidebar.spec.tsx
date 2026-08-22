@@ -40,7 +40,7 @@ it("captures the workspace list in the shadcn sidebar shell", async () => {
     ],
   });
 
-  const handle = screen.getByRole("slider", {
+  const handle = screen.getByRole("button", {
     name: "Resize workspace sidebar",
   });
   await user.pointer([
