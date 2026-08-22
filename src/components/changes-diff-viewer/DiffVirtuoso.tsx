@@ -11,6 +11,7 @@ import {
   buildDiffVirtuosoItems,
   committedFileToParsed,
 } from "./buildDiffVirtuosoItems";
+import { mergeVirtuosoListStyle } from "./mergeVirtuosoListStyle";
 import { filterVisibleCommittedFiles } from "./utils";
 
 const VirtuosoList = ({
@@ -19,7 +20,7 @@ const VirtuosoList = ({
   ref,
   ...listProps
 }: React.ComponentProps<"div">) => (
-  <div ref={ref} {...listProps} style={{ ...style, padding: "16px 0" }}>
+  <div ref={ref} {...listProps} style={mergeVirtuosoListStyle(style)}>
     {children}
   </div>
 );
