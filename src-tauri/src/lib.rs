@@ -743,7 +743,6 @@ pub fn run() {
             commands::gh_create_pr,
             commands::gh_list_pr_review_threads,
             commands::load_repo_yaml_config,
-            commands::get_cached_repo_config,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -110,10 +110,6 @@ export const setRepoSetting = (
 export const loadRepoYamlConfig = (repoPath: string): Promise<RepoYamlConfig> =>
   invoke("load_repo_yaml_config", { repoPath });
 
-export const getCachedRepoConfig = (
-  repoPath: string,
-): Promise<RepoYamlConfig> => invoke("get_cached_repo_config", { repoPath });
-
 export const setWindowRepoPath = (repoPath: string): Promise<void> =>
   invoke("set_window_repo_path", {
     repoPath,

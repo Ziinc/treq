@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
-import { getCachedRepoConfig, loadRepoYamlConfig } from "../lib/api";
+import { useRepoYamlConfig } from "../hooks/useRepoYamlConfig";
 import type { RepoYamlConfig } from "../lib/api-extra";
 import { Button } from "./ui/button";
 
@@ -31,34 +30,7 @@ function hasAnyValue(config: RepoYamlConfig): boolean {
 export function RepoYamlConfigSection({
   repoPath,
 }: RepoYamlConfigSectionProps) {
-  const [config, setConfig] = useState<RepoYamlConfig | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const loaded = await loadRepoYamlConfig(repoPath);
-      setConfig(loaded);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      setError(`Failed to load .treq/config.yaml: ${message}`);
-      try {
-        setConfig(await getCachedRepoConfig(repoPath));
-      } catch {
-        setConfig(null);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [repoPath]);
-
-  useEffect(() => {
-    if (repoPath) {
-      void load();
-    }
-  }, [repoPath, load]);
+  const { config, loading, error, reload } = useRepoYamlConfig(repoPath);
 
   return (
     <div
@@ -70,7 +42,7 @@ export function RepoYamlConfigSection({
         <Button
           variant="outline"
           size="sm"
-          onClick={() => void load()}
+          onClick={() => void reload()}
           disabled={loading}
         >
           {loading ? "Reloading..." : "Reload"}

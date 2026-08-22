@@ -51,6 +51,22 @@ it("captures the YAML config section with no file, synced from a file, and after
 		scrollIntoView: '[data-testid="repo-yaml-config-section"]',
 	});
 
+	const modelSelect = await screen.findByLabelText(/claude code model/i);
+	expect(modelSelect).toBeDisabled();
+	const agentSelect = screen.getByLabelText(/default agent/i);
+	expect(agentSelect).toBeDisabled();
+	const branchPatternInput = screen.getByLabelText(/branch name pattern/i);
+	expect(branchPatternInput).not.toBeDisabled();
+
+	await captureDocument(document, {
+		name: "repo-yaml-config-sync-04-form-inputs-disabled",
+		expectations: [
+			"The Claude Code Model and Default Agent select fields are visibly disabled (greyed out cursor/background) and each shows a note below it reading 'Configured by .treq/config.yaml — edit the file to change this value.'",
+			"The Branch Name Pattern field above them remains enabled (not greyed out) and shows its normal helper text, since branch_name_pattern is not set in the YAML file.",
+		],
+		scrollIntoView: "#repo-default-agent",
+	});
+
 	await writeRepoFile(repoPath, ".treq/config.yaml", "target_branch: develop\n");
 
 	await user.click(screen.getByRole("button", { name: /reload/i }));
