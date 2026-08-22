@@ -157,7 +157,10 @@ fn is_safe_project_skill_dir(canonical: &Path) -> bool {
   is_known_skill_dir && canonical.join(PROJECT_SKILL_MARKER).is_file()
 }
 
-fn with_skill_dir_filesystem_access(settings_json: &str, skill_dir: &Path) -> Result<String, String> {
+fn with_skill_dir_filesystem_access(
+  settings_json: &str,
+  skill_dir: &Path,
+) -> Result<String, String> {
   let mut value: Value = serde_json::from_str(settings_json)
     .map_err(|e| format!("Failed to parse agent settings JSON: {e}"))?;
   value.as_object_mut().and_then(|obj| obj.remove("sandbox"));
@@ -273,12 +276,8 @@ mod tests {
 
   #[test]
   fn cleanup_deletes_written_files_and_skill_dir() {
-    let files = write_agent_cli_files(
-      "tmp",
-      Some(r#"{"filesystem":{"allowRead":[]}}"#),
-      None,
-    )
-    .expect("write");
+    let files = write_agent_cli_files("tmp", Some(r#"{"filesystem":{"allowRead":[]}}"#), None)
+      .expect("write");
     let settings_path = files.settings_path.clone().unwrap();
     cleanup_agent_cli_files(&[
       files.prompt_path.clone(),
@@ -299,7 +298,8 @@ mod tests {
 
   #[test]
   fn with_skill_dir_filesystem_access_appends_read_and_write() {
-    let json = r#"{"filesystem":{"allowRead":["/ws"],"allowWrite":["/ws"]},"sandbox":{"enabled":true}}"#;
+    let json =
+      r#"{"filesystem":{"allowRead":["/ws"],"allowWrite":["/ws"]},"sandbox":{"enabled":true}}"#;
     let merged =
       with_skill_dir_filesystem_access(json, Path::new("/tmp/treq-agent-skills-1")).unwrap();
     let value: Value = serde_json::from_str(&merged).unwrap();
