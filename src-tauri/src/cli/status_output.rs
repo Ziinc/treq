@@ -128,6 +128,7 @@ pub(crate) fn format_pr_status_lines(pr: &WorkspacePrStatus, indent: &str) -> Ve
 pub(crate) fn print_workspace_partial_status(
   status: &core::WorkspaceSidebarStatus,
   pr: Option<&WorkspacePrStatus>,
+  default_branch: &str,
 ) {
   let flags = if status.has_conflicts {
     " [CONFLICTS]"
@@ -139,13 +140,176 @@ pub(crate) fn print_workspace_partial_status(
     println!("{line}");
   }
   if let Some(ref target) = status.current.target_branch {
-    println!("    Target: {}", target);
+    if target != default_branch {
+      println!("    Target: {}", target);
+    }
   }
   if let Some(pr) = pr {
     for line in format_pr_status_lines(pr, "    ") {
       println!("{line}");
     }
   }
+}
+
+/// Keep the focused workspace, ancestor workspaces, and descendant workspaces.
+/// Drop the repository default branch: it is not a workspace in the stack.
+pub(crate) fn filter_statuses_for_workspace(
+  statuses: &[core::WorkspaceSidebarStatus],
+  branch_name: &str,
+  default_branch: &str,
+) -> Vec<core::WorkspaceSidebarStatus> {
+  let by_branch: HashMap<&str, &core::WorkspaceSidebarStatus> = statuses
+    .iter()
+    .map(|status| (status.current.branch_name.as_str(), status))
+    .collect();
+  if !by_branch.contains_key(branch_name) {
+    return Vec::new();
+  }
+
+  let mut keep: HashSet<&str> = HashSet::new();
+  keep.insert(branch_name);
+
+  let mut cursor = branch_name;
+  let mut visited = HashSet::new();
+  while visited.insert(cursor) {
+    let Some(status) = by_branch.get(cursor) else {
+      break;
+    };
+    let Some(parent) = status.current.target_branch.as_deref() else {
+      break;
+    };
+    if parent == default_branch || parent == cursor || !by_branch.contains_key(parent) {
+      break;
+    }
+    keep.insert(parent);
+    cursor = parent;
+  }
+
+  let mut growing = true;
+  while growing {
+    growing = false;
+    for status in statuses {
+      let branch = status.current.branch_name.as_str();
+      if keep.contains(branch) {
+        continue;
+      }
+      let Some(parent) = status.current.target_branch.as_deref() else {
+        continue;
+      };
+      if parent != default_branch && keep.contains(parent) {
+        keep.insert(branch);
+        growing = true;
+      }
+    }
+  }
+
+  statuses
+    .iter()
+    .filter(|status| keep.contains(status.current.branch_name.as_str()))
+    .cloned()
+    .collect()
+}
+
+pub(crate) fn format_focused_workspace_status(
+  status: &core::WorkspaceStatus,
+  related: &[core::WorkspaceSidebarStatus],
+  uncommitted_changes: usize,
+  default_branch: &str,
+  pr: Option<&WorkspacePrStatus>,
+) -> Vec<String> {
+  let mut lines = Vec::new();
+  if !related.is_empty() {
+    lines.extend(format_workspace_stack_lines(related));
+  }
+
+  lines.push(format!("Workspace: {}", status.partial.current.branch_name));
+  lines.extend(format_workspace_metadata_lines(
+    &status.partial.current,
+    "  ",
+  ));
+  if let Some(ref target) = status.partial.current.target_branch {
+    if target != default_branch {
+      lines.push(format!("  Target: {target}"));
+    }
+  }
+  lines.push(format!("  Uncommitted changes: {uncommitted_changes}"));
+  let conflict_count = status.conflicted_files.len();
+  if conflict_count == 0 && !status.partial.has_conflicts {
+    lines.push("  Conflicts: none".to_string());
+  } else {
+    let n = if conflict_count == 0 {
+      1
+    } else {
+      conflict_count
+    };
+    lines.push(format!("  Conflicts: {n} files"));
+    lines.push("  run `treq diff` to inspect conflicts".to_string());
+  }
+  lines.push(format!(
+    "  Commits: {}",
+    status.commits_ahead_of_target.len()
+  ));
+  if let Some(pr) = pr {
+    lines.extend(format_pr_status_lines(pr, "  "));
+  }
+  lines
+}
+
+pub(crate) fn format_workspace_diff_lines(
+  diff: &crate::jj::JjRevisionDiff,
+  conflicted_commits: &[(String, String)],
+) -> Vec<String> {
+  let mut lines = Vec::new();
+  if diff.conflicted_files.is_empty() && conflicted_commits.is_empty() {
+    lines.push("Conflicts: none".to_string());
+  } else {
+    if !diff.conflicted_files.is_empty() {
+      lines.push(format!(
+        "Conflicted files ({})",
+        diff.conflicted_files.len()
+      ));
+      for path in &diff.conflicted_files {
+        lines.push(format!("  {path}"));
+      }
+    }
+    if !conflicted_commits.is_empty() {
+      lines.push("Conflicted commits:".to_string());
+      for (change_id, description) in conflicted_commits {
+        let subject = description.lines().next().unwrap_or("").trim();
+        if subject.is_empty() {
+          lines.push(format!("  {change_id}"));
+        } else {
+          lines.push(format!("  {change_id} {subject}"));
+        }
+      }
+    }
+  }
+
+  let conflict_hunks: Vec<&crate::jj::JjFileDiff> = diff
+    .hunks_by_file
+    .iter()
+    .filter(|file| {
+      !file.conflict_regions.is_empty()
+        || file
+          .hunks
+          .iter()
+          .any(|hunk| !hunk.conflict_regions.is_empty())
+        || diff.conflicted_files.iter().any(|path| path == &file.path)
+    })
+    .collect();
+  if !conflict_hunks.is_empty() {
+    lines.push("Conflict hunks:".to_string());
+    for file in conflict_hunks {
+      lines.push(format!("=== {} ===", file.path));
+      for hunk in &file.hunks {
+        if hunk.patch.is_empty() {
+          continue;
+        }
+        lines.push(hunk.patch.trim_end().to_string());
+      }
+    }
+  }
+  lines
 }
 
 #[cfg(test)]
@@ -273,69 +437,132 @@ mod tests {
 
     assert_eq!(format_pr_status_lines(&pr, ""), vec!["GitHub: octo/app#8"]);
   }
-}
 
-pub(crate) fn print_workspace_status_detail(
-  status: &core::WorkspaceStatus,
-  pr: Option<&WorkspacePrStatus>,
-) {
-  println!("Workspace: {}", status.partial.current.branch_name);
-  for line in format_workspace_metadata_lines(&status.partial.current, "  ") {
-    println!("{line}");
-  }
-  if let Some(ref target) = &status.target {
-    println!("  Target: {}", target.branch_name);
-  }
-  println!(
-    "  Changes: {}",
-    if status.partial.has_changes {
-      "yes"
-    } else {
-      "no"
-    }
-  );
-  println!(
-    "  Conflicts: {}",
-    if status.partial.has_conflicts {
-      "YES"
-    } else {
-      "no"
-    }
-  );
-  println!("  Commits ahead: {}", status.commits_ahead_of_target.len());
-  if let Some(pr) = pr {
-    for line in format_pr_status_lines(pr, "  ") {
-      println!("{line}");
-    }
-  }
+  #[test]
+  fn filter_keeps_parent_and_children_and_drops_unrelated_and_default() {
+    let statuses = vec![
+      sidebar(workspace(1, "feat/api", "API", None, Some("main"))),
+      sidebar(workspace(2, "feat/ui", "UI", None, Some("feat/api"))),
+      sidebar(workspace(3, "feat/other", "Other", None, Some("main"))),
+      sidebar(workspace(4, "feat/css", "CSS", None, Some("feat/ui"))),
+    ];
 
-  if !status.dag_nodes.is_empty() {
-    let stack_statuses: Vec<_> = status
-      .dag_nodes
+    let related = filter_statuses_for_workspace(&statuses, "feat/ui", "main");
+    let names: Vec<&str> = related
       .iter()
-      .map(|node| core::WorkspaceSidebarStatus {
-        current: node.status.current.clone(),
-        has_conflicts: node.status.has_conflicts,
-        last_activity_at: Some(node.status.current.created_at.clone()),
-      })
+      .map(|status| status.current.branch_name.as_str())
       .collect();
-    for line in format_workspace_stack_lines(&stack_statuses) {
-      println!("  {line}");
+    assert_eq!(names, vec!["feat/api", "feat/ui", "feat/css"]);
+  }
+
+  fn focused_status(
+    current: crate::local_db::Workspace,
+    has_conflicts: bool,
+    conflicted_files: Vec<&str>,
+    commit_count: usize,
+  ) -> core::WorkspaceStatus {
+    core::WorkspaceStatus {
+      partial: core::WorkspacePartialStatus {
+        current: current.clone(),
+        has_conflicts,
+        has_changes: false,
+        commits_ahead: commit_count,
+      },
+      conflicted_files: conflicted_files.into_iter().map(str::to_string).collect(),
+      remote_sync: core::RemoteSyncStatus::InSync,
+      target: None,
+      children: Vec::new(),
+      dag_nodes: Vec::new(),
+      conflicted_workspace_ids: Vec::new(),
+      commits_ahead_of_target: (0..commit_count)
+        .map(|i| core::WorkspaceCommit {
+          hash: format!("abcd{i:04}"),
+          timestamp: String::new(),
+          message: format!("commit {i}"),
+        })
+        .collect(),
     }
   }
 
-  if !status.children.is_empty() {
-    println!("  Children:");
-    for child in &status.children {
-      println!("    - {}", child.branch_name);
-    }
+  #[test]
+  fn focused_status_reports_counts_and_diff_hint_without_default_branch() {
+    let current = workspace(2, "feat/ui", "UI", Some("Buttons"), Some("main"));
+    let status = focused_status(current.clone(), true, vec!["src/app.rs", "src/lib.rs"], 3);
+    let related = vec![sidebar(current)];
+
+    let lines = format_focused_workspace_status(&status, &related, 4, "main", None);
+    assert!(lines.contains(&"Stack:".to_string()));
+    assert!(lines.iter().any(|line| line.contains("feat/ui")));
+    assert!(lines.contains(&"  Uncommitted changes: 4".to_string()));
+    assert!(lines.contains(&"  Conflicts: 2 files".to_string()));
+    assert!(lines.contains(&"  run `treq diff` to inspect conflicts".to_string()));
+    assert!(lines.contains(&"  Commits: 3".to_string()));
+    assert!(!lines.iter().any(|line| line.contains("Target: main")));
   }
 
-  if !status.commits_ahead_of_target.is_empty() {
-    println!("  Commits:");
-    for commit in &status.commits_ahead_of_target {
-      let msg = commit.message.lines().next().unwrap_or("");
-      println!("    {} {}", &commit.hash[..8.min(commit.hash.len())], msg);
-    }
+  #[test]
+  fn focused_status_omits_diff_hint_when_clean() {
+    let current = workspace(1, "feat/api", "API", None, Some("feat/core"));
+    let status = focused_status(current.clone(), false, vec![], 1);
+    let lines = format_focused_workspace_status(&status, &[], 0, "main", None);
+    assert!(lines.contains(&"  Conflicts: none".to_string()));
+    assert!(!lines.iter().any(|line| line.contains("treq diff")));
+    assert!(lines.contains(&"  Target: feat/core".to_string()));
+  }
+
+  #[test]
+  fn diff_output_lists_conflicted_files_hunks_and_commits() {
+    let diff = crate::jj::JjRevisionDiff {
+      committed_files: Vec::new(),
+      hunks_by_file: vec![crate::jj::JjFileDiff {
+        path: "src/app.rs".to_string(),
+        hunks: vec![crate::jj::JjDiffHunk {
+          id: "h1".to_string(),
+          header: "@@".to_string(),
+          lines: vec!["<<<<<<<".to_string()],
+          patch: "<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>>".to_string(),
+          conflict_style: crate::conflict_markers::ConflictStyle::GitMerge,
+          conflict_regions: Vec::new(),
+        }],
+        conflict_style: crate::conflict_markers::ConflictStyle::GitMerge,
+        conflict_regions: Vec::new(),
+      }],
+      uncommitted_files: Vec::new(),
+      conflicted_files: vec!["src/app.rs".to_string()],
+      too_large_to_render: false,
+      render_block_reason: None,
+    };
+
+    let lines = format_workspace_diff_lines(
+      &diff,
+      &[("zqkxyz".to_string(), "rebase leftover\nbody".to_string())],
+    );
+    assert_eq!(
+      lines[0..5],
+      vec![
+        "Conflicted files (1)",
+        "  src/app.rs",
+        "Conflicted commits:",
+        "  zqkxyz rebase leftover",
+        "Conflict hunks:",
+      ]
+    );
+    assert!(lines.iter().any(|line| line.contains("<<<<<<< HEAD")));
+  }
+
+  #[test]
+  fn diff_output_reports_none_when_clean() {
+    let diff = crate::jj::JjRevisionDiff {
+      committed_files: Vec::new(),
+      hunks_by_file: Vec::new(),
+      uncommitted_files: Vec::new(),
+      conflicted_files: Vec::new(),
+      too_large_to_render: false,
+      render_block_reason: None,
+    };
+    assert_eq!(
+      format_workspace_diff_lines(&diff, &[]),
+      vec!["Conflicts: none"]
+    );
   }
 }

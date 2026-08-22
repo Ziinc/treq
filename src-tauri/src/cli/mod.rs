@@ -16,7 +16,7 @@ pub(super) fn normalize_repo_path(path: &Path) -> String {
     .unwrap_or_else(|| path.to_string_lossy().to_string())
 }
 
-/// Walk up from CWD to find a directory containing `.treq` or `.git`.
+/// Walk up from CWD to find a directory containing `.git`.
 pub fn detect_repo_path() -> Result<String, String> {
   let cwd = std::env::current_dir().map_err(|e| format!("Failed to get CWD: {}", e))?;
 
@@ -32,6 +32,32 @@ pub fn detect_repo_path() -> Result<String, String> {
   }
 
   Err("Not inside a git repository (no .git directory found)".to_string())
+}
+
+/// Directory name under `.treq/workspaces/` when `cwd` is inside a workspace.
+pub(super) fn workspace_dir_name_from_cwd(cwd: &Path) -> Option<String> {
+  let mut current = cwd;
+  loop {
+    let parent = current.parent()?;
+    if parent.file_name() == Some(std::ffi::OsStr::new("workspaces")) {
+      let treq = parent.parent()?;
+      if treq.file_name() == Some(std::ffi::OsStr::new(".treq")) {
+        return current
+          .file_name()
+          .and_then(|name| name.to_str())
+          .map(|name| name.to_string());
+      }
+    }
+    current = parent;
+  }
+}
+
+pub(super) fn lookup_workspace_from_cwd(repo_path: &str) -> Option<local_db::Workspace> {
+  let cwd = std::env::current_dir().ok()?;
+  let name = workspace_dir_name_from_cwd(&cwd)?;
+  local_db::get_workspace_by_path(repo_path, &name)
+    .ok()
+    .flatten()
 }
 
 /// Initialize binary paths cache for CLI mode (no database needed).
@@ -52,6 +78,7 @@ pub fn handle_cli_command(subcommand: &SubcommandMatches) -> Option<i32> {
     "add" => workspace_handlers::handle_workspace_add(&subcommand.matches),
     "set" => workspace_handlers::handle_workspace_set(&subcommand.matches),
     "st" => workspace_handlers::handle_workspace_status(&subcommand.matches),
+    "diff" => workspace_handlers::handle_workspace_diff(&subcommand.matches),
     "mv" => workspace_handlers::handle_workspace_move(&subcommand.matches),
     "agent" => workspace_handlers::handle_workspace_agent(&subcommand.matches),
     "commit" => workspace_handlers::handle_workspace_commit(&subcommand.matches),
@@ -95,12 +122,13 @@ fn print_cli_help() {
   println!("  treq add <branch_name> [-d description] [-l title] [-s source_branch] [-p sparse]... [-k symlink]...");
   println!("  treq set <workspace_name> [-d description] [-l title] [-t target_branch]");
   println!("  treq st [workspace_name]");
+  println!("  treq diff [workspace_name]");
   println!(
         "  treq mv <source> <destination> -f [FILES...] -r [RANGES...] -c [COMMITS...]  (use '.' for the home repo)"
     );
   println!("  treq agent <branch> <prompt> [-m <edit|plan>]");
   println!("  treq commit <workspace_name> -m <message> [--push]");
-  println!("  treq resolve <commit_id> [sides...]");
+  println!("  treq resolve [commit_id] [sides...]");
   println!("  treq send [path|-]");
   println!("  treq help");
 }

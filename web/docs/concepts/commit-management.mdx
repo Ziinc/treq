@@ -52,7 +52,7 @@ When a rebase leaves one or more commits conflicted, open the **Commits** tab an
 
 Immutable commits can be resolved from this tab only when every conflicted commit is on the workspace branch. Conflicted commits that exist only on the target branch stay read-only. The home repository and the default-branch workspace do not rewrite immutable history this way.
 
-Give the agent one prompt describing how to resolve the conflicts. The agent starts in that resolve root. It can edit conflict markers in each change-id directory, or run:
+Give the agent one prompt describing how to resolve the conflicts. The agent starts in that resolve root. From a workspace terminal you can also run `treq resolve` with no arguments to prepare the same directories. The agent can edit conflict markers in each change-id directory, or run:
 
 ```bash
 treq resolve <change-id> [1|2|base|both]
@@ -86,5 +86,6 @@ Pending changes can prevent Treq from synchronizing a working copy after a rebas
 - [Code Review Workflow](/docs/tutorials/code-review-workflow)
 - [Changes and Reviews](/docs/concepts/changes-and-reviews)
 - [CLI `treq resolve`](/docs/reference/cli#treq-resolve)
+- [CLI `treq diff`](/docs/reference/cli#treq-diff)
 - [Workspaces](/docs/concepts/workspaces)
 - [Under the Hood](/docs/under-the-hood)

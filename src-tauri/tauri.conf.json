@@ -108,7 +108,18 @@
               "name": "workspace_name",
               "index": 1,
               "takesValue": true,
-              "description": "Workspace name (omit for all)"
+              "description": "Workspace name (omit to use the current workspace, or list all from the home repo)"
+            }
+          ]
+        },
+        "diff": {
+          "description": "Show workspace conflicts and conflict hunks",
+          "args": [
+            {
+              "name": "workspace_name",
+              "index": 1,
+              "takesValue": true,
+              "description": "Workspace branch name (omit to use the current workspace)"
             }
           ]
         },
@@ -201,14 +212,13 @@
           ]
         },
         "resolve": {
-          "description": "Resolve conflicts for a commit in a short-lived resolve workspace",
+          "description": "Prepare or finish inplace conflict resolution",
           "args": [
             {
               "name": "commit_id",
               "index": 1,
               "takesValue": true,
-              "required": true,
-              "description": "Change or commit id to resolve"
+              "description": "Change or commit id to resolve. Omit to prepare resolve directories for the current workspace."
             },
             {
               "name": "sides",

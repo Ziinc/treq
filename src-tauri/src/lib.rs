@@ -222,6 +222,7 @@ pub fn run() {
                             eprintln!("  treq add <branch_name> [-d description] [-l title] [-s source_branch] [-p sparse]... [-k symlink]...");
                             eprintln!("  treq set <workspace_name> [-d description] [-l title] [-t target_branch]");
                             eprintln!("  treq st [workspace_name]");
+                            eprintln!("  treq diff [workspace_name]");
                             eprintln!("  treq agent <branch> <prompt> [-m <edit|plan>]");
                             eprintln!("  treq help");
                             drop(telemetry);
