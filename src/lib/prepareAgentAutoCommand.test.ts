@@ -24,11 +24,8 @@ describe("prepareAgentAutoCommand", () => {
     vi.mocked(api.writeAgentCliFiles).mockReset();
   });
 
-  it("does not write Claude sandbox settings", async () => {
-    vi.mocked(api.writeAgentCliFiles).mockResolvedValueOnce({
-      promptPath: writtenFiles.promptPath,
-      skillDir: writtenFiles.skillDir,
-    });
+  it("writes filesystem restrictions without a sandbox key", async () => {
+    vi.mocked(api.writeAgentCliFiles).mockResolvedValueOnce(writtenFiles);
 
     await prepareAgentAutoCommand({
       agent: "claude",
@@ -38,8 +35,15 @@ describe("prepareAgentAutoCommand", () => {
       treqBinDir: null,
     });
 
-    expect(api.readFile).not.toHaveBeenCalled();
-    expect(vi.mocked(api.writeAgentCliFiles).mock.calls[0]?.[1]).toBeUndefined();
+    const settingsJson = vi.mocked(api.writeAgentCliFiles).mock.calls[0]?.[1];
+    expect(JSON.parse(settingsJson as string)).toEqual({
+      filesystem: {
+        denyRead: ["/repo"],
+        allowRead: ["/ws"],
+        allowWrite: ["/ws"],
+      },
+    });
+    expect(settingsJson).not.toContain("sandbox");
   });
 
   it("retries without cwd when writing project skills fails", async () => {

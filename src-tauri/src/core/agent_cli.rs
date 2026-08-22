@@ -1,4 +1,5 @@
 use serde::Serialize;
+use serde_json::{json, Value};
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -55,8 +56,9 @@ pub fn write_agent_cli_files(
 
   let settings_path = match settings_json {
     Some(json) => {
+      let merged = with_skill_dir_filesystem_access(json, &skill_dir)?;
       let path = dir.join(format!("{FILE_PREFIX}settings-{id}.json"));
-      fs::write(&path, json).map_err(|e| format!("Failed to write agent settings file: {e}"))?;
+      fs::write(&path, merged).map_err(|e| format!("Failed to write agent settings file: {e}"))?;
       Some(path_to_string(&path))
     }
     None => None,
@@ -155,6 +157,41 @@ fn is_safe_project_skill_dir(canonical: &Path) -> bool {
   is_known_skill_dir && canonical.join(PROJECT_SKILL_MARKER).is_file()
 }
 
+fn with_skill_dir_filesystem_access(settings_json: &str, skill_dir: &Path) -> Result<String, String> {
+  let mut value: Value = serde_json::from_str(settings_json)
+    .map_err(|e| format!("Failed to parse agent settings JSON: {e}"))?;
+  value.as_object_mut().and_then(|obj| obj.remove("sandbox"));
+  let skill_dir = skill_dir.to_string_lossy().into_owned();
+  let filesystem = value
+    .pointer_mut("/filesystem")
+    .and_then(Value::as_object_mut)
+    .ok_or_else(|| "Agent settings JSON is missing filesystem".to_string())?;
+  push_unique_path(filesystem, "allowRead", &skill_dir, false)?;
+  push_unique_path(filesystem, "allowWrite", &skill_dir, true)?;
+  serde_json::to_string_pretty(&value).map_err(|e| format!("Failed to serialize settings: {e}"))
+}
+
+fn push_unique_path(
+  filesystem: &mut serde_json::Map<String, Value>,
+  key: &str,
+  path: &str,
+  create: bool,
+) -> Result<(), String> {
+  match filesystem.get_mut(key).and_then(Value::as_array_mut) {
+    Some(paths) => {
+      if !paths.iter().any(|p| p.as_str() == Some(path)) {
+        paths.push(json!(path));
+      }
+      Ok(())
+    }
+    None if create => {
+      filesystem.insert(key.to_string(), json!([path]));
+      Ok(())
+    }
+    None => Err(format!("Agent settings JSON is missing filesystem.{key}")),
+  }
+}
+
 fn is_safe_agent_cli_temp_path(canonical: &Path, temp_dir: &Path) -> bool {
   let file_name = canonical.file_name().and_then(|n| n.to_str()).unwrap_or("");
   canonical.starts_with(temp_dir) && file_name.starts_with(FILE_PREFIX)
@@ -173,7 +210,7 @@ mod tests {
   fn writes_prompt_settings_and_skill_pack() {
     let files = write_agent_cli_files(
       "you are in a workspace",
-      Some(r#"{"marker":"verbatim-settings"}"#),
+      Some(r#"{"filesystem":{"allowRead":["/ws"],"allowWrite":["/ws"]}}"#),
       None,
     )
     .expect("write files");
@@ -190,12 +227,18 @@ mod tests {
 
     let settings_path = files.settings_path.expect("settings path");
     let settings = fs::read_to_string(&settings_path).expect("read settings");
-    assert!(settings.contains("verbatim-settings"));
+    assert!(settings.contains(&files.skill_dir));
+    assert!(settings.contains("/ws"));
     assert!(!settings.contains("sandbox"));
-    assert!(!settings.contains("Bash"));
-    assert!(!settings.contains("permissions"));
     let value: Value = serde_json::from_str(&settings).expect("parse settings");
     assert!(value.get("sandbox").is_none());
+    let allow_write = value
+      .pointer("/filesystem/allowWrite")
+      .and_then(Value::as_array)
+      .unwrap();
+    assert!(allow_write
+      .iter()
+      .any(|p| p.as_str() == Some(files.skill_dir.as_str())));
 
     let skill_md = Path::new(&files.skill_dir).join("skills/treq/SKILL.md");
     let body = fs::read_to_string(skill_md).expect("read skill");
@@ -232,7 +275,7 @@ mod tests {
   fn cleanup_deletes_written_files_and_skill_dir() {
     let files = write_agent_cli_files(
       "tmp",
-      Some(r#"{"marker":"verbatim-settings"}"#),
+      Some(r#"{"filesystem":{"allowRead":[]}}"#),
       None,
     )
     .expect("write");
@@ -255,15 +298,28 @@ mod tests {
   }
 
   #[test]
-  fn writes_settings_json_verbatim_without_sandbox_overlay() {
-    let json = r#"{"marker":"verbatim-settings"}"#;
-    let files = write_agent_cli_files("prompt", Some(json), None).expect("write");
-    let settings_path = files.settings_path.expect("settings path");
-    let settings = fs::read_to_string(&settings_path).expect("read settings");
-    let value: Value = serde_json::from_str(&settings).unwrap();
-    assert_eq!(value, serde_json::from_str::<Value>(json).unwrap());
+  fn with_skill_dir_filesystem_access_appends_read_and_write() {
+    let json = r#"{"filesystem":{"allowRead":["/ws"],"allowWrite":["/ws"]},"sandbox":{"enabled":true}}"#;
+    let merged =
+      with_skill_dir_filesystem_access(json, Path::new("/tmp/treq-agent-skills-1")).unwrap();
+    let value: Value = serde_json::from_str(&merged).unwrap();
     assert!(value.get("sandbox").is_none());
-    cleanup_agent_cli_files(&[files.prompt_path, settings_path, files.skill_dir]).expect("cleanup");
+    let allow_read = value
+      .pointer("/filesystem/allowRead")
+      .and_then(Value::as_array)
+      .unwrap();
+    let allow_write = value
+      .pointer("/filesystem/allowWrite")
+      .and_then(Value::as_array)
+      .unwrap();
+    assert_eq!(
+      allow_read,
+      &vec![json!("/ws"), json!("/tmp/treq-agent-skills-1")]
+    );
+    assert_eq!(
+      allow_write,
+      &vec![json!("/ws"), json!("/tmp/treq-agent-skills-1")]
+    );
   }
 
   #[test]
