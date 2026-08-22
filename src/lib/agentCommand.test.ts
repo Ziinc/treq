@@ -2,11 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   appendAgentPrompt,
   buildAgentAutoCommand,
-  buildClaudeSandboxFilesystemSettings,
   buildTreqAgentSystemPrompt,
-  claudeLocalSettingsPath,
   cursorPromptFileContents,
-  mergeClaudeLocalSettings,
 } from "./agentCommand";
 
 describe("appendAgentPrompt", () => {
@@ -73,89 +70,6 @@ describe("buildTreqAgentSystemPrompt", () => {
   });
 });
 
-describe("buildClaudeSandboxFilesystemSettings", () => {
-  it("allows workspace reads and writes while denying the home repository", () => {
-    expect(
-      buildClaudeSandboxFilesystemSettings({
-        repoPath: "/repos/treq",
-        workspacePath: "/repos/treq/.treq/workspaces/fix-parser",
-      }),
-    ).toEqual({
-      filesystem: {
-        denyRead: ["/repos/treq"],
-        allowRead: ["/repos/treq/.treq/workspaces/fix-parser"],
-        allowWrite: ["/repos/treq/.treq/workspaces/fix-parser"],
-      },
-    });
-  });
-
-  it("allows home repository reads and writes without workspace exclusions", () => {
-    expect(
-      buildClaudeSandboxFilesystemSettings({
-        repoPath: "/repos/treq",
-        workspacePath: null,
-      }),
-    ).toEqual({
-      filesystem: {
-        allowRead: ["/repos/treq"],
-        allowWrite: ["/repos/treq"],
-      },
-    });
-  });
-
-  it("does not force sandbox enablement or unsandboxed-command flags", () => {
-    expect(
-      buildClaudeSandboxFilesystemSettings({
-        repoPath: "/repos/treq",
-        workspacePath: null,
-      }),
-    ).not.toHaveProperty("enabled");
-  });
-});
-
-describe("mergeClaudeLocalSettings", () => {
-  it("overlays filesystem restrictions without dropping other sandbox keys", () => {
-    const filesystem = buildClaudeSandboxFilesystemSettings({
-      repoPath: "/repos/treq",
-      workspacePath: "/repos/treq/.treq/workspaces/fix-parser",
-    });
-    expect(
-      mergeClaudeLocalSettings(
-        {
-          permissions: { allow: ["Bash"] },
-          sandbox: { enabled: false, allowUnsandboxedCommands: true },
-        },
-        filesystem,
-      ),
-    ).toEqual({
-      permissions: { allow: ["Bash"] },
-      sandbox: {
-        enabled: false,
-        allowUnsandboxedCommands: true,
-        filesystem: filesystem.filesystem,
-      },
-    });
-  });
-
-  it("uses filesystem restrictions alone when no local file exists", () => {
-    const filesystem = buildClaudeSandboxFilesystemSettings({
-      repoPath: "/repos/treq",
-      workspacePath: null,
-    });
-    expect(mergeClaudeLocalSettings(null, filesystem)).toEqual({
-      sandbox: { filesystem: filesystem.filesystem },
-    });
-  });
-});
-
-describe("claudeLocalSettingsPath", () => {
-  it("points at .claude/settings.local.json under the cwd", () => {
-    expect(claudeLocalSettingsPath("/repos/treq/")).toBe(
-      "/repos/treq/.claude/settings.local.json",
-    );
-  });
-});
-
 describe("cursorPromptFileContents", () => {
   it("combines system prompt with an optional pending prompt", () => {
     expect(cursorPromptFileContents("sys", "do the thing")).toBe(
@@ -172,14 +86,19 @@ describe("buildAgentAutoCommand", () => {
     skillDir: "/tmp/treq-agent-skills-1",
   };
 
-  it("points Claude at filesystem settings, prompt, and the bundled skill directory", () => {
+  it("points Claude at the prompt file without sandbox settings", () => {
     const command = buildAgentAutoCommand({
       agent: "claude",
-      files: { ...files, claudeSkillPath: "/ws/.claude/skills/treq" },
+      files: {
+        promptPath: files.promptPath,
+        skillDir: files.skillDir,
+        claudeSkillPath: "/ws/.claude/skills/treq",
+      },
       pendingPrompt: "fix the bug",
     });
 
-    expect(command).toContain("--settings '/tmp/treq-agent-settings-1.json'");
+    expect(command).not.toContain("--settings");
+    expect(command).not.toContain("sandbox");
     expect(command).toContain(
       "--append-system-prompt-file '/tmp/treq-agent-prompt-1.txt'",
     );
@@ -187,7 +106,7 @@ describe("buildAgentAutoCommand", () => {
     expect(command).not.toContain("--append-system-prompt ");
     expect(command).not.toContain("You are operating");
     expect(command).toContain(
-      `trap "rm -rf '/tmp/treq-agent-prompt-1.txt' '/tmp/treq-agent-skills-1' '/ws/.claude/skills/treq' '/tmp/treq-agent-settings-1.json'" EXIT`,
+      `trap "rm -rf '/tmp/treq-agent-prompt-1.txt' '/tmp/treq-agent-skills-1' '/ws/.claude/skills/treq'" EXIT`,
     );
     expect(command).toContain("-- 'fix the bug'");
   });

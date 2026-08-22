@@ -1,9 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import * as api from "./api";
-import {
-  parseJsonObject,
-  prepareAgentAutoCommand,
-} from "./prepareAgentAutoCommand";
+import { prepareAgentAutoCommand } from "./prepareAgentAutoCommand";
 
 vi.mock("./api", async (importOriginal) => {
   const actual = await importOriginal<typeof import("./api")>();
@@ -13,20 +10,6 @@ vi.mock("./api", async (importOriginal) => {
     cleanupAgentCliFiles: vi.fn(),
     readFile: vi.fn(),
   };
-});
-
-describe("parseJsonObject", () => {
-  it("returns a plain object from JSON", () => {
-    expect(parseJsonObject('{"permissions":{"allow":["Bash"]}}')).toEqual({
-      permissions: { allow: ["Bash"] },
-    });
-  });
-
-  it("returns null for invalid JSON, arrays, and primitives", () => {
-    expect(parseJsonObject("not json")).toBeNull();
-    expect(parseJsonObject("[1]")).toBeNull();
-    expect(parseJsonObject('"x"')).toBeNull();
-  });
 });
 
 const writtenFiles = {
@@ -41,8 +24,11 @@ describe("prepareAgentAutoCommand", () => {
     vi.mocked(api.writeAgentCliFiles).mockReset();
   });
 
-  it("writes filesystem restrictions without forcing sandbox enablement", async () => {
-    vi.mocked(api.writeAgentCliFiles).mockResolvedValueOnce(writtenFiles);
+  it("does not write Claude sandbox settings", async () => {
+    vi.mocked(api.writeAgentCliFiles).mockResolvedValueOnce({
+      promptPath: writtenFiles.promptPath,
+      skillDir: writtenFiles.skillDir,
+    });
 
     await prepareAgentAutoCommand({
       agent: "claude",
@@ -52,16 +38,8 @@ describe("prepareAgentAutoCommand", () => {
       treqBinDir: null,
     });
 
-    const settingsJson = vi.mocked(api.writeAgentCliFiles).mock.calls[0]?.[1];
-    expect(JSON.parse(settingsJson as string)).toEqual({
-      sandbox: {
-        filesystem: {
-          denyRead: ["/repo"],
-          allowRead: ["/ws"],
-          allowWrite: ["/ws"],
-        },
-      },
-    });
+    expect(api.readFile).not.toHaveBeenCalled();
+    expect(vi.mocked(api.writeAgentCliFiles).mock.calls[0]?.[1]).toBeUndefined();
   });
 
   it("retries without cwd when writing project skills fails", async () => {
