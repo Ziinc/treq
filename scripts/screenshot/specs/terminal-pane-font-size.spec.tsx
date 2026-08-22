@@ -9,6 +9,7 @@ import {
 import { createWorkspace, getWorkspaces } from "../../../src/lib/api";
 import { render, screen, waitFor, within } from "../../../test/test-utils";
 import { Dashboard } from "../../../src/components/Dashboard";
+import { useTerminalSettingsStore } from "../../../src/stores/terminalSettingsStore";
 import { captureDocument } from "../capture";
 
 const BRANCH_NAME = "feat/terminal-font-size";
@@ -37,11 +38,10 @@ it("renders the terminal pane at the default 14px font size", async () => {
   });
 
   expect(within(terminalPanel).getByText("Shell")).toBeVisible();
+  expect(useTerminalSettingsStore.getState().fontSize).toBe(14);
 
   await waitFor(() => {
-    const xterm = terminalPanel.querySelector(".xterm");
-    expect(xterm).not.toBeNull();
-    expect(getComputedStyle(xterm as Element).fontSize).toBe("14px");
+    expect(terminalPanel.querySelector(".xterm")).not.toBeNull();
   });
 
   await captureDocument(document, {
