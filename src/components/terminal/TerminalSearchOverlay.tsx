@@ -13,7 +13,7 @@ import {
 } from "../ui/tooltip";
 
 interface TerminalSearchOverlayProps {
-  searchInputRef: RefObject<HTMLInputElement>;
+  searchInputRef: RefObject<HTMLInputElement | null>;
   searchQuery: string;
   onSearchQueryChange: (value: string) => void;
   onSearchKeyDown: (e: ReactKeyboardEvent<HTMLInputElement>) => void;

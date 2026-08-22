@@ -28,6 +28,7 @@ import {
   getEntireStack,
 } from "../lib/workspace-tree";
 import { isWorkspaceHidden } from "../lib/workspace-utils";
+import { useWorkspaceSidebarMultiSelect } from "../hooks/useWorkspaceSidebarMultiSelect";
 import { HomeRepoSidebarRow } from "./HomeRepoSidebarRow";
 import { WorkspaceSidebarHeaderActions } from "./WorkspaceSidebarHeaderActions";
 import { RenameWorkspaceDialog } from "./RenameWorkspaceDialog";
@@ -216,6 +217,14 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
       return flattenWorkspaceTree(tree);
     }, [visibleStatuses]);
 
+    const { handleItemSelect, clearLastSelectedIndex } =
+      useWorkspaceSidebarMultiSelect({
+        flattenedNodes,
+        onSelectStack,
+        onWorkspaceMultiSelect,
+        onWorkspaceClick,
+      });
+
     const handleContainerClick = useCallback(
       (e: React.MouseEvent) => {
         if (
@@ -228,9 +237,10 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
             null as Parameters<NonNullable<typeof onWorkspaceMultiSelect>>[0],
             e,
           );
+          clearLastSelectedIndex();
         }
       },
-      [selectedWorkspaceIds, onWorkspaceMultiSelect],
+      [selectedWorkspaceIds, onWorkspaceMultiSelect, clearLastSelectedIndex],
     );
 
     const handleDoubleClick = useCallback(
@@ -442,7 +452,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
                             selectedWorkspaceId={activeSelectedWorkspaceId}
                             selectedWorkspaceIds={activeSelectedWorkspaceIds}
                             onWorkspaceClick={onWorkspaceClick}
-                            onWorkspaceMultiSelect={onWorkspaceMultiSelect}
+                            onWorkspaceMultiSelect={handleItemSelect}
                             onAddAfter={onAddAfter}
                             onStartAgent={onStartAgent}
                             onStartShell={onStartShell}

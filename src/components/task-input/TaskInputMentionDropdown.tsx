@@ -3,7 +3,7 @@ import { cn } from "../../lib/utils";
 import type { FileSearchResult } from "../../lib/api";
 
 interface TaskInputMentionDropdownProps {
-  mentionRef: React.RefObject<HTMLDivElement>;
+  mentionRef: React.RefObject<HTMLDivElement | null>;
   mentionQuery: string | null;
   mentionResults: FileSearchResult[];
   mentionIndex: number;

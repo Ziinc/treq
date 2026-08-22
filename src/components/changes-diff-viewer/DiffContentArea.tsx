@@ -119,7 +119,7 @@ export interface DiffContentAreaProps {
   addToast: ReturnType<typeof useToast>["addToast"];
   getOutdatedCommentsForFile: (filePath: string) => LineComment[];
   getFileCommentsForFile: (filePath: string) => LineComment[];
-  diffContainerRef: React.RefObject<HTMLDivElement>;
+  diffContainerRef: React.RefObject<HTMLDivElement | null>;
   diffScrollApiRef: React.MutableRefObject<{
     scrollToFile: (path: string) => void;
     scrollToSearchId: (id: string) => void;

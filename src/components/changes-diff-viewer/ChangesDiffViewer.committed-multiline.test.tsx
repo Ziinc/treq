@@ -100,7 +100,9 @@ describe("ChangesDiffViewer committed multi-line comments", () => {
     expect(gutter).not.toBeNull();
 
     fireEvent.mouseDown(gutter!, { button: 0 });
+    fireEvent.mouseOver(line3);
     fireEvent.mouseEnter(line3);
+    fireEvent.mouseOver(line4);
     fireEvent.mouseEnter(line4);
     fireEvent.mouseUp(line4);
 
@@ -122,6 +124,7 @@ describe("ChangesDiffViewer committed multi-line comments", () => {
     expect(gutter).not.toBeNull();
 
     fireEvent.mouseDown(gutter!, { button: 0 });
+    fireEvent.mouseOver(line4);
     fireEvent.mouseEnter(line4);
     fireEvent.mouseUp(line4);
 

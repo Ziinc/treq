@@ -44,6 +44,7 @@ import {
   ContextMenuTrigger,
 } from "./ui/context-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
+import { useWorkspaceRowPointerHandlers } from "../hooks/useWorkspaceSidebarMultiSelect";
 
 export const PathContextMenuItems: React.FC<{
   relativePath: string;
@@ -131,8 +132,9 @@ interface WorkspaceSidebarItemProps {
   selectedWorkspaceIds?: Set<number>;
   onWorkspaceClick?: (workspace: Workspace) => void;
   onWorkspaceMultiSelect?: (
-    workspace: Workspace | null,
-    event: React.MouseEvent,
+    workspace: Workspace,
+    event: React.MouseEvent | React.PointerEvent,
+    index: number,
   ) => void;
   onAddAfter?: (workspace: Workspace) => void;
   onStartAgent?: (workspace: Workspace) => void;
@@ -227,6 +229,15 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
   const workspaceTitle = getWorkspaceTitleFromUtils(workspace);
   const prStatus = hasRemote && prInfo ? prIconStyle(prInfo) : null;
   const [isChangeDropTarget, setIsChangeDropTarget] = useState(false);
+  const { onPointerDown, onClick } = useWorkspaceRowPointerHandlers({
+    onSelect: (event) => {
+      if (onWorkspaceMultiSelect) {
+        onWorkspaceMultiSelect(workspace, event, index);
+        return;
+      }
+      onWorkspaceClick?.(workspace);
+    },
+  });
 
   return (
     <SidebarMenuItem>
@@ -242,6 +253,8 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                 <ContextMenuTrigger asChild>
                   <TooltipTrigger asChild>
                     <div
+                      data-testid={`workspace-sidebar-item-${workspace.branch_name}`}
+                      data-sidebar-index={index}
                       style={indentStyle}
                       className={cn(
                         "relative flex items-center  tracking-wide pr-4 rounded-sm transition-colors cursor-pointer p-0.5",
@@ -255,11 +268,8 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                           "text-destructive": isConflicted,
                         },
                       )}
-                      onClick={(e) =>
-                        onWorkspaceMultiSelect
-                          ? onWorkspaceMultiSelect(workspace, e)
-                          : onWorkspaceClick?.(workspace)
-                      }
+                      onPointerDown={onPointerDown}
+                      onClick={onClick}
                       onDoubleClick={(e) => onDoubleClick?.(workspace, e)}
                       onDragOver={(e) => {
                         if (

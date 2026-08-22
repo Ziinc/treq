@@ -1,6 +1,14 @@
 /* eslint-disable max-lines, max-nested-callbacks */
 
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactElement,
+} from "react";
 import {
   AlertCircle,
   Check,
@@ -178,7 +186,7 @@ interface TreeNodeProps {
   onDirectoryClick: (path: string) => void;
   onFileClick: (path: string) => void;
   getDirectoryChangeStatus: (path: string) => ParsedFileChange | undefined;
-  renderChildren: (entry: DirectoryEntry, depth: number) => JSX.Element;
+  renderChildren: (entry: DirectoryEntry, depth: number) => ReactElement;
   getRelativePath: (fullPath: string) => string;
   addToast: ReturnType<typeof useToast>["addToast"];
 }
@@ -492,7 +500,7 @@ interface FileContentViewProps {
   onDeleteComment: (commentId: string) => void;
   commentDraft: string;
   onCommentDraftChange: (text: string) => void;
-  listRef: React.RefObject<VirtuosoHandle>;
+  listRef: React.RefObject<VirtuosoHandle | null>;
   // Search props
   isSearchOpen: boolean;
   searchQuery: string;
@@ -1741,7 +1749,7 @@ export const FileBrowser = memo(
     };
 
     const renderTreeNode = useCallback(
-      (entry: DirectoryEntry, depth: number = 0): JSX.Element => {
+      (entry: DirectoryEntry, depth: number = 0): ReactElement => {
         const isExpanded = expandedDirs.has(entry.path);
         const children = directoryCache.get(entry.path) || [];
         const hasChanges = hasChangedFilesInDirectory(entry.path);

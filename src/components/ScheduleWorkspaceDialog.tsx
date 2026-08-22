@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useActionState, useEffect, useMemo, useState } from "react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { scheduleWorkspaces } from "../lib/api";
@@ -13,6 +13,7 @@ import {
   nextWeekdayAt,
 } from "../lib/workspace-utils";
 import { Button } from "./ui/button";
+import { FormPendingButton } from "./ui/form-pending-button";
 import {
   Dialog,
   DialogContent,
@@ -101,14 +102,11 @@ export const ScheduleWorkspaceDialog: React.FC<
   mode,
 }) => {
   const [selected, setSelected] = useState<Date>(defaultScheduleDate());
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
   const { addToast } = useToast();
   const queryClient = useQueryClient();
 
   useEffect(() => {
     if (!open) return;
-    setError("");
     if (currentHiddenUntil) {
       const parsed = new Date(currentHiddenUntil);
       setSelected(
@@ -124,42 +122,39 @@ export const ScheduleWorkspaceDialog: React.FC<
     void queryClient.invalidateQueries({ queryKey: ["workspace-statuses"] });
   };
 
-  const handleSchedule = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      await scheduleWorkspaces(repoPath, workspaceIds, selected.toISOString());
-      addToast({
-        title: mode === "stack" ? "Stack scheduled" : "Workspace scheduled",
-        description: "Hidden in the sidebar until the scheduled time.",
-        type: "success",
-      });
-      invalidate();
-      onOpenChange(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRemoveSchedule = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      await clearWorkspaceSchedule(repoPath, workspaceIds, queryClient);
-      addToast({
-        title: mode === "stack" ? "Stack unscheduled" : "Workspace unscheduled",
-        description: "Shown in the sidebar again.",
-        type: "success",
-      });
-      onOpenChange(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [error, scheduleAction] = useActionState(
+    async (_prev: string, formData: FormData) => {
+      const intent = String(formData.get("intent") ?? "schedule");
+      try {
+        if (intent === "remove") {
+          await clearWorkspaceSchedule(repoPath, workspaceIds, queryClient);
+          addToast({
+            title:
+              mode === "stack" ? "Stack unscheduled" : "Workspace unscheduled",
+            description: "Shown in the sidebar again.",
+            type: "success",
+          });
+        } else {
+          await scheduleWorkspaces(
+            repoPath,
+            workspaceIds,
+            selected.toISOString(),
+          );
+          addToast({
+            title: mode === "stack" ? "Stack scheduled" : "Workspace scheduled",
+            description: "Hidden in the sidebar until the scheduled time.",
+            type: "success",
+          });
+          invalidate();
+        }
+        onOpenChange(false);
+        return "";
+      } catch (err) {
+        return err instanceof Error ? err.message : String(err);
+      }
+    },
+    "",
+  );
 
   const showRemove =
     canRemoveSchedule ||
@@ -225,31 +220,35 @@ export const ScheduleWorkspaceDialog: React.FC<
           </div>
           {error && <div className="text-sm text-destructive">{error}</div>}
         </div>
-        <div className="flex justify-end gap-2">
-          {showRemove && (
+        <form action={scheduleAction} className="contents">
+          <div className="flex justify-end gap-2">
+            {showRemove && (
+              <FormPendingButton
+                variant="outline"
+                name="intent"
+                value="remove"
+                data-testid="remove-schedule-button"
+              >
+                Remove schedule
+              </FormPendingButton>
+            )}
             <Button
+              type="button"
               variant="outline"
-              onClick={() => void handleRemoveSchedule()}
-              disabled={loading}
-              data-testid="remove-schedule-button"
+              onClick={() => onOpenChange(false)}
             >
-              Remove schedule
+              Cancel
             </Button>
-          )}
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={loading}
-          >
-            Cancel
-          </Button>
-          <Button
-            onClick={() => void handleSchedule()}
-            disabled={loading || Number.isNaN(selected.getTime())}
-          >
-            {loading ? "Scheduling..." : "Schedule"}
-          </Button>
-        </div>
+            <FormPendingButton
+              name="intent"
+              value="schedule"
+              pendingLabel="Scheduling..."
+              disabled={Number.isNaN(selected.getTime())}
+            >
+              Schedule
+            </FormPendingButton>
+          </div>
+        </form>
       </DialogContent>
     </Dialog>
   );

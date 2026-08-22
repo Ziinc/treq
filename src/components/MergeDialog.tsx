@@ -7,6 +7,7 @@ import {
   DialogTitle,
 } from "./ui/dialog";
 import { Button } from "./ui/button";
+import { FormPendingButton } from "./ui/form-pending-button";
 import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
 import type { Workspace } from "../lib/api";
@@ -24,12 +25,11 @@ interface MergeDialogProps {
   hasWorkspaceChanges: boolean;
   changedFiles: string[];
   isLoadingDetails: boolean;
-  isSubmitting: boolean;
   onConfirm: (options: {
     strategy: MergeStrategy;
     commitMessage: string;
     discardChanges: boolean;
-  }) => void;
+  }) => void | Promise<void>;
 }
 
 const STRATEGY_OPTIONS: Array<{
@@ -68,7 +68,6 @@ export const MergeDialog: React.FC<MergeDialogProps> = ({
   hasWorkspaceChanges,
   changedFiles,
   isLoadingDetails,
-  isSubmitting,
   onConfirm,
 }) => {
   const [strategy, setStrategy] = useState<MergeStrategy>("regular");
@@ -95,7 +94,7 @@ export const MergeDialog: React.FC<MergeDialogProps> = ({
     if (!workspace || isLoadingDetails) return false;
     if (hasWorkspaceChanges && !confirmDiscard) return false;
     if (strategy === "squash" && !commitMessage.trim()) return false;
-    return !isSubmitting;
+    return true;
   }, [
     workspace,
     isLoadingDetails,
@@ -103,12 +102,11 @@ export const MergeDialog: React.FC<MergeDialogProps> = ({
     confirmDiscard,
     strategy,
     commitMessage,
-    isSubmitting,
   ]);
 
-  const handleConfirm = () => {
+  const mergeAction = async () => {
     if (!workspace) return;
-    onConfirm({
+    await onConfirm({
       strategy,
       commitMessage,
       discardChanges: hasWorkspaceChanges,
@@ -239,18 +237,20 @@ export const MergeDialog: React.FC<MergeDialogProps> = ({
           </div>
         )}
 
-        <div className="flex justify-end gap-2">
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            disabled={isSubmitting}
-          >
-            Cancel
-          </Button>
-          <Button onClick={handleConfirm} disabled={!canConfirm}>
-            {isSubmitting ? "Merging..." : "Confirm Merge"}
-          </Button>
-        </div>
+        <form action={mergeAction} className="contents">
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+            >
+              Cancel
+            </Button>
+            <FormPendingButton pendingLabel="Merging..." disabled={!canConfirm}>
+              Confirm Merge
+            </FormPendingButton>
+          </div>
+        </form>
       </DialogContent>
     </Dialog>
   );

@@ -186,9 +186,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [selectedWorkspaceIds, setSelectedWorkspaceIds] = useState<Set<number>>(
     new Set(),
   );
-  const [lastSelectedWorkspaceIndex, setLastSelectedWorkspaceIndex] = useState<
-    number | null
-  >(null);
+  const lastSelectedWorkspaceIndexRef = useRef<number | null>(null);
   const [deferredAgentRequests, setDeferredAgentRequests] = useState<
     AgentDeepLinkRequest[]
   >([]);
@@ -1261,7 +1259,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       // Handle clicking away to clear selection
       if (workspace === null) {
         setSelectedWorkspaceIds(new Set());
-        setLastSelectedWorkspaceIndex(null);
+        lastSelectedWorkspaceIndexRef.current = null;
         return;
       }
 
@@ -1273,10 +1271,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
       const isMetaKey = event.metaKey || event.ctrlKey;
       const isShiftKey = event.shiftKey;
 
-      if (isShiftKey && lastSelectedWorkspaceIndex !== null) {
+      if (isShiftKey && lastSelectedWorkspaceIndexRef.current !== null) {
         // Range selection
-        const start = Math.min(lastSelectedWorkspaceIndex, workspaceIndex);
-        const end = Math.max(lastSelectedWorkspaceIndex, workspaceIndex);
+        const start = Math.min(
+          lastSelectedWorkspaceIndexRef.current,
+          workspaceIndex,
+        );
+        const end = Math.max(
+          lastSelectedWorkspaceIndexRef.current,
+          workspaceIndex,
+        );
         const newSelection = new Set<number>();
         for (let i = start; i <= end; i++) {
           newSelection.add(visibleWorkspaces[i].id);
@@ -1293,15 +1297,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
           }
           return next;
         });
-        setLastSelectedWorkspaceIndex(workspaceIndex);
+        lastSelectedWorkspaceIndexRef.current = workspaceIndex;
       } else {
         // Regular click - clear multi-select, navigate to workspace
         setSelectedWorkspaceIds(new Set());
-        setLastSelectedWorkspaceIndex(workspaceIndex);
+        lastSelectedWorkspaceIndexRef.current = workspaceIndex;
         handleSelectWorkspace(workspace);
       }
     },
-    [visibleWorkspaces, lastSelectedWorkspaceIndex, handleSelectWorkspace],
+    [visibleWorkspaces, handleSelectWorkspace],
   );
 
   const handleBulkDelete = async () => {

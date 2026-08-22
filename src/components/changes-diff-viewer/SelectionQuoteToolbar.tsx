@@ -3,7 +3,7 @@ import { Quote } from "lucide-react";
 import { Button } from "../ui/button";
 
 interface SelectionQuoteToolbarProps {
-  containerRef: React.RefObject<HTMLElement>;
+  containerRef: React.RefObject<HTMLElement | null>;
   onQuote: (selectedText: string) => void;
 }
 

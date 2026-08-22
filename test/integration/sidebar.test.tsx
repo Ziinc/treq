@@ -459,57 +459,69 @@ describe("Dashboard - workspace list", () => {
       await waitFor(() => {
         for (const branchName of expectedBranches) {
           expect(
-            within(sidebarRoot).getAllByText(branchName).length,
-          ).toBeGreaterThan(0);
+            sidebarRoot.querySelector(
+              `[data-testid="workspace-sidebar-item-${branchName}"]`,
+            ),
+          ).toBeTruthy();
         }
       });
 
-      const getWorkspaceRow = (branchName: string) => {
-        const [branchElement] = within(sidebarRoot).getAllByText(branchName);
-        return branchElement.closest("div") as HTMLElement;
-      };
+      const getWorkspaceRow = (branchName: string) =>
+        sidebarRoot.querySelector(
+          `[data-testid="workspace-sidebar-item-${branchName}"]`,
+        ) as HTMLElement;
 
-      const visibleOrder: string[] = [];
-      for (const el of Array.from(sidebarRoot.querySelectorAll("*"))) {
-        if (el.children.length > 0) continue;
-        const text = el.textContent?.trim() ?? "";
-        if (expectedBranches.includes(text) && !visibleOrder.includes(text)) {
-          visibleOrder.push(text);
-        }
-      }
+      const visibleOrder = Array.from(
+        sidebarRoot.querySelectorAll<HTMLElement>(
+          "[data-testid^='workspace-sidebar-item-']",
+        ),
+      )
+        .map(
+          (el) =>
+            el.dataset.testid?.replace("workspace-sidebar-item-", "") ?? "",
+        )
+        .filter((name) => expectedBranches.includes(name));
 
       expect(visibleOrder).toHaveLength(expectedBranches.length);
 
       const anchorBranch = "dduck-joke-readme";
       const targetBranch = "gumbo-notes";
-      const anchorIndex = visibleOrder.indexOf(anchorBranch);
-      const targetIndex = visibleOrder.indexOf(targetBranch);
-      expect(anchorIndex).toBeGreaterThanOrEqual(0);
-      expect(targetIndex).toBeGreaterThanOrEqual(0);
-
-      const rangeStart = Math.min(anchorIndex, targetIndex);
-      const rangeEnd = Math.max(anchorIndex, targetIndex);
-      const selectedRange = visibleOrder.slice(rangeStart, rangeEnd + 1);
-
       const anchorRow = getWorkspaceRow(anchorBranch);
       const targetRow = getWorkspaceRow(targetBranch);
+      const rangeCount =
+        Math.abs(
+          Number(anchorRow.dataset.sidebarIndex) -
+            Number(targetRow.dataset.sidebarIndex),
+        ) + 1;
+      expect(rangeCount).toBeGreaterThan(1);
 
+      fireEvent.pointerDown(anchorRow, { button: 0, metaKey: true });
       fireEvent.click(anchorRow, { metaKey: true });
+      fireEvent.pointerDown(targetRow, { button: 0, shiftKey: true });
       fireEvent.click(targetRow, { shiftKey: true });
 
       await waitFor(() => {
-        for (const branchName of selectedRange) {
-          expect(getWorkspaceRow(branchName)).toHaveClass("bg-primary/20");
+        const start = Math.min(
+          Number(anchorRow.dataset.sidebarIndex),
+          Number(targetRow.dataset.sidebarIndex),
+        );
+        const end = Math.max(
+          Number(anchorRow.dataset.sidebarIndex),
+          Number(targetRow.dataset.sidebarIndex),
+        );
+        for (const row of sidebarRoot.querySelectorAll<HTMLElement>(
+          "[data-testid^='workspace-sidebar-item-']",
+        )) {
+          const index = Number(row.dataset.sidebarIndex);
+          if (index >= start && index <= end) {
+            expect(row).toHaveClass("bg-primary/20");
+          }
         }
       });
 
-      await waitFor(() => {
-        expect(
-          within(sidebarRoot).getByRole("button", {
-            name: new RegExp(`archive ${selectedRange.length} workspaces`, "i"),
-          }),
-        ).toBeTruthy();
-      });
+      await screen.findByText(
+        new RegExp(`archive ${rangeCount} workspaces`, "i"),
+      );
     });
   });
 

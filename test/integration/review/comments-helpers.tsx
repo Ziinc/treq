@@ -105,6 +105,10 @@ export async function clickChangedFile(fileName: string) {
 
 export async function waitForFileAndLines() {
   await clickChangedFile("test.txt");
+  if (document.querySelectorAll("[data-diff-line]").length === 0) {
+    const [fileLabel] = screen.getAllByText(/test\.txt/);
+    fireEvent.click(fileLabel);
+  }
   await screen.findByText(/added line 2/, {}, { timeout: 60_000 });
 }
 

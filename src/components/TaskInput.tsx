@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  startTransition,
+  useActionState,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { CircleDot, X } from "lucide-react";
 import { FilePicker } from "./FilePicker";
@@ -50,7 +57,6 @@ export const TaskInput: React.FC<TaskInputProps> = ({
     initialGitHubIssue,
   );
   const [filePickerOpen, setFilePickerOpen] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
   const [focused, setFocused] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<AgentType>("claude");
   const [configuredDefaultAgent, setConfiguredDefaultAgent] =
@@ -294,16 +300,15 @@ export const TaskInput: React.FC<TaskInputProps> = ({
     [],
   );
 
-  const handleSubmit = useCallback(
-    async (mode: "plan" | "acceptEdits") => {
+  const [, submitTask, submitting] = useActionState(
+    async (_prev: null, mode: "plan" | "acceptEdits") => {
       const trimmed = taskText.trim();
-      if ((!trimmed && !githubIssue) || submitting) return;
+      if (!trimmed && !githubIssue) return null;
 
       const pendingPrompt = githubIssue
         ? formatPromptWithGitHubIssue(trimmed, githubIssue)
         : trimmed;
 
-      setSubmitting(true);
       try {
         if (saveAsRepoDefault && selectedAgent !== configuredDefaultAgent) {
           await setRepoSetting(repoPath, "default_agent", selectedAgent);
@@ -335,7 +340,6 @@ export const TaskInput: React.FC<TaskInputProps> = ({
           agent: selectedAgent,
         });
 
-        // Clear input on success
         setTaskText("");
         setGithubIssue(null);
         setShowSaveAsRepoDefault(false);
@@ -345,24 +349,20 @@ export const TaskInput: React.FC<TaskInputProps> = ({
           description: error instanceof Error ? error.message : String(error),
           type: "error",
         });
-      } finally {
-        setSubmitting(false);
       }
+      return null;
     },
-    [
-      taskText,
-      githubIssue,
-      submitting,
-      repoPath,
-      workspaceId,
-      workspacePath,
-      workingDirectory,
-      onSessionCreated,
-      addToast,
-      selectedAgent,
-      saveAsRepoDefault,
-      configuredDefaultAgent,
-    ],
+    null,
+  );
+
+  const handleSubmit = useCallback(
+    (mode: "plan" | "acceptEdits") => {
+      if (submitting) return;
+      startTransition(() => {
+        void submitTask(mode);
+      });
+    },
+    [submitTask, submitting],
   );
 
   const handleKeyDown = useCallback(
