@@ -33,31 +33,27 @@ export const RepositorySettingsContent = ({
     autoPush: boolean;
   } | null>(null);
 
-  const { data: loaded, error: loadError, isLoading: loading } = useSWR(
-    repoPath ? ["repo-settings", repoPath] : null,
-    async () => {
-      const [
-        branchPattern,
-        includedPatterns,
-        model,
-        agent,
-        autoPushSetting,
-      ] = await Promise.all([
+  const {
+    data: loaded,
+    error: loadError,
+    isLoading: loading,
+  } = useSWR(repoPath ? ["repo-settings", repoPath] : null, async () => {
+    const [branchPattern, includedPatterns, model, agent, autoPushSetting] =
+      await Promise.all([
         getRepoSetting(repoPath, "branch_name_pattern"),
         getRepoSetting(repoPath, "included_copy_files"),
         getRepoSetting(repoPath, "default_model"),
         getRepoSetting(repoPath, "default_agent"),
         getRepoSetting(repoPath, "auto_push"),
       ]);
-      return {
-        branchNamePattern: branchPattern || "treq/{name}",
-        includedFiles: includedPatterns || "",
-        defaultModel: model || "",
-        defaultAgent: agent || "",
-        autoPush: autoPushSetting === "true",
-      };
-    },
-  );
+    return {
+      branchNamePattern: branchPattern || "treq/{name}",
+      includedFiles: includedPatterns || "",
+      defaultModel: model || "",
+      defaultAgent: agent || "",
+      autoPush: autoPushSetting === "true",
+    };
+  });
 
   const settings =
     draft?.key === repoPath
@@ -77,8 +73,7 @@ export const RepositorySettingsContent = ({
     autoPush,
   } = settings;
   const error =
-    saveError ??
-    (loadError ? `Failed to load settings: ${loadError}` : null);
+    saveError ?? (loadError ? `Failed to load settings: ${loadError}` : null);
 
   const updateDraft = (
     patch: Partial<{

@@ -137,6 +137,7 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
     },
     ([, fullName, filter, page]) =>
       ghListIssues(fullName, filter, GH_LIST_PAGE_SIZE, page),
+    { revalidateFirstPage: false },
   );
 
   const {
@@ -154,6 +155,7 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
     },
     ([, fullName, filter, page]) =>
       ghListPrs(fullName, filter, GH_LIST_PAGE_SIZE, page),
+    { revalidateFirstPage: false },
   );
 
   const issuesFetchingNext = issuesValidating && issuesSize > 1;
