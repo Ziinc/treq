@@ -3,7 +3,6 @@ import React, {
   memo,
   type KeyboardEvent as ReactKeyboardEvent,
   useCallback,
-  useEffect,
   useRef,
   useState,
 } from "react";
@@ -71,7 +70,6 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
     const [isResetting, setIsResetting] = useState(false);
     const [isChangingModel, setIsChangingModel] = useState(false);
     const [terminalInstanceKey, setTerminalInstanceKey] = useState(0);
-    const [pendingModelReset, setPendingModelReset] = useState(false);
     const {
       sessionModel,
       setSessionModelState,
@@ -221,7 +219,13 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
             modelToSave,
           );
           setSessionModelState(modelToSave);
-          setPendingModelReset(true);
+          await handleReset({ silent: true });
+          addToast({
+            title: "Terminal Restarting",
+            description: `Using model: ${modelToSave || "default"}`,
+            type: "info",
+          });
+          setIsChangingModel(false);
         } catch (error) {
           addToast({
             title: "Failed to change model",
@@ -231,24 +235,14 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
           setIsChangingModel(false);
         }
       },
-      [sessionData.repoPath, sessionData.sessionId, addToast],
+      [
+        sessionData.repoPath,
+        sessionData.sessionId,
+        addToast,
+        setSessionModelState,
+        handleReset,
+      ],
     );
-
-    // Reset terminal when model changes
-    useEffect(() => {
-      if (!pendingModelReset) return;
-      const performReset = async () => {
-        await handleReset({ silent: true });
-        addToast({
-          title: "Terminal Restarting",
-          description: `Using model: ${sessionModel || "default"}`,
-          type: "info",
-        });
-        setIsChangingModel(false);
-        setPendingModelReset(false);
-      };
-      performReset();
-    }, [pendingModelReset, handleReset, sessionModel, addToast]);
 
     return (
       <div

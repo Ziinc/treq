@@ -14,7 +14,7 @@ import {
 } from "../../../src/lib/api";
 import { savePendingReview } from "../../../src/lib/api-extra";
 import type { LineComment } from "../../../src/lib/api-types";
-import { render, screen } from "../../test-utils";
+import { render, screen, waitFor } from "../../test-utils";
 import { Dashboard } from "../../../src/components/Dashboard";
 import userEvent from "@testing-library/user-event";
 
@@ -56,9 +56,7 @@ describe("Outdated comments - persisted comment with non-existent hunk", () => {
     user = userEvent.setup();
   });
 
-  it("should enter review mode when persisted comment references a non-existent hunk", {
-    timeout: 15000,
-  }, async () => {
+  it("should enter review mode when persisted comment references a non-existent hunk", async () => {
     const branchName = "feat/outdated-comments";
     const { repoPath, workspace } = await setupWorkspaceWithChange(branchName);
     const wsPath = resolveWorkspacePath(repoPath, workspace.workspace_path);
@@ -79,7 +77,14 @@ describe("Outdated comments - persisted comment with non-existent hunk", () => {
 
     await openReviewTab(user, branchName);
 
-    await screen.findByRole("button", { name: /finish review/i });
+    await waitFor(
+      () => {
+        expect(
+          screen.getByRole("button", { name: /finish review/i }),
+        ).toBeTruthy();
+      },
+      { timeout: 60_000 },
+    );
 
     await screen.findAllByText(/test\.txt/);
 

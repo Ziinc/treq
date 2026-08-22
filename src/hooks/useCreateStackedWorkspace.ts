@@ -1,5 +1,4 @@
 import { useCallback } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import {
   type Workspace,
   createWorkspace,
@@ -13,6 +12,7 @@ import {
   getFullWorkspacePath,
 } from "../lib/utils";
 import { useToast } from "../components/ui/toast";
+import { invalidateQueries } from "../lib/swr-cache";
 
 export interface CreateStackedWorkspaceOptions {
   repoPath: string;
@@ -27,7 +27,6 @@ export interface CreateStackedWorkspaceOptions {
 }
 
 export function useCreateStackedWorkspace() {
-  const queryClient = useQueryClient();
   const { addToast } = useToast();
 
   const createStackedWorkspace = useCallback(
@@ -131,7 +130,7 @@ export function useCreateStackedWorkspace() {
         }
 
         // Step 8: Invalidate queries and notify success
-        queryClient.invalidateQueries({ queryKey: ["workspaces", repoPath] });
+        void invalidateQueries(["workspaces", repoPath]);
 
         addToast({
           title: "Stacked workspace created",
@@ -150,7 +149,7 @@ export function useCreateStackedWorkspace() {
         throw error;
       }
     },
-    [queryClient, addToast],
+    [addToast],
   );
 
   return { createStackedWorkspace };

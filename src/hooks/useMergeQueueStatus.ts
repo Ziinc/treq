@@ -1,9 +1,9 @@
 import { listen } from "@tauri-apps/api/event";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect } from "react";
+import useSWR from "swr";
 import {
-  getCachedPrInfo,
   getCachedPrCiStatus,
+  getCachedPrInfo,
   getGitRemoteUrl,
   getPrChecksForPr,
   getPrChecksViaGh,
@@ -22,6 +22,8 @@ import type {
 } from "../lib/api-types";
 import { FEATURES } from "../lib/features";
 import { supabase } from "../lib/supabase";
+import { invalidateQueries, pollMs, setQueryData } from "../lib/swr-cache";
+import { useMutation } from "./useMutation";
 
 /** Query key for the per-repo merge queue opt-in. */
 export const mergeQueueEnabledKey = (repoFullName: string | undefined) => [
@@ -45,7 +47,7 @@ export const cachedPrCiStatusesKey = (repoPath: string | undefined) => [
  * Shared mutation key for "create a PR for this workspace" actions. Multiple
  * surfaces can trigger PR creation for the same workspace (the header's
  * Create PR button, the Review tab's "Commit and create PR" dropdown item);
- * tagging each `useMutation` with this key lets every surface detect via
+ * tagging each mutation with this key lets every surface detect via
  * `useIsMutating` that a create-PR request is in flight, regardless of which
  * one started it, so they can all render a loading state together.
  */
@@ -60,44 +62,38 @@ type PrStatusesPayload = {
   ci_statuses?: Record<string, PrCiStatus | null>;
 };
 
-function applyPrStatusesToQueryCache(
-  queryClient: ReturnType<typeof useQueryClient>,
-  payload: {
-    repoPath: string;
-    statuses: Record<string, PrInfo | null>;
-    ciStatuses?: Record<string, PrCiStatus | null>;
-  },
-) {
+function applyPrStatusesToQueryCache(payload: {
+  repoPath: string;
+  statuses: Record<string, PrInfo | null>;
+  ciStatuses?: Record<string, PrCiStatus | null>;
+}) {
   const { repoPath, statuses, ciStatuses } = payload;
-  queryClient.setQueryData(cachedPrStatusesKey(repoPath), statuses);
+  void setQueryData(cachedPrStatusesKey(repoPath), statuses);
   for (const [branch, info] of Object.entries(statuses)) {
-    queryClient.setQueryData(["pr-info-gh", repoPath, branch], info);
+    void setQueryData(["pr-info-gh", repoPath, branch], info);
   }
   if (ciStatuses) {
-    queryClient.setQueryData(cachedPrCiStatusesKey(repoPath), ciStatuses);
+    void setQueryData(cachedPrCiStatusesKey(repoPath), ciStatuses);
     for (const [branch, status] of Object.entries(ciStatuses)) {
-      queryClient.setQueryData(["pr-ci-status", repoPath, branch], status);
+      void setQueryData(["pr-ci-status", repoPath, branch], status);
     }
   }
 }
 
 export function useGitRemoteInfo(repoPath: string | undefined) {
-  return useQuery({
-    queryKey: ["git-remote-info", repoPath],
-    queryFn: () => getGitRemoteUrl(repoPath!),
-    enabled: !!repoPath,
-    staleTime: 5 * 60 * 1000,
-  });
+  return useSWR(
+    repoPath ? ["git-remote-info", repoPath] : null,
+    () => getGitRemoteUrl(repoPath!),
+    { dedupingInterval: 5 * 60 * 1000 },
+  );
 }
 
 /**
  * Ensure the Rust background poller is watching this repo, and keep the
- * React Query cache in sync via `pr-statuses-updated` events. Cache reads
+ * SWR cache in sync via `pr-statuses-updated` events. Cache reads
  * never shell out to `gh`, so the sidebar can refresh without UI stutter.
  */
 export function usePrStatusPolling(repoPath: string | undefined) {
-  const queryClient = useQueryClient();
-
   useEffect(() => {
     if (!repoPath) return;
     void startPrStatusPolling(repoPath);
@@ -111,7 +107,7 @@ export function usePrStatusPolling(repoPath: string | undefined) {
     let unlisten: (() => void) | undefined;
     void listen<PrStatusesPayload>("pr-statuses-updated", (event) => {
       if (event.payload.repo_path !== repoPath) return;
-      applyPrStatusesToQueryCache(queryClient, {
+      applyPrStatusesToQueryCache({
         repoPath,
         statuses: event.payload.statuses,
         ciStatuses: event.payload.ci_statuses,
@@ -122,27 +118,27 @@ export function usePrStatusPolling(repoPath: string | undefined) {
     return () => {
       unlisten?.();
     };
-  }, [repoPath, queryClient]);
+  }, [repoPath]);
 
-  return useQuery({
-    queryKey: cachedPrStatusesKey(repoPath),
-    queryFn: async () => {
+  return useSWR(
+    repoPath ? cachedPrStatusesKey(repoPath) : null,
+    async () => {
       const [statuses, ciStatuses] = await Promise.all([
         listCachedPrStatuses(repoPath!),
         listCachedPrCiStatuses(repoPath!),
       ]);
-      applyPrStatusesToQueryCache(queryClient, {
+      applyPrStatusesToQueryCache({
         repoPath: repoPath!,
         statuses,
         ciStatuses,
       });
       return statuses;
     },
-    enabled: !!repoPath,
-    // Cheap cache read only — the Rust poller owns the refresh cadence.
-    staleTime: 5_000,
-    refetchInterval: 15_000,
-  });
+    {
+      dedupingInterval: 5_000,
+      refreshInterval: pollMs(15_000),
+    },
+  );
 }
 
 /**
@@ -155,8 +151,6 @@ export function usePrInfoViaGh(
   repoPath: string | undefined,
   branchName: string | undefined,
 ) {
-  const queryClient = useQueryClient();
-
   useEffect(() => {
     if (!repoPath) return;
     void startPrStatusPolling(repoPath);
@@ -170,7 +164,7 @@ export function usePrInfoViaGh(
     let unlisten: (() => void) | undefined;
     void listen<PrStatusesPayload>("pr-statuses-updated", (event) => {
       if (event.payload.repo_path !== repoPath) return;
-      applyPrStatusesToQueryCache(queryClient, {
+      applyPrStatusesToQueryCache({
         repoPath,
         statuses: event.payload.statuses,
         ciStatuses: event.payload.ci_statuses,
@@ -181,29 +175,25 @@ export function usePrInfoViaGh(
     return () => {
       unlisten?.();
     };
-  }, [repoPath, queryClient]);
+  }, [repoPath]);
 
-  return useQuery<PrInfo | null>({
-    queryKey: ["pr-info-gh", repoPath, branchName],
-    queryFn: () => getCachedPrInfo(repoPath!, branchName!),
-    enabled: !!repoPath && !!branchName,
-    staleTime: 5_000,
-    // Cache-only refetch; Rust owns the `gh` polling.
-    refetchInterval: 15_000,
-  });
+  return useSWR<PrInfo | null>(
+    repoPath && branchName ? ["pr-info-gh", repoPath, branchName] : null,
+    () => getCachedPrInfo(repoPath!, branchName!),
+    {
+      dedupingInterval: 5_000,
+      refreshInterval: pollMs(15_000),
+    },
+  );
 }
 
 /** Force-refresh PR statuses after mutations (create PR, etc.). */
 export async function invalidatePrStatuses(
-  queryClient: ReturnType<typeof useQueryClient>,
   repoPath: string,
   branchName?: string,
 ) {
   try {
     if (branchName) {
-      // Single-branch force-fetch warms the Rust cache without re-polling
-      // every workspace. Failures must not fail the caller (e.g. create PR
-      // already succeeded and still needs its success toast).
       await Promise.all([
         getPrInfoViaGh(repoPath, branchName),
         getPrChecksViaGh(repoPath, branchName),
@@ -214,28 +204,16 @@ export async function invalidatePrStatuses(
   } catch {
     // Cache warm is best-effort; background poller will catch up.
   }
-  await queryClient.invalidateQueries({
-    queryKey: cachedPrStatusesKey(repoPath),
-  });
-  await queryClient.invalidateQueries({ queryKey: ["pr-info-gh", repoPath] });
-  await queryClient.invalidateQueries({
-    queryKey: cachedPrCiStatusesKey(repoPath),
-  });
-  await queryClient.invalidateQueries({ queryKey: ["pr-ci-status", repoPath] });
+  await invalidateQueries(cachedPrStatusesKey(repoPath));
+  await invalidateQueries(["pr-info-gh", repoPath]);
+  await invalidateQueries(cachedPrCiStatusesKey(repoPath));
+  await invalidateQueries(["pr-ci-status", repoPath]);
 }
 
-/**
- * CI status for the branch's PR, served from the Rust background cache.
- * Starts the poller if needed; never invokes `gh` from the UI thread.
- * Rust refreshes CI every 30s; opening a workspace also queues an immediate
- * PR+CI refresh so the indicator is not left on a stale poll snapshot.
- */
 export function usePrCiStatus(
   repoPath: string | undefined,
   branchName: string | undefined,
 ) {
-  const queryClient = useQueryClient();
-
   useEffect(() => {
     if (!repoPath) return;
     void startPrStatusPolling(repoPath);
@@ -249,7 +227,7 @@ export function usePrCiStatus(
     let unlisten: (() => void) | undefined;
     void listen<PrStatusesPayload>("pr-statuses-updated", (event) => {
       if (event.payload.repo_path !== repoPath) return;
-      applyPrStatusesToQueryCache(queryClient, {
+      applyPrStatusesToQueryCache({
         repoPath,
         statuses: event.payload.statuses,
         ciStatuses: event.payload.ci_statuses,
@@ -260,61 +238,53 @@ export function usePrCiStatus(
     return () => {
       unlisten?.();
     };
-  }, [repoPath, queryClient]);
+  }, [repoPath]);
 
-  return useQuery<PrCiStatus | null>({
-    queryKey: ["pr-ci-status", repoPath, branchName],
-    queryFn: () => getCachedPrCiStatus(repoPath!, branchName!),
-    enabled: !!repoPath && !!branchName,
-    staleTime: 10_000,
-    // Cache-only; Rust owns the 30s `gh pr checks` cadence.
-    refetchInterval: 30_000,
-  });
+  return useSWR<PrCiStatus | null>(
+    repoPath && branchName ? ["pr-ci-status", repoPath, branchName] : null,
+    () => getCachedPrCiStatus(repoPath!, branchName!),
+    {
+      dedupingInterval: 10_000,
+      refreshInterval: pollMs(30_000),
+    },
+  );
 }
 
-/**
- * CI status for a specific PR, rolled up from `gh pr checks`. Used by the
- * GitHub panel's PR detail view, which browses PRs by number rather than by
- * a locally checked-out branch. Cadence matches the branch-based cache (30s);
- * runs via spawn_blocking on the command side so it does not stall IPC.
- */
 export function usePrChecksForPr(
   repoFullName: string | undefined,
   prNumber: number | undefined,
 ) {
-  return useQuery<PrCiStatus | null>({
-    queryKey: ["pr-ci-status-for-pr", repoFullName, prNumber],
-    queryFn: () => getPrChecksForPr(repoFullName!, prNumber!),
-    enabled: !!repoFullName && prNumber !== undefined,
-    staleTime: 10_000,
-    refetchInterval: 30_000,
-  });
+  return useSWR<PrCiStatus | null>(
+    repoFullName && prNumber !== undefined
+      ? ["pr-ci-status-for-pr", repoFullName, prNumber]
+      : null,
+    () => getPrChecksForPr(repoFullName!, prNumber!),
+    {
+      dedupingInterval: 10_000,
+      refreshInterval: pollMs(30_000),
+    },
+  );
 }
 
-/**
- * Whether the merge queue is switched on for this repo, as stored in Postgres.
- * A repo with no config row has never opted in, so this resolves to false --
- * the user has to turn the queue on before anything can be enqueued.
- */
 export function useMergeQueueEnabled(repoPath: string | undefined) {
   const { data: remoteInfo } = useGitRemoteInfo(repoPath);
 
-  return useQuery<boolean>({
-    queryKey: mergeQueueEnabledKey(remoteInfo?.full_name),
-    queryFn: async () => {
+  return useSWR<boolean>(
+    FEATURES.mergeQueue && remoteInfo
+      ? mergeQueueEnabledKey(remoteInfo.full_name)
+      : null,
+    async () => {
       const { data, error } = await supabase.rpc("get_merge_queue_enabled", {
         p_repo_full_name: remoteInfo!.full_name,
       });
       if (error) throw error;
       return data === true;
     },
-    enabled: FEATURES.mergeQueue && !!remoteInfo,
-    staleTime: 60_000,
-  });
+    { dedupingInterval: 60_000 },
+  );
 }
 
 export function useSetMergeQueueEnabled(repoPath: string | undefined) {
-  const queryClient = useQueryClient();
   const { data: remoteInfo } = useGitRemoteInfo(repoPath);
 
   return useMutation({
@@ -328,27 +298,18 @@ export function useSetMergeQueueEnabled(repoPath: string | undefined) {
       return enabled;
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: mergeQueueEnabledKey(remoteInfo?.full_name),
-      });
+      void invalidateQueries(mergeQueueEnabledKey(remoteInfo?.full_name));
     },
   });
 }
 
-/**
- * Remove one or more branches from the queue, used by the GitHub panel's queue
- * list. Stacks are removed top-down so a branch is never left queued on top of
- * a parent that has already gone.
- */
 export function useDequeueBranches(repoPath: string | undefined) {
-  const queryClient = useQueryClient();
   const { data: remoteInfo } = useGitRemoteInfo(repoPath);
 
   return useMutation({
     mutationFn: async (branchNames: string[]) => {
       if (!remoteInfo) throw new Error("No GitHub remote detected");
       const fullName = remoteInfo.full_name;
-      // Sequential top-down: never dequeue a branch before what's stacked above it.
       await [...branchNames].reverse().reduce(
         (prev, branchName) =>
           prev.then(async () => {
@@ -369,13 +330,15 @@ export function useDequeueBranches(repoPath: string | undefined) {
       return branchNames;
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: ["repo-branch-queue-statuses-panel", remoteInfo?.full_name],
-      });
-      void queryClient.invalidateQueries({
-        queryKey: ["repo-branch-queue-statuses", remoteInfo?.full_name],
-      });
-      void queryClient.invalidateQueries({ queryKey: ["merge-queue-status"] });
+      void invalidateQueries([
+        "repo-branch-queue-statuses-panel",
+        remoteInfo?.full_name,
+      ]);
+      void invalidateQueries([
+        "repo-branch-queue-statuses",
+        remoteInfo?.full_name,
+      ]);
+      void invalidateQueries(["merge-queue-status"]);
     },
   });
 }
@@ -387,9 +350,11 @@ export function useMergeQueueStatus(
   const { data: remoteInfo } = useGitRemoteInfo(repoPath);
   const { data: queueEnabled } = useMergeQueueEnabled(repoPath);
 
-  return useQuery<WorkspaceQueueStatus | null>({
-    queryKey: ["merge-queue-status", remoteInfo?.full_name, branchName],
-    queryFn: async () => {
+  return useSWR<WorkspaceQueueStatus | null>(
+    FEATURES.mergeQueue && queueEnabled === true && remoteInfo && branchName
+      ? ["merge-queue-status", remoteInfo.full_name, branchName]
+      : null,
+    async () => {
       if (!remoteInfo || !branchName) return null;
       const { data, error } = await supabase.rpc("get_workspace_queue_status", {
         p_repo_full_name: remoteInfo.full_name,
@@ -398,21 +363,14 @@ export function useMergeQueueStatus(
       if (error) throw error;
       return (data as WorkspaceQueueStatus[] | null)?.[0] ?? null;
     },
-    // Never poll when off, whether by the build flag or the per-repo opt-in.
-    enabled:
-      FEATURES.mergeQueue &&
-      queueEnabled === true &&
-      !!remoteInfo &&
-      !!branchName,
-    refetchInterval: 30_000,
-  });
+    { refreshInterval: pollMs(30_000) },
+  );
 }
 
 export function useEnqueueWorkspace(
   repoPath: string | undefined,
   branchName: string | undefined,
 ) {
-  const queryClient = useQueryClient();
   const { data: remoteInfo } = useGitRemoteInfo(repoPath);
   const { data: prInfoGh, error: prInfoGhError } = usePrInfoViaGh(
     repoPath,
@@ -447,27 +405,21 @@ export function useEnqueueWorkspace(
       });
       if (error) throw error;
 
-      // Refresh every view of the queue, not just this workspace's button.
-      // Do not await — invalidation refetches must not block the mutation
-      // (and must not stall tests if a matching observer is mid-flight).
-      void queryClient.invalidateQueries({
-        queryKey: ["merge-queue-status", remoteInfo.full_name, branchName],
-      });
-      void queryClient.invalidateQueries({
-        queryKey: ["repo-branch-queue-statuses", remoteInfo.full_name],
-      });
-      void queryClient.invalidateQueries({
-        queryKey: ["repo-branch-queue-statuses-panel", remoteInfo.full_name],
-      });
+      void invalidateQueries([
+        "merge-queue-status",
+        remoteInfo.full_name,
+        branchName,
+      ]);
+      void invalidateQueries([
+        "repo-branch-queue-statuses",
+        remoteInfo.full_name,
+      ]);
+      void invalidateQueries([
+        "repo-branch-queue-statuses-panel",
+        remoteInfo.full_name,
+      ]);
     },
-    [
-      remoteInfo,
-      branchName,
-      prInfoGh,
-      prInfoGhError,
-      queueEnabled,
-      queryClient,
-    ],
+    [remoteInfo, branchName, prInfoGh, prInfoGhError, queueEnabled],
   );
 
   const enqueue = useMutation({ mutationFn: () => mutate("enqueue") });

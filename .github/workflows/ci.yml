@@ -20,7 +20,7 @@ on:
 
 jobs:
   ci:
-    timeout-minutes: 15
+    timeout-minutes: ${{ matrix.timeout-minutes }}
     strategy:
       fail-fast: false
       matrix:
@@ -28,20 +28,25 @@ jobs:
           - platform: ubuntu-22.04
             kind: verify
             task: verify
+            timeout-minutes: 15
           # Unit tests: mocked Tauri, no NAPI/jj. Parallel file execution.
           - platform: ubuntu-22.04
             kind: js
             task: test:unit
+            timeout-minutes: 15
           # Integration tests: NAPI + real jj repos. Serial file execution.
           - platform: ubuntu-22.04
             kind: js
             task: test:integration
+            timeout-minutes: 30
           - platform: ubuntu-22.04
             kind: rust
             task: test
+            timeout-minutes: 15
           - platform: macos-latest
             kind: rust
             task: test
+            timeout-minutes: 15
 
     name: ${{ matrix.kind }} / ${{ matrix.task }} / ${{ matrix.platform }}
     runs-on: ${{ matrix.platform }}

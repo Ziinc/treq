@@ -24,17 +24,6 @@ snapshots:
       style: secondary
       start: 66
       end: 116
-    - source: |-
-        (() => {
-          const load = async () => {
-            const review = await loadFileBrowserReview(repoPath, workspaceId);
-            setComments(review.comments);
-          };
-          load();
-        }, [repoPath, workspaceId])
-      style: secondary
-      start: 9
-      end: 194
   ? |
     useEffect(() => {
       getSetting("theme").then((savedTheme) => {
@@ -58,15 +47,29 @@ snapshots:
       style: secondary
       start: 20
       end: 98
+  ? |
+    useEffect(() => {
+      getSettingsBatch(["theme"]).catch((error) => {
+        console.error(error);
+      });
+    }, []);
+  : labels:
     - source: |-
-        (() => {
-          getSetting("theme").then((savedTheme) => {
-            setThemeState(savedTheme);
+        useEffect(() => {
+          getSettingsBatch(["theme"]).catch((error) => {
+            console.error(error);
           });
         }, [])
+      style: primary
+      start: 0
+      end: 105
+    - source: |-
+        getSettingsBatch(["theme"]).catch((error) => {
+            console.error(error);
+          })
       style: secondary
-      start: 9
-      end: 106
+      start: 20
+      end: 97
   ? |
     useEffect(() => {
       listCommits(repoPath).then((result) => {
@@ -90,12 +93,3 @@ snapshots:
       style: secondary
       start: 20
       end: 97
-    - source: |-
-        (() => {
-          listCommits(repoPath).then((result) => {
-            setCommits(result.commits);
-          });
-        }, [repoPath])
-      style: secondary
-      start: 9
-      end: 113

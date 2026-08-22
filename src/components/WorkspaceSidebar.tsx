@@ -1,12 +1,13 @@
 import { DragDropContext, Droppable, type DropResult } from "@hello-pangea/dnd";
-import { useQuery } from "@tanstack/react-query";
 import { Archive, CalendarClock, Github, Search } from "lucide-react";
 import { memo, useCallback, useMemo, useState } from "react";
+import useSWR from "swr";
 import {
   useGitRemoteInfo,
   useMergeQueueEnabled,
   usePrStatusPolling,
 } from "../hooks/useMergeQueueStatus";
+import { useWorkspaceSidebarMultiSelect } from "../hooks/useWorkspaceSidebarMultiSelect";
 import {
   getWorkspaceStatus,
   getWorkspaces,
@@ -21,6 +22,7 @@ import type {
 import type { ChangeFilesMoveRequest } from "../lib/change-file-drag";
 import { FEATURES } from "../lib/features";
 import { supabase } from "../lib/supabase";
+import { pollMs } from "../lib/swr-cache";
 import {
   buildWorkspaceTree,
   flattenWorkspaceTree,
@@ -28,12 +30,10 @@ import {
   getEntireStack,
 } from "../lib/workspace-tree";
 import { isWorkspaceHidden } from "../lib/workspace-utils";
-import { useWorkspaceSidebarMultiSelect } from "../hooks/useWorkspaceSidebarMultiSelect";
 import { HomeRepoSidebarRow } from "./HomeRepoSidebarRow";
-import { WorkspaceSidebarHeaderActions } from "./WorkspaceSidebarHeaderActions";
 import { RenameWorkspaceDialog } from "./RenameWorkspaceDialog";
 import { TerminalSessionsSidebar } from "./TerminalSessionsSidebar";
-import { type TerminalSessionSummary } from "./terminal/types";
+import type { TerminalSessionSummary } from "./terminal/types";
 import { Kbd, KbdGroup } from "./ui/kbd";
 import {
   Sidebar,
@@ -56,6 +56,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "./ui/tooltip";
+import { WorkspaceSidebarHeaderActions } from "./WorkspaceSidebarHeaderActions";
 import { WorkspaceSidebarItem } from "./WorkspaceSidebarItem";
 
 interface WorkspaceSidebarProps {
@@ -129,20 +130,16 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
     onCreateShellTerminal,
     onDropChangeFiles,
   }) => {
-    const {
-      data: workspaces = [],
-      isPending: workspacesPending,
-      isSuccess: workspacesLoaded,
-    } = useQuery({
-      queryKey: ["workspaces", repoPath],
-      queryFn: () => getWorkspaces(repoPath || ""),
-      enabled: !!repoPath,
-      placeholderData: (previousData) => previousData,
-    });
+    const { data: workspaces = [], isLoading: workspacesPending } = useSWR(
+      repoPath ? ["workspaces", repoPath] : null,
+      () => getWorkspaces(repoPath || ""),
+      { keepPreviousData: true },
+    );
+    const workspacesLoaded = workspacesPending === false && Boolean(repoPath);
 
-    const { data: workspaceStatuses = [] } = useQuery({
-      queryKey: ["workspace-statuses", repoPath],
-      queryFn: async () => {
+    const { data: workspaceStatuses = [] } = useSWR(
+      repoPath && workspacesLoaded ? ["workspace-statuses", repoPath] : null,
+      async () => {
         const baseStatuses = await listWorkspaceStatuses(repoPath || "");
         return Promise.all(
           baseStatuses.map(async (status) => {
@@ -158,18 +155,19 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
           }),
         );
       },
-      enabled: !!repoPath && workspacesLoaded,
-      placeholderData: (previousData) => previousData,
-    });
+      { keepPreviousData: true },
+    );
 
     const { data: remoteInfo } = useGitRemoteInfo(repoPath);
     const { data: queueEnabled } = useMergeQueueEnabled(repoPath);
     // Single Rust-backed cache for all workspace PR statuses — no per-row
     // `gh pr view` polling from the WebView.
     const { data: prStatusesByBranch = {} } = usePrStatusPolling(repoPath);
-    const { data: branchQueueStatuses } = useQuery({
-      queryKey: ["repo-branch-queue-statuses", remoteInfo?.full_name],
-      queryFn: async () => {
+    const { data: branchQueueStatuses } = useSWR(
+      FEATURES.mergeQueue && queueEnabled === true && remoteInfo
+        ? ["repo-branch-queue-statuses", remoteInfo.full_name]
+        : null,
+      async () => {
         const { data } = await supabase.rpc("get_repo_branch_queue_statuses", {
           p_repo_full_name: remoteInfo!.full_name,
         });
@@ -182,9 +180,8 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
         }
         return map;
       },
-      enabled: FEATURES.mergeQueue && queueEnabled === true && !!remoteInfo,
-      refetchInterval: 30_000,
-    });
+      { refreshInterval: pollMs(30_000) },
+    );
 
     const statuses = useMemo<WorkspaceSidebarStatus[]>(() => {
       const statusById = new Map(

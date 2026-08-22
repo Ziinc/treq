@@ -1,36 +1,30 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import React, { ReactNode } from "react";
+import {
+  act,
+  fireEvent,
+  type RenderOptions,
+  render,
+  screen as rtlScreen,
+} from "@testing-library/react";
+import { type ReactNode, useMemo } from "react";
+import { SWRConfig } from "swr";
 import { Router } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import { ToastProvider } from "../src/components/ui/toast";
+import { createTestSWRConfig, SWRMutateScope } from "../src/lib/swr-cache";
 import { AppStoreEffects } from "../src/stores/AppStoreEffects";
-import {
-  RenderOptions,
-  act,
-  render,
-  screen as rtlScreen,
-  fireEvent,
-} from "@testing-library/react";
 
 /**
- * Creates a wrapper with QueryClient, toast host, and Zustand store effects.
+ * Creates a wrapper with SWR, toast host, and Zustand store effects.
  */
 const AllTheProviders = ({ children }: { children: ReactNode }) => {
-  const queryClient = new QueryClient({
-    defaultOptions: {
-      queries: {
-        retry: false,
-      },
-    },
-  });
-
+  const swrConfig = useMemo(() => createTestSWRConfig(), []);
   return (
     <Router hook={useHashLocation}>
       <AppStoreEffects />
       <ToastProvider>
-        <QueryClientProvider client={queryClient}>
-          {children}
-        </QueryClientProvider>
+        <SWRConfig value={swrConfig}>
+          <SWRMutateScope>{children}</SWRMutateScope>
+        </SWRConfig>
       </ToastProvider>
     </Router>
   );

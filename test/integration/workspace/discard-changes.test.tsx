@@ -1,15 +1,14 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import userEvent from "@testing-library/user-event";
-import { render, screen, waitFor } from "../../test-utils";
+import { screen, waitFor } from "../../test-utils";
 import {
   createTestRepo,
-  findSidebarBranchElement,
   openRepo,
   resolveWorkspacePath,
   writeWorkspaceFile,
 } from "../../utils";
 import * as api from "../../../src/lib/api";
-import { Dashboard } from "../../../src/components/Dashboard";
+import { openReviewTab, waitForChangedFile } from "../review/comments-helpers";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -32,17 +31,6 @@ async function createDirtyWorkspace(branchName: string, fileName: string) {
   return { repoPath, workspace: workspace!, workspacePath };
 }
 
-async function openReviewTab(
-  user: ReturnType<typeof userEvent.setup>,
-  branchName: string,
-) {
-  render(<Dashboard />);
-  await user.click(await findSidebarBranchElement(branchName));
-  const reviewTab = await screen.findByRole("tab", { name: /^Changes/ });
-  await user.click(reviewTab);
-  await screen.findByRole("tab", { name: /^Changes/, selected: true });
-}
-
 describe("Review tab - discard changes", () => {
   let user: ReturnType<typeof userEvent.setup>;
 
@@ -57,11 +45,7 @@ describe("Review tab - discard changes", () => {
       fileName,
     );
     await openReviewTab(user, "feat/discard-all");
-
-    await waitFor(
-      () => expect(screen.getAllByText(fileName).length).toBeGreaterThan(0),
-      { timeout: 60_000 },
-    );
+    await waitForChangedFile(fileName);
 
     await user.click(
       await screen.findByRole("button", { name: /discard all changes/i }),
@@ -73,7 +57,7 @@ describe("Review tab - discard changes", () => {
     await user.click(confirmButtons[confirmButtons.length - 1]);
 
     await waitFor(() => {
-      expect(screen.queryAllByText(fileName)).toHaveLength(0);
+      expect(screen.queryByTestId(`file-row-${fileName}`)).toBeNull();
     });
 
     expect(fs.existsSync(path.join(workspacePath, fileName))).toBe(false);
@@ -86,11 +70,7 @@ describe("Review tab - discard changes", () => {
       fileName,
     );
     await openReviewTab(user, "feat/discard-one");
-
-    await waitFor(
-      () => expect(screen.getAllByText(fileName).length).toBeGreaterThan(0),
-      { timeout: 60_000 },
-    );
+    await waitForChangedFile(fileName);
 
     const [sidebarFile] = screen.getAllByText(fileName);
     await user.click(sidebarFile);
@@ -98,7 +78,7 @@ describe("Review tab - discard changes", () => {
     await user.click(await screen.findByTitle("Discard selected files"));
 
     await waitFor(() => {
-      expect(screen.queryAllByText(fileName)).toHaveLength(0);
+      expect(screen.queryByTestId(`file-row-${fileName}`)).toBeNull();
     });
 
     expect(fs.existsSync(path.join(workspacePath, fileName))).toBe(false);
@@ -111,11 +91,7 @@ describe("Review tab - discard changes", () => {
       fileName,
     );
     await openReviewTab(user, "feat/discard-cancel");
-
-    await waitFor(
-      () => expect(screen.getAllByText(fileName).length).toBeGreaterThan(0),
-      { timeout: 60_000 },
-    );
+    await waitForChangedFile(fileName);
 
     await user.click(
       await screen.findByRole("button", { name: /discard all changes/i }),
@@ -135,11 +111,7 @@ describe("Review tab - discard changes", () => {
       fileName,
     );
     await openReviewTab(user, "feat/discard-undo");
-
-    await waitFor(
-      () => expect(screen.getAllByText(fileName).length).toBeGreaterThan(0),
-      { timeout: 60_000 },
-    );
+    await waitForChangedFile(fileName);
 
     await user.click(
       await screen.findByRole("button", { name: /discard all changes/i }),
@@ -151,14 +123,14 @@ describe("Review tab - discard changes", () => {
     await user.click(confirmButtons[confirmButtons.length - 1]);
 
     await waitFor(() => {
-      expect(screen.queryAllByText(fileName)).toHaveLength(0);
+      expect(screen.queryByTestId(`file-row-${fileName}`)).toBeNull();
     });
     expect(fs.existsSync(path.join(workspacePath, fileName))).toBe(false);
 
     await user.click(await screen.findByRole("button", { name: "Undo" }));
 
     await waitFor(() => {
-      expect(screen.getAllByText(fileName).length).toBeGreaterThan(0);
+      expect(screen.getByTestId(`file-row-${fileName}`)).toBeTruthy();
     });
     expect(fs.existsSync(path.join(workspacePath, fileName))).toBe(true);
   });

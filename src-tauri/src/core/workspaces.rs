@@ -1166,6 +1166,7 @@ mod tests {
     resolve_workspace_diff_tip_revision_from_workspace_state, schedule_workspaces, HunkSpec,
     WorkspaceMoveRequest, WorkspaceTargetMoveStep,
   };
+  use crate::jj;
   use crate::local_db::Workspace;
   use rusqlite::Connection;
   use std::fs;
@@ -1473,6 +1474,18 @@ mod tests {
       "main",
     );
     assert_eq!(base, "abc123");
+  }
+
+  #[test]
+  fn revision_diff_is_empty_when_workspace_dir_is_gone() {
+    let temp_dir = TempDir::new().expect("temp dir");
+    let missing = temp_dir.path().join("already-removed");
+    let diff =
+      jj::revision_diff_if_workspace_missing(&missing).expect("missing dir should skip jj load");
+    assert!(diff.uncommitted_files.is_empty());
+    assert!(diff.committed_files.is_empty());
+    assert!(!diff.too_large_to_render);
+    assert!(jj::revision_diff_if_workspace_missing(temp_dir.path()).is_none());
   }
 
   #[test]
@@ -2686,6 +2699,9 @@ fn workspace_diff_with_conflict_style(
   let workspace_dir_str = workspace_dir
     .to_str()
     .ok_or("Failed to convert workspace path to string")?;
+  if let Some(empty) = jj::revision_diff_if_workspace_missing(&workspace_dir) {
+    return Ok(empty);
+  }
   let base_revision =
     resolve_workspace_diff_base_revision(repo_path, &workspace, workspace_dir_str)?;
   let tip_revision = resolve_workspace_diff_tip_revision(repo_path, &workspace, workspace_dir_str)?;

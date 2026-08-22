@@ -32,6 +32,16 @@ fn block_on<F: std::future::Future>(future: F) -> F::Output {
     }
   }
 }
+
+fn with_working_copy_lock<T>(f: impl FnOnce() -> T) -> T {
+  static LOCK: std::sync::OnceLock<std::sync::Mutex<()>> = std::sync::OnceLock::new();
+  let _guard = LOCK
+    .get_or_init(|| std::sync::Mutex::new(()))
+    .lock()
+    .unwrap_or_else(|poisoned| poisoned.into_inner());
+  f()
+}
+
 use gix::refs::transaction::{Change, PreviousValue, RefEdit};
 use gix::refs::Target;
 use imara_diff::intern::InternedInput;
@@ -303,6 +313,13 @@ fn import_colocated_git_state(
 }
 
 fn snapshot_loaded_working_copy(
+  loaded: &mut LoadedWorkspaceRepo,
+  workspace_path: &str,
+) -> Result<(), JjError> {
+  with_working_copy_lock(|| snapshot_loaded_working_copy_inner(loaded, workspace_path))
+}
+
+fn snapshot_loaded_working_copy_inner(
   loaded: &mut LoadedWorkspaceRepo,
   workspace_path: &str,
 ) -> Result<(), JjError> {
@@ -3251,113 +3268,115 @@ pub fn jj_get_changed_files(workspace_path: &str) -> Result<Vec<JjFileChange>, J
     Ok(s) => s,
     Err(_) => return Ok(Vec::new()),
   };
-  let mut workspace = match Workspace::load(
-    &settings,
-    path,
-    &StoreFactories::default(),
-    &default_working_copy_factories(),
-  ) {
-    Ok(ws) => ws,
-    Err(_) => return Ok(Vec::new()),
-  };
-  let repo = match block_on(workspace.repo_loader().load_at_head()) {
-    Ok(r) => r,
-    Err(_) => return Ok(Vec::new()),
-  };
-  let ignore_root = repo_path_opt.as_deref().unwrap_or(workspace_path);
-  let matcher = repo_root_matcher();
-  let opts = snapshot_options_for_all_paths(ignore_root, &matcher);
+  with_working_copy_lock(|| {
+    let mut workspace = match Workspace::load(
+      &settings,
+      path,
+      &StoreFactories::default(),
+      &default_working_copy_factories(),
+    ) {
+      Ok(ws) => ws,
+      Err(_) => return Ok(Vec::new()),
+    };
+    let repo = match block_on(workspace.repo_loader().load_at_head()) {
+      Ok(r) => r,
+      Err(_) => return Ok(Vec::new()),
+    };
+    let ignore_root = repo_path_opt.as_deref().unwrap_or(workspace_path);
+    let matcher = repo_root_matcher();
+    let opts = snapshot_options_for_all_paths(ignore_root, &matcher);
 
-  let workspace_name = workspace.workspace_name().to_owned();
+    let workspace_name = workspace.workspace_name().to_owned();
 
-  // Load current WC commit before locking (needed for tree comparison and diffing)
-  let wc_commit_id = match repo.view().get_wc_commit_id(&workspace_name) {
-    Some(id) => id.clone(),
-    None => return Ok(Vec::new()),
-  };
-  let wc_commit = match repo.store().get_commit(&wc_commit_id) {
-    Ok(c) => c,
-    Err(_) => return Ok(Vec::new()),
-  };
+    // Load current WC commit before locking (needed for tree comparison and diffing)
+    let wc_commit_id = match repo.view().get_wc_commit_id(&workspace_name) {
+      Some(id) => id.clone(),
+      None => return Ok(Vec::new()),
+    };
+    let wc_commit = match repo.store().get_commit(&wc_commit_id) {
+      Ok(c) => c,
+      Err(_) => return Ok(Vec::new()),
+    };
 
-  let mut locked_ws = match workspace.start_working_copy_mutation() {
-    Ok(lws) => lws,
-    Err(_) => return Ok(Vec::new()),
-  };
-  let new_tree = match block_on(locked_ws.locked_wc().snapshot(&opts)) {
-    Ok((tree, _)) => tree,
-    Err(_) => return Ok(Vec::new()), // locked_ws dropped here, lock released
-  };
+    let mut locked_ws = match workspace.start_working_copy_mutation() {
+      Ok(lws) => lws,
+      Err(_) => return Ok(Vec::new()),
+    };
+    let new_tree = match block_on(locked_ws.locked_wc().snapshot(&opts)) {
+      Ok((tree, _)) => tree,
+      Err(_) => return Ok(Vec::new()), // locked_ws dropped here, lock released
+    };
 
-  // If tree changed, create a new WC commit and update op-store to expose the snapshotted state.
-  if new_tree.tree_ids() != wc_commit.tree_ids() {
-    let mut tx = repo.start_transaction();
-    let mut builder = tx.repo_mut().rewrite_commit(&wc_commit).detach();
-    builder.set_tree(new_tree.clone());
-    match block_on(builder.write(tx.repo_mut())) {
-      Ok(rewritten_wc) => {
-        let _ = block_on(tx.repo_mut().edit(workspace_name.clone(), &rewritten_wc));
-        let _ = block_on(tx.repo_mut().rebase_descendants());
-        match block_on(tx.commit("snapshot working copy")) {
-          Ok(final_repo) => {
-            let _ = block_on(locked_ws.finish(final_repo.op_id().clone()));
-          }
-          Err(_) => {
-            let _ = block_on(locked_ws.finish(repo.op_id().clone()));
+    // If tree changed, create a new WC commit and update op-store to expose the snapshotted state.
+    if new_tree.tree_ids() != wc_commit.tree_ids() {
+      let mut tx = repo.start_transaction();
+      let mut builder = tx.repo_mut().rewrite_commit(&wc_commit).detach();
+      builder.set_tree(new_tree.clone());
+      match block_on(builder.write(tx.repo_mut())) {
+        Ok(rewritten_wc) => {
+          let _ = block_on(tx.repo_mut().edit(workspace_name.clone(), &rewritten_wc));
+          let _ = block_on(tx.repo_mut().rebase_descendants());
+          match block_on(tx.commit("snapshot working copy")) {
+            Ok(final_repo) => {
+              let _ = block_on(locked_ws.finish(final_repo.op_id().clone()));
+            }
+            Err(_) => {
+              let _ = block_on(locked_ws.finish(repo.op_id().clone()));
+            }
           }
         }
+        Err(_) => {
+          let _ = block_on(locked_ws.finish(repo.op_id().clone()));
+        }
       }
-      Err(_) => {
-        let _ = block_on(locked_ws.finish(repo.op_id().clone()));
-      }
-    }
-  } else {
-    let _ = block_on(locked_ws.finish(repo.op_id().clone()));
-  }
-
-  // Get the wc commit's parent tree to diff against
-  let parent_tree = if wc_commit.parent_ids().is_empty() {
-    repo.store().root_commit().tree()
-  } else {
-    match repo.store().get_commit(&wc_commit.parent_ids()[0]) {
-      Ok(parent) => parent.tree(),
-      Err(_) => return Ok(Vec::new()),
-    }
-  };
-
-  let diff_matcher = repo_root_matcher();
-  let diff_entries = block_on(
-    parent_tree
-      .diff_stream(&new_tree, &diff_matcher)
-      .collect::<Vec<_>>(),
-  );
-
-  let mut changes = Vec::new();
-  for entry in diff_entries {
-    let file_path = entry.path.as_internal_file_string().to_string();
-    let values = match entry.values {
-      Ok(v) => v,
-      Err(_) => continue,
-    };
-    let status = if !values.before.is_resolved() || !values.after.is_resolved() {
-      "C"
-    } else if values.before.is_absent() {
-      "A"
-    } else if values.after.is_absent() {
-      "D"
     } else {
-      "M"
-    };
-    changes.push(JjFileChange {
-      path: file_path,
-      status: status.to_string(),
-      previous_path: None,
-      changed_line_count: 0,
-      diff_deferred: false,
-    });
-  }
+      let _ = block_on(locked_ws.finish(repo.op_id().clone()));
+    }
 
-  Ok(changes)
+    // Get the wc commit's parent tree to diff against
+    let parent_tree = if wc_commit.parent_ids().is_empty() {
+      repo.store().root_commit().tree()
+    } else {
+      match repo.store().get_commit(&wc_commit.parent_ids()[0]) {
+        Ok(parent) => parent.tree(),
+        Err(_) => return Ok(Vec::new()),
+      }
+    };
+
+    let diff_matcher = repo_root_matcher();
+    let diff_entries = block_on(
+      parent_tree
+        .diff_stream(&new_tree, &diff_matcher)
+        .collect::<Vec<_>>(),
+    );
+
+    let mut changes = Vec::new();
+    for entry in diff_entries {
+      let file_path = entry.path.as_internal_file_string().to_string();
+      let values = match entry.values {
+        Ok(v) => v,
+        Err(_) => continue,
+      };
+      let status = if !values.before.is_resolved() || !values.after.is_resolved() {
+        "C"
+      } else if values.before.is_absent() {
+        "A"
+      } else if values.after.is_absent() {
+        "D"
+      } else {
+        "M"
+      };
+      changes.push(JjFileChange {
+        path: file_path,
+        status: status.to_string(),
+        previous_path: None,
+        changed_line_count: 0,
+        diff_deferred: false,
+      });
+    }
+
+    Ok(changes)
+  })
 }
 
 /// Checks if the working copy is empty (no uncommitted changes)
@@ -6821,6 +6840,28 @@ fn too_large_revision_diff() -> JjRevisionDiff {
   }
 }
 
+pub fn empty_revision_diff() -> JjRevisionDiff {
+  JjRevisionDiff {
+    committed_files: Vec::new(),
+    hunks_by_file: Vec::new(),
+    uncommitted_files: Vec::new(),
+    conflicted_files: Vec::new(),
+    too_large_to_render: false,
+    render_block_reason: None,
+  }
+}
+
+/// None if the workspace dir exists; empty diff if it is already gone (test teardown).
+pub fn revision_diff_if_workspace_missing(
+  workspace_dir: &std::path::Path,
+) -> Option<JjRevisionDiff> {
+  if workspace_dir.exists() {
+    None
+  } else {
+    Some(empty_revision_diff())
+  }
+}
+
 fn resolve_commit_by_revision(
   loaded: &LoadedWorkspaceRepo,
   revision: &str,
@@ -7955,6 +7996,30 @@ mod tests {
   use std::fs;
   use std::process::Command;
   use tempfile::TempDir;
+
+  #[test]
+  fn working_copy_lock_serializes_threads() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::thread;
+    static CONCURRENT: AtomicUsize = AtomicUsize::new(0);
+    static MAX: AtomicUsize = AtomicUsize::new(0);
+    let threads: Vec<_> = (0..4)
+      .map(|_| {
+        thread::spawn(|| {
+          with_working_copy_lock(|| {
+            let now = CONCURRENT.fetch_add(1, Ordering::SeqCst) + 1;
+            MAX.fetch_max(now, Ordering::SeqCst);
+            thread::sleep(std::time::Duration::from_millis(15));
+            CONCURRENT.fetch_sub(1, Ordering::SeqCst);
+          })
+        })
+      })
+      .collect();
+    for t in threads {
+      t.join().unwrap();
+    }
+    assert_eq!(MAX.load(Ordering::SeqCst), 1);
+  }
 
   fn init_git_repo(temp: &TempDir) {
     let status = Command::new("git")

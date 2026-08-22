@@ -69,4 +69,33 @@ describe("useLineSelection drag", () => {
       result.current.diffLineSelection?.lines.map((l) => l.lineIndex),
     ).toEqual([0, 1, 2]);
   });
+
+  it("keeps expanding after a new hunks Map identity between mouseDown and mouseEnter", () => {
+    const filePath = "test.txt";
+    const lines = ["+added line 2", "+added line 3", "+added line 4"];
+    const { result, rerender } = renderHook(
+      ({ hunks }) =>
+        useLineSelection({
+          allFileHunks: hunks,
+          onClearFileSelections: () => {},
+        }),
+      { initialProps: { hunks: hunksFor(filePath, lines) } },
+    );
+
+    act(() => {
+      result.current.handleLineMouseDown(mouseDown(filePath, 0, lines[0]));
+    });
+    rerender({ hunks: hunksFor(filePath, lines) });
+    act(() => {
+      result.current.handleLineMouseEnter({
+        filePath,
+        hunkIndex: 0,
+        lineIndex: 2,
+      });
+    });
+
+    expect(
+      result.current.diffLineSelection?.lines.map((l) => l.lineIndex),
+    ).toEqual([0, 1, 2]);
+  });
 });

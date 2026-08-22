@@ -14,7 +14,7 @@ import path from "path";
 import fs from "fs";
 import { createRequire } from "node:module";
 import { randomUUID } from "crypto";
-import { afterEach, expect, vi } from "vitest";
+import { workspaceDiffCoalesce } from "../src/lib/coalesce-in-flight";
 import { configure } from "@testing-library/dom";
 
 // Shared DOM polyfills, browser API stubs, Tauri plugin mocks, and hook mocks
@@ -62,6 +62,7 @@ vi.mock("@tauri-apps/api/core", () => ({
 }));
 
 afterEach(() => {
+  workspaceDiffCoalesce.reset();
   const calls = [...jjCalls];
   jjCalls.length = 0;
   expect(

@@ -1,5 +1,5 @@
-import { useQueries } from "@tanstack/react-query";
 import { useMemo } from "react";
+import useSWR from "swr";
 import { listCommits, type Workspace } from "../../lib/api";
 import {
   sumWorkspaceDiffStats,
@@ -43,18 +43,34 @@ export function useMissionControlDiffStats({
     [groups, workspaceByBranch],
   );
 
-  const commitQueries = useQueries({
-    queries: groupWorkspaceIds.map((workspaceId) => ({
-      queryKey: ["workspace-commits", repoPath, workspaceId],
-      queryFn: () => listCommits(repoPath!, workspaceId!),
-      enabled: Boolean(open && repoPath && workspaceId != null),
-    })),
-  });
+  const fetchableIds = groupWorkspaceIds.filter(
+    (id): id is number => id != null,
+  );
+  const { data: commitLists } = useSWR(
+    open && repoPath && fetchableIds.length > 0
+      ? ["workspace-commits-mission", repoPath, fetchableIds.join(",")]
+      : null,
+    () =>
+      Promise.all(
+        fetchableIds.map((workspaceId) => listCommits(repoPath!, workspaceId)),
+      ),
+  );
 
   return useMemo(() => {
+    const commitsById = new Map<
+      number,
+      Awaited<ReturnType<typeof listCommits>>
+    >();
+    fetchableIds.forEach((id, index) => {
+      const result = commitLists?.[index];
+      if (result) commitsById.set(id, result);
+    });
+
     const diffStatsByWorkspaceKey = new Map<string, WorkspaceDiffStats>();
     groups.forEach((group, index) => {
-      const data = commitQueries[index]?.data?.commits;
+      const workspaceId = groupWorkspaceIds[index];
+      if (workspaceId == null) return;
+      const data = commitsById.get(workspaceId)?.commits;
       if (!data) return;
       diffStatsByWorkspaceKey.set(
         group.workspaceKey,
@@ -70,5 +86,5 @@ export function useMissionControlDiffStats({
     );
 
     return { diffStatsByWorkspaceKey, maxChange };
-  }, [groups, commitQueries]);
+  }, [groups, groupWorkspaceIds, fetchableIds, commitLists]);
 }

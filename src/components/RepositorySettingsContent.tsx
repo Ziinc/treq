@@ -1,4 +1,5 @@
-import { useEffect, useImperativeHandle, useState, type Ref } from "react";
+import { useImperativeHandle, useState, type Ref } from "react";
+import useSWR from "swr";
 import { getRepoSetting, setRepoSetting } from "../lib/api";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -21,60 +22,88 @@ export const RepositorySettingsContent = ({
   onSavingChange,
   ref,
 }: RepositorySettingsContentProps) => {
-  const [branchNamePattern, setBranchNamePattern] = useState("treq/{name}");
-  const [includedFiles, setIncludedFiles] = useState("");
-  const [defaultModel, setDefaultModel] = useState<string>("");
-  const [defaultAgent, setDefaultAgent] = useState<string>("");
-  const [autoPush, setAutoPush] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const { addToast } = useToast();
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [draft, setDraft] = useState<{
+    key: string;
+    branchNamePattern: string;
+    includedFiles: string;
+    defaultModel: string;
+    defaultAgent: string;
+    autoPush: boolean;
+  } | null>(null);
 
-  // Load settings when repo path changes
-  useEffect(() => {
-    if (repoPath) {
-      setLoading(true);
-      setError(null);
-
-      Promise.all([
+  const {
+    data: loaded,
+    error: loadError,
+    isLoading: loading,
+  } = useSWR(repoPath ? ["repo-settings", repoPath] : null, async () => {
+    const [branchPattern, includedPatterns, model, agent, autoPushSetting] =
+      await Promise.all([
         getRepoSetting(repoPath, "branch_name_pattern"),
         getRepoSetting(repoPath, "included_copy_files"),
         getRepoSetting(repoPath, "default_model"),
         getRepoSetting(repoPath, "default_agent"),
         getRepoSetting(repoPath, "auto_push"),
-      ])
-        .then(
-          ([
-            branchPattern,
-            includedPatterns,
-            model,
-            agent,
-            autoPushSetting,
-          ]) => {
-            setBranchNamePattern(branchPattern || "treq/{name}");
-            setIncludedFiles(includedPatterns || "");
-            setDefaultModel(model || "");
-            setDefaultAgent(agent || "");
-            setAutoPush(autoPushSetting === "true");
-          },
-        )
-        .catch((err) => {
-          setError(`Failed to load settings: ${err}`);
-          setBranchNamePattern("treq/{name}");
-          setIncludedFiles("");
-          setDefaultModel("");
-          setDefaultAgent("");
-          setAutoPush(false);
-        })
-        .finally(() => {
-          setLoading(false);
+      ]);
+    return {
+      branchNamePattern: branchPattern || "treq/{name}",
+      includedFiles: includedPatterns || "",
+      defaultModel: model || "",
+      defaultAgent: agent || "",
+      autoPush: autoPushSetting === "true",
+    };
+  });
+
+  const settings =
+    draft?.key === repoPath
+      ? draft
+      : (loaded ?? {
+          branchNamePattern: "treq/{name}",
+          includedFiles: "",
+          defaultModel: "",
+          defaultAgent: "",
+          autoPush: false,
         });
-    }
-  }, [repoPath]);
+  const {
+    branchNamePattern,
+    includedFiles,
+    defaultModel,
+    defaultAgent,
+    autoPush,
+  } = settings;
+  const error =
+    saveError ?? (loadError ? `Failed to load settings: ${loadError}` : null);
+
+  const updateDraft = (
+    patch: Partial<{
+      branchNamePattern: string;
+      includedFiles: string;
+      defaultModel: string;
+      defaultAgent: string;
+      autoPush: boolean;
+    }>,
+  ) => {
+    setDraft({
+      key: repoPath,
+      branchNamePattern,
+      includedFiles,
+      defaultModel,
+      defaultAgent,
+      autoPush,
+      ...patch,
+    });
+  };
+
+  const setBranchNamePattern = (v: string) =>
+    updateDraft({ branchNamePattern: v });
+  const setIncludedFiles = (v: string) => updateDraft({ includedFiles: v });
+  const setDefaultModel = (v: string) => updateDraft({ defaultModel: v });
+  const setDefaultAgent = (v: string) => updateDraft({ defaultAgent: v });
+  const setAutoPush = (v: boolean) => updateDraft({ autoPush: v });
 
   const handleSave = async () => {
     onSavingChange?.(true);
-    setError(null);
 
     try {
       await Promise.all([
@@ -91,7 +120,7 @@ export const RepositorySettingsContent = ({
       });
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
-      setError(`Failed to save settings: ${errorMsg}`);
+      setSaveError(`Failed to save settings: ${errorMsg}`);
       addToast({
         title: "Error",
         description: `Failed to save settings: ${errorMsg}`,

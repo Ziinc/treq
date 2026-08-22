@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import useSWR from "swr";
 import { Terminal } from "./Terminal";
 import { Button } from "./ui/button";
 import { GitBranch, X } from "lucide-react";
@@ -34,34 +35,15 @@ export const WorkspaceEditSession: React.FC<WorkspaceEditSessionProps> = ({
   const [mainDivergence, setMainDivergence] = useState<BranchDivergence | null>(
     null,
   );
-  const [mainRepoPath, setMainRepoPath] = useState<string | null>(null);
+  const { data: mainRepoPath = null } = useSWR(
+    "window-repo-path",
+    getWindowRepoPath,
+  );
 
   useEffect(() => {
     let isCancelled = false;
 
-    const loadMainRepoPath = async () => {
-      try {
-        const repoPath = await getWindowRepoPath();
-        if (!isCancelled) {
-          setMainRepoPath(repoPath || null);
-        }
-      } catch {
-        if (!isCancelled) {
-          setMainRepoPath(null);
-        }
-      }
-    };
-
-    loadMainRepoPath();
-    return () => {
-      isCancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    let isCancelled = false;
-
-    const loadBranchComparisons = async () => {
+    const loadBranchComparisons = () => {
       if (!workspace?.workspace_path) {
         if (!isCancelled) {
           setRemoteBranchInfo(null);
@@ -71,7 +53,6 @@ export const WorkspaceEditSession: React.FC<WorkspaceEditSessionProps> = ({
         return;
       }
 
-      // Note: Branch info loading would need JJ equivalents
       if (!isCancelled) {
         setRemoteBranchInfo(null);
         setMainBranchName(null);

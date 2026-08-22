@@ -6,6 +6,7 @@ import {
   type FormEvent,
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
+import useSWR from "swr";
 import { Copy, FolderOpen, X, ZoomIn, ZoomOut } from "lucide-react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { readFile, writeSendReviewImage } from "../../lib/api";
@@ -62,7 +63,6 @@ export function SendAssetLightbox({
   const { addToast } = useToast();
   const [api, setApi] = useState<CarouselApi>();
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
-  const [textByPath, setTextByPath] = useState<Record<string, string>>({});
   const [imageZoom, setImageZoom] = useState(IMAGE_ZOOM_DEFAULT);
   const [baseSizeById, setBaseSizeById] = useState<
     Record<string, { width: number; height: number }>
@@ -173,26 +173,27 @@ export function SendAssetLightbox({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [hasUnsent, onClose]);
 
-  useEffect(() => {
-    const textAssets = assets.filter((asset) => asset.mediaType === "text");
-    let cancelled = false;
-    Promise.all(
-      textAssets.map(async (asset) => {
-        try {
-          const content = await readFile(asset.path);
-          return [asset.path, content] as const;
-        } catch {
-          return [asset.path, ""] as const;
-        }
-      }),
-    ).then((entries) => {
-      if (cancelled) return;
-      setTextByPath(Object.fromEntries(entries));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [assets]);
+  const textAssetKey = assets
+    .filter((asset) => asset.mediaType === "text")
+    .map((asset) => asset.path)
+    .join("\0");
+  const { data: textByPath = {} } = useSWR(
+    textAssetKey ? ["send-asset-text", textAssetKey] : null,
+    async () => {
+      const textAssets = assets.filter((asset) => asset.mediaType === "text");
+      const entries = await Promise.all(
+        textAssets.map(async (asset) => {
+          try {
+            const content = await readFile(asset.path);
+            return [asset.path, content] as const;
+          } catch {
+            return [asset.path, ""] as const;
+          }
+        }),
+      );
+      return Object.fromEntries(entries);
+    },
+  );
 
   const copyCurrentAsset = async () => {
     if (!current) return;

@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import useSWR from "swr";
 import { FileText, Images } from "lucide-react";
 import { useMemo, useState } from "react";
 import { listSendArtifacts } from "../lib/api";
@@ -24,11 +24,10 @@ export const ArtifactsPage: React.FC<ArtifactsPageProps> = ({
   const sendAssets = useTreqSendStore((s) => s.assets);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
 
-  const { data: historical = [] } = useQuery({
-    queryKey: ["send-artifacts", repoPath],
-    queryFn: () => listSendArtifacts(repoPath),
-    enabled: !!repoPath,
-  });
+  const { data: historical = [] } = useSWR(
+    repoPath ? ["send-artifacts", repoPath] : null,
+    () => listSendArtifacts(repoPath),
+  );
 
   const assets = useMemo(() => {
     const fromDisk = historical.map(sendRecordToAsset);

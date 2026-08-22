@@ -1,10 +1,7 @@
-import {
-  useQueries,
-  useQuery,
-  type UseMutationResult,
-} from "@tanstack/react-query";
 import { GitMerge, Loader2 } from "lucide-react";
 import { useMemo } from "react";
+import useSWR from "swr";
+import type { MutationResult } from "../../hooks/useMutation";
 import {
   getRepoDefaultBranch,
   listCommits,
@@ -36,7 +33,7 @@ interface MergeQueueListProps {
   repoPath: string;
   queueLoading: boolean;
   queueEntries: QueueEntry[];
-  dequeueBranches: UseMutationResult<string[], Error, string[]>;
+  dequeueBranches: MutationResult<string[], string[]>;
   showMergedHistory: boolean;
   historyLimit: number;
   onHistoryLimitChange: (limit: number) => void;
@@ -51,23 +48,22 @@ function MergeQueueList({
   historyLimit,
   onHistoryLimitChange,
 }: MergeQueueListProps) {
-  const { data: workspaceStatuses } = useQuery({
-    queryKey: ["workspace-statuses", repoPath],
-    queryFn: () => listWorkspaceStatuses(repoPath),
-    enabled: Boolean(repoPath) && queueEntries.length > 0,
-  });
+  const { data: workspaceStatuses } = useSWR(
+    repoPath && queueEntries.length > 0
+      ? ["workspace-statuses", repoPath]
+      : null,
+    () => listWorkspaceStatuses(repoPath),
+  );
 
-  const { data: defaultBranchName } = useQuery({
-    queryKey: ["repo-default-branch", repoPath],
-    queryFn: () => getRepoDefaultBranch(repoPath),
-    enabled: Boolean(repoPath),
-  });
+  const { data: defaultBranchName } = useSWR(
+    repoPath ? ["repo-default-branch", repoPath] : null,
+    () => getRepoDefaultBranch(repoPath),
+  );
 
-  const { data: homeLog } = useQuery({
-    queryKey: ["workspace-commits", repoPath, null, "merge-queue-tip"],
-    queryFn: () => listCommits(repoPath, null, false, undefined, 1),
-    enabled: Boolean(repoPath),
-  });
+  const { data: homeLog } = useSWR(
+    repoPath ? ["workspace-commits", repoPath, null, "merge-queue-tip"] : null,
+    () => listCommits(repoPath, null, false, undefined, 1),
+  );
 
   const branchToWorkspaceId = useMemo(() => {
     const map = new Map<string, number>();
@@ -88,25 +84,30 @@ function MergeQueueList({
     [queueEntries, branchToWorkspaceId],
   );
 
-  const commitQueries = useQueries({
-    queries: branchesNeedingStats.map((entry) => {
-      const workspaceId = branchToWorkspaceId.get(entry.branch_name)!;
-      return {
-        queryKey: ["workspace-commits", repoPath, workspaceId],
-        queryFn: () => listCommits(repoPath, workspaceId),
-      };
-    }),
-  });
+  const statsWorkspaceIds = branchesNeedingStats.map(
+    (entry) => branchToWorkspaceId.get(entry.branch_name)!,
+  );
+  const { data: commitLists } = useSWR(
+    repoPath && statsWorkspaceIds.length > 0
+      ? ["workspace-commits-many", repoPath, statsWorkspaceIds.join(",")]
+      : null,
+    () =>
+      Promise.all(
+        statsWorkspaceIds.map((workspaceId) =>
+          listCommits(repoPath, workspaceId),
+        ),
+      ),
+  );
 
   const localStatsByBranch = useMemo(() => {
     const map = new Map<string, WorkspaceDiffStats>();
     branchesNeedingStats.forEach((entry, index) => {
-      const result = commitQueries[index]?.data;
+      const result = commitLists?.[index];
       if (!result) return;
       map.set(entry.branch_name, sumWorkspaceDiffStats(result.commits));
     });
     return map;
-  }, [branchesNeedingStats, commitQueries]);
+  }, [branchesNeedingStats, commitLists]);
 
   const enrichedEntries = useMemo(
     () => mergeLocalDiffStats(queueEntries, localStatsByBranch),
@@ -219,7 +220,7 @@ export interface MergeQueueTabProps {
   queueEnabled: boolean | undefined;
   queueLoading: boolean;
   queueEntries: QueueEntry[];
-  dequeueBranches: UseMutationResult<string[], Error, string[]>;
+  dequeueBranches: MutationResult<string[], string[]>;
   showMergedHistory: boolean;
   historyLimit: number;
   onHistoryLimitChange: (limit: number) => void;

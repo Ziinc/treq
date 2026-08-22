@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
 } from "react";
+import useSWR from "swr";
 import { open } from "@tauri-apps/plugin-dialog";
 import { CircleDot, X } from "lucide-react";
 import { FilePicker } from "./FilePicker";
@@ -58,9 +59,6 @@ export const TaskInput: React.FC<TaskInputProps> = ({
   );
   const [filePickerOpen, setFilePickerOpen] = useState(false);
   const [focused, setFocused] = useState(false);
-  const [selectedAgent, setSelectedAgent] = useState<AgentType>("claude");
-  const [configuredDefaultAgent, setConfiguredDefaultAgent] =
-    useState<AgentType>("claude");
   const [saveAsRepoDefault, setSaveAsRepoDefault] = useState(false);
   const [showSaveAsRepoDefault, setShowSaveAsRepoDefault] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -69,7 +67,6 @@ export const TaskInput: React.FC<TaskInputProps> = ({
 
   // @ mention state
   const [mentionQuery, setMentionQuery] = useState<string | null>(null);
-  const [mentionResults, setMentionResults] = useState<FileSearchResult[]>([]);
   const [mentionIndex, setMentionIndex] = useState(0);
   const [mentionAnchor, setMentionAnchor] = useState<number | null>(null);
   const debouncedMentionQuery = useDebounce(mentionQuery, 150);
@@ -83,49 +80,39 @@ export const TaskInput: React.FC<TaskInputProps> = ({
     if (focusRequest) textareaRef.current?.focus();
   }, [focusRequest]);
 
-  // Load default agent from repo setting, falling back to global setting
+  const { data: agentSettings } = useSWR(
+    ["task-default-agent", repoPath, workspaceId],
+    async (): Promise<{ agent: AgentType; fromRepo: boolean }> => {
+      const repoAgent = await getRepoSetting(repoPath, "default_agent");
+      if (
+        repoAgent === "claude" ||
+        repoAgent === "codex" ||
+        repoAgent === "cursor"
+      ) {
+        return { agent: repoAgent, fromRepo: true as const };
+      }
+      const globalAgent = await getSetting("default_agent");
+      const agent =
+        globalAgent === "claude" ||
+        globalAgent === "codex" ||
+        globalAgent === "cursor"
+          ? globalAgent
+          : ("claude" as const);
+      return { agent, fromRepo: false as const };
+    },
+  );
+  const [agentOverride, setAgentOverride] = useState<
+    "claude" | "codex" | "cursor" | null
+  >(null);
+  const selectedAgent: AgentType =
+    agentOverride ?? agentSettings?.agent ?? "claude";
+  const configuredDefaultAgent: AgentType = agentSettings?.agent ?? "claude";
+  const setSelectedAgent = setAgentOverride;
+
   useEffect(() => {
-    let cancelled = false;
-    getRepoSetting(repoPath, "default_agent")
-      .then((repoAgent) => {
-        if (cancelled) return;
-        if (
-          repoAgent === "claude" ||
-          repoAgent === "codex" ||
-          repoAgent === "cursor"
-        ) {
-          setSelectedAgent(repoAgent);
-          setConfiguredDefaultAgent(repoAgent);
-          setSaveAsRepoDefault(false);
-          setShowSaveAsRepoDefault(false);
-          return;
-        }
-        return getSetting("default_agent").then((globalAgent) => {
-          if (cancelled) return;
-          if (
-            globalAgent === "claude" ||
-            globalAgent === "codex" ||
-            globalAgent === "cursor"
-          ) {
-            setSelectedAgent(globalAgent);
-          }
-          setConfiguredDefaultAgent(
-            globalAgent === "claude" ||
-              globalAgent === "codex" ||
-              globalAgent === "cursor"
-              ? globalAgent
-              : "claude",
-          );
-          setSaveAsRepoDefault(false);
-          setShowSaveAsRepoDefault(false);
-        });
-      })
-      .catch(() => {
-        // Keep current selection on read failure.
-      });
-    return () => {
-      cancelled = true;
-    };
+    setAgentOverride(null);
+    setSaveAsRepoDefault(false);
+    setShowSaveAsRepoDefault(false);
   }, [repoPath, workspaceId]);
 
   // Auto-resize textarea
@@ -137,27 +124,17 @@ export const TaskInput: React.FC<TaskInputProps> = ({
     }
   }, [taskText]);
 
-  // Search files when mention query changes
+  const { data: mentionResults = [] } = useSWR(
+    debouncedMentionQuery !== null
+      ? ["task-mentions", repoPath, workspaceId, debouncedMentionQuery]
+      : null,
+    () =>
+      searchWorkspaceFiles(repoPath, workspaceId, debouncedMentionQuery!, 4),
+  );
+
   useEffect(() => {
-    if (debouncedMentionQuery === null) {
-      setMentionResults([]);
-      return;
-    }
-    let cancelled = false;
-    searchWorkspaceFiles(repoPath, workspaceId, debouncedMentionQuery, 4)
-      .then((results) => {
-        if (!cancelled) {
-          setMentionResults(results);
-          setMentionIndex(0);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setMentionResults([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [debouncedMentionQuery, repoPath, workspaceId]);
+    setMentionIndex(0);
+  }, [mentionResults]);
 
   // Close mention dropdown on outside click
   useEffect(() => {
@@ -312,7 +289,6 @@ export const TaskInput: React.FC<TaskInputProps> = ({
       try {
         if (saveAsRepoDefault && selectedAgent !== configuredDefaultAgent) {
           await setRepoSetting(repoPath, "default_agent", selectedAgent);
-          setConfiguredDefaultAgent(selectedAgent);
           setSaveAsRepoDefault(false);
         }
 

@@ -1,8 +1,5 @@
-import {
-  useIsMutating,
-  useMutation,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useIsMutating, useMutation } from "../../../hooks/useMutation";
+import { invalidateQueries } from "../../../lib/swr-cache";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useCallback, useState } from "react";
 import {
@@ -75,16 +72,15 @@ export function useFileActions({
   const [localPendingAction, setPendingAction] = useState<
     "commit" | "push" | null
   >(null);
-  const queryClient = useQueryClient();
   const { data: remoteInfo } = useGitRemoteInfo(repoPath);
   const { data: prInfo } = usePrInfoViaGh(repoPath, workspace?.branch_name);
   const canCreatePr = !!remoteInfo && !prInfo && !!workspace && !!baseBranch;
 
   // Shared across surfaces (this dropdown item and the header's Create PR
   // button) so either one's in-flight PR creation shows as pending here too.
-  const createPrActive =
-    useIsMutating({ mutationKey: createPrMutationKey(repoPath, workspaceId) }) >
-    0;
+  const createPrActive = useIsMutating(
+    createPrMutationKey(repoPath, workspaceId),
+  );
   const pendingAction: CommitAction | null = createPrActive
     ? "pr"
     : localPendingAction;
@@ -94,8 +90,8 @@ export function useFileActions({
       try {
         await jjRestoreSnapshot(workspacePath, snapshotId);
         await invalidateCache();
-        await loadChangedFiles();
-        await invalidateReviewChangeCount(queryClient, repoPath, workspaceId);
+        await loadChangedFiles(true);
+        await invalidateReviewChangeCount(repoPath, workspaceId);
         addToast({
           description: "Discarded changes have been restored",
           title: "Restored",
@@ -114,7 +110,6 @@ export function useFileActions({
       addToast,
       invalidateCache,
       loadChangedFiles,
-      queryClient,
       repoPath,
       workspaceId,
     ],
@@ -135,8 +130,8 @@ export function useFileActions({
         },
       });
       await invalidateCache();
-      await loadChangedFiles();
-      await invalidateReviewChangeCount(queryClient, repoPath, workspaceId);
+      await loadChangedFiles(true);
+      await invalidateReviewChangeCount(repoPath, workspaceId);
     } catch (error) {
       addToast({
         description: error instanceof Error ? error.message : String(error),
@@ -151,7 +146,6 @@ export function useFileActions({
     invalidateCache,
     loadChangedFiles,
     handleUndoDiscard,
-    queryClient,
     repoPath,
     workspaceId,
   ]);
@@ -184,8 +178,8 @@ export function useFileActions({
         });
         setSelectedUnstagedFiles(new Set());
         await invalidateCache();
-        await loadChangedFiles();
-        await invalidateReviewChangeCount(queryClient, repoPath, workspaceId);
+        await loadChangedFiles(true);
+        await invalidateReviewChangeCount(repoPath, workspaceId);
       } catch (error) {
         addToast({
           description: error instanceof Error ? error.message : String(error),
@@ -205,7 +199,6 @@ export function useFileActions({
       workspacePath,
       setSelectedUnstagedFiles,
       handleUndoDiscard,
-      queryClient,
       repoPath,
       workspaceId,
     ],
@@ -318,16 +311,18 @@ export function useFileActions({
         // hints / sidebar indicators clear in the same turn as the commit
         // (resolve+commit must not leave a stale Conflicts section).
         await Promise.all([
-          queryClient.refetchQueries({
-            queryKey: ["workspace-status", repoPath, workspaceId ?? null],
-          }),
-          queryClient.refetchQueries({
-            queryKey: ["workspace-statuses", repoPath],
-          }),
-          queryClient.invalidateQueries({
-            queryKey: ["workspace-commits", repoPath, workspaceId ?? null],
-          }),
-          invalidateReviewChangeCount(queryClient, repoPath, workspaceId),
+          invalidateQueries([
+            "workspace-status",
+            repoPath,
+            workspaceId ?? null,
+          ]),
+          invalidateQueries(["workspace-statuses", repoPath]),
+          invalidateQueries([
+            "workspace-commits",
+            repoPath,
+            workspaceId ?? null,
+          ]),
+          invalidateReviewChangeCount(repoPath, workspaceId),
         ]);
         // Force-apply so an in-progress review refreshes instead of parking
         // the post-commit file list behind the stale-files banner.
@@ -353,7 +348,6 @@ export function useFileActions({
       setCommittedSectionCollapsed,
       repoPath,
       workspaceId,
-      queryClient,
     ],
   );
 
@@ -376,7 +370,7 @@ export function useFileActions({
         const committed = await performCommit(commitMsg);
         if (!committed) return;
         await pushWorkspaceToRemote(repoPath!, workspaceId ?? null);
-        await queryClient.invalidateQueries();
+        await invalidateQueries();
         addToast({
           title: "Pushed to remote",
           type: "success",
@@ -391,7 +385,7 @@ export function useFileActions({
         setPendingAction(null);
       }
     },
-    [performCommit, repoPath, workspaceId, queryClient, addToast],
+    [performCommit, repoPath, workspaceId, addToast],
   );
 
   const createPrMutation = useMutation({
@@ -418,7 +412,7 @@ export function useFileActions({
       try {
         const number = await createPrMutation.mutateAsync(commitMsg);
         if (number == null) return;
-        await queryClient.invalidateQueries();
+        await invalidateQueries();
         const prUrl = `https://github.com/${remoteInfo.full_name}/pull/${number}`;
         addToast({
           title: "Pull request created",
@@ -437,14 +431,7 @@ export function useFileActions({
         });
       }
     },
-    [
-      createPrMutation,
-      remoteInfo,
-      workspace,
-      baseBranch,
-      queryClient,
-      addToast,
-    ],
+    [createPrMutation, remoteInfo, workspace, baseBranch, addToast],
   );
 
   const handleExpandContext = useCallback(

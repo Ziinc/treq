@@ -1,7 +1,6 @@
 import { memo, useCallback, useEffect, useState } from "react";
+import useSWR from "swr";
 import {
-  type JjCommitsAhead,
-  type JjRevisionDiff,
   type MergeStrategy,
   type Workspace,
   getWorkspaceDiff,
@@ -43,64 +42,55 @@ export const MergePreviewPage = memo<MergePreviewPageProps>(
     const { addToast } = useToast();
 
     // State
-    const [loading, setLoading] = useState(true);
-    const [commitsAhead, setCommitsAhead] = useState<JjCommitsAhead | null>(
+    const [commitDraft, setCommitDraft] = useState<string | null>(null);
+    const [merging, setMerging] = useState(false);
+    const [expandedFiles, setExpandedFiles] = useState<Set<string> | null>(
       null,
     );
-    const [diff, setDiff] = useState<JjRevisionDiff | null>(null);
-    const [commitMessage, setCommitMessage] = useState("");
-    const [merging, setMerging] = useState(false);
-    const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
     const [mergeStrategy, setMergeStrategy] = useState<MergeStrategy>("merge");
 
     const targetBranch = workspace.target_branch || "main";
+    const fullPath = getFullWorkspacePath(workspace);
 
-    // Load merge preview data
-    useEffect(() => {
-      const loadPreview = async () => {
-        setLoading(true);
-        try {
-          const fullPath = getFullWorkspacePath(workspace);
-          const [commits, diffData] = await Promise.all([
-            jjGetCommitsAhead(fullPath, targetBranch),
-            getWorkspaceDiff(workspace.repo_path, workspace.id),
-          ]);
-
-          setCommitsAhead(commits);
-          setDiff(diffData);
-
-          // Expand all files by default
-          if (diffData && diffData.hunks_by_file) {
-            const allPaths = diffData.hunks_by_file.map((file) => file.path);
-            setExpandedFiles(new Set(allPaths));
-          }
-
-          // Generate default commit message
-          const defaultMessage = `Merge ${workspace.branch_name} into ${targetBranch}`;
-          setCommitMessage(defaultMessage);
-        } catch (error) {
+    const {
+      data: preview,
+      isLoading: loading,
+      error: previewError,
+    } = useSWR(
+      [
+        "merge-preview",
+        fullPath,
+        workspace.repo_path,
+        workspace.id,
+        targetBranch,
+      ],
+      async () => {
+        const [commits, diffData] = await Promise.all([
+          jjGetCommitsAhead(fullPath, targetBranch),
+          getWorkspaceDiff(workspace.repo_path, workspace.id),
+        ]);
+        return { commits, diffData };
+      },
+      {
+        onError: (error) => {
           addToast({
             title: "Failed to load merge preview",
             description: error instanceof Error ? error.message : String(error),
             type: "error",
           });
-        } finally {
-          setLoading(false);
-        }
-      };
+        },
+      },
+    );
+    void previewError;
+    const commitsAhead = preview?.commits ?? null;
+    const diff = preview?.diffData ?? null;
 
-      loadPreview().catch((error) => {
-        console.error("Unexpected error loading merge preview:", error);
-      });
-    }, [
-      workspace.workspace_path,
-      workspace.branch_name,
-      targetBranch,
-      addToast,
-    ]);
-
-    // Update commit message when merge strategy changes
     useEffect(() => {
+      if (!diff?.hunks_by_file) return;
+      setExpandedFiles(new Set(diff.hunks_by_file.map((file) => file.path)));
+    }, [diff]);
+
+    const defaultCommitMessage = (() => {
       let description = "";
       if (workspace.metadata) {
         try {
@@ -110,28 +100,16 @@ export const MergePreviewPage = memo<MergePreviewPageProps>(
           // If metadata is not valid JSON, description stays empty
         }
       }
-
-      if (mergeStrategy === "squash") {
-        setCommitMessage(description);
-      } else if (mergeStrategy === "merge") {
-        if (description) {
-          setCommitMessage(
-            `Merge ${workspace.branch_name} into ${targetBranch}\n\n${description}`,
-          );
-        } else {
-          setCommitMessage(
-            `Merge ${workspace.branch_name} into ${targetBranch}`,
-          );
-        }
-      } else if (mergeStrategy === "rebase") {
-        setCommitMessage("");
+      if (mergeStrategy === "squash") return description;
+      if (mergeStrategy === "rebase") return "";
+      if (description) {
+        return `Merge ${workspace.branch_name} into ${targetBranch}\n\n${description}`;
       }
-    }, [
-      mergeStrategy,
-      workspace.metadata,
-      workspace.branch_name,
-      targetBranch,
-    ]);
+      return `Merge ${workspace.branch_name} into ${targetBranch}`;
+    })();
+    const commitMessage = commitDraft ?? defaultCommitMessage;
+    const setCommitMessage = setCommitDraft;
+    const expandedFileSet = expandedFiles ?? new Set<string>();
 
     // Handle merge
     const handleMerge = useCallback(async () => {
@@ -193,7 +171,7 @@ export const MergePreviewPage = memo<MergePreviewPageProps>(
     // Toggle file expansion
     const toggleFile = useCallback((path: string) => {
       setExpandedFiles((prev) => {
-        const next = new Set(prev);
+        const next = new Set(prev ?? []);
         if (next.has(path)) {
           next.delete(path);
         } else {
@@ -417,7 +395,7 @@ export const MergePreviewPage = memo<MergePreviewPageProps>(
             {diff && diff.committed_files.length > 0 ? (
               <div className="border rounded-lg divide-y">
                 {diff.hunks_by_file.map((fileDiff) => {
-                  const isExpanded = expandedFiles.has(fileDiff.path);
+                  const isExpanded = expandedFileSet.has(fileDiff.path);
                   return (
                     <div key={fileDiff.path}>
                       <button

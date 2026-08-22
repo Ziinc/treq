@@ -1,13 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { screen, within } from "../../test-utils";
 import userEvent from "@testing-library/user-event";
-import {
-  addSingleReviewComment,
-  clickChangedFile,
-  openReviewTab,
-  setupWorkspaceWithDiff,
-  startEditingComment,
-} from "./comments-helpers";
+import { setupEditableComment, startEditingComment } from "./comments-helpers";
 
 describe("Inline comment editing — cancel", () => {
   let user: ReturnType<typeof userEvent.setup>;
@@ -16,15 +10,9 @@ describe("Inline comment editing — cancel", () => {
     user = userEvent.setup();
   });
 
-  async function setupEditableComment(branchName: string, comment: string) {
-    await setupWorkspaceWithDiff(branchName);
-    await openReviewTab(user, branchName);
-    await clickChangedFile("test.txt");
-    await addSingleReviewComment(user, comment);
-  }
-
   it("restores the original inline comment when canceling edit", async () => {
     await setupEditableComment(
+      user,
       "feat/comment-edit-cancel",
       "Original comment text",
     );
@@ -44,6 +32,7 @@ describe("Inline comment editing — cancel", () => {
 
   it("cancels inline comment editing with Escape", async () => {
     await setupEditableComment(
+      user,
       "feat/comment-edit-escape",
       "Original comment text",
     );

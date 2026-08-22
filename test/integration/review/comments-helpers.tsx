@@ -126,6 +126,14 @@ export async function addSingleReviewComment(
   user: ReturnType<typeof userEvent.setup>,
   comment: string,
 ) {
+  await waitFor(
+    () => {
+      if (document.querySelectorAll("[data-diff-line]").length === 0) {
+        throw new Error("waiting for diff lines");
+      }
+    },
+    { timeout: 60_000 },
+  );
   const gutterButton = await waitFor(
     () => {
       const button = document.querySelector(
@@ -165,13 +173,24 @@ export async function startEditingComment(comment: string) {
   return screen.findByDisplayValue(comment);
 }
 
+export async function setupEditableComment(
+  user: ReturnType<typeof userEvent.setup>,
+  branchName: string,
+  comment: string,
+) {
+  await setupWorkspaceWithDiff(branchName);
+  await openReviewTab(user, branchName);
+  await waitForFileAndLines();
+  await addSingleReviewComment(user, comment);
+}
+
 export async function setupReviewMode(
   user: ReturnType<typeof userEvent.setup>,
   branchName: string,
 ) {
   await setupWorkspaceWithDiff(branchName);
   await openReviewTab(user, branchName);
-  await clickChangedFile("test.txt");
+  await waitForFileAndLines();
   await addSingleReviewComment(user, "Test comment");
 }
 

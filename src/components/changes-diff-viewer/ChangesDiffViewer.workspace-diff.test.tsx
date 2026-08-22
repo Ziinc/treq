@@ -85,6 +85,41 @@ describe("ChangesDiffViewer workspace diff contract", () => {
     expect(api.getWorkspaceChangedFiles).not.toHaveBeenCalled();
   });
 
+  it("shows uncommitted files while file hunks are still loading", async () => {
+    const api = await import("../../lib/api");
+    vi.mocked(api.getWorkspaceDiff).mockResolvedValue({
+      committed_files: [],
+      hunks_by_file: [],
+      uncommitted_files: [
+        {
+          path: "src/local.ts",
+          status: "M",
+          changed_line_count: 1,
+          diff_deferred: false,
+        },
+      ],
+      conflicted_files: [],
+      too_large_to_render: false,
+      render_block_reason: null,
+    });
+    vi.mocked(api.getWorkspaceFileHunks).mockReturnValue(new Promise(() => {}));
+
+    render(
+      <ChangesDiffViewer
+        workspacePath="/tmp/workspace"
+        repoPath="/tmp/repo"
+        workspaceId={1}
+        initialSelectedFile={null}
+        showCommittedChanges={false}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText("local.ts")).toBeInTheDocument();
+    });
+    expect(screen.queryByText("Loading diffs...")).not.toBeInTheDocument();
+  });
+
   it("keeps committed and uncommitted sections separate when paths overlap", async () => {
     const api = await import("../../lib/api");
     vi.mocked(api.getWorkspaceDiff).mockResolvedValue({
@@ -249,5 +284,52 @@ describe("ChangesDiffViewer workspace diff contract", () => {
         (_, element) => element?.textContent?.includes("extra = true") ?? false,
       ).length,
     ).toBeGreaterThan(0);
+  });
+
+  it("does not fetch diffs until workspaceId is defined", async () => {
+    const api = await import("../../lib/api");
+    vi.mocked(api.getWorkspaceDiff).mockResolvedValue({
+      committed_files: [],
+      hunks_by_file: [],
+      uncommitted_files: [
+        {
+          path: "src/local.ts",
+          status: "M",
+          changed_line_count: 1,
+          diff_deferred: false,
+        },
+      ],
+      conflicted_files: [],
+      too_large_to_render: false,
+      render_block_reason: null,
+    });
+
+    const { rerender } = render(
+      <ChangesDiffViewer
+        workspacePath="/tmp/workspace"
+        repoPath="/tmp/repo"
+        initialSelectedFile={null}
+        showCommittedChanges={false}
+      />,
+    );
+
+    await Promise.resolve();
+    expect(api.getWorkspaceChangedFiles).not.toHaveBeenCalled();
+    expect(api.getWorkspaceDiff).not.toHaveBeenCalled();
+
+    rerender(
+      <ChangesDiffViewer
+        workspacePath="/tmp/workspace"
+        repoPath="/tmp/repo"
+        workspaceId={1}
+        initialSelectedFile={null}
+        showCommittedChanges={false}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(api.getWorkspaceDiff).toHaveBeenCalled();
+    });
+    expect(api.getWorkspaceChangedFiles).not.toHaveBeenCalled();
   });
 });

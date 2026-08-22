@@ -1,6 +1,7 @@
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { ExternalLink, Github, Loader2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import useSWR from "swr";
 import { useAuthStore } from "../stores/authStore";
 import {
   useGitRemoteInfo,
@@ -144,34 +145,22 @@ export const GitHubIntegrationSettings: React.FC<
     subscription,
     signIn,
   } = useAuthStore();
-  const [repositories, setRepositories] = useState<GitHubRepository[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [failed, setFailed] = useState(false);
-  const isPro =
-    subscription?.plan === "pro" && subscription.status === "active";
-
   const userId = user?.id;
   const isSignedIn = !!user && !!session;
-
-  useEffect(() => {
-    if (!isSignedIn) return;
-    let active = true;
-    setLoading(true);
-    setFailed(false);
-    supabase
+  const isPro =
+    subscription?.plan === "pro" && subscription.status === "active";
+  const {
+    data: repositories = [],
+    isLoading: loading,
+    error: reposError,
+  } = useSWR(isSignedIn ? ["github-repositories", userId] : null, async () => {
+    const { data, error } = await supabase
       .from("github_repositories")
-      .select("id, full_name, private, default_branch, installation_id")
-      .then(({ data, error }) => {
-        if (!active) return;
-        setRepositories(error ? [] : ((data ?? []) as GitHubRepository[]));
-        setFailed(Boolean(error));
-        setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-    // Keyed on user identity, not the auth objects, so an unstable useAuth can't loop this.
-  }, [userId, isSignedIn]);
+      .select("id, full_name, private, default_branch, installation_id");
+    if (error) throw error;
+    return (data ?? []) as GitHubRepository[];
+  });
+  const failed = Boolean(reposError);
 
   if (authLoading) {
     return (

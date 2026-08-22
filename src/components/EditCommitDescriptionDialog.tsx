@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import useSWR from "swr";
 import { Loader2 } from "lucide-react";
 import {
   Dialog,
@@ -28,45 +29,39 @@ interface EditCommitDescriptionDialogProps {
 export const EditCommitDescriptionDialog: React.FC<
   EditCommitDescriptionDialogProps
 > = ({ open, onOpenChange, repoPath, workspaceId, commit, onSuccess }) => {
-  const [description, setDescription] = useState("");
-  const [initialDescription, setInitialDescription] = useState("");
-  const [fetching, setFetching] = useState(false);
+  const changeId = commit?.change_id;
+  const {
+    data: loadedDescription,
+    error: loadError,
+    isLoading: fetching,
+  } = useSWR(
+    open && changeId
+      ? ["commit-description", repoPath, workspaceId, changeId]
+      : null,
+    () => getCommitDescription(repoPath, workspaceId, changeId!),
+  );
+  const [draft, setDraft] = useState<{ key: string; text: string } | null>(
+    null,
+  );
+  const description =
+    draft && draft.key === changeId ? draft.text : (loadedDescription ?? "");
+  const initialDescription = loadedDescription ?? "";
+  const setDescription = (text: string) => {
+    if (!changeId) return;
+    setDraft({ key: changeId, text });
+  };
+  const error = loadError
+    ? loadError instanceof Error
+      ? loadError.message
+      : String(loadError)
+    : "";
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
   const { addToast } = useToast();
-
-  useEffect(() => {
-    if (!open || !commit) return;
-
-    let cancelled = false;
-    setError("");
-    setFetching(true);
-
-    getCommitDescription(repoPath, workspaceId, commit.change_id)
-      .then((fullDescription) => {
-        if (cancelled) return;
-        setDescription(fullDescription);
-        setInitialDescription(fullDescription);
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        setError(err instanceof Error ? err.message : String(err));
-      })
-      .finally(() => {
-        if (cancelled) return;
-        setFetching(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [open, commit, repoPath, workspaceId]);
 
   const handleSave = async () => {
     if (!commit || description === initialDescription) return;
 
     setSaving(true);
-    setError("");
 
     try {
       await describeCommit(
@@ -86,7 +81,6 @@ export const EditCommitDescriptionDialog: React.FC<
       onOpenChange(false);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
-      setError(errorMsg);
       addToast({
         title: "Failed to update description",
         description: errorMsg,

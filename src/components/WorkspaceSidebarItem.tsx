@@ -1,4 +1,3 @@
-import { useQueryClient } from "@tanstack/react-query";
 import { Draggable } from "@hello-pangea/dnd";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
@@ -216,7 +215,6 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
   onDropChangeFiles,
 }) => {
   const workspace = node.status.current;
-  const queryClient = useQueryClient();
   const { addToast } = useToast();
   const isSelected =
     selectedWorkspaceIds?.has(workspace.id) ||
@@ -449,11 +447,9 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                   <ContextMenuItem
                     data-testid="remove-schedule-menu-item"
                     onClick={() => {
-                      void clearWorkspaceSchedule(
-                        repoPath,
-                        [workspace.id],
-                        queryClient,
-                      ).then(() => {
+                      void clearWorkspaceSchedule(repoPath, [
+                        workspace.id,
+                      ]).then(() => {
                         addToast({
                           title: "Workspace unscheduled",
                           description: "Shown in the sidebar again.",

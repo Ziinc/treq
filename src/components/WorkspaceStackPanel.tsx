@@ -1,4 +1,3 @@
-import { useQueries, useQuery } from "@tanstack/react-query";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import {
   ArrowDown,
@@ -8,6 +7,7 @@ import {
   Layers2,
 } from "lucide-react";
 import { memo, useMemo } from "react";
+import useSWR from "swr";
 import { listCommits, listWorkspaceStatuses, type Workspace } from "../lib/api";
 import { WEB_URL } from "../lib/supabase";
 import { cn, formatFullTimestamp, formatRelativeTime } from "../lib/utils";
@@ -54,11 +54,10 @@ export const WorkspaceStackPanel = memo<WorkspaceStackPanelProps>(
     onSelectWorkspace,
     onScheduleStack,
   }) => {
-    const { data: workspaceStatuses } = useQuery({
-      queryKey: ["workspace-statuses", repoPath],
-      queryFn: () => listWorkspaceStatuses(repoPath),
-      enabled: Boolean(repoPath),
-    });
+    const { data: workspaceStatuses } = useSWR(
+      repoPath ? ["workspace-statuses", repoPath] : null,
+      () => listWorkspaceStatuses(repoPath),
+    );
 
     const stack = useMemo(() => {
       if (!workspaceStatuses) return null;
@@ -71,24 +70,24 @@ export const WorkspaceStackPanel = memo<WorkspaceStackPanelProps>(
       return getWorkspaceStack(allWorkspaces, workspace.id);
     }, [workspaceStatuses, workspace.id, defaultBranch]);
 
-    const commitQueries = useQueries({
-      queries: (stack ?? []).map((entry) => ({
-        queryKey: ["workspace-commits", repoPath, entry.workspace.id],
-        queryFn: () => listCommits(repoPath, entry.workspace.id),
-        enabled: Boolean(repoPath),
-      })),
-    });
+    const stackIds = (stack ?? []).map((entry) => entry.workspace.id);
+    const { data: commitLists } = useSWR(
+      repoPath && stackIds.length > 0
+        ? ["workspace-commits-stack", repoPath, stackIds.join(",")]
+        : null,
+      () => Promise.all(stackIds.map((id) => listCommits(repoPath, id))),
+    );
 
     const diffStatsByWorkspaceId = useMemo(() => {
       const map = new Map<number, WorkspaceDiffStats>();
       (stack ?? []).forEach((entry, index) => {
         map.set(
           entry.workspace.id,
-          sumWorkspaceDiffStats(commitQueries[index]?.data?.commits ?? []),
+          sumWorkspaceDiffStats(commitLists?.[index]?.commits ?? []),
         );
       });
       return map;
-    }, [stack, commitQueries]);
+    }, [stack, commitLists]);
 
     // Each side of the bar is sized relative to the largest single-direction
     // change (insertions or deletions) in the stack, a la Gerrit's change

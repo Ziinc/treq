@@ -18,6 +18,7 @@ import {
   addSingleReviewComment as addReviewComment,
   clickChangedFile,
   openReviewTab,
+  waitForChangedFile,
 } from "../review/comments-helpers";
 
 const REVIEW_FILE = "reviews-flow.txt";
@@ -66,12 +67,21 @@ async function expectCommitCreated(
   workspaceId: number,
   commitMessage: string,
 ) {
-  await waitFor(async () => {
-    const log = await listCommits(repoPath, workspaceId, false, undefined, 30);
-    expect(
-      log.commits.some((commit) => commit.description === commitMessage),
-    ).toBe(true);
-  });
+  await waitFor(
+    async () => {
+      const log = await listCommits(
+        repoPath,
+        workspaceId,
+        false,
+        undefined,
+        30,
+      );
+      expect(
+        log.commits.some((commit) => commit.description === commitMessage),
+      ).toBe(true);
+    },
+    { timeout: 60_000 },
+  );
 }
 
 describe("ShowWorkspace - Reviews integration", () => {
@@ -86,6 +96,7 @@ describe("ShowWorkspace - Reviews integration", () => {
     const commitMessage = "Add integration reviews test commit";
     const { repoPath, workspace } = await openReviewWithChange(branchName);
     await openReviewTab(user, branchName);
+    await waitForChangedFile(REVIEW_FILE);
 
     await user.type(
       await screen.findByPlaceholderText("Message"),

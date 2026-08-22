@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import useSWR from "swr";
 import {
   Dialog,
   DialogContent,
@@ -78,9 +79,6 @@ export const UnifiedWorkspaceDialog: React.FC<UnifiedWorkspaceDialogProps> = ({
   const [title, setTitle] = useState("");
   const [sparsePaths, setSparsePaths] = useState("");
   const [symlinkedDirs, setSymlinkedDirs] = useState("");
-  const [gitignoreSuggestions, setGitignoreSuggestions] = useState<string[]>(
-    [],
-  );
   const [branchName, setBranchName] = useState("");
   const [branchPattern, setBranchPattern] = useState("treq/{name}");
   const [isEditingBranch, setIsEditingBranch] = useState(false);
@@ -316,23 +314,10 @@ export const UnifiedWorkspaceDialog: React.FC<UnifiedWorkspaceDialogProps> = ({
   );
 
   // Load gitignore suggestions for symlink chips when the create dialog opens.
-  useEffect(() => {
-    if (!open || sourceWorkspace) {
-      setGitignoreSuggestions([]);
-      return;
-    }
-    let cancelled = false;
-    listGitignoredPathSuggestions(repoPath)
-      .then((suggestions) => {
-        if (!cancelled) setGitignoreSuggestions(suggestions);
-      })
-      .catch(() => {
-        if (!cancelled) setGitignoreSuggestions([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [open, repoPath, sourceWorkspace]);
+  const { data: gitignoreSuggestions = [] } = useSWR(
+    open && !sourceWorkspace ? ["gitignore-suggestions", repoPath] : null,
+    () => listGitignoredPathSuggestions(repoPath),
+  );
 
   // Reset advanced overlay fields when the dialog closes/reopens.
   useEffect(() => {

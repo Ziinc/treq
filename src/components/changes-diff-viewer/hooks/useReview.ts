@@ -1,4 +1,6 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import useSWR from "swr";
+import { useDebounce } from "../../../hooks/useDebounce";
 import {
   type ConflictRegion,
   clearPendingReview,
@@ -8,11 +10,12 @@ import {
   unmarkFileViewed,
 } from "../../../lib/api";
 import type { ParsedFileChange } from "../../../lib/git-utils";
+import { shouldWritePendingReview } from "../../../lib/should-write-pending-review";
+import { setQueryData } from "../../../lib/swr-cache";
 import {
   FILE_COMMENT_HUNK_ID,
   formatReviewMarkdown as formatReviewMarkdownShared,
 } from "../../../lib/review";
-import { useDebounce } from "../../../hooks/useDebounce";
 import type { useToast } from "../../ui/toast";
 import type { ConflictComment, FileHunksData, LineComment } from "../types";
 import {
@@ -88,53 +91,87 @@ export function useReview({
     Map<string, { viewedAt: string; contentHash: string }>
   >(new Map());
 
+  const pendingReviewKey =
+    repoPath && workspaceId !== undefined ? `${repoPath}:${workspaceId}` : null;
+  const hydratedReviewKeyRef = useRef<string | null>(null);
+  if (
+    pendingReviewKey &&
+    hydratedReviewKeyRef.current !== null &&
+    hydratedReviewKeyRef.current !== pendingReviewKey
+  ) {
+    // New workspace only — do not reset when workspaceId briefly goes undefined.
+    hydratedReviewKeyRef.current = null;
+  }
+
+  const { data: pendingReview, isLoading: pendingReviewLoading } = useSWR(
+    repoPath && workspaceId !== undefined
+      ? ["pending-review", repoPath, workspaceId]
+      : null,
+    () => loadPendingReview(repoPath!, workspaceId!),
+  );
+
   useEffect(() => {
-    const loadReview = async () => {
-      if (repoPath && workspaceId !== undefined) {
-        try {
-          const pendingReview = await loadPendingReview(repoPath, workspaceId);
-          if (pendingReview) {
-            setComments(pendingReview.comments.map(toLocalLineComment));
-            if (pendingReview.summary_text)
-              setFinalReviewComment(pendingReview.summary_text);
-            setHasUserAddedComments(pendingReview.comments.length > 0);
-            const loadedComments = await loadPendingReview(
-              repoPath,
-              workspaceId,
-            );
-            if (loadedComments && loadedComments.comments.length > 0) {
-              setComments(loadedComments.comments.map(toLocalLineComment));
-            }
-          }
-        } catch (error) {
-          console.error("Failed to load pending review:", error);
-        }
-      }
-    };
-    loadReview();
-  }, [repoPath, workspaceId]);
+    if (!pendingReviewKey || pendingReviewLoading) return;
+    if (hydratedReviewKeyRef.current === pendingReviewKey) return;
+    hydratedReviewKeyRef.current = pendingReviewKey;
+    const loaded = pendingReview?.comments ?? [];
+    if (loaded.length === 0) return;
+    setComments(loaded.map(toLocalLineComment));
+    if (pendingReview?.summary_text)
+      setFinalReviewComment(pendingReview.summary_text);
+    setHasUserAddedComments(true);
+  }, [
+    pendingReview,
+    pendingReviewLoading,
+    pendingReviewKey,
+    setComments,
+    setFinalReviewComment,
+    setHasUserAddedComments,
+  ]);
 
   const debouncedComments = useDebounce(comments, 500);
   const debouncedSummary = useDebounce(finalReviewComment, 500);
 
+  const persistSuppressedRef = useRef(false);
+  const persistGenRef = useRef(0);
+
   useEffect(() => {
-    const saveReview = async () => {
-      if (!repoPath || workspaceId === undefined) return;
-      if (debouncedComments.length === 0 && !debouncedSummary.trim()) return;
-      try {
-        await savePendingReview(
-          repoPath,
-          workspaceId,
-          debouncedComments.map(toApiLineComment),
-          undefined,
-          debouncedSummary.trim() || undefined,
-        );
-      } catch (error) {
-        console.error("Failed to auto-save review:", error);
+    if (!repoPath || workspaceId === undefined) return;
+    if (comments.length > 0 || finalReviewComment.trim()) {
+      persistSuppressedRef.current = false;
+    }
+    if (persistSuppressedRef.current) return;
+    if (
+      !shouldWritePendingReview({
+        liveCommentCount: comments.length,
+        liveSummary: finalReviewComment,
+        debouncedCommentCount: debouncedComments.length,
+        debouncedSummary,
+      })
+    ) {
+      return;
+    }
+    const gen = persistGenRef.current;
+    void savePendingReview(
+      repoPath,
+      workspaceId,
+      debouncedComments.map(toApiLineComment),
+      undefined,
+      debouncedSummary.trim() || undefined,
+    ).then(async () => {
+      if (persistSuppressedRef.current || gen !== persistGenRef.current) {
+        await clearPendingReview(repoPath, workspaceId);
+        await setQueryData(["pending-review", repoPath, workspaceId], null);
       }
-    };
-    saveReview();
-  }, [debouncedComments, debouncedSummary, repoPath, workspaceId]);
+    });
+  }, [
+    repoPath,
+    workspaceId,
+    comments.length,
+    finalReviewComment,
+    debouncedComments,
+    debouncedSummary,
+  ]);
 
   useEffect(() => {
     if (files.length === 0) return;
@@ -162,7 +199,7 @@ export function useReview({
       return hasChanges ? next : prev;
     });
     for (const filePath of staleViewedFiles) {
-      unmarkFileViewed(workspacePath, filePath).catch(() => {});
+      void unmarkFileViewed(workspacePath, filePath);
     }
   }, [files, allFileHunks, workspacePath]);
 
@@ -246,13 +283,17 @@ export function useReview({
         setPendingFilesData(null);
         setPendingHunksData(null);
         setStaleFiles(new Set());
+        persistSuppressedRef.current = true;
+        persistGenRef.current += 1;
         setComments([]);
         setConflictComments(new Map());
         setHasUserAddedComments(false);
         setFinalReviewComment("");
         setReviewPopoverOpen(false);
-        if (repoPath && workspaceId !== undefined)
+        if (repoPath && workspaceId !== undefined) {
           await clearPendingReview(repoPath, workspaceId);
+          await setQueryData(["pending-review", repoPath, workspaceId], null);
+        }
         onReviewSubmitted?.();
       } catch (error) {
         addToast({
@@ -283,14 +324,18 @@ export function useReview({
 
   const handleCancelReview = useCallback(async () => {
     try {
+      persistSuppressedRef.current = true;
+      persistGenRef.current += 1;
       setComments([]);
       setConflictComments(new Map());
       setHasUserAddedComments(false);
       setFinalReviewComment("");
       setShowCancelDialog(false);
       setReviewPopoverOpen(false);
-      if (repoPath && workspaceId !== undefined)
+      if (repoPath && workspaceId !== undefined) {
         await clearPendingReview(repoPath, workspaceId);
+        await setQueryData(["pending-review", repoPath, workspaceId], null);
+      }
       addToast({
         title: "Review canceled",
         description: "All comments have been discarded",

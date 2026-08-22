@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import useSWR from "swr";
 import { listen } from "@tauri-apps/api/event";
 import { detectEditorApps, getSettingsBatch } from "../lib/api";
 import { TREQ_SEND_EVENT, type TreqSendPayload } from "../lib/treqSend";
@@ -9,6 +10,13 @@ import { useThemeStore } from "./themeStore";
 import { useTreqSendStore } from "./treqSendStore";
 import { applyZoomToDocument, useZoomSettingsStore } from "./zoomSettingsStore";
 
+const SETTINGS_BATCH_KEYS = [
+  "theme",
+  "terminal_font_size",
+  "diff_font_size",
+  "ui_zoom",
+] as const;
+
 /**
  * One-shot side effects for Zustand stores: persist hydration, DOM/theme,
  * Tauri listeners, and editor detection. Mount once at the app root.
@@ -18,6 +26,37 @@ export function AppStoreEffects() {
   const systemTheme = useThemeStore((s) => s.systemTheme);
   const zoom = useZoomSettingsStore((s) => s.zoom);
   const actualTheme = theme === "system" ? systemTheme : theme;
+
+  useSWR(
+    "settings-batch-hydrate",
+    () => getSettingsBatch([...SETTINGS_BATCH_KEYS]),
+    {
+      onSuccess: (record) => {
+        if (record) applySettingsRecord(record);
+      },
+      onError: (error) => {
+        console.error("Failed to preload settings:", error);
+      },
+    },
+  );
+
+  useSWR("detect-editor-apps", detectEditorApps, {
+    onSuccess: (apps) => {
+      if (!apps) {
+        useEditorAppsStore.getState().setLoading(false);
+        return;
+      }
+      useEditorAppsStore.getState().setEditorApps(apps);
+    },
+    onError: (error) => {
+      console.error("Failed to detect editor apps:", error);
+      useEditorAppsStore.getState().setLoading(false);
+    },
+  });
+
+  useSWR("auth-restore-session", () =>
+    useAuthStore.getState().restoreSession(),
+  );
 
   useEffect(() => {
     const mediaQuery = window.matchMedia("(prefers-color-scheme: dark)");
@@ -45,34 +84,6 @@ export function AppStoreEffects() {
       }
     };
     window.addEventListener("keydown", onZoomKeyDown, true);
-
-    void getSettingsBatch([
-      "theme",
-      "terminal_font_size",
-      "diff_font_size",
-      "ui_zoom",
-    ])
-      .then((record) => {
-        if (record) applySettingsRecord(record);
-      })
-      .catch((error) => {
-        console.error("Failed to preload settings:", error);
-      });
-
-    detectEditorApps()
-      .then((apps) => {
-        if (!apps) {
-          useEditorAppsStore.getState().setLoading(false);
-          return;
-        }
-        useEditorAppsStore.getState().setEditorApps(apps);
-      })
-      .catch((error) => {
-        console.error("Failed to detect editor apps:", error);
-        useEditorAppsStore.getState().setLoading(false);
-      });
-
-    void useAuthStore.getState().restoreSession();
 
     let unlistenDeepLink: (() => void) | undefined;
     let unlistenSend: (() => void) | undefined;

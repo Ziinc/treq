@@ -1,5 +1,5 @@
-import { useQueryClient } from "@tanstack/react-query";
 import { useActionState, useEffect, useMemo, useState } from "react";
+import { invalidateQueries } from "../lib/swr-cache";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { scheduleWorkspaces } from "../lib/api";
@@ -103,7 +103,6 @@ export const ScheduleWorkspaceDialog: React.FC<
 }) => {
   const [selected, setSelected] = useState<Date>(defaultScheduleDate());
   const { addToast } = useToast();
-  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (!open) return;
@@ -118,8 +117,8 @@ export const ScheduleWorkspaceDialog: React.FC<
   }, [open, currentHiddenUntil]);
 
   const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: ["workspaces"] });
-    void queryClient.invalidateQueries({ queryKey: ["workspace-statuses"] });
+    void invalidateQueries(["workspaces"]);
+    void invalidateQueries(["workspace-statuses"]);
   };
 
   const [error, scheduleAction] = useActionState(
@@ -127,7 +126,7 @@ export const ScheduleWorkspaceDialog: React.FC<
       const intent = String(formData.get("intent") ?? "schedule");
       try {
         if (intent === "remove") {
-          await clearWorkspaceSchedule(repoPath, workspaceIds, queryClient);
+          await clearWorkspaceSchedule(repoPath, workspaceIds);
           addToast({
             title:
               mode === "stack" ? "Stack unscheduled" : "Workspace unscheduled",

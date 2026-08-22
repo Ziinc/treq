@@ -21,6 +21,9 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { useToast } from "../../ui/toast";
 import type { FileHunksData } from "../types";
 import { hunksEqual, parseCachedHunks } from "../utils";
+import { workspaceDiffCoalesce } from "../../../lib/coalesce-in-flight";
+
+// One in-flight workspace_diff per process. jj WC locks are process-global.
 
 interface UseFileLoadingParams {
   workspacePath: string;
@@ -108,102 +111,110 @@ export function useFileLoading({
     cachedChanges.refresh();
   }, [cachedChanges]);
 
+  const pendingForceApplyRef = useRef(false);
+
   const loadChangedFiles = useCallback(
     async (forceApply = false) => {
-      setRefreshing(true);
-      onRefreshingChange?.(true);
-      // User-initiated refreshes (e.g. commit) must apply through review-mode
-      // freeze so the Review panel updates instead of showing the stale banner.
-      if (forceApply) {
-        isReloadingRef.current = true;
-      }
-      try {
-        if (repoPath && workspaceId !== undefined) {
-          const diff = await getWorkspaceDiff(repoPath, workspaceId);
-          const parsed = parseJjChangedFiles(diff.uncommitted_files ?? []);
-          applyChangedFilesRef.current(parsed, forceApply);
+      if (forceApply) pendingForceApplyRef.current = true;
+      await workspaceDiffCoalesce(async () => {
+        const force = pendingForceApplyRef.current;
+        pendingForceApplyRef.current = false;
+        setRefreshing(true);
+        onRefreshingChange?.(true);
+        // User-initiated refreshes (e.g. commit) must apply through review-mode
+        // freeze so the Review panel updates instead of showing the stale banner.
+        if (force) {
+          isReloadingRef.current = true;
+        }
+        try {
+          if (repoPath && workspaceId !== undefined) {
+            const diff = await getWorkspaceDiff(repoPath, workspaceId);
+            const parsed = parseJjChangedFiles(diff.uncommitted_files ?? []);
+            applyChangedFilesRef.current(parsed, force);
 
-          const fromDiff = diff.conflicted_files ?? [];
-          // Diff is authoritative for live conflict state. The status hint can
-          // lag a frame behind resolve+commit; never re-introduce paths a fresh
-          // diff reports as resolved.
-          setLiveConflictedFiles(fromDiff);
-          const conflictedHint = new Set<string>(fromDiff);
-          const uncommittedPaths = new Set(parsed.map((file) => file.path));
+            const fromDiff = diff.conflicted_files ?? [];
+            // Diff is authoritative for live conflict state. The status hint can
+            // lag a frame behind resolve+commit; never re-introduce paths a fresh
+            // diff reports as resolved.
+            setLiveConflictedFiles(fromDiff);
+            const conflictedHint = new Set<string>(fromDiff);
+            const uncommittedPaths = new Set(parsed.map((file) => file.path));
 
-          // Keep the full committed file list so the Committed section header
-          // (and its Show toggle) stay available while committed diffs are hidden.
-          // Conflicted paths that aren't already in the committed list are still
-          // appended — rebase conflicts live in committed hunks.
-          let committed = [...(diff.committed_files ?? [])];
-          for (const path of conflictedHint) {
-            if (
-              uncommittedPaths.has(path) ||
-              committed.some((file) => file.path === path)
-            ) {
-              continue;
+            // Keep the full committed file list so the Committed section header
+            // (and its Show toggle) stay available while committed diffs are hidden.
+            // Conflicted paths that aren't already in the committed list are still
+            // appended — rebase conflicts live in committed hunks.
+            let committed = [...(diff.committed_files ?? [])];
+            for (const path of conflictedHint) {
+              if (
+                uncommittedPaths.has(path) ||
+                committed.some((file) => file.path === path)
+              ) {
+                continue;
+              }
+              committed = [
+                ...committed,
+                {
+                  path,
+                  status: "C",
+                  previous_path: null,
+                  changed_line_count: 0,
+                  diff_deferred: false,
+                },
+              ];
             }
-            committed = [
-              ...committed,
-              {
-                path,
-                status: "C",
-                previous_path: null,
-                changed_line_count: 0,
-                diff_deferred: false,
-              },
-            ];
-          }
-          setCommittedFiles(committed);
+            setCommittedFiles(committed);
 
-          // When Committed is hidden, still keep dirty + conflicted committed hunks.
-          const alwaysVisibleCommitted = new Set([
-            ...uncommittedPaths,
-            ...conflictedHint,
-          ]);
-          setCommittedFileHunks(
-            new Map(
-              (diff.hunks_by_file ?? [])
-                .filter(
-                  (fileDiff) =>
-                    showCommittedChanges ||
-                    alwaysVisibleCommitted.has(fileDiff.path),
-                )
-                .map((fileDiff) => [
-                  fileDiff.path,
-                  {
-                    filePath: fileDiff.path,
-                    hunks: fileDiff.hunks,
-                    isLoading: false,
-                  },
-                ]),
-            ),
+            // When Committed is hidden, still keep dirty + conflicted committed hunks.
+            const alwaysVisibleCommitted = new Set([
+              ...uncommittedPaths,
+              ...conflictedHint,
+            ]);
+            setCommittedFileHunks(
+              new Map(
+                (diff.hunks_by_file ?? [])
+                  .filter(
+                    (fileDiff) =>
+                      showCommittedChanges ||
+                      alwaysVisibleCommitted.has(fileDiff.path),
+                  )
+                  .map((fileDiff) => [
+                    fileDiff.path,
+                    {
+                      filePath: fileDiff.path,
+                      hunks: fileDiff.hunks,
+                      isLoading: false,
+                    },
+                  ]),
+              ),
+            );
+            return;
+          }
+          const jjFiles = await getWorkspaceChangedFiles(
+            repoPath ?? "",
+            workspaceId ?? null,
           );
-          return;
+          const parsed = parseJjChangedFiles(jjFiles);
+          applyChangedFilesRef.current(parsed, force);
+          setCommittedFiles([]);
+          setCommittedFileHunks(new Map());
+          setLiveConflictedFiles([]);
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : String(error);
+          addToast({ description: message, title: "JJ Error", type: "error" });
+        } finally {
+          setInitialLoading(false);
+          setRefreshing(false);
+          onRefreshingChange?.(false);
+          if (force) {
+            // Keep the flag long enough for the files→hunks effect to apply.
+            setTimeout(() => {
+              isReloadingRef.current = false;
+            }, 100);
+          }
         }
-        const jjFiles = await getWorkspaceChangedFiles(
-          repoPath ?? "",
-          workspaceId ?? null,
-        );
-        const parsed = parseJjChangedFiles(jjFiles);
-        applyChangedFilesRef.current(parsed, forceApply);
-        setCommittedFiles([]);
-        setCommittedFileHunks(new Map());
-        setLiveConflictedFiles([]);
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        addToast({ description: message, title: "JJ Error", type: "error" });
-      } finally {
-        setInitialLoading(false);
-        setRefreshing(false);
-        onRefreshingChange?.(false);
-        if (forceApply) {
-          // Keep the flag long enough for the files→hunks effect to apply.
-          setTimeout(() => {
-            isReloadingRef.current = false;
-          }, 100);
-        }
-      }
+      });
     },
     [
       workspacePath,
@@ -218,14 +229,24 @@ export function useFileLoading({
     ],
   );
 
-  useEffect(() => {
-    loadChangedFiles();
-  }, [workspacePath]);
+  const loadChangedFilesRef = useRef(loadChangedFiles);
+  loadChangedFilesRef.current = loadChangedFiles;
 
+  // Call through the ref so toast/callback identity cannot retrigger this
+  // effect. Including `loadChangedFiles` stacked overlapping getWorkspaceDiff
+  // calls (jj WC lock) and unmounted the Review file list in later tests.
+  // Wait for workspaceId: a null-id getWorkspaceChangedFiles can hold the jj
+  // lock indefinitely, and the coalescer would then never run the real load.
   useEffect(() => {
-    if (!workspacePath || initialLoading) return;
-    loadChangedFiles();
-  }, [workspacePath, showCommittedChanges, initialLoading, loadChangedFiles]);
+    if (!workspacePath || workspaceId === undefined) return;
+    void loadChangedFilesRef.current();
+  }, [
+    workspacePath,
+    repoPath,
+    workspaceId,
+    showCommittedChanges,
+    conflictedFilesKey,
+  ]);
 
   useEffect(() => {
     if (!workspaceId) return;
@@ -427,8 +448,6 @@ export function useFileLoading({
   // above isn't enough to keep an open diff fresh. Re-read everything from
   // disk whenever the window regains focus, so switching back to the app
   // never leaves the Changes tab showing what was there before you left.
-  const loadChangedFilesRef = useRef(loadChangedFiles);
-  loadChangedFilesRef.current = loadChangedFiles;
   const loadAllFileHunksRef = useRef(loadAllFileHunks);
   loadAllFileHunksRef.current = loadAllFileHunks;
   const filesRef = useRef(files);
@@ -488,7 +507,7 @@ export function useFileLoading({
       currentPaths.some((p, i) => p !== prevFilePathsRef.current[i]);
     if (files.length > 0 && pathsChanged) {
       prevFilePathsRef.current = currentPaths;
-      loadAllFileHunks(files);
+      void loadAllFileHunksRef.current(files);
       setLargeChangesetExpandedRef.current(false);
     } else if (files.length === 0 && prevFilePathsRef.current.length > 0) {
       prevFilePathsRef.current = [];
@@ -498,7 +517,7 @@ export function useFileLoading({
       setAllFileHunks(new Map());
       setLargeChangesetExpandedRef.current(false);
     }
-  }, [files, loadAllFileHunks, setLargeChangesetExpandedRef]);
+  }, [files, setLargeChangesetExpandedRef]);
 
   return {
     files,

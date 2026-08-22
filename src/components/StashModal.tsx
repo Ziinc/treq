@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import useSWR from "swr";
+import { invalidateQueries } from "../lib/swr-cache";
 import { Command } from "cmdk";
 import {
   Archive,
@@ -135,7 +136,6 @@ export const StashModal: React.FC<StashModalProps> = ({
   onApplyToNewWorkspace,
 }) => {
   const { addToast } = useToast();
-  const queryClient = useQueryClient();
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [applyOpen, setApplyOpen] = useState(false);
@@ -144,13 +144,11 @@ export const StashModal: React.FC<StashModalProps> = ({
 
   const {
     data: entries = [],
-    isPending,
-    refetch,
-  } = useQuery({
-    queryKey: ["stashes", repoPath],
-    enabled: open && Boolean(repoPath),
-    queryFn: () => listStashes(repoPath),
-  });
+    isLoading: isPending,
+    mutate: refetch,
+  } = useSWR(open && repoPath ? ["stashes", repoPath] : null, () =>
+    listStashes(repoPath),
+  );
 
   useEffect(() => {
     if (open && !wasOpenRef.current) {
@@ -168,11 +166,12 @@ export const StashModal: React.FC<StashModalProps> = ({
   const selectedEntry =
     entries.find((entry) => entry.id === selectedId) ?? null;
 
-  const { data: selectedDiff, isPending: diffPending } = useQuery({
-    queryKey: ["stash-diff", repoPath, selectedEntry?.id],
-    enabled: open && selectedEntry != null,
-    queryFn: () => getStashDiff(repoPath, selectedEntry!.id),
-  });
+  const { data: selectedDiff, isLoading: diffPending } = useSWR(
+    open && selectedEntry != null
+      ? ["stash-diff", repoPath, selectedEntry?.id]
+      : null,
+    () => getStashDiff(repoPath, selectedEntry!.id),
+  );
 
   const applyTargets = useMemo((): StashApplyTarget[] => {
     // Caller should pass activity-sorted workspaces; Home is always first.
@@ -203,7 +202,7 @@ export const StashModal: React.FC<StashModalProps> = ({
   };
 
   const invalidate = async () => {
-    await queryClient.invalidateQueries({ queryKey: ["stashes", repoPath] });
+    await invalidateQueries(["stashes", repoPath]);
     await refetch();
   };
 

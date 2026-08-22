@@ -1,4 +1,5 @@
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
+import useSWR from "swr";
 import { AlertCircle, Check, Loader2 } from "lucide-react";
 import {
   Dialog,
@@ -13,7 +14,8 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { useToast } from "./ui/toast";
 import { type Workspace, renameWorkspace } from "../lib/api";
-import { useQueryClient } from "@tanstack/react-query";
+import { invalidateQueries } from "../lib/swr-cache";
+import { useDebounce } from "../hooks/useDebounce";
 
 interface RenameWorkspaceDialogProps {
   open: boolean;
@@ -31,66 +33,43 @@ export const RenameWorkspaceDialog: React.FC<RenameWorkspaceDialogProps> = ({
   onSuccess,
 }) => {
   const [branchName, setBranchName] = useState(workspace.branch_name);
-  const [isChecking, setIsChecking] = useState(false);
-  const [validationResult, setValidationResult] = useState<{
-    success: boolean;
-    message: string;
-  } | null>(null);
-  const checkTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { addToast } = useToast();
-  const queryClient = useQueryClient();
+  const debouncedBranchName = useDebounce(branchName, 500);
 
-  // Reset state when dialog opens
   useEffect(() => {
     if (open) {
       setBranchName(workspace.branch_name);
-      setValidationResult(null);
-      setIsChecking(false);
     }
   }, [open, workspace.branch_name]);
 
-  // Debounced dry-run validation
-  useEffect(() => {
-    if (checkTimeoutRef.current) {
-      clearTimeout(checkTimeoutRef.current);
-    }
-
-    if (!branchName.trim() || branchName === workspace.branch_name) {
-      setValidationResult(null);
-      setIsChecking(false);
-      return;
-    }
-
-    setIsChecking(true);
-
-    checkTimeoutRef.current = setTimeout(async () => {
+  const { data: validationResult, isLoading: isChecking } = useSWR(
+    open &&
+      debouncedBranchName.trim() &&
+      debouncedBranchName !== workspace.branch_name
+      ? [
+          "rename-workspace-dry-run",
+          repoPath,
+          workspace.id,
+          debouncedBranchName,
+        ]
+      : null,
+    async () => {
       try {
         const result = await renameWorkspace(
           repoPath,
           workspace.id,
-          branchName,
+          debouncedBranchName,
           true,
         );
-        setValidationResult({
-          success: result.success,
-          message: result.message,
-        });
+        return { success: result.success, message: result.message };
       } catch (err) {
-        setValidationResult({
+        return {
           success: false,
           message: err instanceof Error ? err.message : String(err),
-        });
-      } finally {
-        setIsChecking(false);
+        };
       }
-    }, 500);
-
-    return () => {
-      if (checkTimeoutRef.current) {
-        clearTimeout(checkTimeoutRef.current);
-      }
-    };
-  }, [branchName, repoPath, workspace.id, workspace.branch_name]);
+    },
+  );
 
   const [error, renameAction, isPending] = useActionState(
     async (_prev: string, formData: FormData) => {
@@ -115,8 +94,8 @@ export const RenameWorkspaceDialog: React.FC<RenameWorkspaceDialogProps> = ({
           type: "success",
         });
 
-        queryClient.invalidateQueries({ queryKey: ["workspaces"] });
-        queryClient.invalidateQueries({ queryKey: ["workspace-statuses"] });
+        void invalidateQueries(["workspaces"]);
+        void invalidateQueries(["workspace-statuses"]);
         onSuccess();
         onOpenChange(false);
         return "";

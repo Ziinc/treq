@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import useSWR from "swr";
 import { Copy, History, Play } from "lucide-react";
 import { getPromptHistory, type PromptHistoryEntry } from "../lib/api";
 import { cn } from "../lib/utils";
@@ -42,11 +42,10 @@ export const PromptHistoryModal: React.FC<PromptHistoryModalProps> = ({
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const wasOpenRef = useRef(false);
 
-  const { data: entries = [], isPending } = useQuery({
-    queryKey: ["prompt-history", repoPath],
-    enabled: open && Boolean(repoPath),
-    queryFn: () => getPromptHistory(repoPath),
-  });
+  const { data: entries = [], isLoading: isPending } = useSWR(
+    open && repoPath ? ["prompt-history", repoPath] : null,
+    () => getPromptHistory(repoPath),
+  );
 
   // On the closed -> open transition, jump to the requested entry (or clear
   // the selection so the "entries loaded" effect below defaults to the

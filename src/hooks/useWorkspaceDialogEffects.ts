@@ -1,4 +1,5 @@
-import { type Dispatch, type SetStateAction, useEffect, useRef } from "react";
+import { type Dispatch, type SetStateAction, useEffect, useMemo } from "react";
+import useSWR from "swr";
 import {
   type BranchStatus,
   type JjDiffHunk,
@@ -17,6 +18,7 @@ import {
 import type { BranchListItem } from "../components/TargetBranchSelector";
 import { applyBranchNamePattern } from "../lib/utils";
 import type { WorkspaceDialogDefaults } from "../components/UnifiedWorkspaceDialog";
+import { useDebounce } from "./useDebounce";
 
 type HunkMap = Map<string, { hunks: JjDiffHunk[]; isLoading: boolean }>;
 
@@ -59,6 +61,16 @@ export interface UseWorkspaceDialogEffectsParams {
   setAllWorkspaces: (v: Workspace[]) => void;
   setMoveToExisting: (v: boolean) => void;
   setTargetWorkspaceId: (v: number | null) => void;
+}
+
+function mapBranches(
+  branches: { name: string; is_current: boolean }[],
+): BranchListItem[] {
+  return branches.map((b) => ({
+    name: b.name,
+    fullName: b.name,
+    isCurrent: b.is_current,
+  }));
 }
 
 export function useWorkspaceDialogEffects(
@@ -104,8 +116,6 @@ export function useWorkspaceDialogEffects(
     setTargetWorkspaceId,
   } = params;
 
-  const checkBranchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
   useEffect(() => {
     if (!open) return;
 
@@ -139,89 +149,88 @@ export function useWorkspaceDialogEffects(
     setFileHunksMap(new Map());
     setExpandedFiles(new Set());
     setSelectedCommits(new Set(defaults.preSelectedCommits ?? []));
-
-    if (sourceWorkspace) {
-      setDataLoading(true);
-      Promise.all([
-        getWorkspaceStatus(repoPath, sourceWorkspace.id),
-        getWorkspaceChangedFiles(repoPath, sourceWorkspace.id),
-        getWorkspaces(repoPath),
-      ])
-        .then(([status, files, workspaceList]) => {
-          setWorkspaceStatus(status);
-          setChangedFiles(files);
-          setAllWorkspaces(workspaceList);
-          const others = workspaceList.filter(
-            (w) => w.id !== sourceWorkspace.id,
-          );
-          if (others.length > 0) setTargetWorkspaceId(others[0].id);
-        })
-        .catch((err) => {
-          console.error("Failed to load workspace data:", err);
-          setWorkspaceStatus(null);
-          setChangedFiles([]);
-        })
-        .finally(() => setDataLoading(false));
-    } else if (isHomeRepo) {
-      setDataLoading(true);
-      Promise.all([
-        getWorkspaceChangedFiles(repoPath, null),
-        getWorkspaces(repoPath),
-      ])
-        .then(([files, workspaceList]) => {
-          setChangedFiles(files);
-          setAllWorkspaces(workspaceList);
-        })
-        .catch(() => setChangedFiles([]))
-        .finally(() => setDataLoading(false));
-
-      setBranchesLoading(true);
-      jjGitFetchBackground(repoPath).catch(() => {});
-      listRepoBranches(repoPath)
-        .then((branches) => {
-          setAvailableBranches(
-            branches.map((b) => ({
-              name: b.name,
-              fullName: b.name,
-              isCurrent: b.is_current,
-            })),
-          );
-        })
-        .catch(() => setAvailableBranches([]))
-        .finally(() => setBranchesLoading(false));
-    } else {
-      setChangedFiles([]);
-      setWorkspaceStatus(null);
-      getWorkspaces(repoPath)
-        .then(setAllWorkspaces)
-        .catch(() => setAllWorkspaces([]));
-
-      if (!defaults.targetBranch) {
-        setBranchesLoading(true);
-        jjGitFetchBackground(repoPath).catch(() => {});
-        listRepoBranches(repoPath)
-          .then((branches) => {
-            setAvailableBranches(
-              branches.map((b) => ({
-                name: b.name,
-                fullName: b.name,
-                isCurrent: b.is_current,
-              })),
-            );
-          })
-          .catch(() => setAvailableBranches([]))
-          .finally(() => setBranchesLoading(false));
-      }
-    }
   }, [open]);
 
+  const sourceId = sourceWorkspace?.id ?? null;
+  const needsBranches = isHomeRepo || !defaults.targetBranch;
+  const dialogMode = sourceWorkspace
+    ? "source"
+    : isHomeRepo
+      ? "home"
+      : "create";
+
+  const { data: dialogData, isLoading: dialogLoading } = useSWR(
+    open ? ["workspace-dialog-data", repoPath, dialogMode, sourceId] : null,
+    async () => {
+      if (dialogMode === "source" && sourceId != null) {
+        const [status, files, workspaceList] = await Promise.all([
+          getWorkspaceStatus(repoPath, sourceId),
+          getWorkspaceChangedFiles(repoPath, sourceId),
+          getWorkspaces(repoPath),
+        ]);
+        return {
+          status,
+          files,
+          workspaceList,
+          branches: null as BranchListItem[] | null,
+        };
+      }
+      if (dialogMode === "home") {
+        void jjGitFetchBackground(repoPath);
+        const [files, workspaceList, branches] = await Promise.all([
+          getWorkspaceChangedFiles(repoPath, null),
+          getWorkspaces(repoPath),
+          listRepoBranches(repoPath),
+        ]);
+        return {
+          status: null,
+          files,
+          workspaceList,
+          branches: mapBranches(branches),
+        };
+      }
+      const workspaceList = await getWorkspaces(repoPath);
+      let branches: BranchListItem[] | null = null;
+      if (needsBranches) {
+        void jjGitFetchBackground(repoPath);
+        branches = mapBranches(await listRepoBranches(repoPath));
+      }
+      return {
+        status: null,
+        files: [] as JjFileChange[],
+        workspaceList,
+        branches,
+      };
+    },
+  );
+
   useEffect(() => {
-    if (open && repoPath) {
-      getRepoSetting(repoPath, "branch_name_pattern")
-        .then((pattern) => setBranchPattern(pattern || "treq/{name}"))
-        .catch(() => setBranchPattern("treq/{name}"));
+    setDataLoading(Boolean(open && dialogLoading && !dialogData));
+    if (!open || !dialogData) return;
+    setWorkspaceStatus(dialogData.status);
+    setChangedFiles(dialogData.files);
+    setAllWorkspaces(dialogData.workspaceList);
+    if (dialogMode === "source" && sourceId != null) {
+      const others = dialogData.workspaceList.filter((w) => w.id !== sourceId);
+      if (others.length > 0) setTargetWorkspaceId(others[0].id);
     }
-  }, [open, repoPath]);
+    if (dialogData.branches) {
+      setAvailableBranches(dialogData.branches);
+      setBranchesLoading(false);
+    } else if (dialogMode !== "source") {
+      setBranchesLoading(false);
+    }
+  }, [open, dialogData, dialogLoading, dialogMode, sourceId]);
+
+  const { data: pattern } = useSWR(
+    open && repoPath ? ["repo-setting", repoPath, "branch_name_pattern"] : null,
+    () => getRepoSetting(repoPath, "branch_name_pattern"),
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    setBranchPattern(pattern || "treq/{name}");
+  }, [open, pattern]);
 
   useEffect(() => {
     if (!isEditingBranch && title.trim()) {
@@ -231,51 +240,75 @@ export function useWorkspaceDialogEffects(
     }
   }, [title, branchPattern, isEditingBranch]);
 
+  const debouncedBranchName = useDebounce(branchName, 500);
+  const { data: branchStatus, isLoading: checkingBranch } = useSWR(
+    open && !moveToExisting && debouncedBranchName.trim()
+      ? ["check-branch-exists", repoPath, debouncedBranchName]
+      : null,
+    () => checkBranchExists(repoPath, debouncedBranchName),
+  );
+
   useEffect(() => {
-    if (checkBranchTimeoutRef.current)
-      clearTimeout(checkBranchTimeoutRef.current);
-    if (!branchName.trim()) {
+    if (!debouncedBranchName.trim() || moveToExisting) {
       setBranchStatusData(null);
       setIsCheckingBranch(false);
       return;
     }
-    if (moveToExisting) return;
-    setIsCheckingBranch(true);
-    checkBranchTimeoutRef.current = setTimeout(async () => {
-      try {
-        const status = await checkBranchExists(repoPath, branchName);
-        setBranchStatusData(status);
-      } catch {
-        setBranchStatusData({ local_exists: false, remote_exists: false });
-      } finally {
-        setIsCheckingBranch(false);
-      }
-    }, 500);
-    return () => {
-      if (checkBranchTimeoutRef.current)
-        clearTimeout(checkBranchTimeoutRef.current);
-    };
-  }, [branchName, repoPath, moveToExisting]);
+    setIsCheckingBranch(checkingBranch);
+    if (branchStatus) setBranchStatusData(branchStatus);
+  }, [debouncedBranchName, moveToExisting, checkingBranch, branchStatus]);
 
   useEffect(() => {
     if (isStackOnRoot && position !== "after") setPosition("after");
   }, [isStackOnRoot, position]);
 
+  const pendingHunkPaths = useMemo(
+    () =>
+      [...fileHunksMap]
+        .filter(([, data]) => data.isLoading && data.hunks.length === 0)
+        .map(([filePath]) => filePath)
+        .sort()
+        .join("\0"),
+    [fileHunksMap],
+  );
+
+  const { data: loadedHunks } = useSWR(
+    open && pendingHunkPaths
+      ? [
+          "workspace-dialog-hunks",
+          repoPath,
+          sourceWorkspace?.id ?? null,
+          pendingHunkPaths,
+        ]
+      : null,
+    async () => {
+      const paths = pendingHunkPaths.split("\0");
+      const entries = await Promise.all(
+        paths.map(async (filePath) => {
+          try {
+            const hunks = await getWorkspaceFileHunks(
+              repoPath,
+              sourceWorkspace?.id ?? null,
+              filePath,
+            );
+            return [filePath, hunks] as const;
+          } catch {
+            return [filePath, [] as JjDiffHunk[]] as const;
+          }
+        }),
+      );
+      return Object.fromEntries(entries) as Record<string, JjDiffHunk[]>;
+    },
+  );
+
   useEffect(() => {
-    for (const [filePath, data] of fileHunksMap) {
-      if (data.isLoading && data.hunks.length === 0) {
-        getWorkspaceFileHunks(repoPath, sourceWorkspace?.id ?? null, filePath)
-          .then((hunks) =>
-            setFileHunksMap((prev) =>
-              new Map(prev).set(filePath, { hunks, isLoading: false }),
-            ),
-          )
-          .catch(() =>
-            setFileHunksMap((prev) =>
-              new Map(prev).set(filePath, { hunks: [], isLoading: false }),
-            ),
-          );
+    if (!loadedHunks) return;
+    setFileHunksMap((prev) => {
+      const next = new Map(prev);
+      for (const [filePath, hunks] of Object.entries(loadedHunks)) {
+        next.set(filePath, { hunks, isLoading: false });
       }
-    }
-  }, [fileHunksMap]);
+      return next;
+    });
+  }, [loadedHunks]);
 }
