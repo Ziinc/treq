@@ -51,8 +51,8 @@ export const buildTreqAgentSystemPrompt = ({
   ].join(" ");
 };
 
-/** Build per-session Claude filesystem allow/deny lists for the working directory. */
-export const buildClaudeSandboxFilesystemSettings = ({
+/** Workspace/home filesystem allow and deny lists for Claude `--settings`. */
+export const buildClaudeFilesystemSettings = ({
   workspacePath,
   repoPath,
 }: AgentPathContext) => ({
@@ -68,23 +68,16 @@ export const buildClaudeSandboxFilesystemSettings = ({
       },
 });
 
-/** Overlay Treq filesystem restrictions onto a copy of `.claude/settings.local.json`. */
+/** Overlay Treq filesystem restrictions onto `.claude/settings.local.json`, without sandbox. */
 export const mergeClaudeLocalSettings = (
   existing: Record<string, unknown> | null,
-  filesystemSettings: ReturnType<typeof buildClaudeSandboxFilesystemSettings>,
+  filesystemSettings: ReturnType<typeof buildClaudeFilesystemSettings>,
 ): Record<string, unknown> => {
-  const existingSandbox =
-    existing?.sandbox &&
-    typeof existing.sandbox === "object" &&
-    !Array.isArray(existing.sandbox)
-      ? (existing.sandbox as Record<string, unknown>)
-      : {};
+  const rest = { ...(existing ?? {}) };
+  delete rest.sandbox;
   return {
-    ...existing,
-    sandbox: {
-      ...existingSandbox,
-      filesystem: filesystemSettings.filesystem,
-    },
+    ...rest,
+    filesystem: filesystemSettings.filesystem,
   };
 };
 

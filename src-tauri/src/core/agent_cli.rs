@@ -56,7 +56,7 @@ pub fn write_agent_cli_files(
 
   let settings_path = match settings_json {
     Some(json) => {
-      let merged = with_skill_dir_sandbox_access(json, &skill_dir)?;
+      let merged = with_skill_dir_filesystem_access(json, &skill_dir)?;
       let path = dir.join(format!("{FILE_PREFIX}settings-{id}.json"));
       fs::write(&path, merged).map_err(|e| format!("Failed to write agent settings file: {e}"))?;
       Some(path_to_string(&path))
@@ -157,14 +157,18 @@ fn is_safe_project_skill_dir(canonical: &Path) -> bool {
   is_known_skill_dir && canonical.join(PROJECT_SKILL_MARKER).is_file()
 }
 
-fn with_skill_dir_sandbox_access(settings_json: &str, skill_dir: &Path) -> Result<String, String> {
+fn with_skill_dir_filesystem_access(
+  settings_json: &str,
+  skill_dir: &Path,
+) -> Result<String, String> {
   let mut value: Value = serde_json::from_str(settings_json)
     .map_err(|e| format!("Failed to parse agent settings JSON: {e}"))?;
+  value.as_object_mut().and_then(|obj| obj.remove("sandbox"));
   let skill_dir = skill_dir.to_string_lossy().into_owned();
   let filesystem = value
-    .pointer_mut("/sandbox/filesystem")
+    .pointer_mut("/filesystem")
     .and_then(Value::as_object_mut)
-    .ok_or_else(|| "Agent settings JSON is missing sandbox.filesystem".to_string())?;
+    .ok_or_else(|| "Agent settings JSON is missing filesystem".to_string())?;
   push_unique_path(filesystem, "allowRead", &skill_dir, false)?;
   push_unique_path(filesystem, "allowWrite", &skill_dir, true)?;
   serde_json::to_string_pretty(&value).map_err(|e| format!("Failed to serialize settings: {e}"))
@@ -187,9 +191,7 @@ fn push_unique_path(
       filesystem.insert(key.to_string(), json!([path]));
       Ok(())
     }
-    None => Err(format!(
-      "Agent settings JSON is missing sandbox.filesystem.{key}"
-    )),
+    None => Err(format!("Agent settings JSON is missing filesystem.{key}")),
   }
 }
 
@@ -205,12 +207,13 @@ fn path_to_string(path: &PathBuf) -> String {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use serde_json::Value;
 
   #[test]
   fn writes_prompt_settings_and_skill_pack() {
     let files = write_agent_cli_files(
       "you are in a workspace",
-      Some(r#"{"sandbox":{"filesystem":{"allowRead":["/ws"]}}}"#),
+      Some(r#"{"filesystem":{"allowRead":["/ws"],"allowWrite":["/ws"]}}"#),
       None,
     )
     .expect("write files");
@@ -229,9 +232,11 @@ mod tests {
     let settings = fs::read_to_string(&settings_path).expect("read settings");
     assert!(settings.contains(&files.skill_dir));
     assert!(settings.contains("/ws"));
+    assert!(!settings.contains("sandbox"));
     let value: Value = serde_json::from_str(&settings).expect("parse settings");
+    assert!(value.get("sandbox").is_none());
     let allow_write = value
-      .pointer("/sandbox/filesystem/allowWrite")
+      .pointer("/filesystem/allowWrite")
       .and_then(Value::as_array)
       .unwrap();
     assert!(allow_write
@@ -271,12 +276,8 @@ mod tests {
 
   #[test]
   fn cleanup_deletes_written_files_and_skill_dir() {
-    let files = write_agent_cli_files(
-      "tmp",
-      Some(r#"{"sandbox":{"filesystem":{"allowRead":[]}}}"#),
-      None,
-    )
-    .expect("write");
+    let files = write_agent_cli_files("tmp", Some(r#"{"filesystem":{"allowRead":[]}}"#), None)
+      .expect("write");
     let settings_path = files.settings_path.clone().unwrap();
     cleanup_agent_cli_files(&[
       files.prompt_path.clone(),
@@ -296,17 +297,19 @@ mod tests {
   }
 
   #[test]
-  fn with_skill_dir_sandbox_access_appends_read_and_write() {
-    let json = r#"{"sandbox":{"filesystem":{"allowRead":["/ws"],"allowWrite":["/ws"]}}}"#;
+  fn with_skill_dir_filesystem_access_appends_read_and_write() {
+    let json =
+      r#"{"filesystem":{"allowRead":["/ws"],"allowWrite":["/ws"]},"sandbox":{"enabled":true}}"#;
     let merged =
-      with_skill_dir_sandbox_access(json, Path::new("/tmp/treq-agent-skills-1")).unwrap();
+      with_skill_dir_filesystem_access(json, Path::new("/tmp/treq-agent-skills-1")).unwrap();
     let value: Value = serde_json::from_str(&merged).unwrap();
+    assert!(value.get("sandbox").is_none());
     let allow_read = value
-      .pointer("/sandbox/filesystem/allowRead")
+      .pointer("/filesystem/allowRead")
       .and_then(Value::as_array)
       .unwrap();
     let allow_write = value
-      .pointer("/sandbox/filesystem/allowWrite")
+      .pointer("/filesystem/allowWrite")
       .and_then(Value::as_array)
       .unwrap();
     assert_eq!(

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   appendAgentPrompt,
   buildAgentAutoCommand,
-  buildClaudeSandboxFilesystemSettings,
+  buildClaudeFilesystemSettings,
   buildTreqAgentSystemPrompt,
   claudeLocalSettingsPath,
   cursorPromptFileContents,
@@ -73,10 +73,10 @@ describe("buildTreqAgentSystemPrompt", () => {
   });
 });
 
-describe("buildClaudeSandboxFilesystemSettings", () => {
+describe("buildClaudeFilesystemSettings", () => {
   it("allows workspace reads and writes while denying the home repository", () => {
     expect(
-      buildClaudeSandboxFilesystemSettings({
+      buildClaudeFilesystemSettings({
         repoPath: "/repos/treq",
         workspacePath: "/repos/treq/.treq/workspaces/fix-parser",
       }),
@@ -91,7 +91,7 @@ describe("buildClaudeSandboxFilesystemSettings", () => {
 
   it("allows home repository reads and writes without workspace exclusions", () => {
     expect(
-      buildClaudeSandboxFilesystemSettings({
+      buildClaudeFilesystemSettings({
         repoPath: "/repos/treq",
         workspacePath: null,
       }),
@@ -102,48 +102,35 @@ describe("buildClaudeSandboxFilesystemSettings", () => {
       },
     });
   });
-
-  it("does not force sandbox enablement or unsandboxed-command flags", () => {
-    expect(
-      buildClaudeSandboxFilesystemSettings({
-        repoPath: "/repos/treq",
-        workspacePath: null,
-      }),
-    ).not.toHaveProperty("enabled");
-  });
 });
 
 describe("mergeClaudeLocalSettings", () => {
-  it("overlays filesystem restrictions without dropping other sandbox keys", () => {
-    const filesystem = buildClaudeSandboxFilesystemSettings({
+  it("overlays filesystem restrictions and drops sandbox keys", () => {
+    const filesystem = buildClaudeFilesystemSettings({
       repoPath: "/repos/treq",
       workspacePath: "/repos/treq/.treq/workspaces/fix-parser",
     });
     expect(
       mergeClaudeLocalSettings(
         {
-          permissions: { allow: ["Bash"] },
-          sandbox: { enabled: false, allowUnsandboxedCommands: true },
+          extra: true,
+          sandbox: { enabled: true, filesystem: { allowRead: ["/old"] } },
         },
         filesystem,
       ),
     ).toEqual({
-      permissions: { allow: ["Bash"] },
-      sandbox: {
-        enabled: false,
-        allowUnsandboxedCommands: true,
-        filesystem: filesystem.filesystem,
-      },
+      extra: true,
+      filesystem: filesystem.filesystem,
     });
   });
 
   it("uses filesystem restrictions alone when no local file exists", () => {
-    const filesystem = buildClaudeSandboxFilesystemSettings({
+    const filesystem = buildClaudeFilesystemSettings({
       repoPath: "/repos/treq",
       workspacePath: null,
     });
     expect(mergeClaudeLocalSettings(null, filesystem)).toEqual({
-      sandbox: { filesystem: filesystem.filesystem },
+      filesystem: filesystem.filesystem,
     });
   });
 });
@@ -172,7 +159,7 @@ describe("buildAgentAutoCommand", () => {
     skillDir: "/tmp/treq-agent-skills-1",
   };
 
-  it("points Claude at filesystem settings, prompt, and the bundled skill directory", () => {
+  it("points Claude at filesystem settings and the prompt file", () => {
     const command = buildAgentAutoCommand({
       agent: "claude",
       files: { ...files, claudeSkillPath: "/ws/.claude/skills/treq" },
@@ -180,6 +167,7 @@ describe("buildAgentAutoCommand", () => {
     });
 
     expect(command).toContain("--settings '/tmp/treq-agent-settings-1.json'");
+    expect(command).not.toContain("sandbox");
     expect(command).toContain(
       "--append-system-prompt-file '/tmp/treq-agent-prompt-1.txt'",
     );
