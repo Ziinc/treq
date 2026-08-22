@@ -549,7 +549,7 @@ describe("Dashboard - workspace list", () => {
       ).toBeTruthy();
     });
 
-    it("keeps home and workspace action buttons visible when unselected", async () => {
+    it("keeps home action buttons visible when unselected", async () => {
       render(<Dashboard />);
 
       const homeRepoElement = await screen.findByTestId("home-repo-row");
@@ -570,13 +570,21 @@ describe("Dashboard - workspace list", () => {
           name: "Stack a workspace",
         }),
       ).toBeTruthy();
+    });
 
-      await user.click(homeRepoElement);
-      expect(homeRepoElement).toHaveClass("bg-primary/20");
-      expect(alphaRow).not.toHaveClass("bg-primary/20");
-      expect(
-        within(alphaRow).getByRole("button", { name: "Start agent" }),
-      ).toBeTruthy();
+    it("hides workspace action buttons until the workspace row is hovered", async () => {
+      render(<Dashboard />);
+
+      const alphaLabel = await findSidebarBranchElement("feat/alpha");
+      const alphaRow = alphaLabel.closest("div") as HTMLElement;
+
+      expect(alphaRow).toHaveClass("group/workspace");
+      const agentButton = within(alphaRow).getByRole("button", {
+        name: "Start agent",
+      });
+      const actions = agentButton.parentElement as HTMLElement;
+      expect(actions).toHaveClass("opacity-0");
+      expect(actions.className).toContain("group-hover/workspace:opacity-100");
       expect(
         within(alphaRow).getByRole("button", { name: "Open shell" }),
       ).toBeTruthy();
