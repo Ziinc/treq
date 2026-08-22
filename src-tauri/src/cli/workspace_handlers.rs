@@ -567,6 +567,24 @@ pub(super) fn handle_resolve(matches: &Matches) -> bool {
   use std::collections::HashMap;
   use std::io::{IsTerminal, Read};
 
+  let commit_id = match get_arg_value(matches, "commit_id") {
+    Some(value) => value,
+    None => {
+      super::log_cli_error("Error: commit id is required");
+      eprintln!("Usage: treq resolve <commit_id> [sides...]");
+      return false;
+    }
+  };
+
+  let side_tokens = get_arg_values(matches, "sides");
+  let sides = match core::parse_resolve_sides(&side_tokens) {
+    Ok(parsed) => parsed,
+    Err(error) => {
+      super::log_cli_error(&format!("Error: {}", error));
+      return false;
+    }
+  };
+
   let repo_path = match detect_repo_path() {
     Ok(path) => path,
     Err(error) => {
@@ -580,70 +598,36 @@ pub(super) fn handle_resolve(matches: &Matches) -> bool {
     return false;
   }
 
-  let commit_id = get_arg_value(matches, "commit_id");
-  if commit_id.is_none() {
-    let workspace_id = super::lookup_workspace_from_cwd(&repo_path).map(|ws| ws.id);
-    match core::start_resolve_conflicts(&repo_path, workspace_id, None) {
-      Ok(session) => {
-        println!("Resolve root: {}", session.agent_cwd);
-        for target in session.targets {
-          println!(
-            "  {} ({}) files={}",
-            target.change_id,
-            target.description.lines().next().unwrap_or("").trim(),
-            target.conflicted_files.len()
-          );
-        }
-        println!("Work in each change-id directory, then run `treq resolve <change-id>`.");
-        true
-      }
-      Err(error) => {
-        super::log_cli_error(&format!("Error: {}", error));
-        false
-      }
-    }
-  } else {
-    let commit_id = commit_id.unwrap();
-    let side_tokens = get_arg_values(matches, "sides");
-    let sides = match core::parse_resolve_sides(&side_tokens) {
-      Ok(parsed) => parsed,
-      Err(error) => {
-        super::log_cli_error(&format!("Error: {}", error));
-        return false;
-      }
-    };
-
-    let mut replacements: Option<HashMap<String, String>> = None;
-    if !std::io::stdin().is_terminal() {
-      let mut stdin_body = String::new();
-      if std::io::stdin().read_to_string(&mut stdin_body).is_ok() {
-        let trimmed = stdin_body.trim();
-        if !trimmed.is_empty() {
-          match serde_json::from_str::<HashMap<String, String>>(trimmed) {
-            Ok(map) => replacements = Some(map),
-            Err(error) => {
-              super::log_cli_error(&format!("Error: invalid stdin JSON: {}", error));
-              return false;
-            }
+  let mut replacements: Option<HashMap<String, String>> = None;
+  if !std::io::stdin().is_terminal() {
+    let mut stdin_body = String::new();
+    if std::io::stdin().read_to_string(&mut stdin_body).is_ok() {
+      let trimmed = stdin_body.trim();
+      if !trimmed.is_empty() {
+        match serde_json::from_str::<HashMap<String, String>>(trimmed) {
+          Ok(map) => replacements = Some(map),
+          Err(error) => {
+            super::log_cli_error(&format!("Error: invalid stdin JSON: {}", error));
+            return false;
           }
         }
       }
     }
+  }
 
-    match core::resolve_commit(&repo_path, &commit_id, &sides, replacements) {
-      Ok(result) => {
-        if result.success {
-          println!("{}", result.message);
-          true
-        } else {
-          super::log_cli_error(&result.message);
-          false
-        }
-      }
-      Err(error) => {
-        super::log_cli_error(&format!("Error: {}", error));
+  match core::resolve_commit(&repo_path, &commit_id, &sides, replacements) {
+    Ok(result) => {
+      if result.success {
+        println!("{}", result.message);
+        true
+      } else {
+        super::log_cli_error(&result.message);
         false
       }
+    }
+    Err(error) => {
+      super::log_cli_error(&format!("Error: {}", error));
+      false
     }
   }
 }

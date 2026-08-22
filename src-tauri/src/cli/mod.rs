@@ -128,7 +128,7 @@ fn print_cli_help() {
     );
   println!("  treq agent <branch> <prompt> [-m <edit|plan>]");
   println!("  treq commit <workspace_name> -m <message> [--push]");
-  println!("  treq resolve [commit_id] [sides...]");
+  println!("  treq resolve <commit_id> [sides...]");
   println!("  treq send [path|-]");
   println!("  treq help");
 }

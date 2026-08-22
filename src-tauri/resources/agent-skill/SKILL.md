@@ -110,17 +110,17 @@ Do not use `git commit` or `jj commit` for this step.
 
 Use this when a rebase left one or more existing commits conflicted. Treq
 rewrites those commits in place. It does not dirty the product workspace
-working copy.
+working copy. Resolve directories live under `.treq/resolve/<workspace-slug>/`.
+The Commits tab **Resolve conflicts…** action creates them.
 
 1. Confirm `treq diff` lists conflicted commits and their change ids.
-2. Run `treq resolve` with no arguments from the workspace. That prepares
-   `.treq/resolve/<workspace-slug>/` with one directory per change id. Skip
-   this step if those directories already exist.
-3. Open a change-id directory and edit the conflict markers there.
+2. Work in `.treq/resolve/<workspace-slug>/<change-id>/` once that directory
+   exists.
+3. Edit the conflict markers in those files.
 4. Or run `treq resolve <change-id> [1|2|base|both]`.
 5. Or pipe JSON replacements:
    `echo '{"path/to/file": "replacement\n"}' | treq resolve <change-id>`.
 6. Repeat for every change-id directory.
 
 Your work is complete when no change-id directories remain under the resolve
-root.
+root. `treq resolve` always takes a change id.

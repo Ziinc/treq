@@ -212,13 +212,14 @@
           ]
         },
         "resolve": {
-          "description": "Prepare or finish inplace conflict resolution",
+          "description": "Resolve conflicts for a commit in a short-lived resolve workspace",
           "args": [
             {
               "name": "commit_id",
               "index": 1,
               "takesValue": true,
-              "description": "Change or commit id to resolve. Omit to prepare resolve directories for the current workspace."
+              "required": true,
+              "description": "Change or commit id to resolve"
             },
             {
               "name": "sides",

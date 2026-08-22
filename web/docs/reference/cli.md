@@ -108,16 +108,14 @@ This records working-copy changes in that workspace. It does not merge the works
 
 ### `treq resolve`
 
-Prepare or finish inplace conflict resolution.
+Finish inplace conflict resolution for a conflicted commit that already has a resolve directory under `.treq/resolve/<workspace-slug>/`.
 
 ```bash
-treq resolve
 treq resolve <commit_id> [sides...]
 echo '{"path/to/file": "replacement\n"}' | treq resolve <commit_id>
 ```
 
-- With no `commit_id`, Treq prepares `.treq/resolve/<workspace-slug>/` for conflicted commits in the current workspace. From the home repository it targets home-repo conflicted commits.
-- `commit_id`: change id or commit id of the conflicted revision.
+- `commit_id`: change id or commit id of the conflicted revision. Required.
 - `sides`: optional conflict sides to take. Use `1`, `2`, `base`, or `both`.
 - Non-TTY stdin: JSON object of path to full file content replacements.
 

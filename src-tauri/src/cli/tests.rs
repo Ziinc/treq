@@ -80,7 +80,7 @@ fn resolve_subcommand_defines_commit_id_positional() {
     commit_id.get("takesValue").and_then(Value::as_bool),
     Some(true)
   );
-  assert_ne!(
+  assert_eq!(
     commit_id.get("required").and_then(Value::as_bool),
     Some(true)
   );
