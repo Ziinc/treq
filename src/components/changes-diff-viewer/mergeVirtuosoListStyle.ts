@@ -2,9 +2,7 @@ import type { CSSProperties } from "react";
 
 const LIST_PADDING_Y = 16;
 
-export function mergeVirtuosoListStyle(
-  style?: CSSProperties,
-): CSSProperties {
+export function mergeVirtuosoListStyle(style?: CSSProperties): CSSProperties {
   const existing = style?.paddingBottom;
   let paddingBottom: CSSProperties["paddingBottom"] = LIST_PADDING_Y;
   if (typeof existing === "number") {
