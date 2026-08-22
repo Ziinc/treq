@@ -284,7 +284,7 @@ export function DiffContentArea({
         className="absolute top-2 right-2 z-20"
         focusTrigger={searchFocusTrigger}
       />
-      {initialLoading || loadingAllHunks ? (
+      {initialLoading ? (
         <div className="h-full flex items-center justify-center text-muted-foreground">
           <Loader2 className="w-6 h-6 animate-spin" />
           <span className="ml-2">Loading diffs...</span>

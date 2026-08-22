@@ -92,11 +92,16 @@ export function useReview({
   const pendingReviewKey =
     repoPath && workspaceId !== undefined ? `${repoPath}:${workspaceId}` : null;
   const hydratedReviewKeyRef = useRef<string | null>(null);
-  if (hydratedReviewKeyRef.current !== pendingReviewKey) {
+  if (
+    pendingReviewKey &&
+    hydratedReviewKeyRef.current !== null &&
+    hydratedReviewKeyRef.current !== pendingReviewKey
+  ) {
+    // New workspace only — do not reset when workspaceId briefly goes undefined.
     hydratedReviewKeyRef.current = null;
   }
 
-  const { data: pendingReview } = useSWR(
+  const { data: pendingReview, isLoading: pendingReviewLoading } = useSWR(
     repoPath && workspaceId !== undefined
       ? ["pending-review", repoPath, workspaceId]
       : null,
@@ -104,15 +109,18 @@ export function useReview({
   );
 
   useEffect(() => {
-    if (!pendingReview || !pendingReviewKey) return;
+    if (!pendingReviewKey || pendingReviewLoading) return;
     if (hydratedReviewKeyRef.current === pendingReviewKey) return;
     hydratedReviewKeyRef.current = pendingReviewKey;
-    setComments(pendingReview.comments.map(toLocalLineComment));
-    if (pendingReview.summary_text)
+    const loaded = pendingReview?.comments ?? [];
+    if (loaded.length === 0) return;
+    setComments(loaded.map(toLocalLineComment));
+    if (pendingReview?.summary_text)
       setFinalReviewComment(pendingReview.summary_text);
-    setHasUserAddedComments(pendingReview.comments.length > 0);
+    setHasUserAddedComments(true);
   }, [
     pendingReview,
+    pendingReviewLoading,
     pendingReviewKey,
     setComments,
     setFinalReviewComment,
