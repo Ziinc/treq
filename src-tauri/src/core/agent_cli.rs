@@ -173,7 +173,7 @@ mod tests {
   fn writes_prompt_settings_and_skill_pack() {
     let files = write_agent_cli_files(
       "you are in a workspace",
-      Some(r#"{"permissions":{"allow":["Bash"]}}"#),
+      Some(r#"{"marker":"verbatim-settings"}"#),
       None,
     )
     .expect("write files");
@@ -190,8 +190,10 @@ mod tests {
 
     let settings_path = files.settings_path.expect("settings path");
     let settings = fs::read_to_string(&settings_path).expect("read settings");
-    assert!(settings.contains("Bash"));
+    assert!(settings.contains("verbatim-settings"));
     assert!(!settings.contains("sandbox"));
+    assert!(!settings.contains("Bash"));
+    assert!(!settings.contains("permissions"));
     let value: Value = serde_json::from_str(&settings).expect("parse settings");
     assert!(value.get("sandbox").is_none());
 
@@ -230,7 +232,7 @@ mod tests {
   fn cleanup_deletes_written_files_and_skill_dir() {
     let files = write_agent_cli_files(
       "tmp",
-      Some(r#"{"permissions":{}}"#),
+      Some(r#"{"marker":"verbatim-settings"}"#),
       None,
     )
     .expect("write");
@@ -254,7 +256,7 @@ mod tests {
 
   #[test]
   fn writes_settings_json_verbatim_without_sandbox_overlay() {
-    let json = r#"{"permissions":{"allow":["Bash"]}}"#;
+    let json = r#"{"marker":"verbatim-settings"}"#;
     let files = write_agent_cli_files("prompt", Some(json), None).expect("write");
     let settings_path = files.settings_path.expect("settings path");
     let settings = fs::read_to_string(&settings_path).expect("read settings");
