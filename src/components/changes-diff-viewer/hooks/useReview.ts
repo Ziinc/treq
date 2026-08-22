@@ -130,27 +130,17 @@ export function useReview({
   const debouncedComments = useDebounce(comments, 500);
   const debouncedSummary = useDebounce(finalReviewComment, 500);
 
-  useSWR(
-    repoPath &&
-      workspaceId !== undefined &&
-      (debouncedComments.length > 0 || Boolean(debouncedSummary.trim()))
-      ? [
-          "pending-review-save",
-          repoPath,
-          workspaceId,
-          JSON.stringify(debouncedComments.map(toApiLineComment)),
-          debouncedSummary,
-        ]
-      : null,
-    () =>
-      savePendingReview(
-        repoPath!,
-        workspaceId!,
-        debouncedComments.map(toApiLineComment),
-        undefined,
-        debouncedSummary.trim() || undefined,
-      ),
-  );
+  useEffect(() => {
+    if (!repoPath || workspaceId === undefined) return;
+    if (debouncedComments.length === 0 && !debouncedSummary.trim()) return;
+    void savePendingReview(
+      repoPath,
+      workspaceId,
+      debouncedComments.map(toApiLineComment),
+      undefined,
+      debouncedSummary.trim() || undefined,
+    );
+  }, [repoPath, workspaceId, debouncedComments, debouncedSummary]);
 
   useEffect(() => {
     if (files.length === 0) return;

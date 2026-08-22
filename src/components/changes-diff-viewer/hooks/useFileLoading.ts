@@ -23,6 +23,9 @@ import type { FileHunksData } from "../types";
 import { hunksEqual, parseCachedHunks } from "../utils";
 import { createInFlightCoalescer } from "../../../lib/coalesce-in-flight";
 
+// One in-flight workspace_diff per process. jj WC locks are process-global.
+const loadChangedFilesCoalesce = createInFlightCoalescer();
+
 interface UseFileLoadingParams {
   workspacePath: string;
   repoPath: string | undefined;
@@ -109,13 +112,12 @@ export function useFileLoading({
     cachedChanges.refresh();
   }, [cachedChanges]);
 
-  const coalesceLoadChangedFiles = useRef(createInFlightCoalescer()).current;
   const pendingForceApplyRef = useRef(false);
 
   const loadChangedFiles = useCallback(
     async (forceApply = false) => {
       if (forceApply) pendingForceApplyRef.current = true;
-      await coalesceLoadChangedFiles(async () => {
+      await loadChangedFilesCoalesce(async () => {
         const force = pendingForceApplyRef.current;
         pendingForceApplyRef.current = false;
         setRefreshing(true);
