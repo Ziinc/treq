@@ -3,10 +3,10 @@ import { screen, within } from "../../test-utils";
 import userEvent from "@testing-library/user-event";
 import {
   addSingleReviewComment,
-  clickChangedFile,
   openReviewTab,
   setupWorkspaceWithDiff,
   startEditingComment,
+  waitForFileAndLines,
 } from "./comments-helpers";
 
 describe("Inline comment editing — cancel", () => {
@@ -19,7 +19,7 @@ describe("Inline comment editing — cancel", () => {
   async function setupEditableComment(branchName: string, comment: string) {
     await setupWorkspaceWithDiff(branchName);
     await openReviewTab(user, branchName);
-    await clickChangedFile("test.txt");
+    await waitForFileAndLines();
     await addSingleReviewComment(user, comment);
   }
 

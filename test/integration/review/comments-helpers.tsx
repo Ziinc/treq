@@ -126,6 +126,14 @@ export async function addSingleReviewComment(
   user: ReturnType<typeof userEvent.setup>,
   comment: string,
 ) {
+  await waitFor(
+    () => {
+      if (document.querySelectorAll("[data-diff-line]").length === 0) {
+        throw new Error("waiting for diff lines");
+      }
+    },
+    { timeout: 60_000 },
+  );
   const gutterButton = await waitFor(
     () => {
       const button = document.querySelector(
