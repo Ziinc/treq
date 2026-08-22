@@ -34,8 +34,6 @@ Download the latest release [here](https://github.com/Ziinc/treq/releases). Inst
 - Keeps diffs, comments, and terminal metadata [local by default](https://treq.dev/docs/security-and-privacy), with no code upload.
 - Sends [no telemetry](https://treq.dev/docs/security-and-privacy#telemetry): no feature usage, crash reports, or performance metrics.
 - Uses [Jujutsu under the hood](https://treq.dev/docs/under-the-hood) while staying Git compatible.
-- Ships as an Apache 2.0 desktop app, so you can read every command it runs.
-- Runs on macOS; [download the build](https://github.com/Ziinc/treq/releases) and open a Git repository you already have.
 
 ## Developer
 
