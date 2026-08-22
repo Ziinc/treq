@@ -218,14 +218,22 @@ export function useFileLoading({
     ],
   );
 
-  useEffect(() => {
-    loadChangedFiles();
-  }, [workspacePath]);
+  const loadChangedFilesRef = useRef(loadChangedFiles);
+  loadChangedFilesRef.current = loadChangedFiles;
 
+  // Call through the ref so toast/callback identity cannot retrigger this
+  // effect. Including `loadChangedFiles` stacked overlapping getWorkspaceDiff
+  // calls (jj WC lock) and unmounted the Review file list in later tests.
   useEffect(() => {
-    if (!workspacePath || initialLoading) return;
-    loadChangedFiles();
-  }, [workspacePath, showCommittedChanges, initialLoading, loadChangedFiles]);
+    if (!workspacePath) return;
+    void loadChangedFilesRef.current();
+  }, [
+    workspacePath,
+    repoPath,
+    workspaceId,
+    showCommittedChanges,
+    conflictedFilesKey,
+  ]);
 
   useEffect(() => {
     if (!workspaceId) return;
@@ -427,8 +435,6 @@ export function useFileLoading({
   // above isn't enough to keep an open diff fresh. Re-read everything from
   // disk whenever the window regains focus, so switching back to the app
   // never leaves the Changes tab showing what was there before you left.
-  const loadChangedFilesRef = useRef(loadChangedFiles);
-  loadChangedFilesRef.current = loadChangedFiles;
   const loadAllFileHunksRef = useRef(loadAllFileHunks);
   loadAllFileHunksRef.current = loadAllFileHunks;
   const filesRef = useRef(files);
