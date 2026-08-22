@@ -40,7 +40,7 @@ it("captures the workspace list in the shadcn sidebar shell", async () => {
     ],
   });
 
-  const handle = screen.getByRole("separator", {
+  const handle = screen.getByRole("slider", {
     name: "Resize workspace sidebar",
   });
   await user.pointer([
@@ -53,9 +53,7 @@ it("captures the workspace list in the shadcn sidebar shell", async () => {
     { keys: "[/MouseLeft]" },
   ]);
 
-  const wrapper = document.querySelector(
-    ".group\\/sidebar-wrapper",
-  ) as HTMLElement;
+  const wrapper = screen.getByTestId("sidebar-wrapper");
   expect(wrapper.style.getPropertyValue("--sidebar-width")).toBe(
     `${DEFAULT_SIDEBAR_WIDTH + 120}px`,
   );

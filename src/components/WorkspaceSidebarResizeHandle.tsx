@@ -1,4 +1,9 @@
-import { type MouseEvent, useEffect, useRef, useState } from "react";
+import {
+  type MouseEvent as ReactMouseEvent,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { cn } from "../lib/utils";
 import {
   DEFAULT_SIDEBAR_WIDTH,
@@ -12,7 +17,7 @@ export function WorkspaceSidebarResizeHandle() {
   const [isDragging, setIsDragging] = useState(false);
   const lastXRef = useRef(0);
 
-  const handleMouseDown = (event: MouseEvent) => {
+  const handleMouseDown = (event: ReactMouseEvent) => {
     event.preventDefault();
     setIsDragging(true);
     lastXRef.current = event.clientX;
@@ -54,7 +59,7 @@ export function WorkspaceSidebarResizeHandle() {
 
   return (
     <div
-      role="separator"
+      role="slider"
       aria-orientation="vertical"
       aria-label="Resize workspace sidebar"
       aria-valuenow={width}

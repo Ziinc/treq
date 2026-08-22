@@ -1343,7 +1343,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
   return !repoPath ? (
     <Onboarding onOpenRepo={handleOpenRepository} />
   ) : (
-    <SidebarProvider className="h-screen bg-background" style={sidebarWidthStyle}>
+    <SidebarProvider
+      className="h-screen bg-background"
+      style={sidebarWidthStyle}
+    >
       <WorkspaceSidebar
         repoPath={repoPath}
         homeRepoDisplayRef={homeRepoDisplayRef}
