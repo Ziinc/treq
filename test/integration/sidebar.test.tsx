@@ -17,6 +17,10 @@ import {
 } from "../../src/lib/api";
 import type { PrInfo } from "../../src/lib/api-types";
 import { Dashboard } from "../../src/components/Dashboard";
+import {
+  DEFAULT_SIDEBAR_WIDTH,
+  useSidebarWidthStore,
+} from "../../src/stores/sidebarWidthStore";
 import { waitFor, within } from "@testing-library/react";
 
 const findWorkspaceByBranchName = (
@@ -56,6 +60,39 @@ describe("Dashboard - workspace list", () => {
     expect(sidebar.querySelector('[data-sidebar="content"]')).toBeTruthy();
     expect(sidebar.querySelector('[data-sidebar="footer"]')).toBeTruthy();
     expect(within(sidebar).getByText("Workspaces")).toBeTruthy();
+  });
+
+  it("resizes the workspace sidebar by dragging the edge", async () => {
+    const user = userEvent.setup();
+    render(<Dashboard />);
+    await screen.findByText("feat/alpha");
+
+    const wrapper = document.querySelector(
+      ".group\\/sidebar-wrapper",
+    ) as HTMLElement;
+    expect(wrapper.style.getPropertyValue("--sidebar-width")).toBe(
+      `${DEFAULT_SIDEBAR_WIDTH}px`,
+    );
+
+    const handle = screen.getByRole("separator", {
+      name: "Resize workspace sidebar",
+    });
+    await user.pointer([
+      {
+        keys: "[MouseLeft>]",
+        target: handle,
+        coords: { clientX: DEFAULT_SIDEBAR_WIDTH, clientY: 80 },
+      },
+      { coords: { clientX: DEFAULT_SIDEBAR_WIDTH + 80, clientY: 80 } },
+      { keys: "[/MouseLeft]" },
+    ]);
+
+    expect(useSidebarWidthStore.getState().width).toBe(
+      DEFAULT_SIDEBAR_WIDTH + 80,
+    );
+    expect(wrapper.style.getPropertyValue("--sidebar-width")).toBe(
+      `${DEFAULT_SIDEBAR_WIDTH + 80}px`,
+    );
   });
 
   it("shows detached HEAD short hash in home repo row instead of unknown", async () => {
