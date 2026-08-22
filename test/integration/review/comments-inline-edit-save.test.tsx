@@ -1,13 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { screen, within } from "../../test-utils";
 import userEvent from "@testing-library/user-event";
-import {
-  addSingleReviewComment,
-  clickChangedFile,
-  openReviewTab,
-  setupWorkspaceWithDiff,
-  startEditingComment,
-} from "./comments-helpers";
+import { setupEditableComment, startEditingComment } from "./comments-helpers";
 
 describe("Inline comment editing — save", () => {
   let user: ReturnType<typeof userEvent.setup>;
@@ -16,15 +10,9 @@ describe("Inline comment editing — save", () => {
     user = userEvent.setup();
   });
 
-  async function setupEditableComment(branchName: string, comment: string) {
-    await setupWorkspaceWithDiff(branchName);
-    await openReviewTab(user, branchName);
-    await clickChangedFile("test.txt");
-    await addSingleReviewComment(user, comment);
-  }
-
   it("enters edit mode when clicking an inline comment", async () => {
     await setupEditableComment(
+      user,
       "feat/comment-edit-open",
       "Original comment text",
     );
@@ -46,6 +34,7 @@ describe("Inline comment editing — save", () => {
 
   it("updates inline comment text when saving", async () => {
     await setupEditableComment(
+      user,
       "feat/comment-edit-save",
       "Original comment text",
     );
@@ -66,6 +55,7 @@ describe("Inline comment editing — save", () => {
 
   it("saves an inline comment with Cmd+Enter", async () => {
     await setupEditableComment(
+      user,
       "feat/comment-edit-shortcut",
       "Original comment text",
     );

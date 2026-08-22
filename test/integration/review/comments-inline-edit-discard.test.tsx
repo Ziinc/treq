@@ -1,13 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { screen, waitFor, within } from "../../test-utils";
 import userEvent from "@testing-library/user-event";
-import {
-  addSingleReviewComment,
-  clickChangedFile,
-  openReviewTab,
-  setupWorkspaceWithDiff,
-  startEditingComment,
-} from "./comments-helpers";
+import { setupEditableComment, startEditingComment } from "./comments-helpers";
 
 describe("Inline comment editing — empty save and discard", () => {
   let user: ReturnType<typeof userEvent.setup>;
@@ -16,15 +10,9 @@ describe("Inline comment editing — empty save and discard", () => {
     user = userEvent.setup();
   });
 
-  async function setupEditableComment(branchName: string, comment: string) {
-    await setupWorkspaceWithDiff(branchName);
-    await openReviewTab(user, branchName);
-    await clickChangedFile("test.txt");
-    await addSingleReviewComment(user, comment);
-  }
-
   it("disables saving when the edited inline comment is empty", async () => {
     await setupEditableComment(
+      user,
       "feat/comment-edit-empty",
       "Original comment text",
     );
@@ -41,6 +29,7 @@ describe("Inline comment editing — empty save and discard", () => {
 
   it("discards the inline comment from edit mode", async () => {
     await setupEditableComment(
+      user,
       "feat/comment-edit-discard",
       "Original comment text",
     );
