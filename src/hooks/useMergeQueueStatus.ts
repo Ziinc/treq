@@ -357,9 +357,9 @@ export function useMergeQueueStatus(
       ? ["merge-queue-status", repoFullName, branchName]
       : null,
     async () => {
-      if (!remoteInfo || !branchName) return null;
+      if (!repoFullName || !branchName) return null;
       const { data, error } = await supabase.rpc("get_workspace_queue_status", {
-        p_repo_full_name: remoteInfo.full_name,
+        p_repo_full_name: repoFullName,
         p_branch_name: branchName,
       });
       if (error) throw error;

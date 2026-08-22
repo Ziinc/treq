@@ -169,7 +169,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
       : null,
     async () => {
       const { data } = await supabase.rpc("get_repo_branch_queue_statuses", {
-        p_repo_full_name: remoteInfo!.full_name,
+        p_repo_full_name: repoFullName!,
       });
       const map = new Map<string, QueueEntryStatus>();
       for (const row of (data ?? []) as {

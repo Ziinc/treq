@@ -34,17 +34,19 @@ export function useGithubReviewThreads({
   const { data: prInfo } = usePrInfoViaGh(repoPath, branchName);
   const repoFullName = remoteInfo?.full_name;
   const prNumber = prInfo?.number;
+  const remoteOwner = remoteInfo?.owner;
+  const remoteRepo = remoteInfo?.repo;
 
   const { data: threads = [] } = useSWR<GhReviewThread[]>(
-    repoFullName != null && prNumber != null
+    repoFullName != null && prNumber != null && remoteOwner && remoteRepo
       ? ["gh-pr-review-threads", repoFullName, prNumber]
       : null,
-    () =>
-      ghListPrReviewThreads(
-        remoteInfo!.owner,
-        remoteInfo!.repo,
-        prNumber!,
-      ),
+    () => {
+      if (!remoteOwner || !remoteRepo || prNumber == null) {
+        return Promise.resolve([]);
+      }
+      return ghListPrReviewThreads(remoteOwner, remoteRepo, prNumber);
+    },
     {
       dedupingInterval: 60_000,
       refreshInterval: pollMs(2 * 60_000),
