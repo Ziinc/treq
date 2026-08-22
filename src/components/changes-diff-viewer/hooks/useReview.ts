@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import useSWR from "swr";
+import { useDebounce } from "../../../hooks/useDebounce";
 import {
   type ConflictRegion,
   clearPendingReview,
@@ -13,7 +14,6 @@ import {
   FILE_COMMENT_HUNK_ID,
   formatReviewMarkdown as formatReviewMarkdownShared,
 } from "../../../lib/review";
-import { useDebounce } from "../../../hooks/useDebounce";
 import type { useToast } from "../../ui/toast";
 import type { ConflictComment, FileHunksData, LineComment } from "../types";
 import {
@@ -89,6 +89,13 @@ export function useReview({
     Map<string, { viewedAt: string; contentHash: string }>
   >(new Map());
 
+  const pendingReviewKey =
+    repoPath && workspaceId !== undefined ? `${repoPath}:${workspaceId}` : null;
+  const hydratedReviewKeyRef = useRef<string | null>(null);
+  if (hydratedReviewKeyRef.current !== pendingReviewKey) {
+    hydratedReviewKeyRef.current = null;
+  }
+
   const { data: pendingReview } = useSWR(
     repoPath && workspaceId !== undefined
       ? ["pending-review", repoPath, workspaceId]
@@ -97,12 +104,20 @@ export function useReview({
   );
 
   useEffect(() => {
-    if (!pendingReview) return;
+    if (!pendingReview || !pendingReviewKey) return;
+    if (hydratedReviewKeyRef.current === pendingReviewKey) return;
+    hydratedReviewKeyRef.current = pendingReviewKey;
     setComments(pendingReview.comments.map(toLocalLineComment));
     if (pendingReview.summary_text)
       setFinalReviewComment(pendingReview.summary_text);
     setHasUserAddedComments(pendingReview.comments.length > 0);
-  }, [pendingReview]);
+  }, [
+    pendingReview,
+    pendingReviewKey,
+    setComments,
+    setFinalReviewComment,
+    setHasUserAddedComments,
+  ]);
 
   const debouncedComments = useDebounce(comments, 500);
   const debouncedSummary = useDebounce(finalReviewComment, 500);

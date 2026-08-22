@@ -55,13 +55,17 @@ export const defaultSWRConfig = {
   errorRetryCount: 1,
 } as const;
 
-export const testSWRConfig = {
-  revalidateOnFocus: false,
-  errorRetryCount: 0,
-  provider: () => new Map(),
-};
-
 /** Background SWR polls fight jj's working-copy lock in integration tests. */
 export function pollMs(ms: number): number {
   return import.meta.env.MODE === "test" ? 0 : ms;
 }
+
+export function createTestSWRConfig() {
+  return {
+    revalidateOnFocus: false as const,
+    errorRetryCount: 0,
+    provider: () => new Map(),
+  };
+}
+
+export const testSWRConfig = createTestSWRConfig();

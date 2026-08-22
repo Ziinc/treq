@@ -1,27 +1,28 @@
-import React, { ReactNode } from "react";
+import {
+  act,
+  fireEvent,
+  type RenderOptions,
+  render,
+  screen as rtlScreen,
+} from "@testing-library/react";
+import { type ReactNode, useMemo } from "react";
 import { SWRConfig } from "swr";
 import { Router } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";
 import { ToastProvider } from "../src/components/ui/toast";
+import { createTestSWRConfig, SWRMutateScope } from "../src/lib/swr-cache";
 import { AppStoreEffects } from "../src/stores/AppStoreEffects";
-import { testSWRConfig, SWRMutateScope } from "../src/lib/swr-cache";
-import {
-  RenderOptions,
-  act,
-  render,
-  screen as rtlScreen,
-  fireEvent,
-} from "@testing-library/react";
 
 /**
  * Creates a wrapper with SWR, toast host, and Zustand store effects.
  */
 const AllTheProviders = ({ children }: { children: ReactNode }) => {
+  const swrConfig = useMemo(() => createTestSWRConfig(), []);
   return (
     <Router hook={useHashLocation}>
       <AppStoreEffects />
       <ToastProvider>
-        <SWRConfig value={testSWRConfig}>
+        <SWRConfig value={swrConfig}>
           <SWRMutateScope>{children}</SWRMutateScope>
         </SWRConfig>
       </ToastProvider>
