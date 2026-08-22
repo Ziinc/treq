@@ -7,6 +7,7 @@ import {
   useMergeQueueEnabled,
   usePrStatusPolling,
 } from "../hooks/useMergeQueueStatus";
+import { useWorkspaceSidebarMultiSelect } from "../hooks/useWorkspaceSidebarMultiSelect";
 import {
   getWorkspaceStatus,
   getWorkspaces,
@@ -21,6 +22,7 @@ import type {
 import type { ChangeFilesMoveRequest } from "../lib/change-file-drag";
 import { FEATURES } from "../lib/features";
 import { supabase } from "../lib/supabase";
+import { pollMs } from "../lib/swr-cache";
 import {
   buildWorkspaceTree,
   flattenWorkspaceTree,
@@ -28,12 +30,10 @@ import {
   getEntireStack,
 } from "../lib/workspace-tree";
 import { isWorkspaceHidden } from "../lib/workspace-utils";
-import { useWorkspaceSidebarMultiSelect } from "../hooks/useWorkspaceSidebarMultiSelect";
 import { HomeRepoSidebarRow } from "./HomeRepoSidebarRow";
-import { WorkspaceSidebarHeaderActions } from "./WorkspaceSidebarHeaderActions";
 import { RenameWorkspaceDialog } from "./RenameWorkspaceDialog";
 import { TerminalSessionsSidebar } from "./TerminalSessionsSidebar";
-import { type TerminalSessionSummary } from "./terminal/types";
+import type { TerminalSessionSummary } from "./terminal/types";
 import { Kbd, KbdGroup } from "./ui/kbd";
 import {
   Sidebar,
@@ -56,6 +56,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "./ui/tooltip";
+import { WorkspaceSidebarHeaderActions } from "./WorkspaceSidebarHeaderActions";
 import { WorkspaceSidebarItem } from "./WorkspaceSidebarItem";
 
 interface WorkspaceSidebarProps {
@@ -179,7 +180,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = memo(
         }
         return map;
       },
-      { refreshInterval: 30_000 },
+      { refreshInterval: pollMs(30_000) },
     );
 
     const statuses = useMemo<WorkspaceSidebarStatus[]>(() => {

@@ -1,5 +1,5 @@
-import { useLayoutEffect, type ReactNode } from "react";
-import { mutate as defaultMutate, useSWRConfig, type Key } from "swr";
+import { type ReactNode, useLayoutEffect } from "react";
+import { mutate as defaultMutate, type Key, useSWRConfig } from "swr";
 
 type ScopedMutate = typeof defaultMutate;
 
@@ -60,3 +60,8 @@ export const testSWRConfig = {
   errorRetryCount: 0,
   provider: () => new Map(),
 };
+
+/** Background SWR polls fight jj's working-copy lock in integration tests. */
+export function pollMs(ms: number): number {
+  return import.meta.env.MODE === "test" ? 0 : ms;
+}

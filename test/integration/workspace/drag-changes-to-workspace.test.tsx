@@ -1,6 +1,10 @@
-import { beforeEach, describe, expect, it } from "vitest";
-import userEvent from "@testing-library/user-event";
+import fs from "node:fs";
+import path from "node:path";
 import { fireEvent } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it } from "vitest";
+import { Dashboard } from "../../../src/components/Dashboard";
+import * as api from "../../../src/lib/api";
 import { render, screen, waitFor } from "../../test-utils";
 import {
   createTestRepo,
@@ -9,10 +13,6 @@ import {
   resolveWorkspacePath,
   writeWorkspaceFile,
 } from "../../utils";
-import * as api from "../../../src/lib/api";
-import { Dashboard } from "../../../src/components/Dashboard";
-import fs from "node:fs";
-import path from "node:path";
 
 async function createTwoWorkspacesWithDirtySource() {
   const { repoPath } = createTestRepo(false);
@@ -171,6 +171,7 @@ describe("Review tab - drag changes to workspace sidebar", () => {
     await openReviewForBranch(user, source.branch_name);
 
     await waitForChangedFile("a.txt");
+    await waitForChangedFile("b.txt");
 
     await user.click(screen.getByTitle(/Select all/i));
 

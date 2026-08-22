@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
-import { ghListPrReviewThreads } from "../../../lib/api";
-import type { GhReviewThread } from "../../../lib/api-types";
 import {
   useGitRemoteInfo,
   usePrInfoViaGh,
 } from "../../../hooks/useMergeQueueStatus";
+import { ghListPrReviewThreads } from "../../../lib/api";
+import type { GhReviewThread } from "../../../lib/api-types";
+import { pollMs } from "../../../lib/swr-cache";
 import { placeGithubReviewThreads } from "../placeGithubReviewThreads";
 import type { CommentLineQuery, FileHunksData } from "../types";
 
@@ -46,7 +47,7 @@ export function useGithubReviewThreads({
       ),
     {
       dedupingInterval: 60_000,
-      refreshInterval: 2 * 60_000,
+      refreshInterval: pollMs(2 * 60_000),
     },
   );
 

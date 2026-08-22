@@ -1,10 +1,9 @@
 import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect } from "react";
 import useSWR from "swr";
-import { useMutation } from "./useMutation";
 import {
-  getCachedPrInfo,
   getCachedPrCiStatus,
+  getCachedPrInfo,
   getGitRemoteUrl,
   getPrChecksForPr,
   getPrChecksViaGh,
@@ -23,7 +22,8 @@ import type {
 } from "../lib/api-types";
 import { FEATURES } from "../lib/features";
 import { supabase } from "../lib/supabase";
-import { invalidateQueries, setQueryData } from "../lib/swr-cache";
+import { invalidateQueries, pollMs, setQueryData } from "../lib/swr-cache";
+import { useMutation } from "./useMutation";
 
 /** Query key for the per-repo merge queue opt-in. */
 export const mergeQueueEnabledKey = (repoFullName: string | undefined) => [
@@ -136,7 +136,7 @@ export function usePrStatusPolling(repoPath: string | undefined) {
     },
     {
       dedupingInterval: 5_000,
-      refreshInterval: 15_000,
+      refreshInterval: pollMs(15_000),
     },
   );
 }
@@ -182,7 +182,7 @@ export function usePrInfoViaGh(
     () => getCachedPrInfo(repoPath!, branchName!),
     {
       dedupingInterval: 5_000,
-      refreshInterval: 15_000,
+      refreshInterval: pollMs(15_000),
     },
   );
 }
@@ -245,7 +245,7 @@ export function usePrCiStatus(
     () => getCachedPrCiStatus(repoPath!, branchName!),
     {
       dedupingInterval: 10_000,
-      refreshInterval: 30_000,
+      refreshInterval: pollMs(30_000),
     },
   );
 }
@@ -261,7 +261,7 @@ export function usePrChecksForPr(
     () => getPrChecksForPr(repoFullName!, prNumber!),
     {
       dedupingInterval: 10_000,
-      refreshInterval: 30_000,
+      refreshInterval: pollMs(30_000),
     },
   );
 }
@@ -363,7 +363,7 @@ export function useMergeQueueStatus(
       if (error) throw error;
       return (data as WorkspaceQueueStatus[] | null)?.[0] ?? null;
     },
-    { refreshInterval: 30_000 },
+    { refreshInterval: pollMs(30_000) },
   );
 }
 

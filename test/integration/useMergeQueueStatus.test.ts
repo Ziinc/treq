@@ -1,10 +1,9 @@
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { SWRConfig } from "swr";
-import { SWRMutateScope, testSWRConfig } from "../../src/lib/swr-cache";
 import { renderHook, waitFor } from "@testing-library/react";
 import React from "react";
+import { SWRConfig } from "swr";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   useEnqueueWorkspace,
@@ -18,6 +17,7 @@ import type {
   PrCiStatus,
   PrInfo,
 } from "../../src/lib/api-types";
+import { SWRMutateScope, testSWRConfig } from "../../src/lib/swr-cache";
 
 const { mockEdgeFn, mockRpc, queueEnabled } = vi.hoisted(() => {
   const queueEnabled = { current: true };
@@ -107,7 +107,10 @@ describe("useGitRemoteInfo", () => {
     const { result } = renderHook(() => useGitRemoteInfo(repoPath), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.error).toBeUndefined();
+    });
     expect(result.current.data).toBeNull();
   });
 
@@ -118,7 +121,10 @@ describe("useGitRemoteInfo", () => {
     const { result } = renderHook(() => useGitRemoteInfo(repoPath), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.error).toBeUndefined();
+    });
     expect(result.current.data).toBeNull();
   });
 
@@ -129,7 +135,10 @@ describe("useGitRemoteInfo", () => {
     const { result } = renderHook(() => useGitRemoteInfo(repoPath), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.error).toBeUndefined();
+    });
     expect(result.current.data).toMatchObject({
       owner: "ziinc",
       repo: "treq",
@@ -144,7 +153,10 @@ describe("useGitRemoteInfo", () => {
     const { result } = renderHook(() => useGitRemoteInfo(repoPath), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.error).toBeUndefined();
+    });
     expect(result.current.data?.full_name).toBe("ziinc/treq");
   });
 
@@ -152,7 +164,8 @@ describe("useGitRemoteInfo", () => {
     const { result } = renderHook(() => useGitRemoteInfo(undefined), {
       wrapper: makeWrapper(),
     });
-    expect(result.current.fetchStatus).toBe("idle");
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.isValidating).toBe(false);
   });
 });
 
@@ -173,7 +186,10 @@ describe("usePrInfoViaGh", () => {
     const { result } = renderHook(() => usePrInfoViaGh(repoPath, "feat"), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.error).toBeUndefined();
+    });
     expect(result.current.data).toEqual(OPEN_PR);
     expect(api.getCachedPrInfo).toHaveBeenCalledWith(repoPath, "feat");
   });
@@ -191,7 +207,8 @@ describe("usePrInfoViaGh", () => {
     const { result } = renderHook(() => usePrInfoViaGh(repoPath, undefined), {
       wrapper: makeWrapper(),
     });
-    expect(result.current.fetchStatus).toBe("idle");
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.isValidating).toBe(false);
   });
 });
 
@@ -224,7 +241,10 @@ describe("usePrCiStatus", () => {
     const { result } = renderHook(() => usePrCiStatus(repoPath, "feat"), {
       wrapper: makeWrapper(),
     });
-    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    await waitFor(() => {
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.error).toBeUndefined();
+    });
     expect(result.current.data).toEqual(SUCCESS_CI);
     expect(api.getCachedPrCiStatus).toHaveBeenCalledWith(repoPath, "feat");
   });
@@ -242,7 +262,8 @@ describe("usePrCiStatus", () => {
     const { result } = renderHook(() => usePrCiStatus(repoPath, undefined), {
       wrapper: makeWrapper(),
     });
-    expect(result.current.fetchStatus).toBe("idle");
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.isValidating).toBe(false);
   });
 });
 

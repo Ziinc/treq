@@ -1,18 +1,14 @@
 /* eslint-disable max-lines */
 
-import useSWR from "swr";
-import { useMutation } from "../hooks/useMutation";
-import {
-  clearSWRCache,
-  fetchAndCache,
-  invalidateQueries,
-} from "../lib/swr-cache";
 import { listen } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { ask } from "@tauri-apps/plugin-dialog";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import useSWR from "swr";
 import { useLocation } from "wouter";
+import { useAutoUpdate } from "../hooks/useAutoUpdate";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
+import { useMutation } from "../hooks/useMutation";
 import { useTwoFingerSwipe } from "../hooks/useTwoFingerSwipe";
 import { useWorkspaceHierarchy } from "../hooks/useWorkspaceHierarchy";
 import {
@@ -47,11 +43,52 @@ import {
   updateSessionAccess,
   type Workspace,
 } from "../lib/api";
+import { ARTIFACTS_BASE_PATH, artifactsPath } from "../lib/artifactRoutes";
 import {
-  dispatchRefreshWorkspaceChanges,
   type ChangeFilesMoveRequest,
+  dispatchRefreshWorkspaceChanges,
 } from "../lib/change-file-drag";
+import {
+  GITHUB_BASE_PATH,
+  githubDetailPath,
+  githubListPath,
+  stateFilterForPrState,
+} from "../lib/githubRoutes";
+import type { GitHubIssueAttachment } from "../lib/promptAttachments";
 import { invalidateReviewChangeCount } from "../lib/review-change-count";
+import {
+  clearSWRCache,
+  fetchAndCache,
+  invalidateQueries,
+  pollMs,
+} from "../lib/swr-cache";
+import { getFullWorkspacePath } from "../lib/utils";
+import {
+  buildWorkspaceTree,
+  flattenWorkspaceTree,
+} from "../lib/workspace-tree";
+import { AgentPromptDialog } from "./AgentPromptDialog";
+import { ArtifactsPage } from "./ArtifactsPage";
+import { CommandPalette } from "./CommandPalette";
+import { ErrorBoundary } from "./ErrorBoundary";
+import { GitHubPanel } from "./GitHubPanel";
+import { KeyboardShortcutsModal } from "./KeyboardShortcutsModal";
+import { MergePreviewPage } from "./MergePreviewPage";
+import { Onboarding } from "./Onboarding";
+import { PromptHistoryModal } from "./PromptHistoryModal";
+import { SettingsPage } from "./SettingsPage";
+import { ShowWorkspace } from "./ShowWorkspace";
+import { StashModal } from "./StashModal";
+import type { BranchListItem } from "./TargetBranchSelector";
+import { TerminalMissionControl } from "./TerminalMissionControl";
+import type {
+  ClaudeSessionData,
+  TerminalSessionSummary,
+} from "./terminal/types";
+import {
+  UnifiedWorkspaceDialog,
+  type WorkspaceDialogDefaults,
+} from "./UnifiedWorkspaceDialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -62,45 +99,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "./ui/alert-dialog";
-import {
-  GITHUB_BASE_PATH,
-  githubDetailPath,
-  githubListPath,
-  stateFilterForPrState,
-} from "../lib/githubRoutes";
-import { ARTIFACTS_BASE_PATH, artifactsPath } from "../lib/artifactRoutes";
-import { getFullWorkspacePath } from "../lib/utils";
-import type { GitHubIssueAttachment } from "../lib/promptAttachments";
-import {
-  buildWorkspaceTree,
-  flattenWorkspaceTree,
-} from "../lib/workspace-tree";
-import { CommandPalette } from "./CommandPalette";
-import { AgentPromptDialog } from "./AgentPromptDialog";
-import { ErrorBoundary } from "./ErrorBoundary";
-import { GitHubPanel } from "./GitHubPanel";
-import { KeyboardShortcutsModal } from "./KeyboardShortcutsModal";
-import { MergePreviewPage } from "./MergePreviewPage";
-import { Onboarding } from "./Onboarding";
-import { PromptHistoryModal } from "./PromptHistoryModal";
-import { StashModal } from "./StashModal";
-import { SettingsPage } from "./SettingsPage";
-import { ArtifactsPage } from "./ArtifactsPage";
-import { ShowWorkspace } from "./ShowWorkspace";
-import { TerminalMissionControl } from "./TerminalMissionControl";
-import type { BranchListItem } from "./TargetBranchSelector";
-import type {
-  ClaudeSessionData,
-  TerminalSessionSummary,
-} from "./terminal/types";
-import {
-  UnifiedWorkspaceDialog,
-  type WorkspaceDialogDefaults,
-} from "./UnifiedWorkspaceDialog";
-import { useToast } from "./ui/toast";
-import { useAutoUpdate } from "../hooks/useAutoUpdate";
-import { WorkspacePicker } from "./WorkspacePicker";
 import { SidebarInset, SidebarProvider } from "./ui/sidebar";
+import { useToast } from "./ui/toast";
+import { WorkspacePicker } from "./WorkspacePicker";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
 import {
   WorkspaceTerminalPane,
@@ -483,13 +484,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const { data: sessions = [] } = useSWR(
     repoPath ? ["sessions", repoPath] : null,
     () => getSessions(repoPath),
-    { refreshInterval: 30000 },
+    { refreshInterval: pollMs(30000) },
   );
 
   const { data: workspaces = [] } = useSWR(
     repoPath ? ["workspaces", repoPath] : null,
     () => getWorkspaces(repoPath),
-    { refreshInterval: 10000 },
+    { refreshInterval: pollMs(10000) },
   );
 
   // `workspaces` is refetched (e.g. after a push, or on its 10s interval) and
@@ -513,7 +514,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const { data: workspaceStatuses = [] } = useSWR(
     repoPath ? ["workspace-statuses", repoPath] : null,
     () => listWorkspaceStatuses(repoPath),
-    { refreshInterval: 10000 },
+    { refreshInterval: pollMs(10000) },
   );
 
   const visibleWorkspaces = useMemo(() => {

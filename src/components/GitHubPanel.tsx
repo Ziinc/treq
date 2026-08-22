@@ -12,7 +12,6 @@ import { useState } from "react";
 import useSWR from "swr";
 import useSWRInfinite from "swr/infinite";
 import { useLocation, useRoute } from "wouter";
-import { useAuthStore } from "../stores/authStore";
 import {
   useDequeueBranches,
   useGitRemoteInfo,
@@ -20,23 +19,25 @@ import {
 } from "../hooks/useMergeQueueStatus";
 import { GH_LIST_PAGE_SIZE, ghListIssues, ghListPrs } from "../lib/api";
 import { FEATURES } from "../lib/features";
-import type { GitHubIssueAttachment } from "../lib/promptAttachments";
 import {
+  type GitHubStateFilter,
+  type GitHubTab,
   githubDetailPath,
   githubListPath,
   githubNewItemPath,
   githubTabPath,
-  type GitHubStateFilter,
-  type GitHubTab,
 } from "../lib/githubRoutes";
 import {
   MERGE_QUEUE_HISTORY_PAGE_SIZE,
   type QueueEntry,
 } from "../lib/merge-queue-stacks";
+import type { GitHubIssueAttachment } from "../lib/promptAttachments";
 import { supabase } from "../lib/supabase";
+import { pollMs } from "../lib/swr-cache";
 import { cn } from "../lib/utils";
-import { MergeQueueTab } from "./github-panel/MergeQueueTab";
+import { useAuthStore } from "../stores/authStore";
 import { CreateIssueForm, IssueDetailPanel } from "./github-panel/IssueDetail";
+import { MergeQueueTab } from "./github-panel/MergeQueueTab";
 import { CreatePrForm, PrDetailPanel } from "./github-panel/PrDetail";
 import { EmptyState, IssueListItem, PrListItem } from "./github-panel/shared";
 import { Button } from "./ui/button";
@@ -191,7 +192,7 @@ export const GitHubPanel: React.FC<GitHubPanelProps> = ({
         return a.branch_name.localeCompare(b.branch_name);
       });
     },
-    { refreshInterval: 30_000 },
+    { refreshInterval: pollMs(30_000) },
   );
 
   const isListLoading = activeTab === "issues" ? issuesLoading : prsLoading;
