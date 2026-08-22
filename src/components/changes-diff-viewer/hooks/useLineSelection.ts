@@ -63,6 +63,13 @@ export function useLineSelection({
     [],
   );
 
+  const allFileHunksRef = useRef(allFileHunks);
+  allFileHunksRef.current = allFileHunks;
+  const committedFileHunksRef = useRef(committedFileHunks);
+  committedFileHunksRef.current = committedFileHunks;
+  const diffLineSelectionRef = useRef(diffLineSelection);
+  diffLineSelectionRef.current = diffLineSelection;
+
   const handleLineMouseEnter = useCallback(
     ({ filePath, hunkIndex, lineIndex }: DiffLinePointer) => {
       const selectionAnchor = selectionAnchorRef.current;
@@ -72,13 +79,14 @@ export function useLineSelection({
         selectionAnchor.filePath !== filePath
       )
         return;
-      const working = allFileHunks.get(filePath);
-      const committed = committedFileHunks?.get(filePath);
+      const working = allFileHunksRef.current.get(filePath);
+      const committed = committedFileHunksRef.current?.get(filePath);
       let fileData = working ?? committed;
+      const currentSelection = diffLineSelectionRef.current;
       // When the same path appears in both sections, pick the map whose
       // anchor line matches the content captured on mouseDown.
-      if (working && committed && diffLineSelection?.lines.length) {
-        const [anchorLine] = diffLineSelection.lines;
+      if (working && committed && currentSelection?.lines.length) {
+        const [anchorLine] = currentSelection.lines;
         const expected = anchorLine.content;
         const workingLine =
           working.hunks[selectionAnchor.hunkIndex]?.lines[
@@ -132,7 +140,7 @@ export function useLineSelection({
       setDiffLineSelection({ filePath, lines: newLines });
       setCurrentDragLine({ filePath, hunkIndex, lineIndex });
     },
-    [allFileHunks, committedFileHunks, diffLineSelection],
+    [],
   );
 
   const handleLineMouseUp = useCallback(() => {
