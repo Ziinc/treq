@@ -72,8 +72,6 @@ describe("Settings integration", () => {
     expect(
       screen.queryByRole("heading", { name: "Settings" }),
     ).not.toBeInTheDocument();
-    expect(
-      await screen.findByTestId("workspace-terminal-pane"),
-    ).toBeVisible();
+    expect(await screen.findByTestId("workspace-terminal-pane")).toBeVisible();
   });
 });
