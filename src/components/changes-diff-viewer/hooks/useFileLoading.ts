@@ -230,8 +230,10 @@ export function useFileLoading({
   // Call through the ref so toast/callback identity cannot retrigger this
   // effect. Including `loadChangedFiles` stacked overlapping getWorkspaceDiff
   // calls (jj WC lock) and unmounted the Review file list in later tests.
+  // Wait for workspaceId: a null-id getWorkspaceChangedFiles can hold the jj
+  // lock indefinitely, and the coalescer would then never run the real load.
   useEffect(() => {
-    if (!workspacePath) return;
+    if (!workspacePath || workspaceId === undefined) return;
     void loadChangedFilesRef.current();
   }, [
     workspacePath,
