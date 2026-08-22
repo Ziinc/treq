@@ -160,10 +160,10 @@ describe("Pending review persistence", () => {
       { timeout: 60_000 },
     );
 
-    const discardBtn = await screen.findByRole("button", {
+    const discardBtns = await screen.findAllByRole("button", {
       name: /^discard$/i,
     });
-    await user.click(discardBtn);
+    await user.click(discardBtns[0]);
 
     const keepButton = await screen.findByRole("button", {
       name: /keep reviewing/i,

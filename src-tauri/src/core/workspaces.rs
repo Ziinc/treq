@@ -1480,8 +1480,8 @@ mod tests {
   fn revision_diff_is_empty_when_workspace_dir_is_gone() {
     let temp_dir = TempDir::new().expect("temp dir");
     let missing = temp_dir.path().join("already-removed");
-    let diff = jj::revision_diff_if_workspace_missing(&missing)
-      .expect("missing dir should skip jj load");
+    let diff =
+      jj::revision_diff_if_workspace_missing(&missing).expect("missing dir should skip jj load");
     assert!(diff.uncommitted_files.is_empty());
     assert!(diff.committed_files.is_empty());
     assert!(!diff.too_large_to_render);
