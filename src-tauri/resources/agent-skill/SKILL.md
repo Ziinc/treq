@@ -13,7 +13,7 @@ description: >-
 You are running inside Treq. The session system prompt names your working
 directory and the home repository. Stay inside that filesystem scope for
 direct file reads and writes. Use the `treq` CLI when you need to create or
-manage other workspaces; those commands may write under `.treq/workspaces/`
+manage other workspaces. Those commands may write under `.treq/workspaces/`
 outside the current working directory.
 
 Run `treq --help` if a flag is unclear. Prefer `treq` over raw `git` or `jj`
@@ -28,11 +28,19 @@ does not appear in another.
 ```bash
 treq st
 treq st <workspace_name>
+treq diff
+treq diff <workspace_name>
 treq add <branch_name> [-d <description>] [-l <title>] [-s <source_branch>] [-p <sparse_path>]... [-k <symlink_path>]...
 treq set <workspace_name> [-d <description>] [-l <title>] [-t <target_branch>]
 treq mv <source> <destination> -f <file> [-f <file> ...]
 treq mv <source> <destination> -c <commit> [-c <commit> ...]
 ```
+
+`treq st` from a workspace directory shows that workspace only. You get the
+stacked parent and children, the uncommitted change count, whether files are
+conflicted, and the commit count. It omits the repository default branch. If
+files are conflicted, it tells you to run `treq diff`. `treq st` from the home
+repository with no name lists every workspace.
 
 Use `.` as a workspace name when a command needs the home repository. Create a
 new workspace when the task should stay isolated from the current working copy.
@@ -80,13 +88,39 @@ sync. Do not create empty or placeholder commits.
 
 ## Conflict resolution
 
-To finish inplace conflict resolution, work under
-`.treq/resolve/<workspace-slug>/`. Each change-id subdirectory is one
-conflicted commit.
+Run `treq st` first. If it reports conflicts, run `treq diff`. That command
+lists conflicted files, conflict hunks, and conflicted commits with change
+ids. Pick one of the two flows below. Do not mix them on the same conflict.
 
-```bash
-treq resolve <change-id> [1|2|base|both]
-echo '{"path/to/file": "replacement\n"}' | treq resolve <change-id>
-```
+### New-commit resolution
 
-Your work is complete when no change-id directories remain.
+Use this when the workspace working copy holds the conflict and you should
+record a new commit on the branch.
+
+1. Run `treq st` and `treq diff` in the workspace.
+2. Edit each conflicted file in the workspace working copy.
+3. Remove conflict markers and keep the intended result.
+4. Run `treq st` until it reports no conflicts.
+5. Run `treq commit <workspace_name> -m "<message>"` with a message that
+   describes the resolution.
+
+Do not use `git commit` or `jj commit` for this step.
+
+### In-place commit resolution
+
+Use this when a rebase left one or more existing commits conflicted. Treq
+rewrites those commits in place. It does not dirty the product workspace
+working copy. Resolve directories live under `.treq/resolve/<workspace-slug>/`.
+The Commits tab **Resolve conflicts…** action creates them.
+
+1. Confirm `treq diff` lists conflicted commits and their change ids.
+2. Work in `.treq/resolve/<workspace-slug>/<change-id>/` once that directory
+   exists.
+3. Edit the conflict markers in those files.
+4. Or run `treq resolve <change-id> [1|2|base|both]`.
+5. Or pipe JSON replacements:
+   `echo '{"path/to/file": "replacement\n"}' | treq resolve <change-id>`.
+6. Repeat for every change-id directory.
+
+Your work is complete when no change-id directories remain under the resolve
+root. `treq resolve` always takes a change id.

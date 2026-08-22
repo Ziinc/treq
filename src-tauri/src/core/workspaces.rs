@@ -2646,6 +2646,18 @@ pub fn workspace_diff(repo_path: &str, workspace_id: i64) -> Result<jj::JjRevisi
   workspace_diff_with_conflict_style(repo_path, workspace_id, &conflict_marker_style)
 }
 
+/// Workspace diff for CLI callers that have no app settings database yet.
+pub fn workspace_cli_diff(
+  repo_path: &str,
+  workspace_id: i64,
+) -> Result<jj::JjRevisionDiff, String> {
+  workspace_diff_with_conflict_style(
+    repo_path,
+    workspace_id,
+    super::DEFAULT_CONFLICT_MARKER_STYLE,
+  )
+}
+
 fn resolve_workspace_diff_conflict_marker_style(repo_path: &str) -> Result<String, String> {
   let app_db_path = crate::core::resolve_app_db_path(repo_path);
   if !app_db_path.exists() {

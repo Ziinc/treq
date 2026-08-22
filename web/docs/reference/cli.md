@@ -52,7 +52,19 @@ Show workspace status.
 treq st [workspace_name]
 ```
 
-Omit `workspace_name` to list all workspaces. GitHub pull request information will be included if there is a valid GitHub integration.
+From a workspace directory, or with `workspace_name`, Treq prints that workspace only: its stacked parent and children, uncommitted change count, conflicted-file count, and commit count. It omits the repository default branch. If files are conflicted, it tells you to run `treq diff`.
+
+From the home repository with no name, it lists every workspace. GitHub pull request information is included when GitHub integration is available.
+
+### `treq diff`
+
+Show conflicted files and conflict hunks for a workspace.
+
+```bash
+treq diff [workspace_name]
+```
+
+Run this from a workspace directory, or pass `workspace_name`. The output lists conflicted files, conflicted commits with change ids, and the conflict hunks. See [Commit Management](/docs/concepts/commit-management).
 
 ### `treq mv`
 
@@ -103,7 +115,7 @@ treq resolve <commit_id> [sides...]
 echo '{"path/to/file": "replacement\n"}' | treq resolve <commit_id>
 ```
 
-- `commit_id`: change id or commit id of the conflicted revision.
+- `commit_id`: change id or commit id of the conflicted revision. Required.
 - `sides`: optional conflict sides to take. Use `1`, `2`, `base`, or `both`.
 - Non-TTY stdin: JSON object of path to full file content replacements.
 

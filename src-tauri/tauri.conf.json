@@ -108,7 +108,18 @@
               "name": "workspace_name",
               "index": 1,
               "takesValue": true,
-              "description": "Workspace name (omit for all)"
+              "description": "Workspace name (omit to use the current workspace, or list all from the home repo)"
+            }
+          ]
+        },
+        "diff": {
+          "description": "Show workspace conflicts and conflict hunks",
+          "args": [
+            {
+              "name": "workspace_name",
+              "index": 1,
+              "takesValue": true,
+              "description": "Workspace branch name (omit to use the current workspace)"
             }
           ]
         },

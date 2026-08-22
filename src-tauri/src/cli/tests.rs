@@ -1,6 +1,6 @@
 use super::{
   dispatch_agent_request, handle_cli_command, handle_cli_global_args, normalize_repo_path,
-  parse_agent_mode, parse_agent_mode_or_default,
+  parse_agent_mode, parse_agent_mode_or_default, workspace_dir_name_from_cwd,
 };
 use crate::agent_dispatch;
 use crate::local_db;
@@ -43,6 +43,12 @@ fn commit_is_handled_by_cli_dispatch() {
 #[test]
 fn send_is_handled_by_cli_dispatch() {
   let subcommand = make_subcommand("send");
+  assert!(handle_cli_command(&subcommand).is_some());
+}
+
+#[test]
+fn diff_is_handled_by_cli_dispatch() {
+  let subcommand = make_subcommand("diff");
   assert!(handle_cli_command(&subcommand).is_some());
 }
 
@@ -100,6 +106,34 @@ fn send_subcommand_defines_optional_path_positional() {
   assert_eq!(path.get("index").and_then(Value::as_i64), Some(1));
   assert_eq!(path.get("takesValue").and_then(Value::as_bool), Some(true));
   assert_ne!(path.get("required").and_then(Value::as_bool), Some(true));
+}
+
+#[test]
+fn diff_subcommand_defines_optional_workspace_name() {
+  let config_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tauri.conf.json");
+  let config = fs::read_to_string(config_path).expect("failed to read tauri.conf.json");
+  let json: Value = serde_json::from_str(&config).expect("failed to parse tauri.conf.json");
+  let diff = json["plugins"]["cli"]["subcommands"]["diff"]
+    .as_object()
+    .expect("diff subcommand must exist");
+  let args = diff
+    .get("args")
+    .and_then(Value::as_array)
+    .expect("diff args must be an array");
+
+  let workspace_name = args
+    .iter()
+    .find(|arg| arg.get("name").and_then(Value::as_str) == Some("workspace_name"))
+    .expect("diff must define workspace_name positional arg");
+  assert_eq!(workspace_name.get("index").and_then(Value::as_i64), Some(1));
+  assert_eq!(
+    workspace_name.get("takesValue").and_then(Value::as_bool),
+    Some(true)
+  );
+  assert_ne!(
+    workspace_name.get("required").and_then(Value::as_bool),
+    Some(true)
+  );
 }
 
 #[test]
@@ -182,6 +216,20 @@ fn normalize_repo_path_falls_back_for_missing_path() {
   let missing = Path::new("/definitely/not/present/treq-missing-path");
   let normalized = normalize_repo_path(missing);
   assert_eq!(normalized, missing.to_string_lossy());
+}
+
+#[test]
+fn workspace_dir_name_from_cwd_reads_treq_workspaces_component() {
+  let nested = Path::new("/repo/.treq/workspaces/feat-ui/src/lib");
+  assert_eq!(
+    workspace_dir_name_from_cwd(nested).as_deref(),
+    Some("feat-ui")
+  );
+  assert_eq!(
+    workspace_dir_name_from_cwd(Path::new("/repo/.treq/workspaces/feat-ui")).as_deref(),
+    Some("feat-ui")
+  );
+  assert_eq!(workspace_dir_name_from_cwd(Path::new("/repo/src")), None);
 }
 
 #[test]

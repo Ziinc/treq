@@ -6,8 +6,8 @@ use crate::core;
 use crate::local_db;
 
 use super::status_output::{
-  format_workspace_stack_lines, print_workspace_partial_status, print_workspace_status_detail,
-  WorkspacePrStatus,
+  filter_statuses_for_workspace, format_focused_workspace_status, format_workspace_diff_lines,
+  format_workspace_stack_lines, print_workspace_partial_status, WorkspacePrStatus,
 };
 use super::{
   detect_repo_path, dispatch_agent_request, dispatch_send_request, parse_agent_mode_or_default,
@@ -209,6 +209,57 @@ pub(super) fn handle_workspace_set(matches: &Matches) -> bool {
   }
 }
 
+fn resolve_named_or_cwd_workspace(
+  repo_path: &str,
+  workspace_name: Option<String>,
+) -> Result<local_db::Workspace, String> {
+  if let Some(name) = workspace_name {
+    return local_db::get_workspace_by_branch(repo_path, &name)?
+      .ok_or_else(|| format!("workspace '{}' not found", name));
+  }
+  super::lookup_workspace_from_cwd(repo_path).ok_or_else(|| {
+    "run this command from a workspace directory, or pass a workspace name".to_string()
+  })
+}
+
+fn default_branch_or_empty(repo_path: &str) -> String {
+  core::get_repo_default_branch(repo_path).unwrap_or_default()
+}
+
+fn print_focused_workspace(repo_path: &str, workspace: &local_db::Workspace) -> bool {
+  let default_branch = default_branch_or_empty(repo_path);
+  let status = match core::workspace_status(repo_path, Some(workspace.id)) {
+    Ok(status) => status,
+    Err(e) => {
+      super::log_cli_error(&format!("Error getting workspace status: {}", e));
+      return false;
+    }
+  };
+  let related = match core::list_workspace_statuses(repo_path) {
+    Ok(statuses) => {
+      filter_statuses_for_workspace(&statuses, &workspace.branch_name, &default_branch)
+    }
+    Err(e) => {
+      super::log_cli_error(&format!("Error listing workspace statuses: {}", e));
+      return false;
+    }
+  };
+  let uncommitted_changes = core::list_changed_files(repo_path, Some(workspace.id))
+    .map(|files| files.len())
+    .unwrap_or(0);
+  let pr = github_pr_status(repo_path, &status.partial.current.branch_name);
+  for line in format_focused_workspace_status(
+    &status,
+    &related,
+    uncommitted_changes,
+    &default_branch,
+    pr.as_ref(),
+  ) {
+    println!("{line}");
+  }
+  true
+}
+
 pub(super) fn handle_workspace_status(matches: &Matches) -> bool {
   let workspace_name = get_arg_value(matches, "workspace_name");
 
@@ -220,61 +271,81 @@ pub(super) fn handle_workspace_status(matches: &Matches) -> bool {
     }
   };
 
-  match workspace_name {
-    Some(name) => {
-      // Show status for a specific workspace
-      let workspace = match local_db::get_workspace_by_branch(&repo_path, &name) {
-        Ok(Some(ws)) => ws,
-        Ok(None) => {
-          super::log_cli_error(&format!("Error: workspace '{}' not found", name));
-          return false;
-        }
-        Err(e) => {
-          super::log_cli_error(&format!("Error looking up workspace: {}", e));
-          return false;
-        }
-      };
-
-      match core::workspace_status(&repo_path, Some(workspace.id)) {
-        Ok(status) => {
-          let pr = github_pr_status(
-            &status.partial.current.workspace_path,
-            &status.partial.current.branch_name,
-          );
-          print_workspace_status_detail(&status, pr.as_ref());
-          true
-        }
-        Err(e) => {
-          super::log_cli_error(&format!("Error getting workspace status: {}", e));
-          false
-        }
+  if workspace_name.is_some() || super::lookup_workspace_from_cwd(&repo_path).is_some() {
+    match resolve_named_or_cwd_workspace(&repo_path, workspace_name) {
+      Ok(workspace) => print_focused_workspace(&repo_path, &workspace),
+      Err(e) => {
+        super::log_cli_error(&format!("Error: {}", e));
+        false
       }
     }
-    None => {
-      // Show status for all workspaces
-      match core::list_workspace_statuses(&repo_path) {
-        Ok(statuses) => {
-          if statuses.is_empty() {
-            println!("No workspaces found.");
-            return true;
-          }
-          for line in format_workspace_stack_lines(&statuses) {
-            println!("{line}");
-          }
-          println!("Details:");
-          for status in &statuses {
-            let pr = github_pr_status(&status.current.workspace_path, &status.current.branch_name);
-            print_workspace_partial_status(status, pr.as_ref());
-          }
-          true
+  } else {
+    let default_branch = default_branch_or_empty(&repo_path);
+    match core::list_workspace_statuses(&repo_path) {
+      Ok(statuses) => {
+        if statuses.is_empty() {
+          println!("No workspaces found.");
+          return true;
         }
-        Err(e) => {
-          super::log_cli_error(&format!("Error listing workspace statuses: {}", e));
-          false
+        for line in format_workspace_stack_lines(&statuses) {
+          println!("{line}");
         }
+        println!("Details:");
+        for status in &statuses {
+          let pr = github_pr_status(&repo_path, &status.current.branch_name);
+          print_workspace_partial_status(status, pr.as_ref(), &default_branch);
+        }
+        true
+      }
+      Err(e) => {
+        super::log_cli_error(&format!("Error listing workspace statuses: {}", e));
+        false
       }
     }
   }
+}
+
+pub(super) fn handle_workspace_diff(matches: &Matches) -> bool {
+  let workspace_name = get_arg_value(matches, "workspace_name");
+  let repo_path = match detect_repo_path() {
+    Ok(p) => p,
+    Err(e) => {
+      super::log_cli_error(&format!("Error: {}", e));
+      return false;
+    }
+  };
+
+  let workspace = match resolve_named_or_cwd_workspace(&repo_path, workspace_name) {
+    Ok(workspace) => workspace,
+    Err(e) => {
+      super::log_cli_error(&format!("Error: {}", e));
+      return false;
+    }
+  };
+
+  let diff = match core::workspace_cli_diff(&repo_path, workspace.id) {
+    Ok(diff) => diff,
+    Err(e) => {
+      super::log_cli_error(&format!("Error getting workspace diff: {}", e));
+      return false;
+    }
+  };
+
+  let conflicted_commits =
+    match core::list_commits(&repo_path, Some(workspace.id), false, None, Some(50)) {
+      Ok(log) => log
+        .commits
+        .into_iter()
+        .filter(|commit| commit.has_conflicts && !commit.is_working_copy)
+        .map(|commit| (commit.change_id, commit.description))
+        .collect::<Vec<_>>(),
+      Err(_) => Vec::new(),
+    };
+
+  for line in format_workspace_diff_lines(&diff, &conflicted_commits) {
+    println!("{line}");
+  }
+  true
 }
 
 pub(super) fn handle_workspace_move(matches: &Matches) -> bool {
