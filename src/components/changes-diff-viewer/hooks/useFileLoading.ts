@@ -110,22 +110,26 @@ export function useFileLoading({
   }, [cachedChanges]);
 
   const coalesceLoadChangedFiles = useRef(createInFlightCoalescer()).current;
+  const pendingForceApplyRef = useRef(false);
 
   const loadChangedFiles = useCallback(
     async (forceApply = false) => {
+      if (forceApply) pendingForceApplyRef.current = true;
       await coalesceLoadChangedFiles(async () => {
+        const force = pendingForceApplyRef.current;
+        pendingForceApplyRef.current = false;
         setRefreshing(true);
         onRefreshingChange?.(true);
         // User-initiated refreshes (e.g. commit) must apply through review-mode
         // freeze so the Review panel updates instead of showing the stale banner.
-        if (forceApply) {
+        if (force) {
           isReloadingRef.current = true;
         }
         try {
           if (repoPath && workspaceId !== undefined) {
             const diff = await getWorkspaceDiff(repoPath, workspaceId);
             const parsed = parseJjChangedFiles(diff.uncommitted_files ?? []);
-            applyChangedFilesRef.current(parsed, forceApply);
+            applyChangedFilesRef.current(parsed, force);
 
             const fromDiff = diff.conflicted_files ?? [];
             // Diff is authoritative for live conflict state. The status hint can
@@ -190,7 +194,7 @@ export function useFileLoading({
             workspaceId ?? null,
           );
           const parsed = parseJjChangedFiles(jjFiles);
-          applyChangedFilesRef.current(parsed, forceApply);
+          applyChangedFilesRef.current(parsed, force);
           setCommittedFiles([]);
           setCommittedFileHunks(new Map());
           setLiveConflictedFiles([]);
@@ -202,7 +206,7 @@ export function useFileLoading({
           setInitialLoading(false);
           setRefreshing(false);
           onRefreshingChange?.(false);
-          if (forceApply) {
+          if (force) {
             // Keep the flag long enough for the files→hunks effect to apply.
             setTimeout(() => {
               isReloadingRef.current = false;

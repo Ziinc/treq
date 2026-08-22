@@ -324,7 +324,9 @@ export const ChangesDiffViewer = memo(
         onChangedFilesChange?.(parsed);
         if (isInReviewMode && !forceApply) {
           setFiles((prev) => {
-            if (filesEqual(prev, parsed)) return prev;
+            if (prev.length === 0) {
+              return filesEqual(prev, parsed) ? prev : parsed;
+            }
             const prevPaths = new Set(prev.map((f) => f.path));
             const newPaths = new Set(parsed.map((f) => f.path));
             const changedFiles = new Set<string>();

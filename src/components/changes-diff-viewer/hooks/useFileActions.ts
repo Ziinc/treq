@@ -90,7 +90,7 @@ export function useFileActions({
       try {
         await jjRestoreSnapshot(workspacePath, snapshotId);
         await invalidateCache();
-        await loadChangedFiles();
+        await loadChangedFiles(true);
         await invalidateReviewChangeCount(repoPath, workspaceId);
         addToast({
           description: "Discarded changes have been restored",
@@ -130,7 +130,7 @@ export function useFileActions({
         },
       });
       await invalidateCache();
-      await loadChangedFiles();
+      await loadChangedFiles(true);
       await invalidateReviewChangeCount(repoPath, workspaceId);
     } catch (error) {
       addToast({
@@ -178,7 +178,7 @@ export function useFileActions({
         });
         setSelectedUnstagedFiles(new Set());
         await invalidateCache();
-        await loadChangedFiles();
+        await loadChangedFiles(true);
         await invalidateReviewChangeCount(repoPath, workspaceId);
       } catch (error) {
         addToast({
