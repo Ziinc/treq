@@ -1,0 +1,19 @@
+id: no-eprintln-rust
+valid:
+  - |
+    fn logs_a_warning(e: &str) {
+      tracing::warn!("Warning: something failed: {}", e);
+    }
+  - |
+    fn prints_a_message() {
+      println!("hello");
+    }
+invalid:
+  - |
+    fn logs_via_eprintln(e: &str) {
+      eprintln!("Warning: something failed: {}", e);
+    }
+  - |
+    fn debug_dumps_a_value(result: &str) {
+      eprintln!("resolve result: {:?}", result);
+    }

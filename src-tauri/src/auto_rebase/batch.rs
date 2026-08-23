@@ -85,7 +85,7 @@ pub fn check_and_rebase_all(
         &workspace.branch_name,
         conflict_marker_style,
       ) {
-        eprintln!(
+        tracing::warn!(
           "Warning: Failed to resolve bookmark conflict for workspace '{}': {}",
           workspace.workspace_name, e
         );
@@ -135,13 +135,13 @@ pub fn check_and_rebase_all(
                 bookmark: info.bookmark.clone(),
                 commits: info.commits.clone(),
               });
-              eprintln!(
+              tracing::warn!(
                 "Warning: Working copy for workspace '{}' has conflicted bookmark '{}'",
                 workspace.workspace_name, info.bookmark
               );
             }
             Err(e) => {
-              eprintln!(
+              tracing::warn!(
                 "Warning: Failed to auto-sync working copy for workspace '{}': {}",
                 workspace.workspace_name, e
               );
@@ -153,14 +153,14 @@ pub fn check_and_rebase_all(
             workspace.id,
             &current_target_commit,
           ) {
-            eprintln!(
+            tracing::warn!(
               "Warning: Failed to update last rebased commit for workspace '{}': {}",
               workspace.workspace_name, e
             );
           }
         }
         Err(e) => {
-          eprintln!(
+          tracing::warn!(
             "Warning: Failed to rebase workspace '{}': {}",
             workspace.workspace_name, e
           );
@@ -188,7 +188,7 @@ pub fn check_and_rebase_all(
 
   // Log errors but don't fail the entire operation
   for error in &errors {
-    eprintln!("Auto-rebase warning: {}", error);
+    tracing::warn!("Auto-rebase warning: {}", error);
   }
 
   Ok(results)

@@ -150,13 +150,13 @@ pub fn rebase_workspaces_for_target(
             bookmark: info.bookmark.clone(),
             commits: info.commits.clone(),
           });
-          eprintln!(
+          tracing::warn!(
             "Warning: Working copy for workspace '{}' has conflicted bookmark '{}'",
             workspace.workspace_name, info.bookmark
           );
         }
         Err(e) => {
-          eprintln!(
+          tracing::warn!(
             "Warning: Failed to auto-sync working copy for workspace '{}': {}",
             workspace.workspace_name, e
           );
@@ -180,7 +180,7 @@ pub fn rebase_workspaces_for_target(
     if let Err(e) =
       resolve_bookmark_conflict_if_needed(&full_path, &workspace.branch_name, conflict_marker_style)
     {
-      eprintln!(
+      tracing::warn!(
         "Warning: Failed to resolve bookmark conflict for workspace '{}': {}",
         workspace.workspace_name, e
       );
@@ -223,7 +223,7 @@ pub fn rebase_workspaces_for_target(
         )?;
       }
       Err(e) => {
-        eprintln!(
+        tracing::warn!(
           "Warning: Failed to rebase workspace '{}': {}",
           workspace.workspace_name, e
         );
@@ -349,13 +349,13 @@ pub fn rebase_single_workspace(
         bookmark: info.bookmark.clone(),
         commits: info.commits.clone(),
       });
-      eprintln!(
+      tracing::warn!(
         "Warning: Working copy for workspace '{}' has conflicted bookmark '{}'",
         workspace.workspace_name, info.bookmark
       );
     }
     Err(e) => {
-      eprintln!(
+      tracing::warn!(
         "Warning: Failed to auto-sync working copy for workspace '{}': {}",
         workspace.workspace_name, e
       );
