@@ -14,38 +14,53 @@ pub fn config_path(repo_path: &str) -> PathBuf {
   Path::new(repo_path).join(".treq").join("config.yaml")
 }
 
-/// Read `.treq/config.yaml`, cache every field to the local DB, and return the parsed config.
-/// If the file does not exist, returns a default (all-`None`) config and clears any stale cache.
-pub fn load_and_cache(repo_path: &str) -> Result<RepoConfig, String> {
+/// Parse `.treq/config.yaml`. Returns a default (all-`None`) config if the file
+/// does not exist.
+pub fn parse_config(repo_path: &str) -> Result<RepoConfig, String> {
   let path = config_path(repo_path);
-  let config = if path.exists() {
-    let content = std::fs::read_to_string(&path)
-      .map_err(|e| format!("Failed to read .treq/config.yaml: {e}"))?;
-    serde_yaml::from_str::<RepoConfig>(&content)
-      .map_err(|e| format!("Failed to parse .treq/config.yaml: {e}"))?
-  } else {
-    RepoConfig::default()
-  };
-  crate::local_db::cache_repo_config(repo_path, &config)?;
-  Ok(config)
+  if !path.exists() {
+    return Ok(RepoConfig::default());
+  }
+  let content =
+    std::fs::read_to_string(&path).map_err(|e| format!("Failed to read .treq/config.yaml: {e}"))?;
+  serde_yaml::from_str::<RepoConfig>(&content)
+    .map_err(|e| format!("Failed to parse .treq/config.yaml: {e}"))
 }
 
-/// Return the `RepoConfig` that was previously cached in the local DB.
-/// Returns an all-`None` default when no cache entry exists yet.
-pub fn get_cached(repo_path: &str) -> Result<RepoConfig, String> {
-  crate::local_db::get_cached_repo_config(repo_path)
+/// Write every field the YAML config sets into the same per-repo settings store
+/// that `get_repo_setting`/`set_repo_setting` already use, so every existing
+/// consumer of those settings picks up the config file's values without needing
+/// to know about `.treq/config.yaml` at all. Fields the config file leaves unset
+/// are left untouched, preserving whatever the user set directly.
+pub fn sync_to_settings(
+  db: &crate::db::Database,
+  repo_path: &str,
+  config: &RepoConfig,
+) -> Result<(), String> {
+  if let Some(ref value) = config.branch_name_pattern {
+    db.set_repo_setting(repo_path, "branch_name_pattern", value)
+      .map_err(|e| format!("Failed to sync branch_name_pattern: {e}"))?;
+  }
+  if let Some(ref value) = config.default_model {
+    db.set_repo_setting(repo_path, "default_model", value)
+      .map_err(|e| format!("Failed to sync default_model: {e}"))?;
+  }
+  if let Some(ref value) = config.default_agent {
+    db.set_repo_setting(repo_path, "default_agent", value)
+      .map_err(|e| format!("Failed to sync default_agent: {e}"))?;
+  }
+  if let Some(ref files) = config.included_copy_files {
+    db.set_repo_setting(repo_path, "included_copy_files", &files.join("\n"))
+      .map_err(|e| format!("Failed to sync included_copy_files: {e}"))?;
+  }
+  Ok(())
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::local_db::clear_db_cache_for_testing;
   use std::fs;
   use tempfile::TempDir;
-
-  fn cleanup(repo_path: &str) {
-    clear_db_cache_for_testing(repo_path);
-  }
 
   #[test]
   fn test_config_path_is_dotreq_config_yaml() {
@@ -54,18 +69,16 @@ mod tests {
   }
 
   #[test]
-  fn test_load_and_cache_returns_default_when_no_file() {
+  fn test_parse_config_returns_default_when_no_file() {
     let temp_dir = TempDir::new().unwrap();
     let repo_path = temp_dir.path().to_str().unwrap();
 
-    let config = load_and_cache(repo_path).expect("should succeed with no file");
+    let config = parse_config(repo_path).expect("should succeed with no file");
     assert_eq!(config, RepoConfig::default());
-
-    cleanup(repo_path);
   }
 
   #[test]
-  fn test_load_and_cache_reads_branch_name_pattern() {
+  fn test_parse_config_reads_branch_name_pattern() {
     let temp_dir = TempDir::new().unwrap();
     let repo_path = temp_dir.path().to_str().unwrap();
 
@@ -77,14 +90,12 @@ mod tests {
     )
     .unwrap();
 
-    let config = load_and_cache(repo_path).expect("should parse");
+    let config = parse_config(repo_path).expect("should parse");
     assert_eq!(config.branch_name_pattern.as_deref(), Some("feat/{name}"));
-
-    cleanup(repo_path);
   }
 
   #[test]
-  fn test_load_and_cache_reads_all_fields() {
+  fn test_parse_config_reads_all_fields() {
     let temp_dir = TempDir::new().unwrap();
     let repo_path = temp_dir.path().to_str().unwrap();
 
@@ -102,7 +113,7 @@ mod tests {
     )
     .unwrap();
 
-    let config = load_and_cache(repo_path).expect("should parse all fields");
+    let config = parse_config(repo_path).expect("should parse all fields");
     assert_eq!(config.branch_name_pattern.as_deref(), Some("treq/{name}"));
     assert_eq!(config.default_model.as_deref(), Some("claude-opus-4"));
     assert_eq!(config.default_agent.as_deref(), Some("code"));
@@ -111,12 +122,10 @@ mod tests {
       config.included_copy_files,
       Some(vec!["src/main.rs".to_string(), "Cargo.toml".to_string()])
     );
-
-    cleanup(repo_path);
   }
 
   #[test]
-  fn test_load_and_cache_partial_config() {
+  fn test_parse_config_partial_config() {
     let temp_dir = TempDir::new().unwrap();
     let repo_path = temp_dir.path().to_str().unwrap();
 
@@ -124,98 +133,93 @@ mod tests {
     fs::create_dir_all(&treq_dir).unwrap();
     fs::write(treq_dir.join("config.yaml"), "target_branch: \"develop\"\n").unwrap();
 
-    let config = load_and_cache(repo_path).expect("should handle partial config");
+    let config = parse_config(repo_path).expect("should handle partial config");
     assert_eq!(config.target_branch.as_deref(), Some("develop"));
     assert!(config.branch_name_pattern.is_none());
     assert!(config.default_model.is_none());
     assert!(config.default_agent.is_none());
     assert!(config.included_copy_files.is_none());
+  }
 
-    cleanup(repo_path);
+  fn temp_db() -> (TempDir, crate::db::Database) {
+    let temp_dir = TempDir::new().unwrap();
+    let db = crate::db::Database::new(temp_dir.path().join("test.db")).unwrap();
+    db.init().unwrap();
+    (temp_dir, db)
   }
 
   #[test]
-  fn test_cached_config_survives_round_trip() {
-    let temp_dir = TempDir::new().unwrap();
-    let repo_path = temp_dir.path().to_str().unwrap();
+  fn sync_to_settings_writes_yaml_fields_into_repo_settings() {
+    let (_dir, db) = temp_db();
+    let config = RepoConfig {
+      branch_name_pattern: Some("treq/{name}".to_string()),
+      default_model: Some("opus".to_string()),
+      default_agent: Some("claude".to_string()),
+      target_branch: Some("main".to_string()),
+      included_copy_files: Some(vec!["a.env".to_string(), "b.env".to_string()]),
+    };
 
-    let treq_dir = temp_dir.path().join(".treq");
-    fs::create_dir_all(&treq_dir).unwrap();
-    fs::write(
-      treq_dir.join("config.yaml"),
-      "default_model: \"claude-opus-4\"\ntarget_branch: \"main\"\n",
-    )
-    .unwrap();
+    sync_to_settings(&db, "/repo/a", &config).expect("sync should succeed");
 
-    load_and_cache(repo_path).expect("should cache");
-
-    let cached = get_cached(repo_path).expect("should read cache");
-    assert_eq!(cached.default_model.as_deref(), Some("claude-opus-4"));
-    assert_eq!(cached.target_branch.as_deref(), Some("main"));
-    assert!(cached.branch_name_pattern.is_none());
-
-    cleanup(repo_path);
-  }
-
-  #[test]
-  fn test_get_cached_returns_default_when_no_cache() {
-    let temp_dir = TempDir::new().unwrap();
-    let repo_path = temp_dir.path().to_str().unwrap();
-
-    let cached = get_cached(repo_path).expect("should return default when empty");
-    assert_eq!(cached, RepoConfig::default());
-
-    cleanup(repo_path);
-  }
-
-  #[test]
-  fn test_load_and_cache_updates_cache_on_reload() {
-    let temp_dir = TempDir::new().unwrap();
-    let repo_path = temp_dir.path().to_str().unwrap();
-
-    let treq_dir = temp_dir.path().join(".treq");
-    fs::create_dir_all(&treq_dir).unwrap();
-    fs::write(
-      treq_dir.join("config.yaml"),
-      "default_model: \"claude-haiku\"\n",
-    )
-    .unwrap();
-    load_and_cache(repo_path).expect("first load");
-
-    // Overwrite the YAML with new content.
-    fs::write(
-      treq_dir.join("config.yaml"),
-      "default_model: \"claude-opus-4\"\n",
-    )
-    .unwrap();
-    load_and_cache(repo_path).expect("second load");
-
-    let cached = get_cached(repo_path).expect("should reflect updated cache");
-    assert_eq!(cached.default_model.as_deref(), Some("claude-opus-4"));
-
-    cleanup(repo_path);
-  }
-
-  #[test]
-  fn test_cached_included_copy_files_round_trip() {
-    let temp_dir = TempDir::new().unwrap();
-    let repo_path = temp_dir.path().to_str().unwrap();
-
-    let treq_dir = temp_dir.path().join(".treq");
-    fs::create_dir_all(&treq_dir).unwrap();
-    fs::write(
-      treq_dir.join("config.yaml"),
-      "included_copy_files:\n  - \"a.rs\"\n  - \"b.rs\"\n",
-    )
-    .unwrap();
-
-    load_and_cache(repo_path).expect("should cache");
-    let cached = get_cached(repo_path).expect("should read cache");
     assert_eq!(
-      cached.included_copy_files,
-      Some(vec!["a.rs".to_string(), "b.rs".to_string()])
+      db.get_repo_setting("/repo/a", "branch_name_pattern")
+        .unwrap(),
+      Some("treq/{name}".to_string())
     );
+    assert_eq!(
+      db.get_repo_setting("/repo/a", "default_model").unwrap(),
+      Some("opus".to_string())
+    );
+    assert_eq!(
+      db.get_repo_setting("/repo/a", "default_agent").unwrap(),
+      Some("claude".to_string())
+    );
+    assert_eq!(
+      db.get_repo_setting("/repo/a", "included_copy_files")
+        .unwrap(),
+      Some("a.env\nb.env".to_string())
+    );
+  }
 
-    cleanup(repo_path);
+  #[test]
+  fn sync_to_settings_leaves_unset_fields_untouched() {
+    let (_dir, db) = temp_db();
+    db.set_repo_setting("/repo/a", "default_agent", "codex")
+      .unwrap();
+
+    let config = RepoConfig {
+      default_model: Some("opus".to_string()),
+      ..Default::default()
+    };
+    sync_to_settings(&db, "/repo/a", &config).expect("sync should succeed");
+
+    // default_agent wasn't in the YAML, so the user's own value survives.
+    assert_eq!(
+      db.get_repo_setting("/repo/a", "default_agent").unwrap(),
+      Some("codex".to_string())
+    );
+    assert_eq!(
+      db.get_repo_setting("/repo/a", "branch_name_pattern")
+        .unwrap(),
+      None
+    );
+  }
+
+  #[test]
+  fn sync_to_settings_overwrites_previously_set_value() {
+    let (_dir, db) = temp_db();
+    db.set_repo_setting("/repo/a", "default_model", "sonnet")
+      .unwrap();
+
+    let config = RepoConfig {
+      default_model: Some("opus".to_string()),
+      ..Default::default()
+    };
+    sync_to_settings(&db, "/repo/a", &config).expect("sync should succeed");
+
+    assert_eq!(
+      db.get_repo_setting("/repo/a", "default_model").unwrap(),
+      Some("opus".to_string())
+    );
   }
 }

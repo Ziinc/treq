@@ -13,7 +13,7 @@ import {
 import { getSetting, setSetting } from "../lib/api";
 import { AccountSettings } from "./AccountSettings";
 import { GitHubIntegrationSettings } from "./GitHubIntegrationSettings";
-import { RepoYamlConfigSection } from "./RepoYamlConfigSection";
+import { RepoYamlConfigCard } from "./RepoYamlConfigCard";
 import {
   RepositorySettingsContent,
   type RepositorySettingsContentHandle,
@@ -343,6 +343,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 <TabsContent value="repository">
                   {repoPath ? (
                     <div className="space-y-6">
+                      <RepoYamlConfigCard repoPath={repoPath} />
+
                       {/* Repository Info Section */}
                       {currentBranch && (
                         <div className="space-y-3 text-sm border-b border-border pb-6">
@@ -364,9 +366,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                         repoPath={repoPath}
                         onSavingChange={setSavingRepository}
                       />
-
-                      {/* YAML Configuration synced from .treq/config.yaml */}
-                      <RepoYamlConfigSection repoPath={repoPath} />
                     </div>
                   ) : (
                     <div className="text-center py-8 text-muted-foreground">

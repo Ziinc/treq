@@ -1,7 +1,7 @@
 import * as React from "react";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createTestRepo, openRepo, writeRepoFile } from "../utils";
-import { render, screen } from "../test-utils";
+import { render, screen, waitFor } from "../test-utils";
 import { Dashboard } from "../../src/components/Dashboard";
 import userEvent from "@testing-library/user-event";
 
@@ -12,16 +12,12 @@ describe("Repository YAML config sync", () => {
     user = userEvent.setup();
   });
 
-  it("loads and displays settings synced from .treq/config.yaml", async () => {
+  it("shows a sync card and disables the settings .treq/config.yaml provides, with their real values", async () => {
     const { repoPath } = createTestRepo(false);
     await writeRepoFile(
       repoPath,
       ".treq/config.yaml",
-      [
-        "target_branch: main",
-        "default_model: opus",
-        "default_agent: claude",
-      ].join("\n"),
+      ["default_model: opus", "default_agent: claude"].join("\n"),
     );
     openRepo(repoPath);
 
@@ -31,48 +27,21 @@ describe("Repository YAML config sync", () => {
     await user.click(await screen.findByRole("tab", { name: /repository/i }));
 
     await screen.findByText(/synced from \.treq\/config\.yaml/i);
-    expect(await screen.findByText("Target Branch")).toBeVisible();
-    expect(screen.getByText("opus")).toBeVisible();
-    expect(screen.getByText("claude")).toBeVisible();
-    const targetBranchRow = screen.getByText("Target Branch").closest("div");
-    expect(targetBranchRow).toHaveTextContent("main");
-  });
-
-  it("shows a message when no .treq/config.yaml file exists", async () => {
-    const { repoPath } = createTestRepo(false);
-    openRepo(repoPath);
-
-    render(<Dashboard />);
-
-    await user.click(await screen.findByLabelText("Settings"));
-    await user.click(await screen.findByRole("tab", { name: /repository/i }));
-
-    await screen.findByText(/no \.treq\/config\.yaml found/i);
-  });
-
-  it("disables repository setting inputs that are set via .treq/config.yaml", async () => {
-    const { repoPath } = createTestRepo(false);
-    await writeRepoFile(repoPath, ".treq/config.yaml", "default_model: opus\n");
-    openRepo(repoPath);
-
-    render(<Dashboard />);
-
-    await user.click(await screen.findByLabelText("Settings"));
-    await user.click(await screen.findByRole("tab", { name: /repository/i }));
 
     const modelSelect = await screen.findByLabelText(/claude code model/i);
     expect(modelSelect).toBeDisabled();
     expect(modelSelect).toHaveValue("opus");
-    await screen.findByText(/configured by \.treq\/config\.yaml/i);
+
+    const agentSelect = screen.getByLabelText(/default agent/i);
+    expect(agentSelect).toBeDisabled();
+    expect(agentSelect).toHaveValue("claude");
 
     const branchPatternInput = screen.getByLabelText(/branch name pattern/i);
     expect(branchPatternInput).not.toBeDisabled();
-
-    const agentSelect = screen.getByLabelText(/default agent/i);
-    expect(agentSelect).not.toBeDisabled();
+    expect(branchPatternInput).toHaveValue("treq/{name}");
   });
 
-  it("keeps repository setting inputs enabled when no .treq/config.yaml overrides them", async () => {
+  it("shows no card and leaves every input enabled when no .treq/config.yaml exists", async () => {
     const { repoPath } = createTestRepo(false);
     openRepo(repoPath);
 
@@ -86,13 +55,19 @@ describe("Repository YAML config sync", () => {
     ).not.toBeDisabled();
     expect(screen.getByLabelText(/claude code model/i)).not.toBeDisabled();
     expect(screen.getByLabelText(/default agent/i)).not.toBeDisabled();
+    expect(screen.getByLabelText(/included files/i)).not.toBeDisabled();
     expect(
-      screen.queryByText(/configured by \.treq\/config\.yaml/i),
+      screen.queryByText(/synced from \.treq\/config\.yaml/i),
     ).not.toBeInTheDocument();
   });
 
-  it("re-syncs from disk when Reload is clicked", async () => {
+  it("disables Included Files/Directories and shows the config's joined value", async () => {
     const { repoPath } = createTestRepo(false);
+    await writeRepoFile(
+      repoPath,
+      ".treq/config.yaml",
+      "included_copy_files:\n  - .env\n  - .env.local\n",
+    );
     openRepo(repoPath);
 
     render(<Dashboard />);
@@ -100,16 +75,97 @@ describe("Repository YAML config sync", () => {
     await user.click(await screen.findByLabelText("Settings"));
     await user.click(await screen.findByRole("tab", { name: /repository/i }));
 
-    await screen.findByText(/no \.treq\/config\.yaml found/i);
+    const includedFilesTextarea =
+      await screen.findByLabelText(/included files/i);
+    expect(includedFilesTextarea).toBeDisabled();
+    expect(includedFilesTextarea).toHaveValue(".env\n.env.local");
+  });
+
+  it("syncs a newly written .treq/config.yaml when Settings is reopened", async () => {
+    const { repoPath } = createTestRepo(false);
+    openRepo(repoPath);
+
+    render(<Dashboard />);
+
+    await user.click(await screen.findByLabelText("Settings"));
+    await user.click(await screen.findByRole("tab", { name: /repository/i }));
+    expect(
+      await screen.findByLabelText(/branch name pattern/i),
+    ).not.toBeDisabled();
+    await user.click(screen.getByRole("button", { name: /^close$/i }));
 
     await writeRepoFile(
       repoPath,
       ".treq/config.yaml",
-      "target_branch: develop\n",
+      'branch_name_pattern: "release/{name}"\n',
     );
 
+    await user.click(await screen.findByLabelText("Settings"));
+    await user.click(await screen.findByRole("tab", { name: /repository/i }));
+
+    const branchPatternInput =
+      await screen.findByLabelText(/branch name pattern/i);
+    expect(branchPatternInput).toBeDisabled();
+    expect(branchPatternInput).toHaveValue("release/{name}");
+  });
+
+  it("updates disabled field values when Reload is clicked after editing the file", async () => {
+    const { repoPath } = createTestRepo(false);
+    await writeRepoFile(repoPath, ".treq/config.yaml", "default_model: opus\n");
+    openRepo(repoPath);
+
+    render(<Dashboard />);
+
+    await user.click(await screen.findByLabelText("Settings"));
+    await user.click(await screen.findByRole("tab", { name: /repository/i }));
+
+    await screen.findByText(/synced from \.treq\/config\.yaml/i);
+    expect(await screen.findByLabelText(/claude code model/i)).toHaveValue(
+      "opus",
+    );
+
+    await writeRepoFile(
+      repoPath,
+      ".treq/config.yaml",
+      "default_model: sonnet\n",
+    );
     await user.click(await screen.findByRole("button", { name: /reload/i }));
 
-    expect(await screen.findByText("develop")).toBeVisible();
+    await waitFor(() => {
+      expect(screen.getByLabelText(/claude code model/i)).toHaveValue("sonnet");
+    });
+  });
+
+  it("flips which fields are disabled when Reload changes which fields the file sets", async () => {
+    const { repoPath } = createTestRepo(false);
+    await writeRepoFile(
+      repoPath,
+      ".treq/config.yaml",
+      ["default_model: opus", "default_agent: claude"].join("\n"),
+    );
+    openRepo(repoPath);
+
+    render(<Dashboard />);
+
+    await user.click(await screen.findByLabelText("Settings"));
+    await user.click(await screen.findByRole("tab", { name: /repository/i }));
+
+    expect(await screen.findByLabelText(/claude code model/i)).toBeDisabled();
+    expect(screen.getByLabelText(/branch name pattern/i)).not.toBeDisabled();
+
+    await writeRepoFile(
+      repoPath,
+      ".treq/config.yaml",
+      'branch_name_pattern: "release/{name}"\n',
+    );
+    await user.click(await screen.findByRole("button", { name: /reload/i }));
+
+    await waitFor(() => {
+      const branchPatternInput = screen.getByLabelText(/branch name pattern/i);
+      expect(branchPatternInput).toBeDisabled();
+      expect(branchPatternInput).toHaveValue("release/{name}");
+      expect(screen.getByLabelText(/claude code model/i)).not.toBeDisabled();
+      expect(screen.getByLabelText(/default agent/i)).not.toBeDisabled();
+    });
   });
 });
