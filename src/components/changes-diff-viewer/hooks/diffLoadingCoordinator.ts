@@ -35,7 +35,8 @@ export function applyHunkBatch(
   const next = new Map(current);
   for (const file of files) {
     const existing = current.get(file.path);
-    if (existing?.contentHash === file.contentHash && !existing.isLoading) continue;
+    if (existing?.contentHash === file.contentHash && !existing.isLoading)
+      continue;
     next.set(file.path, {
       filePath: file.path,
       hunks: file.error ? [] : file.hunks,

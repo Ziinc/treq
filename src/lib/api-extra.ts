@@ -148,7 +148,8 @@ export interface DirectoryBatchResult {
 
 export const listDirectoriesBatch = (
   paths: string[],
-): Promise<DirectoryBatchResult[]> => invoke("list_directories_batch", { paths });
+): Promise<DirectoryBatchResult[]> =>
+  invoke("list_directories_batch", { paths });
 
 export interface SendArtifactRecord {
   id: string;

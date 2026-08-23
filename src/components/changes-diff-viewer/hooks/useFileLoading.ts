@@ -280,14 +280,20 @@ export function useFileLoading({
     }
     try {
       const batches = chunkPaths(paths, 32);
-      const results: import("../../../lib/api").WorkspaceFileHunksBatchFile[] = [];
+      const results: import("../../../lib/api").WorkspaceFileHunksBatchFile[] =
+        [];
       for (const [index, batch] of batches.entries()) {
         if (index > 0) {
           await new Promise<void>((resolve) => {
             let cancelled = false;
-            const callback = () => { if (!cancelled) resolve(); };
-            const idle = window.requestIdleCallback?.(callback, { timeout: 100 });
-            const timer = idle === undefined ? window.setTimeout(callback, 25) : undefined;
+            const callback = () => {
+              if (!cancelled) resolve();
+            };
+            const idle = window.requestIdleCallback?.(callback, {
+              timeout: 100,
+            });
+            const timer =
+              idle === undefined ? window.setTimeout(callback, 25) : undefined;
             preloadCancelRef.current = () => {
               cancelled = true;
               if (idle !== undefined) window.cancelIdleCallback?.(idle);
@@ -298,19 +304,29 @@ export function useFileLoading({
         }
         if (generation !== hunkGenerationRef.current) return;
         const response = await getWorkspaceFileHunksBatch(
-          repoPath ?? "", workspaceId ?? null, batch, snapshotTokenRef.current ?? undefined,
+          repoPath ?? "",
+          workspaceId ?? null,
+          batch,
+          snapshotTokenRef.current ?? undefined,
         );
         if (generation !== hunkGenerationRef.current) return;
         // Test doubles and older bridges can omit a newly-added command while
         // the workspace metadata path remains usable.
         if (!response) continue;
-        if (snapshotTokenRef.current && snapshotTokenRef.current !== response.snapshotToken) {
+        if (
+          snapshotTokenRef.current &&
+          snapshotTokenRef.current !== response.snapshotToken
+        ) {
           void loadChangedFilesRef.current();
           return;
         }
         snapshotTokenRef.current = response.snapshotToken;
         results.push(...response.files);
-        if (!isInReviewModeRef.current || forceApply || isReloadingRef.current) {
+        if (
+          !isInReviewModeRef.current ||
+          forceApply ||
+          isReloadingRef.current
+        ) {
           setAllFileHunks((prev) => applyHunkBatch(prev, response.files));
         }
       }

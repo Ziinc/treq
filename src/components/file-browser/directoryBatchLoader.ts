@@ -1,6 +1,4 @@
-import type {
-  DirectoryBatchResult,
-} from "../../lib/api-extra";
+import type { DirectoryBatchResult } from "../../lib/api-extra";
 import type { DirectoryEntry } from "../../lib/api-types";
 
 type Request = (paths: string[]) => Promise<DirectoryBatchResult[]>;
@@ -43,14 +41,19 @@ export class DirectoryBatchLoader {
         for (const path of batch) {
           const result = byPath.get(path);
           for (const waiter of queued.get(path) ?? []) {
-            if (!result || result.error) waiter.reject(new Error(result?.error ?? "Missing directory result"));
+            if (!result || result.error)
+              waiter.reject(
+                new Error(result?.error ?? "Missing directory result"),
+              );
             else waiter.resolve(result.entries);
           }
         }
       } catch (error) {
         for (const path of batch) {
           for (const waiter of queued.get(path) ?? []) {
-            waiter.reject(error instanceof Error ? error : new Error(String(error)));
+            waiter.reject(
+              error instanceof Error ? error : new Error(String(error)),
+            );
           }
         }
       }

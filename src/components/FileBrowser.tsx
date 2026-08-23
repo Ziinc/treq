@@ -1147,7 +1147,10 @@ export const FileBrowser = ({
   directoryCacheRef.current = directoryCache;
   const directoryLoaderRef = useRef<DirectoryBatchLoader | null>(null);
   const directoryLoaderKeyRef = useRef("");
-  if (!directoryLoaderRef.current || directoryLoaderKeyRef.current !== basePath) {
+  if (
+    !directoryLoaderRef.current ||
+    directoryLoaderKeyRef.current !== basePath
+  ) {
     directoryLoaderKeyRef.current = basePath;
     directoryLoaderRef.current = new DirectoryBatchLoader(listDirectoriesBatch);
   }
@@ -1794,10 +1797,15 @@ export const FileBrowser = ({
   })();
 
   // Memoize sorted root entries to avoid re-sorting on every render
-  const sortedRootEntries = useMemo(() => [...rootEntries].sort((a, b) => {
-    if (a.is_directory === b.is_directory) return a.name.localeCompare(b.name);
-    return a.is_directory ? -1 : 1;
-  }), [rootEntries]);
+  const sortedRootEntries = useMemo(
+    () =>
+      [...rootEntries].sort((a, b) => {
+        if (a.is_directory === b.is_directory)
+          return a.name.localeCompare(b.name);
+        return a.is_directory ? -1 : 1;
+      }),
+    [rootEntries],
+  );
   const treeRows = useMemo(
     () => flattenExpandedTree(sortedRootEntries, expandedDirs, directoryCache),
     [sortedRootEntries, expandedDirs, directoryCache],

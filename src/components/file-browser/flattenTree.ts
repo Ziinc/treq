@@ -14,7 +14,9 @@ export function flattenExpandedTree<T extends TreeEntry>(
     const sorted = [...entries].sort((a, b) =>
       a.is_directory === b.is_directory
         ? a.name.localeCompare(b.name)
-        : a.is_directory ? -1 : 1,
+        : a.is_directory
+          ? -1
+          : 1,
     );
     for (const entry of sorted) {
       rows.push({ entry, depth });
