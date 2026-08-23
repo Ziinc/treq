@@ -76,6 +76,12 @@ export type CaptureOptions = {
    */
   clipSelector?: string;
   /**
+   * CSS selector Playwright hovers before rasterizing, so CSS `:hover` and
+   * `group-hover` styles appear in the PNG. jsdom `userEvent.hover` does not
+   * survive serialization into this static HTML.
+   */
+  hoverSelector?: string;
+  /**
    * Repo-relative or absolute path, or list of paths, to also write the PNG.
    * Landing crops publish to `web/static/img/landing/*.png`.
    * The README hero publishes to `assets/screenshots/code.png`.
@@ -96,6 +102,7 @@ export async function captureDocument(
     expectations,
     scrollIntoView,
     clipSelector,
+    hoverSelector,
     publishTo,
   } = options;
 
@@ -146,6 +153,9 @@ ${css}
     await page.goto(`file://${htmlPath}`);
     if (scrollIntoView) {
       await page.locator(scrollIntoView).first().scrollIntoViewIfNeeded();
+    }
+    if (hoverSelector) {
+      await page.locator(hoverSelector).first().hover();
     }
     if (clipSelector) {
       const locator = page.locator(clipSelector).first();

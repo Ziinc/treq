@@ -72,6 +72,17 @@ it("captures home sidebar action buttons and workspace hover-only actions", asyn
     ],
   });
 
+  await user.hover(siblingRow);
+  await captureDocument(document, {
+    name: "home-repo-sidebar-actions-02b-workspace-hovered",
+    hoverSelector: '[data-testid="workspace-sidebar-item-feat/sibling"]',
+    clipSelector: '[data-sidebar="sidebar"]',
+    expectations: [
+      "The feat/sibling workspace row shows agent, shell, and stack icon buttons on the right.",
+      "The home-repo row still shows its own agent, shell, and stack buttons.",
+    ],
+  });
+
   await user.click(
     within(homeRepoElement).getByRole("button", {
       name: "Stack a workspace",
