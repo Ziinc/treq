@@ -37,14 +37,18 @@ export const TerminalSessionsSidebarItem: React.FC<
           className="group/terminal relative flex items-center gap-1.5 px-1.5 py-1 rounded-sm cursor-pointer hover:bg-muted/50 transition-colors"
           onClick={() => onFocus?.(session.id)}
         >
-          <Icon className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
+          {session.isStreaming ? (
+            <Loader2
+              className="w-3.5 h-3.5 shrink-0 text-primary animate-spin"
+              aria-label="Active changes"
+            />
+          ) : (
+            <Icon
+              data-icon="session"
+              className="w-3.5 h-3.5 shrink-0 text-muted-foreground"
+            />
+          )}
           <div className="flex-1 min-w-0 flex items-center gap-1.5">
-            {session.isStreaming && (
-              <Loader2
-                className="w-3 h-3 text-primary animate-spin shrink-0"
-                aria-label="Active changes"
-              />
-            )}
             <span className="truncate max-w-[104px] text-xs font-medium text-foreground">
               {session.name}
             </span>

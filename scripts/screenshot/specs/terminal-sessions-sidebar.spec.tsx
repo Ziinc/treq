@@ -92,10 +92,31 @@ it("captures the terminal sessions sidebar", async () => {
 		],
 	});
 
-	// Hover + close the shell terminal from its sidebar list item.
+	// Produce real shell output so the session summary flips isStreaming true,
+	// then capture before the 2s idle timeout clears it back to false.
 	const shellItem = document.querySelector(
 		'[data-testid^="terminal-session-item-shell-"]',
 	) as HTMLElement;
+	const shellTerminal = document.querySelector(
+		'[data-terminal-id^="shell-"] .xterm-helper-textarea, [data-terminal-id^="shell-"] textarea',
+	) as HTMLElement | null;
+	if (shellTerminal) {
+		await user.click(shellTerminal);
+		await user.keyboard("echo hi{enter}");
+	}
+	await waitFor(() => {
+		expect(shellItem.querySelector('[aria-label="Active changes"]')).not.toBeNull();
+	});
+
+	await captureDocument(document, {
+		name: "terminal-sessions-sidebar-streaming",
+		expectations: [
+			"The shell terminal's sidebar row shows a spinning loader icon in place of the terminal icon, directly before the session name text.",
+			"The agent terminal's sidebar row (not currently streaming) still shows its normal robot/agent icon, not a spinner.",
+		],
+	});
+
+	// Hover + close the shell terminal from its sidebar list item.
 	await user.hover(shellItem);
 	const closeShellButton = within(shellItem).getByLabelText("Close terminal");
 	await user.click(closeShellButton);
