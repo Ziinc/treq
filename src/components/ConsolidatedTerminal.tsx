@@ -27,6 +27,7 @@ import { useTerminalSettingsStore } from "../stores/terminalSettingsStore";
 import { cn } from "../lib/utils";
 import { Loader2 } from "lucide-react";
 import { TerminalErrorOverlay } from "./terminal/TerminalErrorOverlay";
+import { normalizeCommand } from "./terminal/normalizeCommand";
 
 interface ConsolidatedTerminalProps {
   ref?: Ref<ConsolidatedTerminalHandle>;
@@ -55,13 +56,6 @@ export interface ConsolidatedTerminalHandle {
   focus: () => void;
   scrollToBottom: () => void;
 }
-
-const normalizeCommand = (command: string) => {
-  if (command.endsWith("\r\n") || command.endsWith("\n")) {
-    return command;
-  }
-  return `${command}\r\n`;
-};
 
 export const ConsolidatedTerminal = ({
   sessionId,
