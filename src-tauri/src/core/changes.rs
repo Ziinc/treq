@@ -92,17 +92,28 @@ pub fn list_file_hunks_batch(
   resolve_workspace_dir(repo_path, workspace_id)?;
   let files = deduplicate_file_paths(file_paths)
     .into_iter()
-    .map(|path| match list_file_hunks(repo_path, workspace_id, &path, conflict_marker_style) {
-      Ok(hunks) => WorkspaceFileHunksBatchFile {
-        content_hash: content_hash(&hunks), path, hunks, error: None,
+    .map(
+      |path| match list_file_hunks(repo_path, workspace_id, &path, conflict_marker_style) {
+        Ok(hunks) => WorkspaceFileHunksBatchFile {
+          content_hash: content_hash(&hunks),
+          path,
+          hunks,
+          error: None,
+        },
+        Err(error) => WorkspaceFileHunksBatchFile {
+          content_hash: content_hash(&error),
+          path,
+          hunks: Vec::new(),
+          error: Some(error),
+        },
       },
-      Err(error) => WorkspaceFileHunksBatchFile {
-        content_hash: content_hash(&error), path, hunks: Vec::new(), error: Some(error),
-      },
-    })
+    )
     .collect();
   let snapshot_token = content_hash(&list_changed_files(repo_path, workspace_id)?);
-  Ok(WorkspaceFileHunksBatch { snapshot_token, files })
+  Ok(WorkspaceFileHunksBatch {
+    snapshot_token,
+    files,
+  })
 }
 
 /// Get lines from a file in a workspace.

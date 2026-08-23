@@ -19,8 +19,11 @@ pub fn get_workspace_file_hunks(
 
 #[tauri::command]
 pub fn get_workspace_file_hunks_batch(
-  state: State<AppState>, repo_path: String, workspace_id: Option<i64>,
-  file_paths: Vec<String>, _snapshot_token: Option<String>,
+  state: State<AppState>,
+  repo_path: String,
+  workspace_id: Option<i64>,
+  file_paths: Vec<String>,
+  _snapshot_token: Option<String>,
 ) -> Result<core::WorkspaceFileHunksBatch, String> {
   let style = core::resolve_conflict_marker_style(&state.db);
   core::list_file_hunks_batch(&repo_path, workspace_id, file_paths, &style)

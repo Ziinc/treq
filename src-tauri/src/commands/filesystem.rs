@@ -164,12 +164,22 @@ pub fn list_directory(path: String) -> Result<Vec<DirectoryEntry>, String> {
 #[tauri::command]
 pub fn list_directories_batch(paths: Vec<String>) -> Vec<DirectoryBatchResult> {
   let mut seen = std::collections::HashSet::new();
-  paths.into_iter().filter(|path| seen.insert(path.clone())).map(|path| {
-    match list_directory(path.clone()) {
-      Ok(entries) => DirectoryBatchResult { path, entries, error: None },
-      Err(error) => DirectoryBatchResult { path, entries: Vec::new(), error: Some(error) },
-    }
-  }).collect()
+  paths
+    .into_iter()
+    .filter(|path| seen.insert(path.clone()))
+    .map(|path| match list_directory(path.clone()) {
+      Ok(entries) => DirectoryBatchResult {
+        path,
+        entries,
+        error: None,
+      },
+      Err(error) => DirectoryBatchResult {
+        path,
+        entries: Vec::new(),
+        error: Some(error),
+      },
+    })
+    .collect()
 }
 
 #[tauri::command]
