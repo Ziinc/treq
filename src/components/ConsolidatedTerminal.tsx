@@ -15,6 +15,7 @@ import { ISearchOptions, SearchAddon } from "@xterm/addon-search";
 import { ImageAddon } from "@xterm/addon-image";
 import {
   ptyCreateSession,
+  ptyClose,
   ptyListen,
   ptyResize,
   ptySessionExists,
@@ -88,7 +89,6 @@ export const ConsolidatedTerminal = ({
   const webglAddonRef = useRef<WebglAddon | null>(null);
   const webglContextLossDisposeRef = useRef<IDisposable | null>(null);
   const unlistenRef = useRef<(() => void) | null>(null);
-  const outputRef = useRef("");
   const pendingEchoRef = useRef("");
   const idleTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isPtyReady, setIsPtyReady] = useState(false);
@@ -101,6 +101,7 @@ export const ConsolidatedTerminal = ({
   const initialAutoCommandRef = useRef(autoCommand);
   const [terminalError, setTerminalError] = useState<string | null>(null);
   const [instanceKey, setInstanceKey] = useState(0);
+  const [isRetrying, setIsRetrying] = useState(false);
 
   const onSessionErrorRef = useRef(onSessionError);
   const onTerminalOutputRef = useRef(onTerminalOutput);
@@ -124,26 +125,38 @@ export const ConsolidatedTerminal = ({
 
   // Reset output and error when session changes
   useEffect(() => {
-    outputRef.current = "";
     pendingEchoRef.current = "";
     autoCommandSentRef.current = false;
     setTerminalError(null);
   }, [sessionId, instanceKey]);
 
-  const handleRetryTerminal = () => {
-    setTerminalError(null);
-    setInstanceKey((prev) => prev + 1);
+  const handleRetryTerminal = async () => {
+    if (isRetrying) return;
+    setIsRetrying(true);
+    try {
+      await ptyClose(sessionId);
+      setTerminalError(null);
+      setInstanceKey((prev) => prev + 1);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setTerminalError(message);
+      onSessionErrorRef.current?.(message);
+    } finally {
+      setIsRetrying(false);
+    }
   };
 
   // Main terminal setup effect - all handlers are inlined to avoid stale closures
   useEffect(() => {
     if (!terminalRef.current) return;
+    let cancelled = false;
 
     setIsPtyReady(false);
     isPtyReadyRef.current = false;
 
     // Local error handler
     const localHandleError = (error: unknown) => {
+      if (cancelled) return;
       const message = error instanceof Error ? error.message : String(error);
       console.error("Terminal error:", message);
       const friendlyMessage = message.includes("Session not found")
@@ -193,7 +206,7 @@ export const ConsolidatedTerminal = ({
     ) {
       try {
         const webglAddon = new WebglAddon();
-        webglAddon.onContextLoss(() => {
+        webglContextLossDisposeRef.current = webglAddon.onContextLoss(() => {
           console.warn("WebGL context lost; reverting to canvas renderer");
           webglAddonRef.current?.dispose();
           webglAddonRef.current = null;
@@ -291,11 +304,10 @@ export const ConsolidatedTerminal = ({
 
     const localHandlePtyOutput = (chunk: string) => {
       xterm.write(chunk);
-      outputRef.current += chunk;
       const consumed = consumePtyEcho(pendingEchoRef.current, chunk);
       pendingEchoRef.current = consumed.pendingEcho;
       const fromProcess = consumed.processOutput.length > 0;
-      onTerminalOutputRef.current?.(outputRef.current, fromProcess);
+      onTerminalOutputRef.current?.(chunk, fromProcess);
       if (!fromProcess) return;
       if (idleTimeoutRef.current) clearTimeout(idleTimeoutRef.current);
       idleTimeoutRef.current = setTimeout(() => {
@@ -304,7 +316,7 @@ export const ConsolidatedTerminal = ({
     };
 
     xterm.attachCustomKeyEventHandler(localHandleKeyEvent);
-    xterm.onData(localHandleXtermData);
+    const xtermDataSubscription = xterm.onData(localHandleXtermData);
 
     const handlePaste = (e: ClipboardEvent) => {
       const items = e.clipboardData?.items;
@@ -333,11 +345,14 @@ export const ConsolidatedTerminal = ({
     terminalRef.current?.addEventListener("paste", handlePaste);
 
     let resizeTimeout: ReturnType<typeof setTimeout> | null = null;
+    let autoCommandTimeout: ReturnType<typeof setTimeout> | null = null;
+    let localUnlisten: (() => void) | null = null;
 
     // Setup PTY
     const setupPty = async () => {
       try {
         const exists = await ptySessionExists(sessionId);
+        if (cancelled) return;
         const isNewSession = !exists;
 
         if (isNewSession) {
@@ -348,9 +363,15 @@ export const ConsolidatedTerminal = ({
             undefined,
             initialAutoCommandRef.current || undefined,
           );
+          if (cancelled) return;
         }
 
         const unlisten = await ptyListen(sessionId, localHandlePtyOutput);
+        if (cancelled) {
+          unlisten();
+          return;
+        }
+        localUnlisten = unlisten;
         unlistenRef.current = unlisten;
         setIsPtyReady(true);
         isPtyReadyRef.current = true;
@@ -367,8 +388,9 @@ export const ConsolidatedTerminal = ({
         ) {
           autoCommandSentRef.current = true;
           // Add a small delay to ensure the shell prompt is ready
-          setTimeout(
+          autoCommandTimeout = setTimeout(
             () => {
+              if (cancelled) return;
               ptyWriteSuppressEcho(
                 sessionId,
                 normalizeCommand(initialAutoCommandRef.current!),
@@ -385,7 +407,9 @@ export const ConsolidatedTerminal = ({
     setupPty();
 
     return () => {
+      cancelled = true;
       if (resizeTimeout) clearTimeout(resizeTimeout);
+      if (autoCommandTimeout) clearTimeout(autoCommandTimeout);
       if (idleTimeoutRef.current) {
         clearTimeout(idleTimeoutRef.current);
         idleTimeoutRef.current = null;
@@ -393,15 +417,18 @@ export const ConsolidatedTerminal = ({
 
       terminalRef.current?.removeEventListener("paste", handlePaste);
 
-      unlistenRef.current?.();
-      unlistenRef.current = null;
+      localUnlisten?.();
+      if (unlistenRef.current === localUnlisten) unlistenRef.current = null;
 
-      xterm.dispose();
-      searchAddonRef.current = null;
-      webglAddonRef.current?.dispose();
-      webglAddonRef.current = null;
+      xtermDataSubscription.dispose();
       webglContextLossDisposeRef.current?.dispose();
       webglContextLossDisposeRef.current = null;
+      webglAddonRef.current?.dispose();
+      webglAddonRef.current = null;
+      xterm.dispose();
+      xtermRef.current = null;
+      fitAddonRef.current = null;
+      searchAddonRef.current = null;
 
       setIsPtyReady(false);
       isPtyReadyRef.current = false;
@@ -460,7 +487,7 @@ export const ConsolidatedTerminal = ({
     resizeObserverRef.current.observe(terminal);
 
     // Initial fit when becoming visible
-    requestAnimationFrame(() => {
+    const initialFitFrame = requestAnimationFrame(() => {
       if (!terminal) return;
       const rect = terminal.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) return;
@@ -475,6 +502,7 @@ export const ConsolidatedTerminal = ({
       window.removeEventListener("resize", handleResize);
       resizeObserverRef.current?.disconnect();
       resizeObserverRef.current = null;
+      cancelAnimationFrame(initialFitFrame);
     };
   }, [isHidden, sessionId]);
 
@@ -555,7 +583,11 @@ export const ConsolidatedTerminal = ({
                 {terminalError}
               </p>
               <div className="mt-4 flex flex-col gap-2">
-                <Button size="sm" onClick={handleRetryTerminal}>
+                <Button
+                  size="sm"
+                  onClick={handleRetryTerminal}
+                  disabled={isRetrying}
+                >
                   Try again
                 </Button>
                 {onClose && (

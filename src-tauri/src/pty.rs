@@ -1,7 +1,9 @@
 use portable_pty::{native_pty_system, Child, CommandBuilder, MasterPty, PtySize};
 use regex::Regex;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::OnceLock;
 use std::sync::{Arc, Mutex};
 use std::thread;
 
@@ -43,10 +45,11 @@ fn process_utf8_chunk(pending: &mut Vec<u8>, new_bytes: &[u8]) -> String {
 /// Strip ANSI escape sequences from a string.
 pub fn strip_ansi_codes(s: &str) -> String {
   // Match CSI sequences (including private modes like ?1h), OSC sequences, and charset designations
-  let re = Regex::new(
-    r"\x1b\[[\x20-\x3f]*[\x30-\x3f]*[\x40-\x7e]|\x1b\][^\x07]*\x07|\x1b\([A-Z]|\x1b[=>]",
-  )
-  .unwrap();
+  static ANSI_RE: OnceLock<Regex> = OnceLock::new();
+  let re = ANSI_RE.get_or_init(|| {
+    Regex::new(r"\x1b\[[\x20-\x3f]*[\x30-\x3f]*[\x40-\x7e]|\x1b\][^\x07]*\x07|\x1b\([A-Z]|\x1b[=>]")
+      .unwrap()
+  });
   re.replace_all(s, "").to_string()
 }
 
@@ -68,6 +71,7 @@ pub fn line_matches_auto_command(stripped_line: &str, auto_command: &str) -> boo
 }
 
 pub struct PtySession {
+  generation: u64,
   writer: Box<dyn Write + Send>,
   master: Box<dyn MasterPty + Send>,
   child: Box<dyn Child + Send>,
@@ -118,14 +122,19 @@ impl PtySession {
   }
 }
 
+#[derive(Clone)]
 pub struct PtyManager {
   sessions: Arc<Mutex<HashMap<String, PtySession>>>,
+  creating: Arc<Mutex<HashSet<String>>>,
+  next_generation: Arc<AtomicU64>,
 }
 
 impl PtyManager {
   pub fn new() -> Self {
     PtyManager {
       sessions: Arc::new(Mutex::new(HashMap::new())),
+      creating: Arc::new(Mutex::new(HashSet::new())),
+      next_generation: Arc::new(AtomicU64::new(1)),
     }
   }
 
@@ -138,6 +147,49 @@ impl PtyManager {
     suppress_echo_for: Option<String>,
     callback: Box<dyn Fn(String) + Send + 'static>,
   ) -> Result<(), String> {
+    {
+      let mut creating = self.creating.lock().unwrap();
+      if !creating.insert(session_id.clone()) {
+        return Err(format!(
+          "PTY session creation already in progress: {session_id}"
+        ));
+      }
+    }
+    let result = self.create_session_inner(
+      session_id.clone(),
+      working_dir,
+      shell,
+      initial_command,
+      suppress_echo_for,
+      callback,
+    );
+    self.creating.lock().unwrap().remove(&session_id);
+    result
+  }
+
+  fn create_session_inner(
+    &self,
+    session_id: String,
+    working_dir: Option<String>,
+    shell: Option<String>,
+    initial_command: Option<String>,
+    suppress_echo_for: Option<String>,
+    callback: Box<dyn Fn(String) + Send + 'static>,
+  ) -> Result<(), String> {
+    let stale = {
+      let mut sessions = self.sessions.lock().unwrap();
+      match sessions.get_mut(&session_id) {
+        Some(session) => match session.child.try_wait() {
+          Ok(Some(_)) => sessions.remove(&session_id),
+          Ok(None) => return Err(format!("PTY session already exists: {session_id}")),
+          Err(error) => return Err(format!("Failed to inspect PTY child: {error}")),
+        },
+        None => None,
+      }
+    };
+    if let Some(mut stale) = stale {
+      stale.shutdown()?;
+    }
     let pty_system = native_pty_system();
 
     let pair = pty_system
@@ -170,12 +222,27 @@ impl PtyManager {
     // Set extended PATH so terminal can find jj, git, claude binaries
     cmd.env("PATH", crate::binary_paths::get_extended_path());
 
-    let child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
+    let mut child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
     drop(pair.slave);
 
-    let mut reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
-    let writer = pair.master.take_writer().map_err(|e| e.to_string())?;
+    let mut reader = match pair.master.try_clone_reader() {
+      Ok(value) => value,
+      Err(error) => {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(error.to_string());
+      }
+    };
+    let writer = match pair.master.take_writer() {
+      Ok(value) => value,
+      Err(error) => {
+        let _ = child.kill();
+        let _ = child.wait();
+        return Err(error.to_string());
+      }
+    };
     let master = pair.master;
+    let generation = self.next_generation.fetch_add(1, Ordering::Relaxed);
 
     let auto_command: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(suppress_echo_for));
     let auto_command_reader = auto_command.clone();
@@ -186,6 +253,7 @@ impl PtyManager {
       sessions.insert(
         session_id.clone(),
         PtySession {
+          generation,
           writer,
           master,
           child,
@@ -194,23 +262,19 @@ impl PtyManager {
       );
     }
 
-    // Execute initial command if provided
-    if let Some(cmd) = initial_command {
-      // Wait a bit for shell to be ready
-      thread::sleep(std::time::Duration::from_millis(100));
-      let cmd_with_newline = format!("{}\n", cmd);
-      self.write_to_session(&session_id, &cmd_with_newline)?;
-    }
-
     // Spawn reader thread
+    let reader_sessions = self.sessions.clone();
+    let reader_session_id = session_id.clone();
     thread::spawn(move || {
       let mut buffer = [0u8; 8192];
       let mut pending_bytes: Vec<u8> = Vec::with_capacity(4);
       let mut line_buffer = String::new();
+      let mut suppressed_tail = String::new();
       let mut non_matching_lines_emitted: usize = 0;
       let mut seen_command_echo = false;
       // Once we've emitted enough non-matching lines, stop filtering
       const FILTER_STOP_THRESHOLD: usize = 5;
+      const MAX_FILTER_BUFFER: usize = 32 * 1024;
 
       loop {
         match reader.read(&mut buffer) {
@@ -250,6 +314,18 @@ impl PtyManager {
 
             // Filtering is active: buffer and process line by line
             line_buffer.push_str(&data);
+            if !seen_command_echo {
+              suppressed_tail.push_str(&data);
+              if suppressed_tail.len() > MAX_FILTER_BUFFER {
+                let start = suppressed_tail.len() - MAX_FILTER_BUFFER;
+                let start = suppressed_tail.ceil_char_boundary(start);
+                callback(suppressed_tail[start..].to_string());
+                suppressed_tail.clear();
+                line_buffer.clear();
+                *auto_command_reader.lock().unwrap() = None;
+                continue;
+              }
+            }
 
             while let Some(newline_pos) = line_buffer.find('\n') {
               let line = line_buffer[..=newline_pos].to_string();
@@ -260,6 +336,7 @@ impl PtyManager {
               // Discard lines matching the auto_command
               if line_matches_auto_command(&stripped, &filter_cmd) {
                 seen_command_echo = true;
+                suppressed_tail.clear();
                 continue;
               }
 
@@ -294,9 +371,45 @@ impl PtyManager {
           Err(_) => break,
         }
       }
+      let removed = {
+        let mut sessions = reader_sessions.lock().unwrap();
+        if sessions.get(&reader_session_id).map(|s| s.generation) == Some(generation) {
+          sessions.remove(&reader_session_id)
+        } else {
+          None
+        }
+      };
+      if let Some(mut session) = removed {
+        let _ = session.shutdown();
+      }
     });
 
+    if let Some(command) = initial_command {
+      let manager = self.clone();
+      let initial_session_id = session_id;
+      thread::spawn(move || {
+        thread::sleep(std::time::Duration::from_millis(100));
+        let _ =
+          manager.write_to_generation(&initial_session_id, generation, &format!("{command}\n"));
+      });
+    }
+
     Ok(())
+  }
+
+  fn write_to_generation(
+    &self,
+    session_id: &str,
+    generation: u64,
+    data: &str,
+  ) -> Result<(), String> {
+    let mut sessions = self.sessions.lock().unwrap();
+    match sessions.get_mut(session_id) {
+      Some(session) if session.generation == generation => {
+        session.write(data.as_bytes()).map_err(|e| e.to_string())
+      }
+      _ => Err("Session not found".to_string()),
+    }
   }
 
   pub fn write_to_session(&self, session_id: &str, data: &str) -> Result<(), String> {
@@ -342,8 +455,20 @@ impl PtyManager {
   }
 
   pub fn session_exists(&self, session_id: &str) -> bool {
-    let sessions = self.sessions.lock().unwrap();
-    sessions.contains_key(session_id)
+    let stale = {
+      let mut sessions = self.sessions.lock().unwrap();
+      match sessions.get_mut(session_id) {
+        Some(session) => match session.child.try_wait() {
+          Ok(None) => return true,
+          Ok(Some(_)) | Err(_) => sessions.remove(session_id),
+        },
+        None => None,
+      }
+    };
+    if let Some(mut session) = stale {
+      let _ = session.shutdown();
+    }
+    false
   }
 
   #[doc(hidden)]
@@ -352,5 +477,108 @@ impl PtyManager {
     sessions
       .get(session_id)
       .and_then(|session| session.process_id())
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use std::sync::mpsc;
+  use std::time::{Duration, Instant};
+
+  fn shell() -> Option<String> {
+    if cfg!(windows) {
+      None
+    } else {
+      Some("/bin/sh".to_string())
+    }
+  }
+
+  #[test]
+  fn rejects_duplicate_live_session_id() {
+    let manager = PtyManager::new();
+    manager
+      .create_session(
+        "duplicate".into(),
+        None,
+        shell(),
+        None,
+        None,
+        Box::new(|_| {}),
+      )
+      .unwrap();
+
+    let duplicate = manager.create_session(
+      "duplicate".into(),
+      None,
+      shell(),
+      None,
+      None,
+      Box::new(|_| {}),
+    );
+
+    assert!(duplicate.is_err());
+    assert!(manager.session_exists("duplicate"));
+    manager.close_session("duplicate").unwrap();
+  }
+
+  #[test]
+  fn removes_session_after_child_eof() {
+    let manager = PtyManager::new();
+    manager
+      .create_session(
+        "eof".into(),
+        None,
+        shell(),
+        Some("exit".into()),
+        None,
+        Box::new(|_| {}),
+      )
+      .unwrap();
+
+    let deadline = Instant::now() + Duration::from_secs(2);
+    while manager.session_exists("eof") && Instant::now() < deadline {
+      thread::sleep(Duration::from_millis(10));
+    }
+    assert!(!manager.session_exists("eof"));
+  }
+
+  #[test]
+  fn schedules_initial_command_without_blocking_creation() {
+    let manager = PtyManager::new();
+    let started = Instant::now();
+    manager
+      .create_session(
+        "prompt".into(),
+        None,
+        shell(),
+        Some("printf ready".into()),
+        None,
+        Box::new(|_| {}),
+      )
+      .unwrap();
+    assert!(started.elapsed() < Duration::from_millis(50));
+    manager.close_session("prompt").unwrap();
+  }
+
+  #[test]
+  fn echo_suppression_releases_output_after_bounded_buffer() {
+    let manager = PtyManager::new();
+    let (tx, rx) = mpsc::channel();
+    manager
+      .create_session(
+        "bounded-filter".into(),
+        None,
+        shell(),
+        Some("yes x | head -c 40000".into()),
+        Some("echo-that-will-never-appear-0123456789".into()),
+        Box::new(move |chunk| {
+          let _ = tx.send(chunk);
+        }),
+      )
+      .unwrap();
+
+    assert!(rx.recv_timeout(Duration::from_secs(2)).is_ok());
+    manager.close_session("bounded-filter").unwrap();
   }
 }

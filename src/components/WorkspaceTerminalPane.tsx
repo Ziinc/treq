@@ -210,7 +210,7 @@ const WorkspaceTerminalPaneInner = ({
     );
     const sessionData = claudeSessions.find((s) => s.sessionId === sessionId);
     if (sessionData) {
-      // ptyClose(sessionData.ptySessionId).catch(console.error);
+      ptyClose(sessionData.ptySessionId).catch(console.error);
       terminalRefs.current.delete(claudeTerminalId);
       console.info(
         "[WorkspaceTerminalPane] agent terminal ref deleted",

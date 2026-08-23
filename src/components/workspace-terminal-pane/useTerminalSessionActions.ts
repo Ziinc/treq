@@ -1,4 +1,3 @@
-import { ptyClose } from "../../lib/api";
 import {
   isTerminalSessionIdle,
   type ClaudeSessionData,
@@ -98,10 +97,7 @@ export function useTerminalSessionActions({
 
     claudeSessions
       .filter((s) => (s.workspacePath || s.repoPath) === workspaceKey)
-      .forEach((s) => {
-        ptyClose(s.ptySessionId).catch(console.error);
-        handleCloseClaudeSession(s.sessionId);
-      });
+      .forEach((s) => handleCloseClaudeSession(s.sessionId));
   };
 
   return {

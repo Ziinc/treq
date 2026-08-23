@@ -28,6 +28,11 @@ import { TerminalSearchOverlay } from "./TerminalSearchOverlay";
 import { TerminalSendPreviews } from "./TerminalSendPreviews";
 import type { ClaudeSessionData } from "./types";
 import { useAgentAutoCommand } from "./useAgentAutoCommand";
+import {
+  appendTerminalOutput,
+  createTerminalOutputTail,
+  terminalQuestionWindow,
+} from "./terminalOutputTail";
 
 export interface AgentTerminalPanelProps {
   sessionData: ClaudeSessionData;
@@ -82,7 +87,7 @@ export const AgentTerminalPanel = ({
   const [terminalBodyEl, setTerminalBodyEl] = useState<HTMLDivElement | null>(
     null,
   );
-  const lastProcessOutputRef = useRef("");
+  const processOutputTailRef = useRef(createTerminalOutputTail());
 
   const {
     messages: queuedMessages,
@@ -102,7 +107,10 @@ export const AgentTerminalPanel = ({
   // Handle terminal output — agent is busy while streaming process output.
   const handleTerminalOutput = (output: string, fromProcess?: boolean) => {
     if (fromProcess !== false) {
-      lastProcessOutputRef.current = output;
+      processOutputTailRef.current = appendTerminalOutput(
+        processOutputTailRef.current,
+        output,
+      );
       markBusy();
     }
     onTerminalOutput?.(output, fromProcess);
@@ -111,7 +119,7 @@ export const AgentTerminalPanel = ({
   const handleTerminalIdle = () => {
     markIdle({
       awaitingQuestion: looksLikeAgentUserQuestion(
-        lastProcessOutputRef.current,
+        terminalQuestionWindow(processOutputTailRef.current),
       ),
     });
     onTerminalIdle?.();
@@ -161,7 +169,7 @@ export const AgentTerminalPanel = ({
     setIsResetting(true);
     try {
       clearQueuedMessages();
-      lastProcessOutputRef.current = "";
+      processOutputTailRef.current = createTerminalOutputTail();
       markBusy();
       await ptyClose(sessionData.ptySessionId).catch(console.error);
       setTerminalInstanceKey((prev) => prev + 1);
