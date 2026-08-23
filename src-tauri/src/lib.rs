@@ -82,11 +82,10 @@ impl AppState {
   }
 }
 
-/// Emits an event only to the focused webview window.
-///
-/// On macOS the menu bar unfocuses every window, so this never broadcasts
-/// globally — a broadcast would run folder pickers in every open webview.
-pub fn emit_to_focused<S: serde::Serialize + Clone>(app: &AppHandle, event: &str, payload: S) {
+/// Picks which webview a menu event targets, following the same rule as
+/// `emit_to_focused`: the currently focused window, falling back to the
+/// most recently focused one that still exists.
+fn resolve_menu_target_label(app: &AppHandle) -> Option<String> {
   let windows = app.webview_windows();
   let focused: Vec<String> = windows
     .iter()
@@ -103,12 +102,74 @@ pub fn emit_to_focused<S: serde::Serialize + Clone>(app: &AppHandle, event: &str
     .try_state::<AppState>()
     .and_then(|state| state.window_last_focused_at.lock().ok().map(|g| g.clone()))
     .unwrap_or_default();
-  let Some(label) =
-    open_new_window::resolve_menu_event_window_label(&focused, &last_focused, &existing)
-  else {
+  open_new_window::resolve_menu_event_window_label(&focused, &last_focused, &existing)
+}
+
+/// Emits an event only to the focused webview window.
+///
+/// On macOS the menu bar unfocuses every window, so this never broadcasts
+/// globally — a broadcast would run folder pickers in every open webview.
+pub fn emit_to_focused<S: serde::Serialize + Clone>(app: &AppHandle, event: &str, payload: S) {
+  let Some(label) = resolve_menu_target_label(app) else {
     return;
   };
   let _ = app.emit_to(EventTarget::webview_window(&label), event, payload);
+}
+
+/// Handles the regular "Open..." menu action (CmdOrCtrl+O).
+///
+/// Guarded the same way as "Open in New Window": a macOS File-menu
+/// redelivery must not be able to stack a second directory picker on top of
+/// one already showing. The target webview is resolved and retained before
+/// the picker steals window focus, and the picker itself is shown after
+/// leaving the AppKit menu-tracking loop.
+fn schedule_open_repo(app: AppHandle) {
+  if !open_new_window::OPEN_REPO_GATE.try_begin() {
+    return;
+  }
+  let Some(label) = resolve_menu_target_label(&app) else {
+    open_new_window::OPEN_REPO_GATE.end();
+    return;
+  };
+  std::thread::spawn(move || {
+    let app_for_main = app.clone();
+    if app
+      .run_on_main_thread(move || {
+        pick_folder_and_notify(app_for_main, label);
+      })
+      .is_err()
+    {
+      open_new_window::OPEN_REPO_GATE.end();
+    }
+  });
+}
+
+fn pick_folder_and_notify(app: AppHandle, label: String) {
+  use tauri_plugin_dialog::DialogExt;
+
+  app
+    .dialog()
+    .file()
+    .set_title("Select Folder")
+    .pick_folder(move |folder| {
+      let Some(file_path) = folder else {
+        open_new_window::OPEN_REPO_GATE.end();
+        return;
+      };
+      let path = match file_path.into_path() {
+        Ok(p) => p.to_string_lossy().into_owned(),
+        Err(_) => {
+          open_new_window::OPEN_REPO_GATE.end();
+          return;
+        }
+      };
+      let _ = app.emit_to(
+        EventTarget::webview_window(&label),
+        "menu-repository-path-selected",
+        path,
+      );
+      open_new_window::OPEN_REPO_GATE.end();
+    });
 }
 
 fn schedule_open_repo_in_new_window(app: AppHandle) {
@@ -572,7 +633,7 @@ pub fn run() {
             app.on_menu_event(move |app, event| match event.id().as_ref() {
                 "dashboard" => emit_to_focused(app, "navigate-to-dashboard", ()),
                 "settings" => emit_to_focused(app, "navigate-to-settings", ()),
-                "open" => emit_to_focused(app, "menu-open-repository", ()),
+                "open" => schedule_open_repo(app.clone()),
                 "open_new_window" => schedule_open_repo_in_new_window(app.clone()),
                 "open_web_inspector" =>
                 {

@@ -48,6 +48,7 @@ import {
   type ChangeFilesMoveRequest,
   dispatchRefreshWorkspaceChanges,
 } from "../lib/change-file-drag";
+import { openRepositoryAtPath as openRepositoryAtPathShared } from "../lib/open-repository";
 import {
   GITHUB_BASE_PATH,
   githubDetailPath,
@@ -547,38 +548,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
     },
   });
 
+  const openRepositoryAtPath = (selected: string) =>
+    openRepositoryAtPathShared(selected, {
+      addToast,
+      onOpened: (path) => {
+        setRepoPath(path);
+        setSelectedWorkspace(null);
+        setActiveSessionId(null);
+        setSessionSelectedFile(null);
+      },
+    });
+
   const handleOpenRepository = async () => {
     const selected = await selectFolder();
     if (!selected) return;
-
-    try {
-      await initRepo(selected);
-    } catch (error) {
-      addToast({
-        title: "Failed to open repository",
-        description: error instanceof Error ? error.message : String(error),
-        type: "error",
-      });
-      return;
-    }
-
-    await setSetting("last_opened_repo_path", selected);
-    await setWindowRepoPath(selected);
-    setRepoPath(selected);
-    setSelectedWorkspace(null);
-    setActiveSessionId(null);
-    setSessionSelectedFile(null);
-    void invalidateQueries(["workspaces"]);
-    void invalidateQueries(["workspace-statuses"]);
-    void invalidateQueries(["sessions"]);
-    void invalidateQueries(["repo-status"]);
-    void invalidateQueries(["repo-branch"]);
-
-    addToast({
-      title: "Repository Opened",
-      description: `Now viewing ${selected.split("/").pop() || selected}`,
-      type: "success",
-    });
+    await openRepositoryAtPath(selected);
   };
 
   // Consolidate all Tauri event listeners
@@ -602,8 +586,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
       listen("navigate-to-settings", () => {
         openSettings();
       }),
-      // Menu open repository
-      listen("menu-open-repository", () => handleOpenRepository()),
+      // Menu open repository - path is resolved natively before this fires
+      listen<string>("menu-repository-path-selected", (event) => {
+        void openRepositoryAtPath(event.payload);
+      }),
       // Menu factory reset
       listen("menu-factory-reset", async () => {
         const confirmed = await ask(
