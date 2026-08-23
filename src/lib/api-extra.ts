@@ -140,6 +140,16 @@ export const getFileModifiedAt = (path: string): Promise<string | null> =>
 export const listDirectory = (path: string): Promise<DirectoryEntry[]> =>
   invoke("list_directory", { path });
 
+export interface DirectoryBatchResult {
+  path: string;
+  entries: DirectoryEntry[];
+  error?: string;
+}
+
+export const listDirectoriesBatch = (
+  paths: string[],
+): Promise<DirectoryBatchResult[]> => invoke("list_directories_batch", { paths });
+
 export interface SendArtifactRecord {
   id: string;
   repo: string;

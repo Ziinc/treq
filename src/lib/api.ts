@@ -179,6 +179,33 @@ export const getWorkspaceFileHunks = (
     }),
   );
 
+export interface WorkspaceFileHunksBatchFile {
+  path: string;
+  contentHash: string;
+  hunks: JjDiffHunk[];
+  error?: string;
+}
+
+export interface WorkspaceFileHunksBatch {
+  snapshotToken: string;
+  files: WorkspaceFileHunksBatchFile[];
+}
+
+export const getWorkspaceFileHunksBatch = (
+  repoPath: string,
+  workspaceId: number | null,
+  filePaths: string[],
+  snapshotToken?: string,
+): Promise<WorkspaceFileHunksBatch> =>
+  enqueueJjExclusive(() =>
+    invoke("get_workspace_file_hunks_batch", {
+      repoPath,
+      workspaceId,
+      filePaths,
+      snapshotToken: snapshotToken ?? null,
+    }),
+  );
+
 export const getWorkspaceFileLines = (
   repoPath: string,
   workspaceId: number | null,

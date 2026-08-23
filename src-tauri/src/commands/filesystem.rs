@@ -12,11 +12,62 @@ pub struct CachedDirectoryEntry {
   pub modified_at: Option<String>,
 }
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DirectoryBatchResult {
+  pub path: String,
+  pub entries: Vec<DirectoryEntry>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub error: Option<String>,
+}
+
 fn modified_at_rfc3339(path: &str) -> Option<String> {
   std::fs::metadata(path)
     .ok()
     .and_then(|metadata| metadata.modified().ok())
     .map(|modified| chrono::DateTime::<chrono::Utc>::from(modified).to_rfc3339())
+}
+
+#[cfg(test)]
+mod batch_tests {
+  use super::*;
+  use tempfile::TempDir;
+
+  #[test]
+  fn lists_directories_in_requested_order_and_deduplicates() {
+    let temp = TempDir::new().unwrap();
+    let first = temp.path().join("first");
+    let second = temp.path().join("second");
+    std::fs::create_dir_all(&first).unwrap();
+    std::fs::create_dir_all(&second).unwrap();
+
+    let result = list_directories_batch(vec![
+      first.to_string_lossy().to_string(),
+      second.to_string_lossy().to_string(),
+      first.to_string_lossy().to_string(),
+    ]);
+
+    assert_eq!(result.len(), 2);
+    assert_eq!(result[0].path, first.to_string_lossy());
+    assert_eq!(result[1].path, second.to_string_lossy());
+  }
+
+  #[test]
+  fn returns_directory_errors_without_failing_siblings() {
+    let temp = TempDir::new().unwrap();
+    let valid = temp.path().join("valid");
+    std::fs::create_dir_all(&valid).unwrap();
+    std::fs::write(valid.join("visible.txt"), "ok").unwrap();
+    let missing = temp.path().join("missing");
+
+    let result = list_directories_batch(vec![
+      missing.to_string_lossy().to_string(),
+      valid.to_string_lossy().to_string(),
+    ]);
+
+    assert!(result[0].error.is_some());
+    assert_eq!(result[1].entries[0].name, "visible.txt");
+  }
 }
 
 #[tauri::command]
@@ -62,6 +113,9 @@ pub fn list_directory(path: String) -> Result<Vec<DirectoryEntry>, String> {
   use std::path::Path;
 
   let base_path = Path::new(&path);
+  if !base_path.is_dir() {
+    return Err(format!("Directory does not exist: {}", path));
+  }
   let mut files = Vec::new();
 
   // Use ignore::WalkBuilder to respect .gitignore patterns
@@ -105,6 +159,17 @@ pub fn list_directory(path: String) -> Result<Vec<DirectoryEntry>, String> {
   });
 
   Ok(files)
+}
+
+#[tauri::command]
+pub fn list_directories_batch(paths: Vec<String>) -> Vec<DirectoryBatchResult> {
+  let mut seen = std::collections::HashSet::new();
+  paths.into_iter().filter(|path| seen.insert(path.clone())).map(|path| {
+    match list_directory(path.clone()) {
+      Ok(entries) => DirectoryBatchResult { path, entries, error: None },
+      Err(error) => DirectoryBatchResult { path, entries: Vec::new(), error: Some(error) },
+    }
+  }).collect()
 }
 
 #[tauri::command]
