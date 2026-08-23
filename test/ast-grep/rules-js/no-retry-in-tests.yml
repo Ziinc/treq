@@ -10,13 +10,13 @@ files:
   - "test/**/*.tsx"
 rule:
   any:
-    - pattern: it($$$, { retry: $_, $$$ })
-    - pattern: it($$$, { $$$, retry: $_, $$$ })
-    - pattern: test($$$, { retry: $_, $$$ })
-    - pattern: test($$$, { $$$, retry: $_, $$$ })
+    - pattern: "it($$$, { retry: $_, $$$ })"
+    - pattern: "it($$$, { $$$, retry: $_, $$$ })"
+    - pattern: "test($$$, { retry: $_, $$$ })"
+    - pattern: "test($$$, { $$$, retry: $_, $$$ })"
     - pattern: it.retry($$$)
     - pattern: test.retry($$$)
-    - pattern: describe($$$, { retry: $_, $$$ })
-    - pattern: describe($$$, { $$$, retry: $_, $$$ })
-    - pattern: vi.setConfig({ retry: $_, $$$ })
-    - pattern: vi.setConfig({ $$$, retry: $_, $$$ })
+    - pattern: "describe($$$, { retry: $_, $$$ })"
+    - pattern: "describe($$$, { $$$, retry: $_, $$$ })"
+    - pattern: "vi.setConfig({ retry: $_, $$$ })"
+    - pattern: "vi.setConfig({ $$$, retry: $_, $$$ })"
