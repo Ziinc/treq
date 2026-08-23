@@ -61,7 +61,6 @@ describe("ShowWorkspace - Search integration", () => {
       () => {
         expect(screen.queryByText(/of \d+/)).toBeTruthy();
       },
-      { timeout: 15_000 },
     );
   });
 

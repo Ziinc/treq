@@ -1,0 +1,13 @@
+id: no-process-on-in-tests
+language: typescript
+severity: error
+message: >
+  Do not use process.on(...) for teardown in test files. Process-level exit
+  handlers are not guaranteed to run between tests and race the test runner's
+  own lifecycle, which is a source of nondeterministic cleanup. Use
+  `afterEach`/`afterAll` instead.
+files:
+  - "test/**/*.ts"
+  - "test/**/*.tsx"
+rule:
+  pattern: process.on($$$)

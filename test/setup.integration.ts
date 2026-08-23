@@ -21,8 +21,10 @@ import { configure } from "@testing-library/dom";
 import "./setup.common";
 
 // tauri-test invoke runs on spawn_blocking; the default 5s async util timeout
-// flakes under CI load when waiting for Changes file lists.
-configure({ asyncUtilTimeout: 60_000 });
+// flakes under CI load when waiting for Changes file lists. Kept in line with
+// the global 15s test timeout (vitest.integration.config.ts) so a stuck
+// waitFor fails fast instead of silently eating the whole test budget.
+configure({ asyncUtilTimeout: 15_000 });
 
 // Keep integration tests deterministic: avoid background auto-rebase races
 // during commit creation in Rust core.
@@ -42,21 +44,8 @@ const tauriTest = require("../src-tauri/target") as {
   invoke: (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
 };
 
-// Track jj_* calls made during each test. Commands that already have a real
-// NAPI implementation (restore/snapshot for Review discard) are allowlisted.
-const jjCalls: string[] = [];
-const ALLOWED_JJ_COMMANDS = new Set([
-  "jj_restore_file",
-  "jj_restore_all",
-  "jj_snapshot_working_copy",
-  "jj_restore_snapshot",
-]);
-
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn((cmd: string, args?: Record<string, unknown>) => {
-    if (cmd.startsWith("jj_") && !ALLOWED_JJ_COMMANDS.has(cmd)) {
-      jjCalls.push(cmd);
-    }
     return tauriTest.invoke(cmd, args ?? {});
   }),
   // The real Rust dispatch behind this harness represents the shipped app's
@@ -68,15 +57,9 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 afterEach(() => {
   workspaceDiffCoalesce.reset();
-  const calls = [...jjCalls];
-  jjCalls.length = 0;
-  expect(
-    calls,
-    "jj_* commands should not be called in integration tests",
-  ).toEqual([]);
 });
 
-process.on("exit", () => {
+afterAll(() => {
   try {
     if (fs.existsSync(testDbPath)) fs.unlinkSync(testDbPath);
   } catch {

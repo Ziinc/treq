@@ -118,7 +118,6 @@ describe("ShowWorkspace - Create PR", () => {
       () => {
         expect(createPr).toBeEnabled();
       },
-      { timeout: 60_000 },
     );
     return createPr;
   }

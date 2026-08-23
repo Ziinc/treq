@@ -80,7 +80,6 @@ async function expectCommitCreated(
         log.commits.some((commit) => commit.description === commitMessage),
       ).toBe(true);
     },
-    { timeout: 60_000 },
   );
 }
 

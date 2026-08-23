@@ -66,7 +66,6 @@ async function openWorkspaceCodeBrowser(
       const failed = scoped.queryByText(/failed to load file content/i);
       expect(hasCodeLines || hasMarkdownTabs || failed).toBeTruthy();
     },
-    { timeout: 60_000 },
   );
   return scoped;
 }

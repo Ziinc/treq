@@ -83,7 +83,6 @@ describe("Outdated comments - persisted comment with non-existent hunk", () => {
           screen.getByRole("button", { name: /finish review/i }),
         ).toBeTruthy();
       },
-      { timeout: 60_000 },
     );
 
     await screen.findAllByText(/test\.txt/);

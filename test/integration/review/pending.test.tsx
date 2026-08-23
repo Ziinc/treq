@@ -48,7 +48,7 @@ async function setupWorkspaceWithFile(branchName: string): Promise<{
 
 async function openPendingFile() {
   await clickChangedFile(PENDING_FILE);
-  await screen.findByText(/first line/, {}, { timeout: 60_000 });
+  await screen.findByText(/first line/);
 }
 
 describe("Pending review persistence", () => {
@@ -82,7 +82,6 @@ describe("Pending review persistence", () => {
           screen.queryByRole("button", { name: /finish review/i }),
         ).toBeInTheDocument();
       },
-      { timeout: 60_000 },
     );
   });
 
@@ -101,7 +100,6 @@ describe("Pending review persistence", () => {
         expect(review).not.toBeNull();
         expect(review!.comments.length).toBeGreaterThan(0);
       },
-      { timeout: 60_000 },
     );
   });
 
@@ -119,7 +117,6 @@ describe("Pending review persistence", () => {
         const review = await loadPendingReview(repoPath, workspace.id);
         expect(review).not.toBeNull();
       },
-      { timeout: 60_000 },
     );
 
     const actionBarBtns = await screen.findAllByTestId("discard-review");
@@ -135,7 +132,6 @@ describe("Pending review persistence", () => {
         const review = await loadPendingReview(repoPath, workspace.id);
         expect(review).toBeNull();
       },
-      { timeout: 60_000 },
     );
   });
 
@@ -153,7 +149,6 @@ describe("Pending review persistence", () => {
         const review = await loadPendingReview(repoPath, workspace.id);
         expect(review).not.toBeNull();
       },
-      { timeout: 60_000 },
     );
 
     const discardBtns = await screen.findAllByTestId("discard-review");

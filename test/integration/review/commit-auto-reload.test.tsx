@@ -93,7 +93,6 @@ describe("Review tab - auto-reload after commit", () => {
       () => {
         expect(screen.getAllByText(REVIEW_FILE).length).toBeGreaterThan(0);
       },
-      { timeout: 60_000 },
     );
     await addSingleReviewComment(user, "Please tighten this change");
 

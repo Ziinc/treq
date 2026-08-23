@@ -1,0 +1,23 @@
+id: no-retry-in-tests
+valid:
+  - |
+    it("does the thing", async () => {
+      expect(classifyError(new RetryableError("later"))).toBe("retryable");
+    });
+  - |
+    it("does the thing", { timeout: 5000 }, async () => {
+      expect(true).toBe(true);
+    });
+invalid:
+  - |
+    it("is flaky", { retry: 3 }, async () => {
+      expect(true).toBe(true);
+    });
+  - |
+    it("is flaky", { timeout: 5000, retry: 3 }, async () => {
+      expect(true).toBe(true);
+    });
+  - |
+    it.retry(3)("is flaky", async () => {
+      expect(true).toBe(true);
+    });

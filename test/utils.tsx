@@ -1,6 +1,9 @@
 import { createCommit } from "../src/lib/api";
 import { execFileSync } from "node:child_process";
+import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import { afterEach, expect } from "vitest";
 import { waitFor, within } from "./test-utils";
 
@@ -44,6 +47,10 @@ function getNapiBindings(): NapiTestBindings {
 }
 
 const testRepoPaths = new Set<string>();
+// Per-test copies made from the golden fixture below; cleaned up by removing
+// the directory tree directly since Rust's TEST_REPOS registry (and thus
+// cleanupTestRepo) only knows about repos it created via createTestRepo.
+const copiedRepoDirs = new Set<string>();
 
 afterEach(() => {
   const napi = getNapiBindings();
@@ -51,16 +58,56 @@ afterEach(() => {
     napi.cleanupTestRepo(tempDirPath);
   }
   testRepoPaths.clear();
+
+  for (const dir of copiedRepoDirs) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+  copiedRepoDirs.clear();
 });
+
+// Golden fixture for the common `withRemote: false` case: built once via the
+// real NAPI path, then copied per test instead of re-running jj/git setup
+// each time. A plain repo has no path baked into its own `.jj`/`.git` state
+// (jj resolves the workspace root from cwd, and an uncolocated remote-free
+// repo has no absolute paths in its git config), so copying the directory
+// tree to a new location is safe as long as no secondary jj workspace has
+// been created yet -- `createWorkspace()` calls in tests always happen after
+// this copy, never before, so that stays true.
+let goldenPlainRepo:
+  | { repoPath: string; tempDirPath: string; defaultBranch: string }
+  | null = null;
+
+function getGoldenPlainRepo() {
+  if (!goldenPlainRepo) {
+    goldenPlainRepo = getNapiBindings().createTestRepo(false);
+  }
+  return goldenPlainRepo;
+}
 
 export function createTestRepo(withRemote = false): {
   repoPath: string;
   tempDirPath: string;
   defaultBranch: string;
 } {
-  const repo = getNapiBindings().createTestRepo(withRemote);
-  testRepoPaths.add(repo.tempDirPath);
-  return repo;
+  if (withRemote) {
+    const repo = getNapiBindings().createTestRepo(true);
+    testRepoPaths.add(repo.tempDirPath);
+    return repo;
+  }
+
+  const golden = getGoldenPlainRepo();
+  const tempDirPath = path.join(
+    os.tmpdir(),
+    `treq-fixture-copy-${process.pid}-${randomUUID()}`,
+  );
+  fs.cpSync(golden.tempDirPath, tempDirPath, { recursive: true });
+  copiedRepoDirs.add(tempDirPath);
+
+  const repoPath = path.join(
+    tempDirPath,
+    path.relative(golden.tempDirPath, golden.repoPath),
+  );
+  return { repoPath, tempDirPath, defaultBranch: golden.defaultBranch };
 }
 
 export function writeWorkspaceFile(

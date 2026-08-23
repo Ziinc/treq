@@ -66,7 +66,6 @@ describe("ShowWorkspace - Code tab", () => {
         const el = document.querySelector('[data-testid="code-line"]');
         expect(el).toBeTruthy();
       },
-      { timeout: 5000 },
     );
 
     const codeLineDiv = document.querySelector(

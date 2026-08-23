@@ -44,19 +44,16 @@ export async function openReviewTab(
   const reviewTab = await screen.findByRole(
     "tab",
     { name: /^Changes/ },
-    { timeout: 60_000 },
   );
   await user.click(reviewTab);
   await screen.findByRole(
     "tab",
     { name: /^Changes/, selected: true },
-    { timeout: 60_000 },
   );
   await waitFor(
     () => {
       expect(screen.queryByText(/Loading diffs\.\.\./)).not.toBeInTheDocument();
     },
-    { timeout: 60_000 },
   );
 }
 
@@ -71,7 +68,6 @@ async function findChangedFileElement(fileName: string): Promise<HTMLElement> {
       if (sidebarMatch) return sidebarMatch;
       throw new Error(`waiting for changed file ${fileName}`);
     },
-    { timeout: 60_000 },
   );
 }
 
@@ -97,7 +93,6 @@ export async function clickChangedFile(fileName: string) {
           screen.queryByText(/Loading diffs\.\.\./),
         ).not.toBeInTheDocument();
       },
-      { timeout: 60_000 },
     );
     fireEvent.click(await findChangedFileElement(fileName));
   }
@@ -109,7 +104,7 @@ export async function waitForFileAndLines() {
     const [fileLabel] = screen.getAllByText(/test\.txt/);
     fireEvent.click(fileLabel);
   }
-  await screen.findByText(/added line 2/, {}, { timeout: 60_000 });
+  await screen.findByText(/added line 2/);
 }
 
 export function getDiffLines() {
@@ -132,7 +127,6 @@ export async function addSingleReviewComment(
         throw new Error("waiting for diff lines");
       }
     },
-    { timeout: 60_000 },
   );
   const gutterButton = await waitFor(
     () => {
@@ -144,7 +138,6 @@ export async function addSingleReviewComment(
       }
       return button;
     },
-    { timeout: 60_000 },
   );
   fireEvent.click(gutterButton);
   const input = await screen.findByPlaceholderText(/add a comment/i);

@@ -307,7 +307,6 @@ describe("Review - conflict rendering contract", () => {
           screen.queryByRole("button", { name: "Conflicts" }),
         ).not.toBeInTheDocument();
       },
-      { timeout: 5000 },
     );
     expect(
       screen.queryByRole("button", { name: /Resolve conflicts/i }),
