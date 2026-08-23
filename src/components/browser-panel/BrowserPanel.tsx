@@ -1,5 +1,6 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { v4 as uuidv4 } from "uuid";
 import {
   closeBrowserWebview,
@@ -24,6 +25,7 @@ export function BrowserPanel({
   onCreateAgentWithReview,
   onReviewSubmitted,
   openRequest,
+  toolbarSlot,
 }: BrowserPanelProps) {
   const { addToast } = useToast();
   const [url, setUrl] = useState(DEFAULT_URL);
@@ -173,15 +175,19 @@ export function BrowserPanel({
     [pendingPick, addComment, clearPendingPick],
   );
 
+  const addressBar = (
+    <AddressBar
+      url={url}
+      onNavigate={handleNavigate}
+      onReload={handleReload}
+      selectMode={selectMode}
+      onToggleSelectMode={toggleSelectMode}
+    />
+  );
+
   return (
     <div className="h-full flex flex-col">
-      <AddressBar
-        url={url}
-        onNavigate={handleNavigate}
-        onReload={handleReload}
-        selectMode={selectMode}
-        onToggleSelectMode={toggleSelectMode}
-      />
+      {toolbarSlot ? createPortal(addressBar, toolbarSlot) : addressBar}
       <div className="flex-1 min-h-0 relative" ref={previewRef}>
         {!webviewOpen && (
           <div className="h-full flex items-center justify-center text-sm text-muted-foreground">

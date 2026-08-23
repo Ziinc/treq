@@ -156,13 +156,13 @@ it("captures the in-app browser page review flow", async () => {
 	await user.clear(input);
 	await user.type(input, `${fixtureUrl}{Enter}`);
 	await user.click(
-		await screen.findByRole("button", { name: /select element/i }),
+		await screen.findByRole("button", { name: /^select$/i }),
 	);
 	await captureDocument(document, {
 		name: "browser-panel-review-03-select-mode",
 		expectations: [
 			'The address bar shows a file:// URL pointing at a real static HTML fixture, and the placeholder message is gone (a page is "loaded").',
-			'The "Select element" toggle button is visually pressed/active.',
+			'The "Select" toggle button is visually pressed/active.',
 		],
 	});
 

@@ -38,4 +38,11 @@ export interface BrowserPanelProps {
   ) => Promise<void>;
   onReviewSubmitted?: () => void;
   openRequest?: BrowserOpenRequest | null;
+  /**
+   * DOM node the address bar (URL input + reload + select toggle) should be
+   * portaled into, e.g. the workspace tab row, so it sits alongside the
+   * Code/Commits/Changes tabs instead of its own row. Falls back to
+   * rendering inline when absent.
+   */
+  toolbarSlot?: HTMLElement | null;
 }

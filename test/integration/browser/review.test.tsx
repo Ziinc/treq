@@ -66,7 +66,7 @@ async function pickElement(
   capturePicked: () => (element: PickedElement) => void,
   element: PickedElement,
 ) {
-  await screen.findByRole("button", { name: /select element/i });
+  await screen.findByRole("button", { name: /^select$/i });
   capturePicked()(element);
 }
 
@@ -136,9 +136,7 @@ describe("BrowserPanel - page review integration", () => {
     await openBrowserTab(user, workspace.branch_name);
     await loadPage(user, "http://localhost:3000/");
 
-    await user.click(
-      await screen.findByRole("button", { name: /select element/i }),
-    );
+    await user.click(await screen.findByRole("button", { name: /^select$/i }));
 
     await pickElement(() => pickedCallback!, SAMPLE_ELEMENT);
     await user.type(
@@ -168,9 +166,7 @@ describe("BrowserPanel - page review integration", () => {
 
     const createSessionSpy = vi.spyOn(api, "createSession");
 
-    await user.click(
-      await screen.findByRole("button", { name: /select element/i }),
-    );
+    await user.click(await screen.findByRole("button", { name: /^select$/i }));
     await pickElement(() => pickedCallback!, SAMPLE_ELEMENT);
     await user.type(
       await screen.findByPlaceholderText(/add a comment/i),
@@ -225,9 +221,7 @@ describe("BrowserPanel - page review integration", () => {
     await openBrowserTab(user, workspace.branch_name);
     await loadPage(user, "http://localhost:3000/");
 
-    await user.click(
-      await screen.findByRole("button", { name: /select element/i }),
-    );
+    await user.click(await screen.findByRole("button", { name: /^select$/i }));
     await pickElement(() => pickedCallback!, SAMPLE_ELEMENT);
     await user.type(
       await screen.findByPlaceholderText(/add a comment/i),

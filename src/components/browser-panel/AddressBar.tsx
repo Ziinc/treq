@@ -37,8 +37,8 @@ export function AddressBar({
   };
 
   return (
-    <div className="flex items-center gap-2 border-b px-3 py-2">
-      <div className="relative flex-1">
+    <div className="flex items-center gap-2 flex-1 min-w-0">
+      <div className="relative flex-1 min-w-0">
         <Input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
@@ -71,17 +71,20 @@ export function AddressBar({
       <Button
         type="button"
         size="sm"
-        variant={selectMode ? "default" : "outline"}
+        variant="outline"
         aria-pressed={selectMode}
         onClick={onToggleSelectMode}
         disabled={disabled}
-        className="gap-1.5"
+        className={cn(
+          "gap-1.5",
+          selectMode && "bg-accent text-accent-foreground",
+        )}
       >
         <MousePointerClick className="w-3.5 h-3.5" />
-        Select element
+        Select
       </Button>
       {!isValid && draft.trim().length > 0 && (
-        <span className="text-xs text-destructive whitespace-nowrap">
+        <span className="text-xs text-destructive whitespace-nowrap truncate">
           Only http://localhost, http://127.0.0.1 and file:// URLs are supported
         </span>
       )}

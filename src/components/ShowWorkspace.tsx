@@ -291,6 +291,10 @@ export const ShowWorkspace = ({
   );
   const [browserOpenRequest, setBrowserOpenRequest] =
     useState<BrowserOpenRequest | null>(null);
+  // Portal target for the browser address bar, rendered in the tab row so
+  // it sits alongside the Code/Commits/Changes tabs instead of its own row.
+  const [browserToolbarSlot, setBrowserToolbarSlot] =
+    useState<HTMLDivElement | null>(null);
   const [scrollToCommitId, setScrollToCommitId] = useState<string | null>(null);
   const [showFileBrowserInCode, setShowFileBrowserInCode] = useState(false);
 
@@ -1179,9 +1183,9 @@ export const ShowWorkspace = ({
     <div className="flex flex-col h-full">
       <div
         data-testid="workspace-tab-row"
-        className="flex-shrink-0 bg-background px-4 py-2 border-b border-border flex items-center justify-between"
+        className="flex-shrink-0 bg-background px-4 py-2 border-b border-border flex items-center gap-3"
       >
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-shrink-0">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList>
               <TabsTrigger
@@ -1275,7 +1279,11 @@ export const ShowWorkspace = ({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-        <div className="flex items-center gap-3">
+        <div
+          ref={setBrowserToolbarSlot}
+          className="flex-1 min-w-0 flex items-center gap-2"
+        />
+        <div className="flex items-center gap-3 flex-shrink-0">
           {(rebasing || refreshingFiles) && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -1535,6 +1543,7 @@ export const ShowWorkspace = ({
             workspaceId={workspace?.id}
             onCreateAgentWithReview={handleCreateAgentWithPageReview}
             openRequest={browserOpenRequest}
+            toolbarSlot={browserToolbarSlot}
           />
         ) : (
           <ChangesDiffViewer
