@@ -373,7 +373,10 @@ pub async fn set_workspace_target_branch(
 ) -> Result<JjRebaseResult, String> {
   tracing::debug!(
     "[set_workspace_target_branch] repo_path={}, workspace_path={}, id={}, target_branch={}",
-    repo_path, workspace_path, id, target_branch
+    repo_path,
+    workspace_path,
+    id,
+    target_branch
   );
 
   // Validate workspace path exists

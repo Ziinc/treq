@@ -3173,7 +3173,9 @@ pub fn reconcile_all_workspaces_after_rewrite(
       // Log but continue — one bad workspace must not block the rest.
       tracing::warn!(
         "[treq] Warning: failed to reconcile workspace '{}' at '{}': {}",
-        ws_name_str, ws_path, e
+        ws_name_str,
+        ws_path,
+        e
       );
     }
   }
@@ -4652,7 +4654,8 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
     if let Err(e) = set_git_head_branch_with_gix(workspace_path, &branch) {
       tracing::warn!(
         "Warning: Failed to set git HEAD to branch '{}': {}",
-        branch, e
+        branch,
+        e
       );
     }
     if let Err(e) = reset_git_index_to_head_with_gix(workspace_path) {
@@ -5100,7 +5103,8 @@ pub fn get_conflicted_files(
     if let Err(update_err) = jj_workspace_update_stale(workspace_path) {
       tracing::warn!(
         "Failed to update stale workspace in get_conflicted_files for {}: {}",
-        workspace_path, update_err
+        workspace_path,
+        update_err
       );
     }
   }

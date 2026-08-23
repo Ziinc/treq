@@ -87,7 +87,8 @@ pub fn check_and_rebase_all(
       ) {
         tracing::warn!(
           "Warning: Failed to resolve bookmark conflict for workspace '{}': {}",
-          workspace.workspace_name, e
+          workspace.workspace_name,
+          e
         );
         all_success = false;
         combined_messages.push(format!(
@@ -137,13 +138,15 @@ pub fn check_and_rebase_all(
               });
               tracing::warn!(
                 "Warning: Working copy for workspace '{}' has conflicted bookmark '{}'",
-                workspace.workspace_name, info.bookmark
+                workspace.workspace_name,
+                info.bookmark
               );
             }
             Err(e) => {
               tracing::warn!(
                 "Warning: Failed to auto-sync working copy for workspace '{}': {}",
-                workspace.workspace_name, e
+                workspace.workspace_name,
+                e
               );
             }
           }
@@ -155,14 +158,16 @@ pub fn check_and_rebase_all(
           ) {
             tracing::warn!(
               "Warning: Failed to update last rebased commit for workspace '{}': {}",
-              workspace.workspace_name, e
+              workspace.workspace_name,
+              e
             );
           }
         }
         Err(e) => {
           tracing::warn!(
             "Warning: Failed to rebase workspace '{}': {}",
-            workspace.workspace_name, e
+            workspace.workspace_name,
+            e
           );
           all_success = false;
           combined_messages.push(format!(

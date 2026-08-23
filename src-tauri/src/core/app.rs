@@ -159,7 +159,9 @@ pub fn init(repo_path: &str) -> Result<bool, String> {
           if let Err(err) = ensure_workspace_rebased(repo_path, workspace.id, &conflict_style) {
             tracing::warn!(
               "Init rebase warning: workspace '{}' ({}) failed: {}",
-              workspace.workspace_name, workspace.id, err
+              workspace.workspace_name,
+              workspace.id,
+              err
             );
           }
         }
