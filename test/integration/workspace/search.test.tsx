@@ -57,11 +57,9 @@ describe("ShowWorkspace - Search integration", () => {
 
     await user.type(searchInput, "hello");
 
-    await waitFor(
-      () => {
-        expect(screen.queryByText(/of \d+/)).toBeTruthy();
-      },
-    );
+    await waitFor(() => {
+      expect(screen.queryByText(/of \d+/)).toBeTruthy();
+    });
   });
 
   it("closes search overlay with Escape", async () => {

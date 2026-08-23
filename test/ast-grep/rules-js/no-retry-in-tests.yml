@@ -10,13 +10,36 @@ files:
   - "test/**/*.tsx"
 rule:
   any:
-    - pattern: "it($$$, { retry: $_, $$$ })"
-    - pattern: "it($$$, { $$$, retry: $_, $$$ })"
-    - pattern: "test($$$, { retry: $_, $$$ })"
-    - pattern: "test($$$, { $$$, retry: $_, $$$ })"
     - pattern: it.retry($$$)
     - pattern: test.retry($$$)
-    - pattern: "describe($$$, { retry: $_, $$$ })"
-    - pattern: "describe($$$, { $$$, retry: $_, $$$ })"
-    - pattern: "vi.setConfig({ retry: $_, $$$ })"
-    - pattern: "vi.setConfig({ $$$, retry: $_, $$$ })"
+    - kind: call_expression
+      all:
+        - has:
+            field: function
+            regex: "^(it|test|describe)$"
+        - has:
+            kind: arguments
+            has:
+              kind: object
+              has:
+                kind: pair
+                has:
+                  field: key
+                  regex: "^retry$"
+    - kind: call_expression
+      all:
+        - has:
+            field: function
+            kind: member_expression
+            has:
+              field: property
+              regex: "^setConfig$"
+        - has:
+            kind: arguments
+            has:
+              kind: object
+              has:
+                kind: pair
+                has:
+                  field: key
+                  regex: "^retry$"

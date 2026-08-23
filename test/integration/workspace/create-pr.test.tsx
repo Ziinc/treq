@@ -114,11 +114,9 @@ describe("ShowWorkspace - Create PR", () => {
     const createPr = await within(header).findByRole("button", {
       name: /^create pr$/i,
     });
-    await waitFor(
-      () => {
-        expect(createPr).toBeEnabled();
-      },
-    );
+    await waitFor(() => {
+      expect(createPr).toBeEnabled();
+    });
     return createPr;
   }
 

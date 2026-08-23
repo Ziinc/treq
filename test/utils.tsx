@@ -82,9 +82,11 @@ afterAll(() => {
 // tree to a new location is safe as long as no secondary jj workspace has
 // been created yet -- `createWorkspace()` calls in tests always happen after
 // this copy, never before, so that stays true.
-let goldenPlainRepo:
-  | { repoPath: string; tempDirPath: string; defaultBranch: string }
-  | null = null;
+let goldenPlainRepo: {
+  repoPath: string;
+  tempDirPath: string;
+  defaultBranch: string;
+} | null = null;
 
 function getGoldenPlainRepo() {
   if (!goldenPlainRepo) {

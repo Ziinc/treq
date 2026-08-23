@@ -56,9 +56,8 @@ describe("ShowWorkspace - File staging integration", () => {
     await user.click(reviewTab);
     await screen.findByRole("tab", { name: /^Changes/, selected: true });
 
-    await waitFor(
-      () =>
-        expect(screen.getAllByText("stage-test.txt").length).toBeGreaterThan(0),
+    await waitFor(() =>
+      expect(screen.getAllByText("stage-test.txt").length).toBeGreaterThan(0),
     );
 
     const fileRows = screen.getAllByText("stage-test.txt");
@@ -81,9 +80,8 @@ describe("ShowWorkspace - File staging integration", () => {
     await user.click(reviewTab);
     await screen.findByRole("tab", { name: /^Changes/, selected: true });
 
-    await waitFor(
-      () =>
-        expect(screen.getAllByText("stage-test.txt").length).toBeGreaterThan(0),
+    await waitFor(() =>
+      expect(screen.getAllByText("stage-test.txt").length).toBeGreaterThan(0),
     );
 
     const collapseBtn = await screen.findByRole("button", {

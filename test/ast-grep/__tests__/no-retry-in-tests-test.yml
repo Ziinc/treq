@@ -21,3 +21,5 @@ invalid:
     it.retry(3)("is flaky", async () => {
       expect(true).toBe(true);
     });
+  - |
+    vi.setConfig({ retry: 2 });

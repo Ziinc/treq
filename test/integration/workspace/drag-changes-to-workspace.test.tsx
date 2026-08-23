@@ -40,10 +40,7 @@ async function openReviewForBranch(
 ) {
   render(<Dashboard />);
   await user.click(await findSidebarBranchElement(branchName));
-  const reviewTab = await screen.findByRole(
-    "tab",
-    { name: /^Changes/ },
-  );
+  const reviewTab = await screen.findByRole("tab", { name: /^Changes/ });
   await user.click(reviewTab);
   await screen.findByRole("tab", { name: /^Changes/, selected: true });
 }

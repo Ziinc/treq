@@ -1,0 +1,21 @@
+id: no-process-on-in-tests
+snapshots:
+  ? |
+    process.on("SIGINT", cleanup);
+  : labels:
+    - source: process.on("SIGINT", cleanup)
+      style: primary
+      start: 0
+      end: 29
+  ? |
+    process.on("exit", () => {
+      if (fs.existsSync(testDbPath)) fs.unlinkSync(testDbPath);
+    });
+  : labels:
+    - source: |-
+        process.on("exit", () => {
+          if (fs.existsSync(testDbPath)) fs.unlinkSync(testDbPath);
+        })
+      style: primary
+      start: 0
+      end: 89

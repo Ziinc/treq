@@ -61,12 +61,10 @@ describe("ShowWorkspace - Code tab", () => {
     const backButton = await screen.findByRole("button", { name: /back/i });
     expect(backButton).toBeTruthy();
 
-    await waitFor(
-      () => {
-        const el = document.querySelector('[data-testid="code-line"]');
-        expect(el).toBeTruthy();
-      },
-    );
+    await waitFor(() => {
+      const el = document.querySelector('[data-testid="code-line"]');
+      expect(el).toBeTruthy();
+    });
 
     const codeLineDiv = document.querySelector(
       '[data-testid="code-line"]',

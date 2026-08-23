@@ -77,13 +77,11 @@ describe("Outdated comments - persisted comment with non-existent hunk", () => {
 
     await openReviewTab(user, branchName);
 
-    await waitFor(
-      () => {
-        expect(
-          screen.getByRole("button", { name: /finish review/i }),
-        ).toBeTruthy();
-      },
-    );
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: /finish review/i }),
+      ).toBeTruthy();
+    });
 
     await screen.findAllByText(/test\.txt/);
 
