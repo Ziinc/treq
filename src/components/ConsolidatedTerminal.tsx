@@ -146,7 +146,6 @@ export const ConsolidatedTerminal = ({
     }
   };
 
-  // Main terminal setup effect - all handlers are inlined to avoid stale closures
   useEffect(() => {
     if (!terminalRef.current) return;
     let cancelled = false;
