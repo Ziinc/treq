@@ -23,13 +23,29 @@ describe("workspace sidebar hover actions", () => {
       name: "Start agent",
     });
     const actions = agentButton.parentElement as HTMLElement;
-    expect(actions).toHaveClass("opacity-0");
-    expect(actions.className).toContain("group-hover/workspace:opacity-100");
+    expect(actions).toHaveClass("hidden");
+    expect(actions.className).toContain("group-hover/workspace:flex");
+    expect(actions.className).toContain("group-focus-within/workspace:flex");
     expect(
       within(alphaRow).getByRole("button", { name: "Open shell" }),
     ).toBeTruthy();
     expect(
       within(alphaRow).getByRole("button", { name: "Stack a workspace" }),
     ).toBeTruthy();
+  });
+
+  it("keeps the action group out of absolute positioning and reserves no permanent right padding on the row", async () => {
+    render(<Dashboard />);
+
+    const alphaLabel = await findSidebarBranchElement("feat/alpha");
+    const alphaRow = alphaLabel.closest("div") as HTMLElement;
+
+    expect(alphaRow.className).not.toMatch(/\bpr-\d/);
+
+    const agentButton = within(alphaRow).getByRole("button", {
+      name: "Start agent",
+    });
+    const actions = agentButton.parentElement as HTMLElement;
+    expect(actions.className).not.toContain("absolute");
   });
 });
