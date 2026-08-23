@@ -76,7 +76,7 @@ Do not mix unrelated cleanup into feature work. Treq has several layers with dif
 
 Docs follow the local style guide in `web/STYLE_GUIDE.md`. Write direct technical prose. Avoid marketing language. Use tables for dense reference data.
 
-Public docs should describe supported macOS behavior unless another platform is explicitly documented. Avoid exposing implementation details that users cannot act on.
+Public docs should describe supported macOS, Windows, and Linux behavior. Call out platform-specific behavior when it differs. Avoid exposing implementation details that users cannot act on.
 
 ## Learn More
 

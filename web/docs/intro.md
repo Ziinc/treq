@@ -5,7 +5,7 @@ slug: /
 
 # Treq
 
-_Technical overview of Treq's workspace model, runtime behavior, and macOS-specific assumptions._
+_Technical overview of Treq's workspace model and runtime behavior on macOS, Windows, and Linux._
 
 Treq is a local review and workspace manager for Git repositories. You open a Git repo, create workspaces for parallel work, and push through normal Git remotes. You do not need to know [Jujutsu](https://jj-vcs.github.io/jj/latest/) to use Treq.
 

@@ -1,10 +1,10 @@
 # Treq
 
-> Treq is an open-source macOS app for managing parallel AI development: create isolated Git workspaces per branch, run coding agents inside them, then review, commit, and merge changes without leaving the app.
+> Treq is an open-source desktop app for macOS, Windows, and Linux. Create isolated Git workspaces per branch, run coding agents inside them, then review, commit, and merge changes without leaving the app.
 
 ## Getting Started
 
-- [Installation and Quickstart](https://treq.dev/docs/getting-started/installation.md): Download Treq for macOS, open a repository, create a workspace, launch an agent, and commit and push changes.
+- [Installation and Quickstart](https://treq.dev/docs/getting-started/installation.md): Download Treq for macOS, Windows, or Linux, open a repository, create a workspace, launch an agent, and commit and push changes.
 
 ## Concepts
 
