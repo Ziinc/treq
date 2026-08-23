@@ -1,5 +1,6 @@
 import { useImperativeHandle, useState, type Ref } from "react";
 import useSWR from "swr";
+import { useRepoYamlConfig } from "../hooks/useRepoYamlConfig";
 import { getRepoSetting, setRepoSetting } from "../lib/api";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
@@ -72,6 +73,16 @@ export const RepositorySettingsContent = ({
     defaultAgent,
     autoPush,
   } = settings;
+
+  // .treq/config.yaml, when it sets a field, is synced into these same repo
+  // settings on the backend — so `settings` above already reflects it. This
+  // is only used to know which fields to disable and explain via the card.
+  const { config: yamlConfig } = useRepoYamlConfig(repoPath);
+  const branchNamePatternManaged = yamlConfig?.branch_name_pattern != null;
+  const includedFilesManaged = yamlConfig?.included_copy_files != null;
+  const defaultModelManaged = yamlConfig?.default_model != null;
+  const defaultAgentManaged = yamlConfig?.default_agent != null;
+
   const error =
     saveError ?? (loadError ? `Failed to load settings: ${loadError}` : null);
 
@@ -151,6 +162,7 @@ export const RepositorySettingsContent = ({
           onChange={(e) => setBranchNamePattern(e.target.value)}
           placeholder="treq/{name}"
           className="mt-2 font-mono"
+          disabled={branchNamePatternManaged}
         />
         <p className="text-sm text-muted-foreground mt-1">
           treq/{"{name}"} → treq/add-dark-mode
@@ -166,6 +178,7 @@ export const RepositorySettingsContent = ({
           placeholder="e.g., .env&#10;.env.local"
           rows={4}
           className="font-mono text-sm mt-2"
+          disabled={includedFilesManaged}
         />
         <p className="text-sm text-muted-foreground mt-1">
           Paths to copy into each new workspace (e.g. .env). For heavy dirs like
@@ -180,7 +193,8 @@ export const RepositorySettingsContent = ({
           id="repo-default-model"
           value={defaultModel}
           onChange={(e) => setDefaultModel(e.target.value)}
-          className="mt-2 w-full px-3 py-2 border rounded-md bg-background text-foreground"
+          className="mt-2 w-full px-3 py-2 border rounded-md bg-background text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+          disabled={defaultModelManaged}
         >
           <option value="">Use Application Default</option>
           <option value="sonnet">Sonnet</option>
@@ -201,7 +215,8 @@ export const RepositorySettingsContent = ({
           id="repo-default-agent"
           value={defaultAgent}
           onChange={(e) => setDefaultAgent(e.target.value)}
-          className="mt-2 w-full px-3 py-2 border rounded-md bg-background text-foreground"
+          className="mt-2 w-full px-3 py-2 border rounded-md bg-background text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+          disabled={defaultAgentManaged}
         >
           <option value="">Use Application Default</option>
           <option value="claude">Claude</option>
