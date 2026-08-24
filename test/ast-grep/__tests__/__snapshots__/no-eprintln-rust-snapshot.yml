@@ -1,0 +1,20 @@
+id: no-eprintln-rust
+snapshots:
+  ? |
+    fn debug_dumps_a_value(result: &str) {
+      eprintln!("resolve result: {:?}", result);
+    }
+  : labels:
+    - source: 'eprintln!("resolve result: {:?}", result)'
+      style: primary
+      start: 41
+      end: 82
+  ? |
+    fn logs_via_eprintln(e: &str) {
+      eprintln!("Warning: something failed: {}", e);
+    }
+  : labels:
+    - source: 'eprintln!("Warning: something failed: {}", e)'
+      style: primary
+      start: 34
+      end: 79

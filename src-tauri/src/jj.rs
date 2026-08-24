@@ -3171,9 +3171,11 @@ pub fn reconcile_all_workspaces_after_rewrite(
 
     if let Err(e) = reconcile_single_workspace(&ws_path) {
       // Log but continue — one bad workspace must not block the rest.
-      eprintln!(
+      tracing::warn!(
         "[treq] Warning: failed to reconcile workspace '{}' at '{}': {}",
-        ws_name_str, ws_path, e
+        ws_name_str,
+        ws_path,
+        e
       );
     }
   }
@@ -4650,13 +4652,14 @@ pub fn jj_commit(workspace_path: &str, message: &str) -> Result<String, JjError>
   // For home repos, keep Git HEAD symbolic to the active branch (avoid detached HEAD after jj commit).
   if repo_path_opt.is_none() && branch != "HEAD" {
     if let Err(e) = set_git_head_branch_with_gix(workspace_path, &branch) {
-      eprintln!(
+      tracing::warn!(
         "Warning: Failed to set git HEAD to branch '{}': {}",
-        branch, e
+        branch,
+        e
       );
     }
     if let Err(e) = reset_git_index_to_head_with_gix(workspace_path) {
-      eprintln!("Warning: Failed to reset git index to HEAD: {}", e);
+      tracing::warn!("Warning: Failed to reset git index to HEAD: {}", e);
     }
   }
 
@@ -4927,7 +4930,7 @@ pub fn jj_split(
       .args(["checkout", &branch])
       .output();
     if let Err(e) = checkout {
-      eprintln!("Warning: Failed to checkout git branch '{}': {}", branch, e);
+      tracing::warn!("Warning: Failed to checkout git branch '{}': {}", branch, e);
     }
   }
 
@@ -5098,9 +5101,10 @@ pub fn get_conflicted_files(
   // 1. Proactively check and update if stale
   if let Ok(true) = is_workspace_stale(workspace_path) {
     if let Err(update_err) = jj_workspace_update_stale(workspace_path) {
-      eprintln!(
+      tracing::warn!(
         "Failed to update stale workspace in get_conflicted_files for {}: {}",
-        workspace_path, update_err
+        workspace_path,
+        update_err
       );
     }
   }

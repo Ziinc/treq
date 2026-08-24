@@ -727,7 +727,7 @@ fn delete_workspace_impl(
         }
       };
       if let Err(e) = disk_result {
-        eprintln!("Warning: Failed to remove workspace directory: {}", e);
+        tracing::warn!("Warning: Failed to remove workspace directory: {}", e);
       }
       local_db::delete_workspace(repo_path, *workspace_id)
         .map_err(|e| format!("Failed to delete workspace from db: {}", e))?;

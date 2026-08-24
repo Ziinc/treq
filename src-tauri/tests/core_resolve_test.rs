@@ -199,7 +199,6 @@ fn treq_resolve_side_two_clears_conflict_and_cleans_up_without_extra_commit() {
     None,
   )
   .expect("resolve_commit side 2");
-  eprintln!("resolve result: {:?}", result);
   assert!(result.success, "{}", result.message);
   assert!(
     !Path::new(&resolve_path).exists(),
@@ -212,22 +211,6 @@ fn treq_resolve_side_two_clears_conflict_and_cleans_up_without_extra_commit() {
 
   let after =
     core::list_commits(&repo.repo_path, Some(workspace.id), false, None, None).expect("list after");
-  eprintln!(
-    "after commits: {:?}",
-    after
-      .commits
-      .iter()
-      .map(|c| {
-        (
-          c.change_id.clone(),
-          c.has_conflicts,
-          c.description.clone(),
-          c.insertions,
-          c.deletions,
-        )
-      })
-      .collect::<Vec<_>>()
-  );
 
   let still_conflicted = after.commits.iter().any(|c| c.has_conflicts);
   assert!(!still_conflicted, "should not remain conflicted");

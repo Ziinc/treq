@@ -157,9 +157,11 @@ pub fn init(repo_path: &str) -> Result<bool, String> {
       if let Ok(all_workspaces) = local_db::get_workspaces(repo_path) {
         for workspace in all_workspaces {
           if let Err(err) = ensure_workspace_rebased(repo_path, workspace.id, &conflict_style) {
-            eprintln!(
+            tracing::warn!(
               "Init rebase warning: workspace '{}' ({}) failed: {}",
-              workspace.workspace_name, workspace.id, err
+              workspace.workspace_name,
+              workspace.id,
+              err
             );
           }
         }

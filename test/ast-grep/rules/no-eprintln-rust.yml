@@ -1,0 +1,18 @@
+id: no-eprintln-rust
+language: rust
+severity: error
+message: >
+  Do not use eprintln! outside of the CLI entry points. It bypasses tracing's
+  EnvFilter and is not captured by the test harness, so it leaks into every
+  test run and can't be filtered. Use tracing::warn!/tracing::debug! (or
+  tracing::error! for real failures) instead. eprintln! stays allowed only in
+  src-tauri/src/cli/** and lib.rs, where it prints CLI usage/error output
+  directly to the user's terminal.
+files:
+  - "src-tauri/src/**/*.rs"
+  - "src-tauri/tests/**/*.rs"
+ignores:
+  - "src-tauri/src/cli/**"
+  - "src-tauri/src/lib.rs"
+rule:
+  pattern: eprintln!($$$)
