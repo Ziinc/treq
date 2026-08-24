@@ -89,12 +89,9 @@ describe("Review tab - auto-reload after commit", () => {
     const { repoPath, workspace } = await setupWorkspaceWithChange(branchName);
     await openReviewTab(user, branchName);
 
-    await waitFor(
-      () => {
-        expect(screen.getAllByText(REVIEW_FILE).length).toBeGreaterThan(0);
-      },
-      { timeout: 60_000 },
-    );
+    await waitFor(() => {
+      expect(screen.getAllByText(REVIEW_FILE).length).toBeGreaterThan(0);
+    });
     await addSingleReviewComment(user, "Please tighten this change");
 
     await user.type(screen.getByPlaceholderText("Message"), commitMessage);

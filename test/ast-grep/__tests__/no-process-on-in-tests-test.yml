@@ -1,0 +1,17 @@
+id: no-process-on-in-tests
+valid:
+  - |
+    afterAll(() => {
+      if (fs.existsSync(testDbPath)) fs.unlinkSync(testDbPath);
+    });
+  - |
+    afterEach(() => {
+      workspaceDiffCoalesce.reset();
+    });
+invalid:
+  - |
+    process.on("exit", () => {
+      if (fs.existsSync(testDbPath)) fs.unlinkSync(testDbPath);
+    });
+  - |
+    process.on("SIGINT", cleanup);

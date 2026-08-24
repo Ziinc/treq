@@ -40,17 +40,13 @@ async function openReviewForBranch(
 ) {
   render(<Dashboard />);
   await user.click(await findSidebarBranchElement(branchName));
-  const reviewTab = await screen.findByRole(
-    "tab",
-    { name: /^Changes/ },
-    { timeout: 30_000 },
-  );
+  const reviewTab = await screen.findByRole("tab", { name: /^Changes/ });
   await user.click(reviewTab);
   await screen.findByRole("tab", { name: /^Changes/, selected: true });
 }
 
 async function waitForChangedFile(fileName: string) {
-  await screen.findAllByText(fileName, {}, { timeout: 30_000 });
+  await screen.findAllByText(fileName);
 }
 
 function createDataTransfer(): DataTransfer {

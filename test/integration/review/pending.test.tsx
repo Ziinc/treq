@@ -48,7 +48,7 @@ async function setupWorkspaceWithFile(branchName: string): Promise<{
 
 async function openPendingFile() {
   await clickChangedFile(PENDING_FILE);
-  await screen.findByText(/first line/, {}, { timeout: 60_000 });
+  await screen.findByText(/first line/);
 }
 
 describe("Pending review persistence", () => {
@@ -76,14 +76,11 @@ describe("Pending review persistence", () => {
 
     await openReviewTab(user, branchName);
 
-    await waitFor(
-      () => {
-        expect(
-          screen.queryByRole("button", { name: /finish review/i }),
-        ).toBeInTheDocument();
-      },
-      { timeout: 60_000 },
-    );
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("button", { name: /finish review/i }),
+      ).toBeInTheDocument();
+    });
   });
 
   it("should auto-save when user adds a comment", async () => {
@@ -95,14 +92,11 @@ describe("Pending review persistence", () => {
 
     await addSingleReviewComment(user, "New comment for auto-save");
 
-    await waitFor(
-      async () => {
-        const review = await loadPendingReview(repoPath, workspace.id);
-        expect(review).not.toBeNull();
-        expect(review!.comments.length).toBeGreaterThan(0);
-      },
-      { timeout: 60_000 },
-    );
+    await waitFor(async () => {
+      const review = await loadPendingReview(repoPath, workspace.id);
+      expect(review).not.toBeNull();
+      expect(review!.comments.length).toBeGreaterThan(0);
+    });
   });
 
   it("should clear persisted review when user cancels", async () => {
@@ -114,13 +108,10 @@ describe("Pending review persistence", () => {
 
     await addSingleReviewComment(user, "Comment to be cleared");
 
-    await waitFor(
-      async () => {
-        const review = await loadPendingReview(repoPath, workspace.id);
-        expect(review).not.toBeNull();
-      },
-      { timeout: 60_000 },
-    );
+    await waitFor(async () => {
+      const review = await loadPendingReview(repoPath, workspace.id);
+      expect(review).not.toBeNull();
+    });
 
     const actionBarBtns = await screen.findAllByTestId("discard-review");
     await user.click(actionBarBtns[0]);
@@ -130,13 +121,10 @@ describe("Pending review persistence", () => {
       (await screen.findAllByTestId("confirm-discard-review"))[0],
     );
 
-    await waitFor(
-      async () => {
-        const review = await loadPendingReview(repoPath, workspace.id);
-        expect(review).toBeNull();
-      },
-      { timeout: 60_000 },
-    );
+    await waitFor(async () => {
+      const review = await loadPendingReview(repoPath, workspace.id);
+      expect(review).toBeNull();
+    });
   });
 
   it("should not clear persisted review when user dismisses cancel dialog", async () => {
@@ -148,13 +136,10 @@ describe("Pending review persistence", () => {
 
     await addSingleReviewComment(user, "Comment to keep");
 
-    await waitFor(
-      async () => {
-        const review = await loadPendingReview(repoPath, workspace.id);
-        expect(review).not.toBeNull();
-      },
-      { timeout: 60_000 },
-    );
+    await waitFor(async () => {
+      const review = await loadPendingReview(repoPath, workspace.id);
+      expect(review).not.toBeNull();
+    });
 
     const discardBtns = await screen.findAllByTestId("discard-review");
     await user.click(discardBtns[0]);

@@ -1,0 +1,45 @@
+id: no-retry-in-tests
+language: typescript
+severity: error
+message: >
+  Do not use a `retry` option in test files. A test that needs a retry to pass
+  reliably has a real race in the app or the test harness -- retrying hides it
+  instead of fixing it. Fix the underlying non-determinism instead.
+files:
+  - "test/**/*.ts"
+  - "test/**/*.tsx"
+rule:
+  any:
+    - pattern: it.retry($$$)
+    - pattern: test.retry($$$)
+    - kind: call_expression
+      all:
+        - has:
+            field: function
+            regex: "^(it|test|describe)$"
+        - has:
+            kind: arguments
+            has:
+              kind: object
+              has:
+                kind: pair
+                has:
+                  field: key
+                  regex: "^retry$"
+    - kind: call_expression
+      all:
+        - has:
+            field: function
+            kind: member_expression
+            has:
+              field: property
+              regex: "^setConfig$"
+        - has:
+            kind: arguments
+            has:
+              kind: object
+              has:
+                kind: pair
+                has:
+                  field: key
+                  regex: "^retry$"

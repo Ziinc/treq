@@ -59,15 +59,12 @@ async function openWorkspaceCodeBrowser(
   await user.click(await screen.findByRole("button", { name: fileName }));
   const fileBrowser = await screen.findByTestId("file-browser");
   const scoped = within(fileBrowser);
-  await waitFor(
-    () => {
-      const hasCodeLines = scoped.queryAllByTestId("code-line").length > 0;
-      const hasMarkdownTabs = scoped.queryByRole("tab", { name: "Code" });
-      const failed = scoped.queryByText(/failed to load file content/i);
-      expect(hasCodeLines || hasMarkdownTabs || failed).toBeTruthy();
-    },
-    { timeout: 60_000 },
-  );
+  await waitFor(() => {
+    const hasCodeLines = scoped.queryAllByTestId("code-line").length > 0;
+    const hasMarkdownTabs = scoped.queryByRole("tab", { name: "Code" });
+    const failed = scoped.queryByText(/failed to load file content/i);
+    expect(hasCodeLines || hasMarkdownTabs || failed).toBeTruthy();
+  });
   return scoped;
 }
 
