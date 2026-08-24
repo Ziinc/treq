@@ -30,6 +30,11 @@ impl OpenNewWindowGate {
 
 pub static OPEN_NEW_WINDOW_GATE: OpenNewWindowGate = OpenNewWindowGate::new();
 
+/// Same re-entry problem, but for the regular "Open..." action: a macOS
+/// File-menu redelivery must not open a second directory picker while one
+/// is already showing.
+pub static OPEN_REPO_GATE: OpenNewWindowGate = OpenNewWindowGate::new();
+
 pub fn new_repo_window_url(repo_path: &str) -> String {
   format!("index.html?repo={}", urlencoding::encode(repo_path))
 }
@@ -88,6 +93,19 @@ mod tests {
     assert!(!gate.try_begin());
     gate.end();
     assert!(gate.try_begin());
+  }
+
+  #[test]
+  fn open_repo_gate_rejects_reentrant_begin_and_recovers_after_cancellation() {
+    let gate = OpenNewWindowGate::new();
+    assert!(gate.try_begin());
+    // Redelivered menu event while the picker is already showing must be rejected.
+    assert!(!gate.try_begin());
+    assert!(!gate.try_begin());
+    // Cancelling the picker releases the gate for the next "Open..." action.
+    gate.end();
+    assert!(gate.try_begin());
+    gate.end();
   }
 
   #[test]
