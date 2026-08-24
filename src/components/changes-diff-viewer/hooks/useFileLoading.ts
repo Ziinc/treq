@@ -282,7 +282,9 @@ export function useFileLoading({
       const batches = chunkPaths(paths, 32);
       const results: import("../../../lib/api").WorkspaceFileHunksBatchFile[] =
         [];
-      for (const [index, batch] of batches.entries()) {
+      const loadBatch = async (index: number): Promise<void> => {
+        const batch = batches[index];
+        if (!batch) return;
         if (index > 0) {
           await new Promise<void>((resolve) => {
             let cancelled = false;
@@ -312,7 +314,7 @@ export function useFileLoading({
         if (generation !== hunkGenerationRef.current) return;
         // Test doubles and older bridges can omit a newly-added command while
         // the workspace metadata path remains usable.
-        if (!response) continue;
+        if (!response) return loadBatch(index + 1);
         if (
           snapshotTokenRef.current &&
           snapshotTokenRef.current !== response.snapshotToken
@@ -329,7 +331,9 @@ export function useFileLoading({
         ) {
           setAllFileHunks((prev) => applyHunkBatch(prev, response.files));
         }
-      }
+        await loadBatch(index + 1);
+      };
+      await loadBatch(0);
       if (isInReviewModeRef.current && !forceApply && !isReloadingRef.current) {
         const newHunksMap = new Map<string, FileHunksData>();
         const changedFiles = new Set<string>();

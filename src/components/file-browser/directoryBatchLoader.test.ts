@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import { DirectoryBatchLoader } from "./directoryBatchLoader";
 
+const emptyDirectoryResults = async (paths: string[]) =>
+  paths.map((path) => ({ path, entries: [] }));
+
 describe("DirectoryBatchLoader", () => {
   it("deduplicates queued paths and caps backend calls at 16", async () => {
-    const request = vi.fn(async (paths: string[]) =>
-      paths.map((path) => ({ path, entries: [] })),
-    );
+    const request = vi.fn(emptyDirectoryResults);
     const loader = new DirectoryBatchLoader(request);
     const paths = Array.from({ length: 17 }, (_, index) => `dir-${index}`);
     await Promise.all([...paths, paths[0]].map((path) => loader.load(path)));

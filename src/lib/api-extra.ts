@@ -151,6 +151,11 @@ export const listDirectoriesBatch = (
 ): Promise<DirectoryBatchResult[]> =>
   invoke("list_directories_batch", { paths });
 
+// Kept as the typed frontend counterpart of the registered Tauri command.
+// eslint-disable-next-line local/no-unused-exported-ts-functions, local/require-tauri-api-exports-used
+export const listDirectoryCached = (repoPath: string, workspaceId: number | null, parentPath: string): Promise<CachedDirectoryEntry[]> =>
+  invoke("list_directory_cached", { repoPath, workspaceId, parentPath });
+
 export interface SendArtifactRecord {
   id: string;
   repo: string;
@@ -164,17 +169,6 @@ export interface SendArtifactRecord {
 export const listSendArtifacts = (
   repoPath: string,
 ): Promise<SendArtifactRecord[]> => invoke("list_send_artifacts", { repoPath });
-
-export const listDirectoryCached = (
-  repoPath: string,
-  workspaceId: number | null,
-  parentPath: string,
-): Promise<CachedDirectoryEntry[]> =>
-  invoke("list_directory_cached", {
-    repoPath,
-    workspaceId,
-    parentPath,
-  });
 
 export const searchWorkspaceFiles = (
   repoPath: string,

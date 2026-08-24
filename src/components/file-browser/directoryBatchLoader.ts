@@ -2,14 +2,31 @@ import type { DirectoryBatchResult } from "../../lib/api-extra";
 import type { DirectoryEntry } from "../../lib/api-types";
 
 type Request = (paths: string[]) => Promise<DirectoryBatchResult[]>;
+type Waiter = {
+  resolve: (entries: DirectoryEntry[]) => void;
+  reject: (error: Error) => void;
+};
+
+const rejectWaiters = (waiters: Waiter[], error: unknown) => {
+  const reason = error instanceof Error ? error : new Error(String(error));
+  for (const { reject } of waiters) reject(reason);
+};
+
+const settleWaiters = (
+  waiters: Waiter[],
+  result: DirectoryBatchResult | undefined,
+) => {
+  if (!result || result.error) {
+    rejectWaiters(waiters, new Error(result?.error ?? "Missing directory result"));
+    return;
+  }
+  for (const { resolve } of waiters) resolve(result.entries);
+};
 
 export class DirectoryBatchLoader {
   private queued = new Map<
     string,
-    Array<{
-      resolve: (entries: DirectoryEntry[]) => void;
-      reject: (error: Error) => void;
-    }>
+    Waiter[]
   >();
   private scheduled = false;
 
@@ -30,33 +47,25 @@ export class DirectoryBatchLoader {
 
   private async flush() {
     this.scheduled = false;
-    const queued = this.queued;
+    const { queued } = this;
     this.queued = new Map();
     const paths = [...queued.keys()];
-    for (let index = 0; index < paths.length; index += 16) {
+    const processBatch = async (index: number): Promise<void> => {
+      if (index >= paths.length) return;
       const batch = paths.slice(index, index + 16);
       try {
         const results = await this.request(batch);
         const byPath = new Map(results.map((result) => [result.path, result]));
         for (const path of batch) {
-          const result = byPath.get(path);
-          for (const waiter of queued.get(path) ?? []) {
-            if (!result || result.error)
-              waiter.reject(
-                new Error(result?.error ?? "Missing directory result"),
-              );
-            else waiter.resolve(result.entries);
-          }
+          settleWaiters(queued.get(path) ?? [], byPath.get(path));
         }
       } catch (error) {
         for (const path of batch) {
-          for (const waiter of queued.get(path) ?? []) {
-            waiter.reject(
-              error instanceof Error ? error : new Error(String(error)),
-            );
-          }
+          rejectWaiters(queued.get(path) ?? [], error);
         }
       }
-    }
+      await processBatch(index + 16);
+    };
+    await processBatch(0);
   }
 }
