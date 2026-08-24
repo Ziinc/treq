@@ -2,6 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { formatTerminalPreview } from "../terminal-mission-control/formatTerminalPreview";
 import { type TerminalSessionSummary } from "../terminal/types";
 import { type TerminalEntry } from "./types";
+import {
+  appendTerminalOutput,
+  createTerminalOutputTail,
+  type TerminalOutputTail,
+} from "../terminal/terminalOutputTail";
 
 interface UseTerminalSessionSummariesOptions {
   allTerminals: TerminalEntry[];
@@ -21,6 +26,28 @@ function getTerminalSummaryId(t: TerminalEntry) {
   return t.type === "shell" ? t.data.id : `claude-${t.data.sessionId}`;
 }
 
+function summariesEqual(
+  left: TerminalSessionSummary[],
+  right: TerminalSessionSummary[],
+) {
+  if (left.length !== right.length) return false;
+  return left.every((summary, index) => {
+    const other = right[index];
+    return (
+      summary.id === other.id &&
+      summary.kind === other.kind &&
+      summary.name === other.name &&
+      summary.branchName === other.branchName &&
+      summary.isMainRepo === other.isMainRepo &&
+      summary.agent === other.agent &&
+      summary.lastActivityAt === other.lastActivityAt &&
+      summary.lastUserInputAt === other.lastUserInputAt &&
+      summary.isStreaming === other.isStreaming &&
+      summary.previewOutput === other.previewOutput
+    );
+  });
+}
+
 /**
  * Tracks last-activity timestamp + streaming state per terminal, and derives
  * the unified `TerminalSessionSummary` list consumed by the sidebar's
@@ -34,6 +61,20 @@ export function useTerminalSessionSummaries({
 }: UseTerminalSessionSummariesOptions) {
   const [activity, setActivity] = useState<Map<string, TerminalActivity>>(
     new Map(),
+  );
+  const outputTailsRef = useRef<Map<string, TerminalOutputTail>>(new Map());
+  const lastPreviewAtRef = useRef<Map<string, number>>(new Map());
+  const previewTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(
+    new Map(),
+  );
+
+  useEffect(
+    () => () => {
+      for (const timer of previewTimersRef.current.values())
+        clearTimeout(timer);
+      previewTimersRef.current.clear();
+    },
+    [],
   );
 
   // Seed a fresh activity entry for every newly-mounted terminal, and prune
@@ -70,34 +111,64 @@ export function useTerminalSessionSummaries({
     output?: string,
     fromProcess = true,
   ) => {
-    const previewOutput =
-      output === undefined ? undefined : formatTerminalPreview(output);
-    setActivity((prev) => {
-      const existing = prev.get(id);
-      const nextPreview = previewOutput ?? existing?.previewOutput ?? "";
-      const lastActivityAt = fromProcess
-        ? Date.now()
-        : (existing?.lastActivityAt ?? Date.now());
-      const isStreaming = fromProcess ? true : (existing?.isStreaming ?? false);
-      const lastUserInputAt = existing?.lastUserInputAt ?? 0;
-      if (
-        existing &&
-        existing.lastActivityAt === lastActivityAt &&
-        existing.isStreaming === isStreaming &&
-        existing.previewOutput === nextPreview
-      ) {
-        return prev;
-      }
+    if (!fromProcess) return;
+    if (output !== undefined) {
+      const tail = appendTerminalOutput(
+        outputTailsRef.current.get(id) ?? createTerminalOutputTail(),
+        output,
+      );
+      outputTailsRef.current.set(id, tail);
+    }
+    const update = (includePreview: boolean) => {
+      const previewOutput = includePreview
+        ? formatTerminalPreview(outputTailsRef.current.get(id)?.raw ?? "")
+        : undefined;
+      setActivity((prev) => {
+        const existing = prev.get(id);
+        if (!includePreview && existing?.isStreaming) return prev;
+        const nextPreview = previewOutput ?? existing?.previewOutput ?? "";
+        const lastActivityAt = Date.now();
+        const isStreaming = true;
+        const lastUserInputAt = existing?.lastUserInputAt ?? 0;
+        if (
+          existing &&
+          existing.lastActivityAt === lastActivityAt &&
+          existing.isStreaming === isStreaming &&
+          existing.previewOutput === nextPreview
+        ) {
+          return prev;
+        }
 
-      const next = new Map(prev);
-      next.set(id, {
-        lastActivityAt,
-        lastUserInputAt,
-        isStreaming,
-        previewOutput: nextPreview,
+        const next = new Map(prev);
+        next.set(id, {
+          lastActivityAt,
+          lastUserInputAt,
+          isStreaming,
+          previewOutput: nextPreview,
+        });
+        return next;
       });
-      return next;
-    });
+    };
+
+    const now = Date.now();
+    const lastPreviewAt = lastPreviewAtRef.current.get(id) ?? 0;
+    if (now - lastPreviewAt >= 100) {
+      lastPreviewAtRef.current.set(id, now);
+      update(true);
+      return;
+    }
+    update(false);
+    if (!previewTimersRef.current.has(id)) {
+      const timer = setTimeout(
+        () => {
+          previewTimersRef.current.delete(id);
+          lastPreviewAtRef.current.set(id, Date.now());
+          update(true);
+        },
+        100 - (now - lastPreviewAt),
+      );
+      previewTimersRef.current.set(id, timer);
+    }
   };
 
   const handleTerminalInput = (id: string) => {
@@ -115,11 +186,19 @@ export function useTerminalSessionSummaries({
   };
 
   const handleTerminalIdlePulse = (id: string) => {
+    const pending = previewTimersRef.current.get(id);
+    if (pending) {
+      clearTimeout(pending);
+      previewTimersRef.current.delete(id);
+    }
+    const previewOutput = formatTerminalPreview(
+      outputTailsRef.current.get(id)?.raw ?? "",
+    );
     setActivity((prev) => {
       const existing = prev.get(id);
       if (!existing || !existing.isStreaming) return prev;
       const next = new Map(prev);
-      next.set(id, { ...existing, isStreaming: false });
+      next.set(id, { ...existing, isStreaming: false, previewOutput });
       return next;
     });
   };
@@ -175,11 +254,10 @@ export function useTerminalSessionSummaries({
   // when nothing actually changed. Only notify the parent (which stores this
   // in state) when the derived content genuinely differs, otherwise this
   // effect would setState every render and loop forever.
-  const lastNotifiedRef = useRef<string>("");
+  const lastNotifiedRef = useRef<TerminalSessionSummary[]>([]);
   useEffect(() => {
-    const serialized = JSON.stringify(terminalSummaries);
-    if (serialized === lastNotifiedRef.current) return;
-    lastNotifiedRef.current = serialized;
+    if (summariesEqual(terminalSummaries, lastNotifiedRef.current)) return;
+    lastNotifiedRef.current = terminalSummaries;
     onTerminalsChangeRef.current?.(terminalSummaries);
   }, [terminalSummaries]);
 

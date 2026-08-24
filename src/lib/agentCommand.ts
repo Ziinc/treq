@@ -73,7 +73,7 @@ export const mergeClaudeLocalSettings = (
   existing: Record<string, unknown> | null,
   filesystemSettings: ReturnType<typeof buildClaudeFilesystemSettings>,
 ): Record<string, unknown> => {
-  const rest = { ...(existing ?? {}) };
+  const rest = { ...existing };
   delete rest.sandbox;
   return {
     ...rest,

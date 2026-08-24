@@ -108,4 +108,32 @@ describe("useTerminalSessionSummaries preview output", () => {
 
     window.removeEventListener(REFRESH_WORKSPACE_CHANGES_EVENT, onRefresh);
   });
+
+  it("coalesces output bursts and publishes the newest preview", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const onTerminalsChange = vi.fn();
+    const allTerminals: TerminalEntry[] = [
+      { type: "shell", data: { id: "shell-1", workingDirectory: "/tmp/ws" } },
+    ];
+    const { result } = renderHook(() =>
+      useTerminalSessionSummaries({ allTerminals, onTerminalsChange }),
+    );
+    const callsBeforeOutput = onTerminalsChange.mock.calls.length;
+
+    act(() => {
+      result.current.handleTerminalOutput("shell-1", "first\n");
+      result.current.handleTerminalOutput("shell-1", "second\n");
+      result.current.handleTerminalOutput("shell-1", "newest\n");
+    });
+    expect(onTerminalsChange.mock.calls.length - callsBeforeOutput).toBe(1);
+
+    act(() => vi.advanceTimersByTime(100));
+    const latest = onTerminalsChange.mock.calls.at(-1)?.[0] as Array<{
+      previewOutput: string;
+    }>;
+    expect(latest[0].previewOutput).toContain("newest");
+    expect(onTerminalsChange.mock.calls.length - callsBeforeOutput).toBe(2);
+    vi.useRealTimers();
+  });
 });

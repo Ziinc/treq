@@ -47,7 +47,7 @@ pub struct TauriTestApp;
 
 pub(crate) struct AppState {
   db: Mutex<Database>,
-  pty_manager: Mutex<PtyManager>,
+  pty_manager: PtyManager,
   watcher_manager: WatcherManager,
   window_repo_paths: Mutex<HashMap<String, String>>,
   window_last_focused_at: Mutex<HashMap<String, u64>>,
@@ -70,7 +70,7 @@ impl AppState {
   ) -> Self {
     Self {
       db: Mutex::new(db),
-      pty_manager: Mutex::new(pty_manager),
+      pty_manager,
       watcher_manager,
       window_repo_paths: Mutex::new(HashMap::new()),
       window_last_focused_at: Mutex::new(HashMap::new()),
