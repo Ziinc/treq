@@ -255,7 +255,7 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                       data-sidebar-index={index}
                       style={indentStyle}
                       className={cn(
-                        "group/workspace relative flex items-center  tracking-wide pr-4 rounded-sm transition-colors cursor-pointer p-0.5",
+                        "group/workspace relative flex items-center tracking-wide rounded-sm transition-colors cursor-pointer py-1 pr-2",
                         {
                           "bg-primary/20": isSelected,
                           "hover:bg-muted/50": !isSelected,
@@ -310,6 +310,8 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                       />
                       <span
                         className={`flex-1 min-w-0 truncate font-mono ${
+                          isConflicted ? "pr-7" : ""
+                        } ${
                           isSelected
                             ? "text-primary font-medium"
                             : "text-muted-foreground"
@@ -326,7 +328,7 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                       {isConflicted && (
                         <AlertTriangle
                           data-testid={`workspace-conflict-indicator-${workspace.id}`}
-                          className="w-3.5 h-3.5 text-destructive shrink-0 mr-1"
+                          className="w-3.5 h-3.5 text-destructive shrink-0 absolute right-3 top-1/2 -translate-y-1/2 group-hover/workspace:hidden group-focus-within/workspace:hidden"
                           aria-label="Conflicted workspace"
                         />
                       )}
@@ -343,7 +345,10 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                           </TooltipContent>
                         </Tooltip>
                       )}
-                      <div className="flex items-center gap-1 shrink-0 mr-1 opacity-0 group-hover/workspace:opacity-100 group-focus-within/workspace:opacity-100 transition-opacity">
+                      <div
+                        data-workspace-actions
+                        className="hidden items-center gap-1 shrink-0 mr-1 group-hover/workspace:flex group-focus-within/workspace:flex"
+                      >
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button

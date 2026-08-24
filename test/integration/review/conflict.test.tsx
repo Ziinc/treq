@@ -325,8 +325,16 @@ describe("Review - conflict rendering contract", () => {
     );
 
     render(<Dashboard />);
-    await screen.findByTestId(
+    const conflictIndicator = await screen.findByTestId(
       `workspace-conflict-indicator-${fixture.workspaceId}`,
+    );
+    const conflictIndicatorClass =
+      conflictIndicator.getAttribute("class") ?? "";
+    expect(conflictIndicatorClass).toContain("absolute");
+    expect(conflictIndicatorClass).toContain("right-");
+    expect(conflictIndicatorClass).toMatch(/group-hover\/workspace:hidden/);
+    expect(conflictIndicatorClass).toMatch(
+      /group-focus-within\/workspace:hidden/,
     );
     await assertStatus(fixture.repoPath, fixture.workspaceId, {
       hasConflicts: true,
