@@ -161,6 +161,7 @@ export default defineConfig([
       "src/lib/api-browser.ts",
       "src/lib/api-extra.ts",
       "src/lib/api-github.ts",
+      "src/lib/api-pr-status.ts",
     ],
     rules: {
       "max-params": "off",
