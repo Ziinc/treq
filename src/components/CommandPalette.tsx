@@ -19,6 +19,7 @@ import {
   History,
   Home,
   Archive,
+  FolderOpen,
   Maximize2,
   Plus,
   Settings,
@@ -42,6 +43,8 @@ interface CommandPaletteProps {
   workspaces: Workspace[];
   onNavigateToDashboard: () => void;
   onNavigateToSettings: () => void;
+  onOpenRepository?: () => void;
+  onOpenRepositoryInNewWindow?: () => void;
   onOpenBranchSwitcher: () => void;
   onOpenFilePicker: () => void;
   onOpenWorkspacePicker: () => void;
@@ -83,6 +86,8 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
   workspaces,
   onNavigateToDashboard,
   onNavigateToSettings,
+  onOpenRepository,
+  onOpenRepositoryInNewWindow,
   onOpenBranchSwitcher,
   onOpenFilePicker,
   onOpenWorkspacePicker,
@@ -133,6 +138,28 @@ export const CommandPalette: React.FC<CommandPaletteProps> = ({
       icon: <Settings className="w-4 h-4" />,
       onSelect: onNavigateToSettings,
     });
+
+    if (onOpenRepository) {
+      result.push({
+        id: "open-repository",
+        type: "action",
+        label: "Open Repository",
+        description: "Open a different repository",
+        icon: <FolderOpen className="w-4 h-4" />,
+        onSelect: onOpenRepository,
+      });
+    }
+
+    if (onOpenRepositoryInNewWindow) {
+      result.push({
+        id: "open-repository-new-window",
+        type: "action",
+        label: "Open Repository in New Window",
+        description: "Open a repository in a separate window",
+        icon: <AppWindow className="w-4 h-4" />,
+        onSelect: onOpenRepositoryInNewWindow,
+      });
+    }
 
     if (repoPath && onOpenBranchSwitcher) {
       result.push({
