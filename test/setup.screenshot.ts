@@ -17,7 +17,7 @@ import os from "os";
 import path from "path";
 import fs from "fs";
 import { createRequire } from "node:module";
-import { afterEach, vi } from "vitest";
+import { afterAll, afterEach, vi } from "vitest";
 
 import "./setup.common";
 
@@ -55,7 +55,7 @@ afterEach(() => {
   jjCalls.length = 0;
 });
 
-process.on("exit", () => {
+afterAll(() => {
   try {
     if (fs.existsSync(testDbPath)) fs.unlinkSync(testDbPath);
   } catch {

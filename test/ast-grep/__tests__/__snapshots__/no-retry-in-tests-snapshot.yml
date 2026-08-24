@@ -1,0 +1,112 @@
+id: no-retry-in-tests
+snapshots:
+  ? |
+    it("is flaky", { retry: 3 }, async () => {
+      expect(true).toBe(true);
+    });
+  : labels:
+    - source: |-
+        it("is flaky", { retry: 3 }, async () => {
+          expect(true).toBe(true);
+        })
+      style: primary
+      start: 0
+      end: 72
+    - source: it
+      style: secondary
+      start: 0
+      end: 2
+    - source: retry
+      style: secondary
+      start: 17
+      end: 22
+    - source: 'retry: 3'
+      style: secondary
+      start: 17
+      end: 25
+    - source: '{ retry: 3 }'
+      style: secondary
+      start: 15
+      end: 27
+    - source: |-
+        ("is flaky", { retry: 3 }, async () => {
+          expect(true).toBe(true);
+        })
+      style: secondary
+      start: 2
+      end: 72
+  ? |
+    it("is flaky", { timeout: 5000, retry: 3 }, async () => {
+      expect(true).toBe(true);
+    });
+  : labels:
+    - source: |-
+        it("is flaky", { timeout: 5000, retry: 3 }, async () => {
+          expect(true).toBe(true);
+        })
+      style: primary
+      start: 0
+      end: 87
+    - source: it
+      style: secondary
+      start: 0
+      end: 2
+    - source: retry
+      style: secondary
+      start: 32
+      end: 37
+    - source: 'retry: 3'
+      style: secondary
+      start: 32
+      end: 40
+    - source: '{ timeout: 5000, retry: 3 }'
+      style: secondary
+      start: 15
+      end: 42
+    - source: |-
+        ("is flaky", { timeout: 5000, retry: 3 }, async () => {
+          expect(true).toBe(true);
+        })
+      style: secondary
+      start: 2
+      end: 87
+  ? |
+    it.retry(3)("is flaky", async () => {
+      expect(true).toBe(true);
+    });
+  : labels:
+    - source: it.retry(3)
+      style: primary
+      start: 0
+      end: 11
+  ? |
+    vi.setConfig({ retry: 2 });
+  : labels:
+    - source: 'vi.setConfig({ retry: 2 })'
+      style: primary
+      start: 0
+      end: 26
+    - source: setConfig
+      style: secondary
+      start: 3
+      end: 12
+    - source: vi.setConfig
+      style: secondary
+      start: 0
+      end: 12
+    - source: retry
+      style: secondary
+      start: 15
+      end: 20
+    - source: 'retry: 2'
+      style: secondary
+      start: 15
+      end: 23
+    - source: '{ retry: 2 }'
+      style: secondary
+      start: 13
+      end: 25
+    - source: '({ retry: 2 })'
+      style: secondary
+      start: 12
+      end: 26
