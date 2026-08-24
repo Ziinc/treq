@@ -80,17 +80,34 @@ describe("TerminalSessionsSidebar reorder animation", () => {
     expect(getByTestId("terminal-session-item-first").style.transform).toBe("");
   });
 
-  it("shows the streaming spinner before the session name", () => {
+  it("shows the streaming spinner before the session name, replacing the session icon", () => {
     const streaming = { ...session("working", 1), isStreaming: true };
-    const { getByLabelText, getByText } = render(
+    const { getByTestId, getByLabelText, getByText } = render(
       <TooltipProvider>
         <TerminalSessionsSidebar sessions={[streaming]} />
       </TooltipProvider>,
     );
 
+    const item = getByTestId("terminal-session-item-working");
+
     expect(getByLabelText("Active changes")).toAppearBefore(
       getByText("working"),
     );
+    expect(item.querySelector('[data-icon="session"]')).toBeNull();
+  });
+
+  it("shows the normal session icon when not streaming", () => {
+    const idle = session("idle-session", 1);
+    const { getByTestId } = render(
+      <TooltipProvider>
+        <TerminalSessionsSidebar sessions={[idle]} />
+      </TooltipProvider>,
+    );
+
+    const item = getByTestId("terminal-session-item-idle-session");
+
+    expect(item.querySelector('[data-icon="session"]')).not.toBeNull();
+    expect(item.querySelector('[aria-label="Active changes"]')).toBeNull();
   });
 
   it("sorts sessions by their most recent user input instead of output", () => {
