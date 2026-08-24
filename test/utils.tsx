@@ -6,6 +6,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, expect } from "vitest";
 import { waitFor, within } from "./test-utils";
+import { drainNativeInvokes } from "./native-invoke-tracker";
 
 export function openRepo(repoPath: string) {
   // Point the app at a repo via the URL search param it reads
@@ -59,7 +60,8 @@ const testRepoPaths = new Set<string>();
 // of the file gives any straggling async work time to finish first.
 const copiedRepoDirs = new Set<string>();
 
-afterEach(() => {
+afterEach(async () => {
+  await drainNativeInvokes();
   const napi = getNapiBindings();
   for (const tempDirPath of testRepoPaths) {
     napi.cleanupTestRepo(tempDirPath);

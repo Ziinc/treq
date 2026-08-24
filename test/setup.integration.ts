@@ -15,6 +15,7 @@ import fs from "fs";
 import { createRequire } from "node:module";
 import { randomUUID } from "crypto";
 import { workspaceDiffCoalesce } from "../src/lib/coalesce-in-flight";
+import { trackNativeInvoke } from "./native-invoke-tracker";
 import { configure } from "@testing-library/dom";
 
 // Shared DOM polyfills, browser API stubs, Tauri plugin mocks, and hook mocks
@@ -46,7 +47,7 @@ const tauriTest = require("../src-tauri/target") as {
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn((cmd: string, args?: Record<string, unknown>) => {
-    return tauriTest.invoke(cmd, args ?? {});
+    return trackNativeInvoke(tauriTest.invoke(cmd, args ?? {}));
   }),
   // The real Rust dispatch behind this harness represents the shipped app's
   // production code path (unlike the screenshot harness, which flips this to
