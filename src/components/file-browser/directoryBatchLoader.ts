@@ -17,17 +17,17 @@ const settleWaiters = (
   result: DirectoryBatchResult | undefined,
 ) => {
   if (!result || result.error) {
-    rejectWaiters(waiters, new Error(result?.error ?? "Missing directory result"));
+    rejectWaiters(
+      waiters,
+      new Error(result?.error ?? "Missing directory result"),
+    );
     return;
   }
   for (const { resolve } of waiters) resolve(result.entries);
 };
 
 export class DirectoryBatchLoader {
-  private queued = new Map<
-    string,
-    Waiter[]
-  >();
+  private queued = new Map<string, Waiter[]>();
   private scheduled = false;
 
   constructor(private readonly request: Request) {}
