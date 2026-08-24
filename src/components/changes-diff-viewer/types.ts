@@ -71,6 +71,7 @@ export interface FileHunksData {
   hunks: JjDiffHunk[];
   isLoading: boolean;
   error?: string;
+  contentHash?: string;
 }
 
 export interface DiffSearchData {

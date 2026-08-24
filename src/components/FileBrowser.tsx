@@ -1,6 +1,6 @@
 /* eslint-disable max-lines, max-nested-callbacks */
 
-import { useEffect, useRef, useState, type ReactElement } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactElement } from "react";
 import useSWR from "swr";
 import {
   AlertCircle,
@@ -26,8 +26,8 @@ import {
   getFileModifiedAt,
   getWorkspaceChangedFiles,
   getWorkspaceFileHunks,
+  listDirectoriesBatch,
   listDirectory,
-  listDirectoryCached,
   readFile,
 } from "../lib/api";
 import {
@@ -95,6 +95,8 @@ import { MarkdownContent } from "./MarkdownContent";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
 import { Textarea } from "./ui/textarea";
+import { DirectoryBatchLoader } from "./file-browser/directoryBatchLoader";
+import { flattenExpandedTree } from "./file-browser/flattenTree";
 
 // Helper to check if file is binary
 function isBinaryFile(path: string): boolean {
@@ -182,6 +184,7 @@ interface TreeNodeProps {
   renderChildren: (entry: DirectoryEntry, depth: number) => ReactElement;
   getRelativePath: (fullPath: string) => string;
   addToast: ReturnType<typeof useToast>["addToast"];
+  renderNested?: boolean;
 }
 
 // CodeLine component - memoized individual line to prevent re-renders
@@ -980,6 +983,7 @@ const TreeNode = ({
   renderChildren,
   getRelativePath,
   addToast,
+  renderNested = true,
 }: TreeNodeProps) => {
   if (entry.is_directory) {
     return (
@@ -1021,7 +1025,7 @@ const TreeNode = ({
               />
             )}
           </button>
-          {isExpanded && children.length > 0 && (
+          {renderNested && isExpanded && children.length > 0 && (
             <div>
               {children
                 .sort((a, b) => {
@@ -1034,7 +1038,7 @@ const TreeNode = ({
                 .map((child) => renderChildren(child, depth + 1))}
             </div>
           )}
-          {isExpanded && children.length === 0 && (
+          {renderNested && isExpanded && children.length === 0 && (
             <div
               className="text-sm text-muted-foreground px-2 py-1"
               style={{ paddingLeft: `${(depth + 1) * 16 + 8}px` }}
@@ -1141,6 +1145,15 @@ export const FileBrowser = ({
   >(new Map());
   const directoryCacheRef = useRef(directoryCache);
   directoryCacheRef.current = directoryCache;
+  const directoryLoaderRef = useRef<DirectoryBatchLoader | null>(null);
+  const directoryLoaderKeyRef = useRef("");
+  if (
+    !directoryLoaderRef.current ||
+    directoryLoaderKeyRef.current !== basePath
+  ) {
+    directoryLoaderKeyRef.current = basePath;
+    directoryLoaderRef.current = new DirectoryBatchLoader(listDirectoriesBatch);
+  }
   const expandedDirsRef = useRef(expandedDirs);
   expandedDirsRef.current = expandedDirs;
   const [isLoadingFile, setIsLoadingFile] = useState(false);
@@ -1574,22 +1587,9 @@ export const FileBrowser = ({
     }
 
     try {
-      let entries: DirectoryEntry[];
-      if (force) {
-        entries = await listDirectory(path);
-      } else if (workspace?.repo_path && workspace?.id !== undefined) {
-        const cachedEntries = await listDirectoryCached(
-          workspace.repo_path,
-          workspace.id,
-          path,
-        );
-        entries = cachedEntries;
-      } else if (repoPath) {
-        const cachedEntries = await listDirectoryCached(repoPath, null, path);
-        entries = cachedEntries;
-      } else {
-        entries = await listDirectory(path);
-      }
+      const entries: DirectoryEntry[] = force
+        ? await listDirectory(path)
+        : await directoryLoaderRef.current!.load(path);
 
       const filtered = filterHiddenEntries(entries);
       setDirectoryCache((prev) => new Map(prev).set(path, filtered));
@@ -1797,13 +1797,19 @@ export const FileBrowser = ({
   })();
 
   // Memoize sorted root entries to avoid re-sorting on every render
-  const sortedRootEntries = [...rootEntries].sort((a, b) => {
-    // Directories first, then alphabetically
-    if (a.is_directory === b.is_directory) {
-      return a.name.localeCompare(b.name);
-    }
-    return a.is_directory ? -1 : 1;
-  });
+  const sortedRootEntries = useMemo(
+    () =>
+      [...rootEntries].sort((a, b) => {
+        if (a.is_directory === b.is_directory)
+          return a.name.localeCompare(b.name);
+        return a.is_directory ? -1 : 1;
+      }),
+    [rootEntries],
+  );
+  const treeRows = useMemo(
+    () => flattenExpandedTree(sortedRootEntries, expandedDirs, directoryCache),
+    [sortedRootEntries, expandedDirs, directoryCache],
+  );
 
   const renderFileContent = () => (
     <FileContentView
@@ -2009,15 +2015,39 @@ export const FileBrowser = ({
 
       <div className="flex-1 flex min-h-0 overflow-hidden">
         {/* File Tree */}
-        <div className="w-72 flex-shrink-0 border-r bg-sidebar overflow-auto">
+        <div className="w-72 flex-shrink-0 border-r bg-sidebar overflow-hidden">
           {isLoadingDir && rootEntries.length === 0 ? (
             <div className="flex items-center justify-center p-4">
               <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
             </div>
           ) : (
-            <div className="p-3 space-y-1">
-              {sortedRootEntries.map((entry) => renderTreeNode(entry, 0))}
-            </div>
+            <Virtuoso
+              className="h-full"
+              data={treeRows}
+              defaultItemHeight={28}
+              increaseViewportBy={280}
+              computeItemKey={(_index, row) => row.entry.path}
+              itemContent={(_index, row) => (
+                <TreeNode
+                  entry={row.entry}
+                  depth={row.depth}
+                  isExpanded={expandedDirs.has(row.entry.path)}
+                  childEntries={EMPTY_DIRECTORY_ENTRIES}
+                  hasChanges={hasChangedFilesInDirectory(row.entry.path)}
+                  selectedFile={selectedFile}
+                  changedFiles={changedFiles}
+                  commentCounts={commentCountsByFile}
+                  basePath={basePath}
+                  onDirectoryClick={handleDirectoryClick}
+                  onFileClick={handleFileClick}
+                  getDirectoryChangeStatus={getDirectoryChangeStatus}
+                  renderChildren={renderTreeNode}
+                  getRelativePath={getRelativePath}
+                  addToast={addToast}
+                  renderNested={false}
+                />
+              )}
+            />
           )}
         </div>
 

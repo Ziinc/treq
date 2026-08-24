@@ -67,16 +67,6 @@ export const getLinePrefix = (line: string): string => {
   return " ";
 };
 
-export const hunksEqual = (
-  hunksA?: JjDiffHunk[] | null,
-  hunksB?: JjDiffHunk[] | null,
-): boolean => {
-  if (!hunksA && !hunksB) return true;
-  if (!hunksA || !hunksB) return false;
-  if (hunksA.length !== hunksB.length) return false;
-  return JSON.stringify(hunksA) === JSON.stringify(hunksB);
-};
-
 export const filesEqual = (
   filesA: ParsedFileChange[],
   filesB: ParsedFileChange[],
@@ -117,18 +107,6 @@ export function filterVisibleCommittedFiles<T extends { path: string }>(
     shouldShowCommittedFile(file.path, false, alwaysVisiblePaths),
   );
 }
-
-export const parseCachedHunks = (raw: string): JjDiffHunk[] | null => {
-  try {
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) {
-      return parsed as JjDiffHunk[];
-    }
-  } catch {
-    // Silently ignore parse failures
-  }
-  return null;
-};
 
 export const parseHunkHeader = (
   header: string,

@@ -1,10 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import {
-  type JjDiffHunk,
-  getDiffCache,
   getWorkspaceChangedFiles,
   getWorkspaceDiff,
-  getWorkspaceFileHunks,
+  getWorkspaceFileHunksBatch,
 } from "../../../lib/api";
 import {
   type ParsedFileChange,
@@ -20,8 +18,12 @@ import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { useToast } from "../../ui/toast";
 import type { FileHunksData } from "../types";
-import { hunksEqual, parseCachedHunks } from "../utils";
 import { workspaceDiffCoalesce } from "../../../lib/coalesce-in-flight";
+import {
+  applyHunkBatch,
+  chunkPaths,
+  replaceGeneration,
+} from "./diffLoadingCoordinator";
 
 // One in-flight workspace_diff per process. jj WC locks are process-global.
 
@@ -112,6 +114,9 @@ export function useFileLoading({
   };
 
   const pendingForceApplyRef = useRef(false);
+  const hunkGenerationRef = useRef(0);
+  const snapshotTokenRef = useRef<string | null>(null);
+  const preloadCancelRef = useRef<(() => void) | null>(null);
 
   const loadChangedFiles = async (forceApply = false) => {
     if (forceApply) pendingForceApplyRef.current = true;
@@ -265,103 +270,92 @@ export function useFileLoading({
       setLoadingAllHunks(false);
       return;
     }
+    const generation = ++hunkGenerationRef.current;
+    preloadCancelRef.current?.();
+    snapshotTokenRef.current = null;
     setLoadingAllHunks(true);
-    const cachedHunksMap = new Map<string, JjDiffHunk[]>();
-    const hunksMap = new Map<string, FileHunksData>();
-    await Promise.all(
-      filesToLoad.map(async (file) => {
-        try {
-          const cache = await getDiffCache(
-            workspacePath,
-            "file_hunks",
-            file.path,
-          );
-          if (cache?.data) {
-            const hunks = parseCachedHunks(cache.data);
-            if (hunks) {
-              cachedHunksMap.set(file.path, hunks);
-              hunksMap.set(file.path, {
-                filePath: file.path,
-                hunks,
-                isLoading: false,
-              });
-            }
-          }
-        } catch {
-          /* cache miss non-fatal */
-        }
-      }),
-    );
-    filesToLoad.forEach((file) => {
-      if (!hunksMap.has(file.path))
-        hunksMap.set(file.path, {
-          filePath: file.path,
-          hunks: [],
-          isLoading: true,
-        });
-    });
-    if (cachedHunksMap.size > 0 && (!isInReviewModeRef.current || forceApply)) {
-      setAllFileHunks((prev) => {
-        let needsUpdate = prev.size !== hunksMap.size;
-        if (!needsUpdate) {
-          for (const [path, data] of hunksMap) {
-            const existing = prev.get(path);
-            if (
-              !existing ||
-              existing.isLoading !== data.isLoading ||
-              !hunksEqual(existing.hunks, data.hunks)
-            ) {
-              needsUpdate = true;
-              break;
-            }
-          }
-        }
-        return needsUpdate ? new Map(hunksMap) : prev;
-      });
+    const paths = filesToLoad.map((file) => file.path);
+    if (!isInReviewModeRef.current || forceApply) {
+      setAllFileHunks((prev) => replaceGeneration(prev, paths));
     }
     try {
-      const results = await Promise.all(
-        filesToLoad.map(async (file) => {
-          try {
-            const hunks = await getWorkspaceFileHunks(
-              repoPath ?? "",
-              workspaceId ?? null,
-              file.path,
-            );
-            return {
-              filePath: file.path,
-              hunks,
-              error: null as string | null,
+      const batches = chunkPaths(paths, 32);
+      const results: import("../../../lib/api").WorkspaceFileHunksBatchFile[] =
+        [];
+      const loadBatch = async (index: number): Promise<void> => {
+        const batch = batches[index];
+        if (!batch) return;
+        if (index > 0) {
+          await new Promise<void>((resolve) => {
+            let cancelled = false;
+            const callback = () => {
+              if (!cancelled) resolve();
             };
-          } catch (error) {
-            return {
-              filePath: file.path,
-              hunks: [] as JjDiffHunk[],
-              error: error instanceof Error ? error.message : String(error),
+            const idle = window.requestIdleCallback?.(callback, {
+              timeout: 100,
+            });
+            const timer =
+              idle === undefined ? window.setTimeout(callback, 25) : undefined;
+            preloadCancelRef.current = () => {
+              cancelled = true;
+              if (idle !== undefined) window.cancelIdleCallback?.(idle);
+              if (timer !== undefined) window.clearTimeout(timer);
+              resolve();
             };
-          }
-        }),
-      );
+          });
+        }
+        if (generation !== hunkGenerationRef.current) return;
+        const response = await getWorkspaceFileHunksBatch(
+          repoPath ?? "",
+          workspaceId ?? null,
+          batch,
+          snapshotTokenRef.current ?? undefined,
+        );
+        if (generation !== hunkGenerationRef.current) return;
+        // Test doubles and older bridges can omit a newly-added command while
+        // the workspace metadata path remains usable.
+        if (!response) return loadBatch(index + 1);
+        if (
+          snapshotTokenRef.current &&
+          snapshotTokenRef.current !== response.snapshotToken
+        ) {
+          void loadChangedFilesRef.current();
+          return;
+        }
+        snapshotTokenRef.current = response.snapshotToken;
+        results.push(...response.files);
+        if (
+          !isInReviewModeRef.current ||
+          forceApply ||
+          isReloadingRef.current
+        ) {
+          setAllFileHunks((prev) => applyHunkBatch(prev, response.files));
+        }
+        await loadBatch(index + 1);
+      };
+      await loadBatch(0);
       if (isInReviewModeRef.current && !forceApply && !isReloadingRef.current) {
         const newHunksMap = new Map<string, FileHunksData>();
         const changedFiles = new Set<string>();
         for (const result of results) {
-          const existing = allFileHunks.get(result.filePath);
+          const existing = allFileHunks.get(result.path);
           const newData: FileHunksData = result.error
             ? {
                 error: result.error,
-                filePath: result.filePath,
+                filePath: result.path,
                 hunks: [],
                 isLoading: false,
+                contentHash: result.contentHash,
               }
             : {
-                filePath: result.filePath,
+                filePath: result.path,
                 hunks: result.hunks,
                 isLoading: false,
+                contentHash: result.contentHash,
               };
-          newHunksMap.set(result.filePath, newData);
-          if (!existing || !hunksEqual(existing.hunks, result.hunks))
-            changedFiles.add(result.filePath);
+          newHunksMap.set(result.path, newData);
+          if (!existing || existing.contentHash !== result.contentHash)
+            changedFiles.add(result.path);
         }
         if (changedFiles.size > 0) {
           setStaleFilesRef.current(
@@ -372,40 +366,8 @@ export function useFileLoading({
         setLoadingAllHunks(false);
         return;
       }
-      setAllFileHunks((prev) => {
-        let hasChanges = false;
-        const next = new Map(prev);
-        for (const result of results) {
-          const existing = prev.get(result.filePath);
-          if (result.error) {
-            if (!existing || existing.error !== result.error) {
-              hasChanges = true;
-              next.set(result.filePath, {
-                error: result.error,
-                filePath: result.filePath,
-                hunks: [],
-                isLoading: false,
-              });
-            }
-            continue;
-          }
-          if (
-            !existing ||
-            existing.isLoading ||
-            !hunksEqual(existing.hunks, result.hunks)
-          ) {
-            hasChanges = true;
-            next.set(result.filePath, {
-              filePath: result.filePath,
-              hunks: result.hunks,
-              isLoading: false,
-            });
-          }
-        }
-        return hasChanges ? next : prev;
-      });
     } finally {
-      setLoadingAllHunks(false);
+      if (generation === hunkGenerationRef.current) setLoadingAllHunks(false);
     }
   };
 
