@@ -34,13 +34,14 @@ describe("workspace sidebar hover actions", () => {
     ).toBeTruthy();
   });
 
-  it("keeps the action group out of absolute positioning and reserves no permanent right padding on the row", async () => {
+  it("keeps the action group out of absolute positioning and matches the home row's fixed edge padding, not a wider reservation for actions", async () => {
     render(<Dashboard />);
 
     const alphaLabel = await findSidebarBranchElement("feat/alpha");
     const alphaRow = alphaLabel.closest("div") as HTMLElement;
 
-    expect(alphaRow.className).not.toMatch(/\bpr-\d/);
+    expect(alphaRow.className).toMatch(/\bpr-2\b/);
+    expect(alphaRow.className).not.toMatch(/\bpr-(?!2\b)\d/);
 
     const agentButton = within(alphaRow).getByRole("button", {
       name: "Start agent",

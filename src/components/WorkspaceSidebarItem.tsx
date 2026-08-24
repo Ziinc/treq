@@ -255,7 +255,7 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                       data-sidebar-index={index}
                       style={indentStyle}
                       className={cn(
-                        "group/workspace relative flex items-center  tracking-wide rounded-sm transition-colors cursor-pointer p-0.5",
+                        "group/workspace relative flex items-center tracking-wide rounded-sm transition-colors cursor-pointer py-1 pr-2",
                         {
                           "bg-primary/20": isSelected,
                           "hover:bg-muted/50": !isSelected,
@@ -310,7 +310,7 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                       />
                       <span
                         className={`flex-1 min-w-0 truncate font-mono ${
-                          isConflicted ? "pr-5" : ""
+                          isConflicted ? "pr-7" : ""
                         } ${
                           isSelected
                             ? "text-primary font-medium"
@@ -328,7 +328,7 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                       {isConflicted && (
                         <AlertTriangle
                           data-testid={`workspace-conflict-indicator-${workspace.id}`}
-                          className="w-3.5 h-3.5 text-destructive shrink-0 absolute right-1 top-1/2 -translate-y-1/2 group-hover/workspace:hidden group-focus-within/workspace:hidden"
+                          className="w-3.5 h-3.5 text-destructive shrink-0 absolute right-3 top-1/2 -translate-y-1/2 group-hover/workspace:hidden group-focus-within/workspace:hidden"
                           aria-label="Conflicted workspace"
                         />
                       )}
