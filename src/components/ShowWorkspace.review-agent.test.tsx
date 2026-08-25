@@ -77,7 +77,7 @@ const workspace: Workspace = {
   id: 7,
   repo_path: "/Users/test/repo",
   workspace_name: "feature-one",
-  workspace_path: "/Users/test/repo/.treq/workspaces/feature-one",
+  workspace_path: "feature-one",
   branch_name: "feature-one",
   title: "feature-one",
   created_at: new Date().toISOString(),
@@ -225,5 +225,21 @@ describe("Send review to terminal respects default agent setting", () => {
     ];
     expect(sessionInfo.pendingPrompt).toBe(reviewText);
     expect(sessionInfo.permissionMode).toBe("plan");
+  });
+
+  it("passes the full workspace path to the review agent session", async () => {
+    const onSessionCreated = vi.fn();
+    renderWorkspace(onSessionCreated);
+
+    await openReviewTab();
+
+    await capturedOnCreateAgentWithReview!("review text", "plan");
+
+    const [sessionInfo] = onSessionCreated.mock.calls[0] as [
+      SessionCreationInfo,
+    ];
+    expect(sessionInfo.workspacePath).toBe(
+      "/Users/test/repo/.treq/workspaces/feature-one",
+    );
   });
 });
