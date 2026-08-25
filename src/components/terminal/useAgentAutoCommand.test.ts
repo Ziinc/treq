@@ -78,12 +78,12 @@ describe("useAgentAutoCommand", () => {
   });
 
   it("prepares a new command when a prompt arrives after the session mounts", async () => {
-    vi.mocked(prepareAgentAutoCommand).mockImplementation(async ({
-      pendingPrompt,
-    }) => ({
-      command: `prompt:${pendingPrompt ?? ""}`,
-      filePaths: [],
-    }));
+    vi.mocked(prepareAgentAutoCommand).mockImplementation(
+      async ({ pendingPrompt }) => ({
+        command: `prompt:${pendingPrompt ?? ""}`,
+        filePaths: [],
+      }),
+    );
 
     const { result, rerender } = renderHook(
       ({ currentSession }: { currentSession: ClaudeSessionData }) =>
