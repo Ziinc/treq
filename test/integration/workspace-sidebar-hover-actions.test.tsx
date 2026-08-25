@@ -49,4 +49,5 @@ describe("workspace sidebar hover actions", () => {
     const actions = agentButton.parentElement as HTMLElement;
     expect(actions.className).not.toContain("absolute");
   });
+
 });
