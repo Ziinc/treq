@@ -2,6 +2,7 @@ import { Draggable } from "@hello-pangea/dnd";
 import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
   AlertTriangle,
+  Archive,
   Bot,
   CalendarClock,
   Copy,
@@ -11,7 +12,6 @@ import {
   Link,
   Pencil,
   Terminal,
-  Trash2,
 } from "lucide-react";
 import { useState } from "react";
 import { useEditorAppsStore } from "../stores/editorAppsStore";
@@ -485,8 +485,8 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                         className="text-destructive focus:text-destructive"
                         onClick={() => onDeleteWorkspace?.(workspace)}
                       >
-                        <Trash2 className="w-4 h-4 mr-2" />
-                        Delete Workspace
+                        <Archive className="w-4 h-4 mr-2" />
+                        Archive Workspace
                       </ContextMenuItem>
                     </>
                   }
