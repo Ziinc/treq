@@ -266,10 +266,9 @@ pub fn run() {
         tauri_plugin_log::Builder::new()
           .level(tauri_plugin_log::log::LevelFilter::Info)
           .target(Target::new(TargetKind::Dispatch(
-            tauri_plugin_log::fern::Dispatch::new()
-              .chain(tauri_plugin_log::fern::Output::call(
-                telemetry::forward_log_record,
-              )),
+            tauri_plugin_log::fern::Dispatch::new().chain(tauri_plugin_log::fern::Output::call(
+              telemetry::forward_log_record,
+            )),
           )))
           .build(),
       )
@@ -847,10 +846,10 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-  use super::is_cli_process;
   use super::agent_runtime::{
     build_agent_deep_link_url, extract_repo_from_agent_deep_link, parse_agent_request_from_url,
   };
+  use super::is_cli_process;
 
   #[test]
   fn identifies_cli_process_before_tauri_plugins_initialize() {

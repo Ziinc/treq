@@ -1,0 +1,54 @@
+name: CLI Binary
+
+on:
+  pull_request:
+    paths:
+      - "src/**"
+      - "src-tauri/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/cli-binary.yml"
+
+jobs:
+  sandboxed-cli:
+    name: Sandboxed macOS CLI
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          workspaces: |
+            ./src-tauri -> target
+
+      - name: Build frontend assets
+        run: |
+          npm ci
+          npm run build
+
+      - name: Build release CLI binary
+        run: cargo build --release --bin treq
+
+      - name: Run CLI with filesystem writes denied
+        run: |
+          sandbox-exec \
+            -p '(version 1) (allow default) (deny file-write*)' \
+            target/release/treq --help > "$RUNNER_TEMP/treq-help.txt"
+          grep -F "Treq - Stacking ADE" "$RUNNER_TEMP/treq-help.txt"
+          grep -F "Usage: treq" "$RUNNER_TEMP/treq-help.txt"
