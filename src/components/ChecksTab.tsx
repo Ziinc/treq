@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import useSWR from "swr";
+import { invalidateQueries } from "../lib/swr-cache";
 import {
 	CheckCircle2,
 	CircleDot,
@@ -72,7 +73,6 @@ export function ChecksTab({
 	workspacePath,
 	onSendToAgent,
 }: Props) {
-	const queryClient = useQueryClient();
 	const [runningJobs, setRunningJobs] = useState<Set<string>>(new Set());
 	const [runningWorkflows, setRunningWorkflows] = useState<Set<string>>(
 		new Set(),
@@ -86,27 +86,25 @@ export function ChecksTab({
 		setLogTarget(null);
 	}, [workspaceId]);
 
-	const { data: isTrusted, isLoading: trustLoading } = useQuery({
-		queryKey: ["repo-trusted", repoPath],
-		queryFn: () => isRepoTrusted(repoPath),
-	});
+	const { data: isTrusted, isLoading: trustLoading } = useSWR(
+		["repo-trusted", repoPath],
+		() => isRepoTrusted(repoPath),
+	);
 
-	const { data: workflows = [], isLoading: workflowsLoading } = useQuery({
-		queryKey: ["workflows", repoPath],
-		queryFn: () => listWorkflows(repoPath),
-	});
+	const { data: workflows = [], isLoading: workflowsLoading } = useSWR(
+		["workflows", repoPath],
+		() => listWorkflows(repoPath),
+	);
 
 	const jobKey = (filename: string, jobId: string) => `${filename}:${jobId}`;
 
 	function invalidateRuns(filename: string) {
-		queryClient.invalidateQueries({
-			queryKey: ["workflow-runs", repoPath, workspaceId, filename],
-		});
+		invalidateQueries(["workflow-runs", repoPath, workspaceId, filename]);
 	}
 
 	async function handleTrustRepo() {
 		await trustRepo(repoPath);
-		queryClient.invalidateQueries({ queryKey: ["repo-trusted", repoPath] });
+		invalidateQueries(["repo-trusted", repoPath]);
 	}
 
 	async function handleRunJob(wf: WorkflowInfo, jobId: string) {
@@ -254,10 +252,10 @@ function WorkflowCard({
 	onRunJob,
 	onOpenLogs,
 }: CardProps) {
-	const { data: runs = [] } = useQuery({
-		queryKey: ["workflow-runs", repoPath, workspaceId, wf.filename],
-		queryFn: () => listWorkflowRuns(repoPath, workspaceId, wf.filename),
-	});
+	const { data: runs = [] } = useSWR(
+		["workflow-runs", repoPath, workspaceId, wf.filename],
+		() => listWorkflowRuns(repoPath, workspaceId, wf.filename),
+	);
 
 	const [latestRun]: (RunSummary | undefined)[] = runs;
 

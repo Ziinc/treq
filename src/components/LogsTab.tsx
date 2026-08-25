@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import useSWR from "swr";
 import { Database, Loader2, Table2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { getLogTimeseries, getRepoLogs } from "../lib/api";
@@ -32,17 +32,15 @@ export function LogsTab({ repoPath, onSendToAgent }: Props) {
 		search: search || undefined,
 	};
 
-	const { data: records = [], isLoading } = useQuery({
-		queryKey: ["repo-logs", repoPath, levels, search],
-		queryFn: () => getRepoLogs(repoPath, filters),
-		enabled: browsing,
-	});
+	const { data: records = [], isLoading } = useSWR(
+		browsing ? ["repo-logs", repoPath, levels, search] : null,
+		() => getRepoLogs(repoPath, filters),
+	);
 
-	const { data: buckets = [] } = useQuery({
-		queryKey: ["repo-logs-timeseries", repoPath, levels, search],
-		queryFn: () => getLogTimeseries(repoPath, { ...filters, bucketSeconds: 1 }),
-		enabled: browsing,
-	});
+	const { data: buckets = [] } = useSWR(
+		browsing ? ["repo-logs-timeseries", repoPath, levels, search] : null,
+		() => getLogTimeseries(repoPath, { ...filters, bucketSeconds: 1 }),
+	);
 
 	function handleSendToAgent(chosen: LogRecordView[]) {
 		onSendToAgent?.(buildLogLinesPrompt(chosen, "my check logs"));

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import useSWR from "swr";
 import { ArrowLeft, Download, Loader2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { exportRunLogs, getRunLogs } from "../lib/api";
@@ -34,15 +34,15 @@ export function LogsBrowser({
 	);
 	const [exportedTo, setExportedTo] = useState<string | null>(null);
 
-	const { data: records = [], isLoading } = useQuery({
-		queryKey: ["run-logs", repoPath, runId, jobId, levels, search, stepIndex],
-		queryFn: () =>
+	const { data: records = [], isLoading } = useSWR(
+		["run-logs", repoPath, runId, jobId, levels, search, stepIndex],
+		() =>
 			getRunLogs(repoPath, runId, jobId, {
 				levels: levels.length > 0 ? levels : undefined,
 				search: search || undefined,
 				stepIndex,
 			}),
-	});
+	);
 
 	// Step names for the step filter, in first-seen order.
 	const steps = useMemo(() => {
