@@ -240,28 +240,53 @@ fn pick_folder_and_open_new_window(app: AppHandle) {
     });
 }
 
+fn is_cli_process<I, S>(args: I) -> bool
+where
+  I: IntoIterator<Item = S>,
+  S: AsRef<std::ffi::OsStr>,
+{
+  let Some(first_arg) = args.into_iter().nth(1) else {
+    return false;
+  };
+  let first_arg = first_arg.as_ref().to_string_lossy();
+
+  !first_arg.starts_with("treq://") && !first_arg.starts_with("-psn_")
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
   telemetry::install_panic_hook();
-  tauri::Builder::default()
-        .plugin(
-            tauri_plugin_log::Builder::new()
-                .level(tauri_plugin_log::log::LevelFilter::Info)
-                .target(Target::new(TargetKind::Dispatch(
-                    tauri_plugin_log::fern::Dispatch::new().chain(
-                        tauri_plugin_log::fern::Output::call(telemetry::forward_log_record),
-                    ),
-                )))
-                .build(),
-        )
-        .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_deep_link::init())
+  let cli_process = is_cli_process(std::env::args_os());
+  let builder = tauri::Builder::default();
+  let builder = if cli_process {
+    builder
+  } else {
+    builder
+      .plugin(
+        tauri_plugin_log::Builder::new()
+          .level(tauri_plugin_log::log::LevelFilter::Info)
+          .target(Target::new(TargetKind::Dispatch(
+            tauri_plugin_log::fern::Dispatch::new().chain(tauri_plugin_log::fern::Output::call(
+              telemetry::forward_log_record,
+            )),
+          )))
+          .build(),
+      )
+      .plugin(tauri_plugin_opener::init())
+      .plugin(tauri_plugin_dialog::init())
+      .plugin(tauri_plugin_deep_link::init())
+  };
+  builder
         .plugin(tauri_plugin_cli::init())
-        .setup(|app| {
-            // --- Initialize telemetry first, before anything (CLI or GUI) that may log ---
-            let log_dir = app.path().app_log_dir().expect("Failed to get app log dir");
-            let telemetry = telemetry::init(&log_dir).expect("Failed to initialize telemetry");
+        .setup(move |app| {
+            // CLI commands must not touch the GUI app's log directory: agent sandboxes may
+            // intentionally deny access to it. GUI processes retain the existing telemetry.
+            let mut telemetry = if cli_process {
+                None
+            } else {
+                let log_dir = app.path().app_log_dir().expect("Failed to get app log dir");
+                Some(telemetry::init(&log_dir).expect("Failed to initialize telemetry"))
+            };
 
             // --- CLI mode: handle commands and exit before any GUI init ---
             {
@@ -273,7 +298,6 @@ pub fn run() {
                             if let Some(exit_code) = cli::handle_cli_command(subcommand) {
                                 // Drop explicitly to flush the log writer before the process exits,
                                 // since `app.handle().exit()` does not run Rust destructors.
-                                drop(telemetry);
                                 app.handle().exit(exit_code);
                                 return Ok(());
                             }
@@ -287,11 +311,9 @@ pub fn run() {
                             eprintln!("  treq diff [workspace_name]");
                             eprintln!("  treq agent <branch> <prompt> [-m <edit|plan>]");
                             eprintln!("  treq help");
-                            drop(telemetry);
                             app.handle().exit(1);
                             return Ok(());
                         } else if cli::handle_cli_global_args(&matches) {
-                            drop(telemetry);
                             app.handle().exit(0);
                             return Ok(());
                         } else if !matches.args.is_empty() {
@@ -300,7 +322,6 @@ pub fn run() {
                             let msg = format!("Unrecognized arguments: {:?}", matches.args);
                             eprintln!("{}", msg);
                             tracing::error!("{}", msg);
-                            drop(telemetry);
                             app.handle().exit(1);
                             return Ok(());
                         }
@@ -314,7 +335,6 @@ pub fn run() {
                         let msg = e.to_string();
                         eprintln!("{}", msg);
                         tracing::error!("{}", msg);
-                        drop(telemetry);
                         app.handle().exit(1);
                         return Ok(());
                     }
@@ -322,6 +342,10 @@ pub fn run() {
             }
 
             // --- GUI mode: continue setup ---
+
+            let telemetry = telemetry
+                .take()
+                .expect("GUI process must initialize telemetry");
 
             let app_dir = app
                 .path()
@@ -825,6 +849,20 @@ mod tests {
   use super::agent_runtime::{
     build_agent_deep_link_url, extract_repo_from_agent_deep_link, parse_agent_request_from_url,
   };
+  use super::is_cli_process;
+
+  #[test]
+  fn identifies_cli_process_before_tauri_plugins_initialize() {
+    assert!(is_cli_process(["treq", "st"]));
+    assert!(is_cli_process(["treq", "--help"]));
+    assert!(is_cli_process(["treq", "unknown-command"]));
+    assert!(!is_cli_process(["treq"]));
+    assert!(!is_cli_process([
+      "treq",
+      "treq://agent/start?repo=%2Ftmp%2Frepo"
+    ]));
+    assert!(!is_cli_process(["treq", "-psn_0_12345"]));
+  }
 
   #[test]
   fn extracts_repo_from_agent_deep_link() {
