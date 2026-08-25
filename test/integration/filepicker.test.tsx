@@ -17,6 +17,8 @@ describe("FilePicker integration", () => {
 
   beforeEach(async () => {
     const { repoPath } = createTestRepo(false);
+    await commitRepoFile(repoPath, "makefile", "all:", "add makefile");
+    await commitRepoFile(repoPath, "src-tauri/.gitignore", "target", "add gitignore");
     await commitRepoFile(
       repoPath,
       "src/components/Button.tsx",
@@ -64,6 +66,20 @@ describe("FilePicker integration", () => {
     await user.type(input, "zzz_nonexistent_file");
 
     await screen.findByText("No files found");
+  });
+
+  it.each([
+    ["make file", /makefile/],
+    ["taurgit", /src-tauri\/.gitignore/],
+  ])("fuzzy searches files with query %s", async (query, expectedFile) => {
+    render(<Dashboard />);
+    await settleReactUpdates();
+
+    await user.keyboard("{Control>}p{/Control}");
+    const input = await screen.findByPlaceholderText("Search files...");
+    await user.type(input, query);
+
+    await screen.findByText(expectedFile);
   });
 });
 

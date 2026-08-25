@@ -1367,11 +1367,38 @@ pub fn get_cached_directory_listing(
     .map_err(|e| e.to_string())
 }
 
+fn escape_like_character(character: char, pattern: &mut String) {
+  if matches!(character, '%' | '_' | '^') {
+    pattern.push('^');
+  }
+  pattern.push(character);
+}
+
+fn fuzzy_like_pattern(query: &str) -> String {
+  let mut pattern = String::from("%");
+  for character in query.chars().filter(|character| !character.is_whitespace()) {
+    escape_like_character(character.to_ascii_lowercase(), &mut pattern);
+    pattern.push('%');
+  }
+  pattern
+}
+
+fn literal_like_pattern(query: &str) -> String {
+  let mut pattern = String::from("%");
+  for character in query.chars().filter(|character| !character.is_whitespace()) {
+    escape_like_character(character.to_ascii_lowercase(), &mut pattern);
+  }
+  pattern.push('%');
+  pattern
+}
+
 /// Search workspace files by filename or path.
 ///
-/// Returns files (not directories) matching the query string using case-insensitive
-/// LIKE matching against the relative_path. Results are ordered by:
+/// Returns files (not directories) using a case-insensitive, ordered-character
+/// fuzzy match against the relative path. Whitespace in the query is ignored.
+/// Results are ordered by:
 /// - Exact filename matches first
+/// - Then contiguous substring matches
 /// - Then by path length (shorter = more relevant)
 pub fn search_workspace_files(
   repo_path: &str,
@@ -1414,7 +1441,13 @@ pub fn search_workspace_files(
       .map_err(|e| e.to_string());
   }
 
-  let search_pattern = format!("%{}%", query.to_lowercase());
+  let normalized_query = query
+    .chars()
+    .filter(|character| !character.is_whitespace())
+    .flat_map(char::to_lowercase)
+    .collect::<String>();
+  let search_pattern = fuzzy_like_pattern(query);
+  let literal_pattern = literal_like_pattern(query);
 
   let mut stmt = conn
         .prepare(
@@ -1422,19 +1455,30 @@ pub fn search_workspace_files(
              FROM workspace_files
              WHERE workspace_id IS ?1
                AND is_directory = 0
-               AND LOWER(relative_path) LIKE ?2
+               AND LOWER(relative_path) LIKE ?2 ESCAPE '^'
              ORDER BY
-               CASE WHEN LOWER(relative_path) LIKE ?3 THEN 0 ELSE 1 END,
+               CASE
+                 WHEN LOWER(relative_path) = ?3 OR LOWER(relative_path) LIKE ?4 ESCAPE '^' THEN 0
+                 WHEN LOWER(relative_path) LIKE ?5 ESCAPE '^' THEN 1
+                 ELSE 2
+               END,
                LENGTH(relative_path)
-             LIMIT ?4",
+             LIMIT ?6",
         )
         .map_err(|e| format!("Failed to prepare search query: {}", e))?;
 
-  let filename_pattern = format!("%/{}", query.to_lowercase());
+  let filename_pattern = format!("%/{}", literal_pattern.trim_start_matches('%'));
 
   let files = stmt
     .query_map(
-      params![workspace_id, search_pattern, filename_pattern, limit as i64],
+      params![
+        workspace_id,
+        search_pattern,
+        normalized_query,
+        filename_pattern,
+        literal_pattern,
+        limit as i64
+      ],
       |row| {
         Ok(CachedWorkspaceFile {
           id: row.get(0)?,
@@ -1927,6 +1971,54 @@ mod tests {
   use super::*;
   use std::fs;
   use tempfile::TempDir;
+
+  fn cached_file(relative_path: &str) -> CachedWorkspaceFile {
+    CachedWorkspaceFile {
+      id: 0,
+      workspace_id: None,
+      file_path: relative_path.to_string(),
+      relative_path: relative_path.to_string(),
+      is_directory: false,
+      parent_path: None,
+      cached_at: "2026-08-26T00:00:00Z".to_string(),
+      mtime: None,
+    }
+  }
+
+  #[test]
+  fn searches_workspace_files_ignoring_query_spaces() {
+    let temp = TempDir::new().expect("tempdir");
+    let repo_path = temp.path().to_str().expect("utf8 path");
+    sync_workspace_files(repo_path, None, vec![cached_file("makefile")])
+      .expect("index files");
+
+    let matches = search_workspace_files(repo_path, None, "make file", 50)
+      .expect("search workspace files");
+
+    assert_eq!(matches.len(), 1);
+    assert_eq!(matches[0].relative_path, "makefile");
+  }
+
+  #[test]
+  fn searches_workspace_files_by_ordered_lazy_characters() {
+    let temp = TempDir::new().expect("tempdir");
+    let repo_path = temp.path().to_str().expect("utf8 path");
+    sync_workspace_files(
+      repo_path,
+      None,
+      vec![
+        cached_file("src-tauri/.gitignore"),
+        cached_file("src/components/FilePicker.tsx"),
+      ],
+    )
+    .expect("index files");
+
+    let matches = search_workspace_files(repo_path, None, "taurgit", 50)
+      .expect("search workspace files");
+
+    assert_eq!(matches.len(), 1);
+    assert_eq!(matches[0].relative_path, "src-tauri/.gitignore");
+  }
 
   #[test]
   fn conflicted_discovery_preserves_canonical_branch_name() {
