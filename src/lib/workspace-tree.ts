@@ -36,6 +36,7 @@ export interface FlattenedWorkspaceNode {
  */
 export function buildWorkspaceTree(
   statuses: WorkspaceSidebarStatus[],
+  isMergedBranch: (branchName: string) => boolean = () => false,
 ): WorkspaceTreeNode[] {
   const workspaces = statuses.map((statusEntry) => statusEntry.current);
   // Step 1: Create lookup map by branch_name
@@ -97,7 +98,7 @@ export function buildWorkspaceTree(
   for (const root of roots) {
     computeDepths(root, 0);
   }
-  sortTreeByRecency(roots);
+  sortTreeByRecency(roots, isMergedBranch);
 
   return roots;
 }
@@ -121,12 +122,21 @@ function activityTimestamp(node: WorkspaceTreeNode): string {
 }
 
 /**
- * Sort tree nodes by recency at each sibling level (newest first).
- * Hierarchy is unchanged — only peer order within a parent (or among roots).
- * Equal timestamps fall back to branch name for stability.
+ * Sort tree nodes by recency at each sibling level (newest first), with
+ * merged workspaces always sorted after unmerged ones regardless of
+ * recency. Hierarchy is unchanged — only peer order within a parent (or
+ * among roots). Equal timestamps fall back to branch name for stability.
  */
-function sortTreeByRecency(nodes: WorkspaceTreeNode[]): void {
+function sortTreeByRecency(
+  nodes: WorkspaceTreeNode[],
+  isMergedBranch: (branchName: string) => boolean,
+): void {
   nodes.sort((nodeA, nodeB) => {
+    const mergedA = isMergedBranch(nodeA.branchName);
+    const mergedB = isMergedBranch(nodeB.branchName);
+    if (mergedA !== mergedB) {
+      return mergedA ? 1 : -1;
+    }
     const timeA = activityTimestamp(nodeA);
     const timeB = activityTimestamp(nodeB);
     if (timeA !== timeB) {
@@ -135,7 +145,7 @@ function sortTreeByRecency(nodes: WorkspaceTreeNode[]): void {
     return nodeA.branchName.localeCompare(nodeB.branchName);
   });
   for (const node of nodes) {
-    sortTreeByRecency(node.children);
+    sortTreeByRecency(node.children, isMergedBranch);
   }
 }
 
