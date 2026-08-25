@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { getSessionModel, getTreqBinDir } from "../../lib/api";
 import { prepareAgentAutoCommand } from "../../lib/prepareAgentAutoCommand";
@@ -27,9 +27,6 @@ export const useAgentAutoCommand = (sessionData: ClaudeSessionData) => {
   const isModelLoaded = !modelLoading;
   const treqBinDirReady = !binLoading;
 
-  const pendingPromptRef = useRef(sessionData.pendingPrompt);
-  const permissionModeRef = useRef(sessionData.permissionMode);
-
   const { data: prepared, error: prepareErr } = useSWR(
     isModelLoaded && treqBinDirReady
       ? [
@@ -39,6 +36,8 @@ export const useAgentAutoCommand = (sessionData: ClaudeSessionData) => {
           sessionData.repoPath,
           sessionModel,
           treqBinDir,
+          sessionData.pendingPrompt,
+          sessionData.permissionMode,
         ]
       : null,
     () =>
@@ -47,8 +46,8 @@ export const useAgentAutoCommand = (sessionData: ClaudeSessionData) => {
         workspacePath: sessionData.workspacePath,
         repoPath: sessionData.repoPath,
         sessionModel,
-        permissionMode: permissionModeRef.current,
-        pendingPrompt: pendingPromptRef.current,
+        permissionMode: sessionData.permissionMode,
+        pendingPrompt: sessionData.pendingPrompt,
         treqBinDir,
       }),
   );

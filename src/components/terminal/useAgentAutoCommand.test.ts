@@ -76,4 +76,29 @@ describe("useAgentAutoCommand", () => {
         "Failed to create .agents/skills/treq: Read-only file system",
     });
   });
+
+  it("prepares a new command when a prompt arrives after the session mounts", async () => {
+    vi.mocked(prepareAgentAutoCommand).mockImplementation(async ({
+      pendingPrompt,
+    }) => ({
+      command: `prompt:${pendingPrompt ?? ""}`,
+      filePaths: [],
+    }));
+
+    const { result, rerender } = renderHook(
+      ({ currentSession }: { currentSession: ClaudeSessionData }) =>
+        useAgentAutoCommand(currentSession),
+      { initialProps: { currentSession: session } },
+    );
+
+    await waitFor(() => expect(result.current.autoCommand).toBe("prompt:"));
+
+    rerender({
+      currentSession: { ...session, pendingPrompt: "current prompt" },
+    });
+
+    await waitFor(() =>
+      expect(result.current.autoCommand).toBe("prompt:current prompt"),
+    );
+  });
 });
