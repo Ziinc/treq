@@ -18,7 +18,12 @@ describe("FilePicker integration", () => {
   beforeEach(async () => {
     const { repoPath } = createTestRepo(false);
     await commitRepoFile(repoPath, "makefile", "all:", "add makefile");
-    await commitRepoFile(repoPath, "src-tauri/.gitignore", "target", "add gitignore");
+    await commitRepoFile(
+      repoPath,
+      "src-tauri/.gitignore",
+      "target",
+      "add gitignore",
+    );
     await commitRepoFile(
       repoPath,
       "src/components/Button.tsx",

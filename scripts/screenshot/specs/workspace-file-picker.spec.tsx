@@ -28,6 +28,13 @@ it("captures Cmd+P file search from a workspace without a prior file-browser ind
     "export const Modal = () => {};",
     "add Modal",
   );
+  await gitCommitRepoFile(repoPath, "makefile", "all:", "add makefile");
+  await gitCommitRepoFile(
+    repoPath,
+    "src-tauri/.gitignore",
+    "target",
+    "add gitignore",
+  );
   await createWorkspace(repoPath, BRANCH_NAME);
   openRepo(repoPath);
 
@@ -64,6 +71,30 @@ it("captures Cmd+P file search from a workspace without a prior file-browser ind
       "The search input contains the typed query 'Button'.",
       "Only src/components/Button.tsx appears in the filtered results list.",
       "Other files such as Modal.tsx are not shown in the results list.",
+    ],
+  });
+
+  await user.clear(input);
+  await user.type(input, "make file");
+  await screen.findByText(/^makefile$/);
+
+  await captureDocument(document, {
+    name: "workspace-file-picker-03-spaced-fuzzy-search",
+    expectations: [
+      "The search input contains the spaced query 'make file'.",
+      "The result list shows makefile despite the extra space in the query.",
+    ],
+  });
+
+  await user.clear(input);
+  await user.type(input, "taurgit");
+  await screen.findByText(/^src-tauri\/.gitignore$/);
+
+  await captureDocument(document, {
+    name: "workspace-file-picker-04-lazy-fuzzy-search",
+    expectations: [
+      "The search input contains the lazily combined query 'taurgit'.",
+      "The result list shows src-tauri/.gitignore as an ordered fuzzy match.",
     ],
   });
 }, 60000);
