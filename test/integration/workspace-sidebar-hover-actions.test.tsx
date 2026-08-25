@@ -49,4 +49,13 @@ describe("workspace sidebar hover actions", () => {
     const actions = agentButton.parentElement as HTMLElement;
     expect(actions.className).not.toContain("absolute");
   });
+
+  it("keeps a fixed row height when hover actions become visible", async () => {
+    render(<Dashboard />);
+
+    const alphaLabel = await findSidebarBranchElement("feat/alpha");
+    const alphaRow = alphaLabel.closest("div") as HTMLElement;
+
+    expect(alphaRow).toHaveClass("h-8");
+  });
 });
