@@ -78,6 +78,7 @@ describe("useAgentAutoCommand", () => {
   });
 
   it("prepares a new command when a prompt arrives after the session mounts", async () => {
+    const promptSession = { ...session, sessionId: 2 };
     vi.mocked(prepareAgentAutoCommand).mockImplementation(
       async ({ pendingPrompt }) => ({
         command: `prompt:${pendingPrompt ?? ""}`,
@@ -88,13 +89,13 @@ describe("useAgentAutoCommand", () => {
     const { result, rerender } = renderHook(
       ({ currentSession }: { currentSession: ClaudeSessionData }) =>
         useAgentAutoCommand(currentSession),
-      { initialProps: { currentSession: session } },
+      { initialProps: { currentSession: promptSession } },
     );
 
     await waitFor(() => expect(result.current.autoCommand).toBe("prompt:"));
 
     rerender({
-      currentSession: { ...session, pendingPrompt: "current prompt" },
+      currentSession: { ...promptSession, pendingPrompt: "current prompt" },
     });
 
     await waitFor(() =>
