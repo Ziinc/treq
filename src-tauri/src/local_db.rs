@@ -1989,11 +1989,10 @@ mod tests {
   fn searches_workspace_files_ignoring_query_spaces() {
     let temp = TempDir::new().expect("tempdir");
     let repo_path = temp.path().to_str().expect("utf8 path");
-    sync_workspace_files(repo_path, None, vec![cached_file("makefile")])
-      .expect("index files");
+    sync_workspace_files(repo_path, None, vec![cached_file("makefile")]).expect("index files");
 
-    let matches = search_workspace_files(repo_path, None, "make file", 50)
-      .expect("search workspace files");
+    let matches =
+      search_workspace_files(repo_path, None, "make file", 50).expect("search workspace files");
 
     assert_eq!(matches.len(), 1);
     assert_eq!(matches[0].relative_path, "makefile");
@@ -2013,8 +2012,8 @@ mod tests {
     )
     .expect("index files");
 
-    let matches = search_workspace_files(repo_path, None, "taurgit", 50)
-      .expect("search workspace files");
+    let matches =
+      search_workspace_files(repo_path, None, "taurgit", 50).expect("search workspace files");
 
     assert_eq!(matches.len(), 1);
     assert_eq!(matches[0].relative_path, "src-tauri/.gitignore");
