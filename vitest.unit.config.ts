@@ -24,5 +24,8 @@ export default defineConfig({
     globals: true,
     fileParallelism: true,
     testTimeout: 15000,
+    env: {
+      DEBUG_PRINT_LIMIT: "10",
+    },
   },
 });
