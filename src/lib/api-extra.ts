@@ -1,3 +1,5 @@
+/* eslint-disable max-lines */
+
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
@@ -441,30 +443,30 @@ export const undoRepoOperation = (
  * not a commit on the target branch). Must be undone sequentially from the tip.
  */
 export const undoCommit = (
-	repoPath: string,
-	workspaceId: number,
-	commitChangeId: string,
+  repoPath: string,
+  workspaceId: number,
+  commitChangeId: string,
 ): Promise<void> =>
-	invoke("undo_commit", {
-		repoPath,
-		workspaceId,
-		commitChangeId,
-	});
+  invoke("undo_commit", {
+    repoPath,
+    workspaceId,
+    commitChangeId,
+  });
 
 /**
  * Revert a commit by creating a new commit that reverses its changes on top
  * of the workspace's current tip. Can target any commit except the working copy.
  */
 export const revertCommit = (
-	repoPath: string,
-	workspaceId: number,
-	commitChangeId: string,
+  repoPath: string,
+  workspaceId: number,
+  commitChangeId: string,
 ): Promise<void> =>
-	invoke("revert_commit", {
-		repoPath,
-		workspaceId,
-		commitChangeId,
-	});
+  invoke("revert_commit", {
+    repoPath,
+    workspaceId,
+    commitChangeId,
+  });
 
 export const getCommitDescription = (
   repoPath: string,
