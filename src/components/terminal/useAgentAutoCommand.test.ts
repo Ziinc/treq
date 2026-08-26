@@ -1,5 +1,8 @@
 import { renderHook, waitFor } from "@testing-library/react";
+import { createElement, type ReactNode, useMemo } from "react";
+import { SWRConfig } from "swr";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createTestSWRConfig } from "../../lib/swr-cache";
 import type { ClaudeSessionData } from "./types";
 import { useAgentAutoCommand } from "./useAgentAutoCommand";
 
@@ -32,6 +35,11 @@ const session: ClaudeSessionData = {
   repoPath: "/repo",
 };
 
+const TestSWRProvider = ({ children }: { children: ReactNode }) => {
+  const config = useMemo(() => createTestSWRConfig(), []);
+  return createElement(SWRConfig, { value: config }, children);
+};
+
 describe("useAgentAutoCommand", () => {
   beforeEach(() => {
     vi.mocked(prepareAgentAutoCommand).mockReset();
@@ -45,7 +53,9 @@ describe("useAgentAutoCommand", () => {
       ),
     );
 
-    const { result } = renderHook(() => useAgentAutoCommand(session));
+    const { result } = renderHook(() => useAgentAutoCommand(session), {
+      wrapper: TestSWRProvider,
+    });
 
     await waitFor(() => {
       expect(result.current.isModelLoaded).toBe(true);
@@ -62,7 +72,9 @@ describe("useAgentAutoCommand", () => {
         "Failed to create .agents/skills/treq: Read-only file system",
     });
 
-    const { result } = renderHook(() => useAgentAutoCommand(session));
+    const { result } = renderHook(() => useAgentAutoCommand(session), {
+      wrapper: TestSWRProvider,
+    });
 
     await waitFor(() => {
       expect(result.current.autoCommand).toBe(
@@ -75,5 +87,33 @@ describe("useAgentAutoCommand", () => {
       description:
         "Failed to create .agents/skills/treq: Read-only file system",
     });
+  });
+
+  it("prepares a new command when a prompt arrives after the session mounts", async () => {
+    vi.mocked(prepareAgentAutoCommand).mockImplementation(
+      async ({ pendingPrompt }) => ({
+        command: `prompt:${pendingPrompt ?? ""}`,
+        filePaths: [],
+      }),
+    );
+
+    const { result, rerender } = renderHook(
+      ({ currentSession }: { currentSession: ClaudeSessionData }) =>
+        useAgentAutoCommand(currentSession),
+      {
+        initialProps: { currentSession: session },
+        wrapper: TestSWRProvider,
+      },
+    );
+
+    await waitFor(() => expect(result.current.autoCommand).toBe("prompt:"));
+
+    rerender({
+      currentSession: { ...session, pendingPrompt: "current prompt" },
+    });
+
+    await waitFor(() =>
+      expect(result.current.autoCommand).toBe("prompt:current prompt"),
+    );
   });
 });
