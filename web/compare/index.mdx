@@ -1,0 +1,38 @@
+---
+sidebar_position: 1
+description: Compare Treq's Stacking ADE with agent development environments, terminal tools, and stacked PR platforms.
+---
+
+# Compare
+
+_How Treq's Stacking ADE differs from other agent tools and stacked PR platforms._
+
+Treq is a desktop **Stacking Agent Development Environment (ADE)**. Agents write code fast. Managing the output is the hard part.
+
+Each coding agent gets an isolated workspace. Dependent workspaces form a stack. You review diffs like a pull request, send comments back to the agent, and Treq rebases higher layers when a lower layer moves. Conflicts go to the agent instead of sitting in a merge tool.
+
+The four problems Treq is built around:
+
+| Problem | What Treq does |
+| --- | --- |
+| Parallel agents overwrite each other | Isolated [workspaces](/docs/concepts/workspaces) with separate working copies |
+| Branches go stale while you iterate | Auto-rebase of dependent workspaces in the background |
+| Conflict resolution is grunt work | Auto-resolve: send the conflict to the agent with instructions |
+| Large features need smaller, synced PRs | [Stacked workspaces](/learn/concepts/git/stacked-prs) that stay on the same rebase chain |
+
+Most agent tools solve the first row. Isolation via [git worktrees](/learn/concepts/git/git-worktrees) is now common. Treq's claim is the other three rows: review that feeds the next agent turn, automatic rebase, and a stack that stays current. Git worktrees cannot rebase dependents the way Treq's colocated Jujutsu workspaces do.
+
+Treq also positions itself as an [open-source Graphite alternative](/learn/graphite-alternative). Graphite stacks pull requests after you push. Treq stacks local agent workspaces before a pull request exists. Review data stays on your machine by default.
+
+Supported agents today are Claude, Codex, and Cursor. The desktop app is marketed for macOS. The app is Apache 2.0. [Pricing](/pricing) keeps the desktop free. Pro adds GitHub integration for private repos and a Treq-managed merge queue. Those cloud features are listed as coming soon.
+
+| Comparison | Best when you care about |
+| --- | --- |
+| [Treq vs Superset](./treq-vs-superset) | Broad agent control, team packaging, and review-focused workflows |
+| [Treq vs Conductor](./treq-vs-conductor) | Mac-native agent workspaces versus stacked review and rebase |
+| [Treq vs Emdash](./treq-vs-emdash) | Cross-platform open-source breadth versus review and stack depth |
+| [Treq vs Claude Squad](./treq-vs-claude-squad) | Terminal tools versus a review-first desktop workspace |
+| [Treq vs Graphite for AI teams](./treq-vs-graphite-for-ai-teams) | Stacked PR tooling when agents write most of the code |
+| [Treq vs Orca](./treq-vs-orca) | Full IDE-like surface versus branch hygiene and review quality |
+
+New to the category? Start with [agent orchestration](/learn/concepts/ai-engineering/agent-orchestration), [git worktrees](/learn/concepts/git/git-worktrees), and [stacked PRs](/learn/concepts/git/stacked-prs).

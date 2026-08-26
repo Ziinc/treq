@@ -25,6 +25,16 @@ const config: Config = {
         editUrl: 'https://github.com/Ziinc/treq/tree/main/web/',
       },
     ],
+    [
+      '@docusaurus/plugin-content-docs',
+      {
+        id: 'compare',
+        path: 'compare',
+        routeBasePath: 'compare',
+        sidebarPath: './sidebarsCompare.ts',
+        editUrl: 'https://github.com/Ziinc/treq/tree/main/web/',
+      },
+    ],
     function chunkSplittingPlugin() {
       return {
         name: 'chunk-splitting-plugin',
@@ -215,6 +225,12 @@ const config: Config = {
               to: '/changelog',
               label: 'Changelog',
             },
+            {
+              type: 'docSidebar',
+              sidebarId: 'compareSidebar',
+              docsPluginId: 'compare',
+              label: 'Compare',
+            },
           ],
         },
         {
@@ -286,6 +302,10 @@ const config: Config = {
             {
               label: 'Skills',
               to: '/skills',
+            },
+            {
+              label: 'Compare',
+              to: '/compare',
             },
           ],
         },
