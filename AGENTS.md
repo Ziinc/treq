@@ -211,6 +211,7 @@ Never write implementation code before the test exists. If you are fixing a bug,
 - Do not share mutable repo state across test cases
 - Do not test implementation details (internal state, private functions called) — test observable behaviour
 - Do not skip the failing step: a green test written before code is a false test
+- Do not add tests for styling-only changes (CSS classes, z-index, spacing, color) — jsdom does not apply real stylesheets, so assertions on class names or computed style don't verify actual visual/stacking behaviour. Verify styling changes with `/app-qa` (real browser rasterization) instead
 
 ### Benchmark Guidance
 

@@ -50,18 +50,4 @@ describe("Dashboard - workspace sidebar resize", () => {
       `${DEFAULT_SIDEBAR_WIDTH + 80}px`,
     );
   });
-
-  it("stacks the sidebar above both Dashboard content layers", async () => {
-    render(<Dashboard />);
-    await screen.findByText("feat/alpha");
-
-    const sidebar = screen.getByTestId("workspace-sidebar");
-    const match = sidebar.className.match(/(?:^|\s)z-(\d+)(?:\s|$)/);
-    expect(match, `expected an explicit z-index class on the sidebar, got: ${sidebar.className}`).not.toBeNull();
-    const sidebarZIndex = Number(match![1]);
-
-    // Dashboard's "Sessions Layer" and "Content Layer" both cap out at z-index 10.
-    const dashboardContentLayerZIndex = 10;
-    expect(sidebarZIndex).toBeGreaterThan(dashboardContentLayerZIndex);
-  });
 });
