@@ -1,0 +1,49 @@
+name: pgTAP
+
+on:
+  pull_request:
+    paths:
+      - "supabase/migrations/**"
+      - "supabase/tests/**"
+      - "supabase/config.toml"
+      - ".github/workflows/pgtap.yml"
+  push:
+    branches: [main]
+    paths:
+      - "supabase/migrations/**"
+      - "supabase/tests/**"
+      - "supabase/config.toml"
+      - ".github/workflows/pgtap.yml"
+  workflow_dispatch:
+
+jobs:
+  test-db:
+    name: supabase test db
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start local database (skip API/edge/studio -- pgTAP only needs postgres)
+        run: |
+          supabase start \
+            --exclude gotrue,realtime,storage-api,imgproxy,kong,mailpit,postgrest,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+
+      - name: Apply migrations and seed
+        run: supabase db reset --local
+
+      - name: Run pgTAP tests
+        run: supabase test db --local
+
+      - name: Dump database logs on failure
+        if: failure()
+        run: docker logs supabase_db_treq --tail=200
+
+      - name: Stop stack
+        if: always()
+        run: supabase stop
