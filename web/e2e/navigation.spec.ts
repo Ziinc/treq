@@ -79,7 +79,9 @@ test.describe('Navbar navigation', () => {
   });
 
   test('installation lists each release target', async ({ page }) => {
-    await page.goto('/docs/getting-started/installation');
+    await page.goto('/');
+    await nav(page).getByRole('link', { name: 'Get Started' }).click();
+    await expect(page.getByRole('heading', { name: 'Installation and Quickstart', level: 1 })).toBeVisible();
     await expect(page.getByRole('cell', { name: 'x86_64-pc-windows-msvc' })).toBeVisible();
     await expect(page.getByRole('cell', { name: 'x86_64-unknown-linux-gnu' })).toBeVisible();
   });
