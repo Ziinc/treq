@@ -7,9 +7,9 @@ description: Compare Treq and Graphite for AI coding teams that need stacked pul
 
 _Graphite popularized stacked PRs for humans. Treq applies stacked development to agent-generated work._
 
-Graphite and Treq operate at different parts of the development workflow, but AI teams often evaluate them together. Graphite is a stacked pull request and code review platform. Treq is a local Stacking ADE that manages dependent agent workspaces before you open a pull request.
+Graphite and Treq operate at different parts of the development workflow, but AI teams often evaluate them together. Graphite is a stacked pull request and code review platform. Treq is a local Stacking ADE that manages dependent agent workspaces before you open a pull request. The landing page calls Treq an open-source Graphite alternative for that reason. The longer comparison of workflow philosophy lives in [Treq as a Graphite alternative](/learn/graphite-alternative).
 
-The comparison matters because agent throughput changes where the pain shows up. When people wrote most of the code, stack tools focused on review batching and merge order. When agents write most of the code, you also need isolation. You need comment routing back into agent sessions. You need ongoing rebase hygiene.
+The comparison matters because agent throughput changes where the pain shows up. When people wrote most of the code, stack tools focused on review batching and merge order. When agents write most of the code, you also need isolation. You need comment routing back into agent sessions. You need ongoing rebase hygiene. You need conflict work to go back to the agent.
 
 ## At a Glance
 
@@ -27,11 +27,11 @@ The comparison matters because agent throughput changes where the pain shows up.
 
 ## What Each Product Does
 
-**Treq** creates isolated workspaces for coding agents, shows diffs for review, and turns comments into the next agent prompt. Workspaces target other workspaces to form a stack before any pull request exists. When a lower layer moves, Treq rebases dependents and shows conflicts.
+**Treq** creates isolated workspaces for coding agents, shows diffs for review, and turns comments into the next agent prompt. Workspaces target other workspaces to form a stack before any pull request exists. When a lower layer moves, Treq rebases dependents and shows conflicts. That is the landing-page loop: stacked workspaces, auto-rebase, auto-resolve.
 
-**Graphite** helps teams create, review, restack, and merge stacked pull requests. It sits on top of GitHub's pull request model and optimizes the social and process layer of code review: smaller diffs, clearer dependencies, and better merge sequencing. It is not a desktop environment for launching Claude, Codex, or Cursor agents in parallel worktrees.
+**Graphite** helps teams create, review, restack, and merge stacked pull requests. It sits on top of GitHub's pull request model and optimizes the social and process layer of code review: smaller diffs, clearer dependencies, and better merge sequencing. It is not a desktop environment for launching Claude, Codex, or Cursor agents in parallel workspaces.
 
-Teams looking for a "Graphite alternative" for AI work usually want one of two things. Some want open-source stacked PR mechanics without Graphite's commercial surface. Others want stacked development that starts earlier, at the agent workspace layer, before a pull request exists. Treq is aimed at the second need, and can still participate in GitHub-centered review after you push.
+Teams looking for a Graphite alternative for AI work usually want one of two things. Some want open-source stacked PR mechanics without Graphite's commercial surface. Others want stacked development that starts earlier, at the agent workspace layer, before a pull request exists. Treq is aimed at the second need, and can still participate in GitHub-centered review after you push.
 
 ## Feature Comparison
 
@@ -42,7 +42,8 @@ Teams looking for a "Graphite alternative" for AI work usually want one of two t
 | Parallel coding agent workspaces | Yes | No |
 | Local diff review before push | Yes | Review is centered on hosted PRs |
 | Comments sent back to an agent | Yes | Comments stay in the PR review system unless you bridge them yourself |
-| GitHub PR collaboration | After push, through normal Git tooling | Native product focus |
+| GitHub PR collaboration | After push, through normal Git tooling. App integration is [coming soon](/roadmap) | Native product focus |
+| Merge queue | Treq-managed queue planned, not GitHub Enterprise Cloud | Graphite merge workflows on GitHub |
 | Local-only privacy for review drafts | Yes | Cloud collaboration model |
 | Open source | Apache 2.0 | No |
 
@@ -54,11 +55,13 @@ Treq assumes the unit of work often starts as an agent workspace. The first revi
 
 This is why Treq calls itself an open-source Graphite alternative without claiming feature parity with Graphite's hosted review platform. Both products use stacked development. Treq applies the stack to local agent workspaces, while Graphite applies it to hosted pull requests.
 
-If your team already has a strong Graphite workflow, Treq can still help on the generation side. Agents work in isolated stacks locally, you review there, then you push into whatever PR process you already trust. If your team has no agent orchestration layer yet, starting with Graphite alone leaves the parallel generation problem unsolved.
+Treq's [roadmap](/roadmap) adds GitHub pull request status and a Treq-managed merge queue so a local stack can land on `main` without GitHub Enterprise Cloud. That is still planned work. Graphite already owns the hosted PR and merge process. Until those Treq features ship, Graphite remains the stronger GitHub collaboration product.
+
+If your team already has a strong Graphite workflow, Treq can still help on the generation side. Agents work in isolated stacks locally, you review there, then you push into whatever PR process you already trust. If your team has no agent orchestration layer yet, starting with Graphite alone leaves the parallel generation problem unsolved. Agents still collide in one checkout. See [parallel coding agents](/learn/parallel-coding-agents).
 
 ## Pricing and Licensing
 
-Treq is free and open source under Apache 2.0. There is no public paid plan today.
+Treq's desktop app is free and open source under Apache 2.0. [Pricing](/pricing) lists Free and Pro at $15 per user per month. Pro is for GitHub on private repos and merge queue. Those features are marked coming soon. Local review stays on your machine either way.
 
 Graphite is a commercial product with its own packaging and pricing. Evaluate current Graphite plans on Graphite's site when cost is part of the decision.
 
@@ -70,13 +73,13 @@ Choose **Treq** if you:
 
 - Run coding agents in parallel and need local isolation before a PR exists.
 - Want stacked workspaces with automatic rebasing while agents keep working.
-- Need review comments to go back into the agent loop.
+- Need review comments and conflict instructions to go back into the agent loop.
 - Want an open-source, local-first workflow for AI-generated changes.
 
 Choose **Graphite** if you:
 
 - Already standardize on stacked GitHub pull requests for human teams.
-- Need hosted collaboration features around PR review and merge queues.
+- Need hosted collaboration features around PR review and merge queues today.
 - Are solving review process on GitHub more than local agent orchestration.
 - Do not need a desktop environment for launching and supervising coding agents.
 
@@ -84,8 +87,8 @@ Many AI-native teams will eventually want both layers. Use local agent orchestra
 
 ## Next Steps
 
+- [Treq as a Graphite alternative](/learn/graphite-alternative): workflow philosophy, not a feature checklist.
 - [Stacked PRs](/learn/concepts/git/stacked-prs): the dependency model behind stacked development.
 - [Stacked PR workflow](/learn/workflows/git/stacked-pr): how to split and restack dependent changes.
 - [Treq vs Superset](./treq-vs-superset): compare Treq with a direct agent orchestrator.
-- [Workspaces](/docs/concepts/workspaces): how Treq models stacks and rebases.
 - [Installation](/docs/getting-started/installation): install Treq and open a repository.

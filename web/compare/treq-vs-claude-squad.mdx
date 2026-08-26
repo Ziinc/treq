@@ -7,9 +7,9 @@ description: Compare Treq and Claude Squad for multi-agent isolation, from termi
 
 _Same isolation idea, different control surfaces: desktop review versus terminal multiplexing._
 
-Treq and Claude Squad both start from git worktree isolation and parallel agent sessions. They serve different preferences for how much UI you want between you and the agents.
+Treq and Claude Squad both start from working-copy isolation and parallel agent sessions. They serve different preferences for how much UI you want between you and the agents.
 
-Treq is a desktop Stacking ADE with PR-style review and automatic rebasing across dependent workspaces. Claude Squad is a terminal-native manager that uses tmux sessions and git worktrees for people who want minimal abstraction.
+Treq is a desktop Stacking ADE with PR-style review, automatic rebasing, and agent-driven conflict resolution. Claude Squad is a terminal-native manager that uses tmux sessions and git worktrees for people who want minimal abstraction.
 
 ## At a Glance
 
@@ -21,18 +21,18 @@ Treq is a desktop Stacking ADE with PR-style review and automatic rebasing acros
 | Review surface | PR-style diffs and line comments | Basic or TUI-oriented review before push |
 | Stacked changes | Core workflow | Not emphasized publicly |
 | Auto-rebase | Core workflow | No public auto-rebase story |
-| Remote or cloud workspaces | Not public on the site today | No |
+| Remote or cloud workspaces | Not shipped | No |
 | License | Apache 2.0 | AGPL-3.0 |
-| Pricing | Free and open source | Free and open source |
+| Pricing | Free desktop, [Pro](/pricing) coming for GitHub and merge queue | Free and open source |
 | Distribution | GitHub releases and docs | Homebrew and GitHub |
 
 ## What Each Product Does
 
-**Treq** gives each agent workspace its own working copy, terminal, and review surface. A target relationship connects dependent workspaces into a stack. You inspect each layer, send comments back to the agent, and let Treq rebase higher layers when their base changes.
+**Treq** gives each agent workspace its own working copy, terminal, and review surface. A target relationship connects dependent workspaces into a stack. You inspect each layer, send comments back to the agent, and let Treq rebase higher layers when their base changes. Conflicts stay in the review. You can send resolution instructions to the agent instead of editing markers by hand.
 
 **Claude Squad** keeps you in the terminal. It manages multiple AI agent sessions through tmux, isolates work with git worktrees, supports background work, and expects review before push. The appeal is low abstraction and fast install for power users who already live in shell workflows.
 
-Both tools reject the idea that several agents should share one dirty working tree. Both keep the human responsible for what gets pushed.
+Both tools reject the idea that several agents should share one dirty working tree. Both keep the human responsible for what gets pushed. See [parallel development](/learn/workflows/git/parallel-development) for the isolation pattern they share.
 
 ## Feature Comparison
 
@@ -46,22 +46,26 @@ Both tools reject the idea that several agents should share one dirty working tr
 | Stacked PR or stacked workspace support | Yes | Not emphasized publicly |
 | Auto-rebase and conflict handling | Yes | No |
 | Background agent work | Yes, per-workspace terminals | Yes |
-| Enterprise or remote packaging | Not public on the site today | No |
+| Enterprise or remote packaging | GitHub and merge queue listed as coming soon | No |
 | License | Apache 2.0 | AGPL-3.0 |
 
 ## Where They Differ
 
-The main difference is the control surface. Claude Squad assumes you want tmux, a terminal UI, and as little desktop chrome as possible. Treq assumes review quality and stack maintenance deserve a dedicated interface.
+The main difference is the control surface. Claude Squad assumes you want tmux, a terminal UI, and as little desktop chrome as possible. Treq assumes review quality and stack maintenance deserve a dedicated interface. That matches the landing-page review feature: inspect diffs like a GitHub PR, annotate lines, and send comments back to Claude.
 
-That leads to different failure modes. With Claude Squad, the cost shows up when review, comment routing, and stack rebases remain manual. With Treq, the cost shows up when you wanted a thinner tool and the desktop environment is more than you need.
+That leads to different failure modes. With Claude Squad, the cost shows up when review, comment routing, and stack rebases remain manual. Git worktrees isolate sessions. They do not rebase a dependent stack when a lower branch moves. With Treq, the cost shows up when you wanted a thinner tool and the desktop environment is more than you need.
+
+Treq persists [terminal sessions](/docs/concepts/terminal-sessions) per workspace so agents keep running while you review another layer. Claude Squad uses tmux for the same idea with less product around it.
 
 Licensing also differs. Apache 2.0 and `AGPL-3.0` create different obligations if you embed or redistribute the tool inside a larger system. For many individual developers that distinction never appears. For companies packaging internal platforms, it can.
 
 ## Pricing and Licensing
 
-Both are free and open source.
+Both are free and open source at the desktop layer.
 
-Treq uses Apache 2.0. Claude Squad uses `AGPL-3.0`. Install paths differ too. Treq ships through GitHub releases and product docs. Claude Squad ships through Homebrew and the project repository.
+Treq uses Apache 2.0. [Pricing](/pricing) adds a Pro plan at $15 per user per month for GitHub on private repos and merge queue. Those features are marked coming soon. Claude Squad uses `AGPL-3.0` and has no hosted plan in public materials.
+
+Install paths differ too. Treq ships through GitHub releases and product docs. Claude Squad ships through Homebrew and the project repository.
 
 Model provider costs are separate for both.
 
@@ -70,7 +74,7 @@ Model provider costs are separate for both.
 Choose **Treq** if you:
 
 - Want a desktop diff and comment workflow that feeds the next agent turn.
-- Need stacked workspaces and automatic rebasing.
+- Need stacked workspaces, automatic rebasing, and agent-driven conflict resolution.
 - Prefer Apache 2.0 for company or platform use.
 - Are building a review-heavy process around AI-generated pull requests.
 
@@ -86,5 +90,5 @@ Choose **Claude Squad** if you:
 - [Treq vs Emdash](./treq-vs-emdash): open-source ADE breadth versus review depth.
 - [Treq vs Conductor](./treq-vs-conductor): another desktop orchestrator with a different product bet.
 - [Parallel development workflow](/learn/workflows/git/parallel-development): how isolated directories support concurrent work.
-- [Creating terminal sessions](/docs/tutorials/creating-terminal-sessions): terminals inside Treq workspaces.
+- [Terminal sessions](/docs/concepts/terminal-sessions): terminals inside Treq workspaces.
 - [Installation](/docs/getting-started/installation): install Treq and open a repository.
