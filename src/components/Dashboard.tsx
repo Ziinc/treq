@@ -565,6 +565,22 @@ export const Dashboard: React.FC<DashboardProps> = ({
     await openRepositoryAtPath(selected);
   };
 
+  const handleOpenRepositoryInNewWindow = async () => {
+    const selected = await selectFolder();
+    if (!selected) return;
+    const windowLabel = `treq-repo-${Date.now()}-${Math.floor(
+      Math.random() * 1000,
+    )}`;
+    const repoName =
+      selected.split("/").pop() || selected.split("\\").pop() || selected;
+    new WebviewWindow(windowLabel, {
+      url: `index.html?repo=${encodeURIComponent(selected)}`,
+      title: `Treq - ${repoName}`,
+      width: 1400,
+      height: 900,
+    });
+  };
+
   // Consolidate all Tauri event listeners
   useEffect(() => {
     const listeners = [
@@ -1681,6 +1697,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
         workspaces={workspaces}
         onNavigateToDashboard={handleReturnToDashboard}
         onNavigateToSettings={openSettings}
+        onOpenRepository={() => void handleOpenRepository()}
+        onOpenRepositoryInNewWindow={() =>
+          void handleOpenRepositoryInNewWindow()
+        }
         onOpenBranchSwitcher={() => setShowBranchSwitcher(true)}
         onOpenFilePicker={() => setShowFilePicker(true)}
         onOpenWorkspacePicker={() => setShowWorkspacePicker(true)}
