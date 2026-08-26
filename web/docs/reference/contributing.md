@@ -81,7 +81,7 @@ Do not fold unrelated tidying into feature work. Treq has several layers with di
 
 Docs follow the style guide in `web/STYLE_GUIDE.md`. Write plain technical prose, skip the marketing language, and use tables for dense reference data.
 
-Public docs describe macOS behavior unless another platform is spelled out. Leave out implementation details a reader cannot act on.
+Public docs describe macOS, Windows, and Linux behavior. Call out platform-specific behavior when it differs. Leave out implementation details a reader cannot act on.
 
 ## Learn More
 
