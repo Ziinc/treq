@@ -207,6 +207,54 @@ describe("workspace tree sibling recency sort", () => {
   });
 });
 
+describe("workspace tree merged sort", () => {
+  it("sorts merged root workspaces after unmerged ones, ignoring recency", () => {
+    const statuses = [
+      makeStatus(1, "old-merged", {
+        targetBranch: "main",
+        lastActivityAt: "2026-05-01T00:00:00.000Z",
+      }),
+      makeStatus(2, "new-unmerged", {
+        targetBranch: "main",
+        lastActivityAt: "2026-01-01T00:00:00.000Z",
+      }),
+      makeStatus(3, "newest-merged", {
+        targetBranch: "main",
+        lastActivityAt: "2026-06-01T00:00:00.000Z",
+      }),
+    ];
+    const roots = buildWorkspaceTree(
+      statuses,
+      (branchName) =>
+        branchName === "old-merged" || branchName === "newest-merged",
+    );
+    const flattened = flattenWorkspaceTree(roots);
+    expect(flattened.map((node) => node.branchName)).toEqual([
+      "new-unmerged",
+      "newest-merged",
+      "old-merged",
+    ]);
+  });
+
+  it("sorts merged children after unmerged siblings within a stack", () => {
+    const statuses = [
+      makeStatus(1, "root", { targetBranch: "main" }),
+      makeStatus(2, "merged-child", { targetBranch: "root" }),
+      makeStatus(3, "unmerged-child", { targetBranch: "root" }),
+    ];
+    const roots = buildWorkspaceTree(
+      statuses,
+      (branchName) => branchName === "merged-child",
+    );
+    const flattened = flattenWorkspaceTree(roots);
+    expect(flattened.map((node) => node.branchName)).toEqual([
+      "root",
+      "unmerged-child",
+      "merged-child",
+    ]);
+  });
+});
+
 describe("getWorkspaceStack", () => {
   it("returns null when a lone workspace targets an external branch", () => {
     const workspaces = [

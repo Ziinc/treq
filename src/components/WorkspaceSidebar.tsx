@@ -206,7 +206,10 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
   ).length;
 
   const flattenedNodes = (() => {
-    const tree = buildWorkspaceTree(visibleStatuses);
+    const isMergedBranch = (branchName: string) =>
+      (prStatusesByBranch as Record<string, PrInfo | null>)[branchName]
+        ?.state === "MERGED";
+    const tree = buildWorkspaceTree(visibleStatuses, isMergedBranch);
     return flattenWorkspaceTree(tree);
   })();
 
