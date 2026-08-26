@@ -54,7 +54,7 @@ Both products solve the same first problem. Several agents should not share one 
 
 Both products run parallel agents in isolated workspaces. Git worktrees give Superset isolation. They do not give it Treq's automatic rebase of a dependent stack. Treq uses colocated [Jujutsu workspaces](/docs/concepts/workspaces) so a target move can rebase every layer above it in the background.
 
-Treq organizes agent work as linked, reviewable layers. That matches the landing-page claim that a large feature should ship as smaller PRs that stay in sync. Diff comments return to the agent. Auto-rebase keeps the stack current. Conflicts stay in the review loop instead of becoming a separate merge chore.
+Treq organizes agent work as linked, reviewable layers. A large feature should ship as smaller PRs that stay in sync. Diff comments return to the agent. Auto-rebase keeps the stack current. Conflicts stay in the review loop instead of becoming a separate merge chore.
 
 Superset focuses on breadth. Its public materials feature provider coverage, automations, remote workspaces, and team plans. This model fits teams that want one control plane for many agents, including agents Treq does not list today.
 

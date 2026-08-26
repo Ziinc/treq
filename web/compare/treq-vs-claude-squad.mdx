@@ -51,7 +51,7 @@ Both tools reject the idea that several agents should share one dirty working tr
 
 ## Where They Differ
 
-The main difference is the control surface. Claude Squad assumes you want tmux, a terminal UI, and as little desktop chrome as possible. Treq assumes review quality and stack maintenance deserve a dedicated interface. That matches the landing-page review feature: inspect diffs like a GitHub PR, annotate lines, and send comments back to Claude.
+The main difference is the control surface. Claude Squad assumes you want tmux, a terminal UI, and as little desktop chrome as possible. Treq assumes review quality and stack maintenance deserve a dedicated interface. You inspect diffs like a GitHub PR, annotate lines, and send comments back to Claude.
 
 That leads to different failure modes. With Claude Squad, the cost shows up when review, comment routing, and stack rebases remain manual. Git worktrees isolate sessions. They do not rebase a dependent stack when a lower branch moves. With Treq, the cost shows up when you wanted a thinner tool and the desktop environment is more than you need.
 

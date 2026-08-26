@@ -28,7 +28,7 @@ Orca presents a broad environment with support for any CLI agent, built-in editi
 
 ## What Each Product Does
 
-**Treq** manages parallel agent workspaces and keeps merge quality under human control. You review changes, leave comments, and send that feedback back to the agent. Dependent workspaces form stacks. When lower layers move, Treq rebases dependents and shows conflicts. The landing page treats conflict resolution as work the agent should do. You write instructions and include them in the review prompt.
+**Treq** manages parallel agent workspaces and keeps merge quality under human control. You review changes, leave comments, and send that feedback back to the agent. Dependent workspaces form stacks. When lower layers move, Treq rebases dependents and shows conflicts. Conflict resolution is work the agent should do. You write instructions and include them in the review prompt.
 
 **Orca** aims to be the place where agent work happens. Public materials stress per-task worktrees, terminals, browser tabs, a built-in file editor, and Git tracking. They also cover mobile support, automation copy, and paid team plans. The product story is a full environment for developers who already run many agents.
 
@@ -58,7 +58,7 @@ Orca's public momentum comes from breadth and speed. High GitHub traction, frequ
 
 Treq uses the stack as its primary workflow. Each workspace represents one reviewable layer and records which lower workspace it targets. Automatic rebasing keeps the dependency chain current while agents continue working. Isolation via worktrees, which Orca already has, does not rebase dependents when a base moves. Treq's [workspaces](/docs/concepts/workspaces) use colocated Jujutsu for that rebase.
 
-That creates a clear trade-off. Choose Orca when you want a full environment more than a specific merge workflow. Choose Treq when weak reviews, drifting stacks, and conflict-heavy AI branches are the costly failures. Those are the four problems on the Treq landing page.
+That creates a clear trade-off. Choose Orca when you want a full environment more than a specific merge workflow. Choose Treq when weak reviews, drifting stacks, and conflict-heavy AI branches are the costly failures.
 
 Orca ships SSH worktrees now. Treq lists SSH remote development for later in 2026. Do not treat remote work as a current Treq capability.
 

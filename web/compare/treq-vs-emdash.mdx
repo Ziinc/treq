@@ -51,9 +51,9 @@ Both use Apache 2.0, so licensing does not separate them.
 
 ## Where They Differ
 
-Emdash covers more of the environment around each agent. It supports many providers, remote execution, cloud workspaces, and team deployment. This model fits teams whose agents run across different tools and machines. Treq's landing page lists Claude, Codex, and Cursor. If you need a long tail of CLI agents today, Emdash is the broader catalog.
+Emdash covers more of the environment around each agent. It supports many providers, remote execution, cloud workspaces, and team deployment. This model fits teams whose agents run across different tools and machines. Treq lists Claude, Codex, and Cursor. If you need a long tail of CLI agents today, Emdash is the broader catalog.
 
-Treq makes the stack the main unit of work. Each workspace holds one reviewable layer and names the layer below it. Auto-rebase keeps higher workspaces current as lower workspaces change. That is the landing-page answer to stale branches while you iterate on reviews. Git worktree isolation, which most ADEs share, does not rebase a dependent chain by itself. See [git worktrees versus clones](/learn/concepts/git/git-worktrees-vs-clones) for the isolation tradeoffs, then [workspaces](/docs/concepts/workspaces) for why Treq uses Jujutsu on top of Git.
+Treq makes the stack the main unit of work. Each workspace holds one reviewable layer and names the layer below it. Auto-rebase keeps higher workspaces current as lower workspaces change. That is how Treq handles stale branches while you iterate on reviews. Git worktree isolation, which most ADEs share, does not rebase a dependent chain by itself. See [git worktrees versus clones](/learn/concepts/git/git-worktrees-vs-clones) for the isolation tradeoffs, then [workspaces](/docs/concepts/workspaces) for why Treq uses Jujutsu on top of Git.
 
 Emdash already ships SSH remote work. Treq lists SSH remote development for later in 2026 on the [roadmap](/roadmap). Do not treat that as a shipped Treq feature.
 

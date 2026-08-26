@@ -7,7 +7,7 @@ description: Compare Treq and Graphite for AI coding teams that need stacked pul
 
 _Graphite popularized stacked PRs for humans. Treq applies stacked development to agent-generated work._
 
-Graphite and Treq operate at different parts of the development workflow, but AI teams often evaluate them together. Graphite is a stacked pull request and code review platform. Treq is a local Stacking ADE that manages dependent agent workspaces before you open a pull request. The landing page calls Treq an open-source Graphite alternative for that reason. The longer comparison of workflow philosophy lives in [Treq as a Graphite alternative](/learn/graphite-alternative).
+Graphite and Treq operate at different parts of the development workflow, but AI teams often evaluate them together. Graphite is a stacked pull request and code review platform. Treq is a local Stacking ADE that manages dependent agent workspaces before you open a pull request. Treq is an open-source Graphite alternative for that reason. The longer comparison of workflow philosophy lives in [Treq as a Graphite alternative](/learn/graphite-alternative).
 
 The comparison matters because agent throughput changes where the pain shows up. When people wrote most of the code, stack tools focused on review batching and merge order. When agents write most of the code, you also need isolation. You need comment routing back into agent sessions. You need ongoing rebase hygiene. You need conflict work to go back to the agent.
 
@@ -27,7 +27,7 @@ The comparison matters because agent throughput changes where the pain shows up.
 
 ## What Each Product Does
 
-**Treq** creates isolated workspaces for coding agents, shows diffs for review, and turns comments into the next agent prompt. Workspaces target other workspaces to form a stack before any pull request exists. When a lower layer moves, Treq rebases dependents and shows conflicts. That is the landing-page loop: stacked workspaces, auto-rebase, auto-resolve.
+**Treq** creates isolated workspaces for coding agents, shows diffs for review, and turns comments into the next agent prompt. Workspaces target other workspaces to form a stack before any pull request exists. When a lower layer moves, Treq rebases dependents and shows conflicts. The loop is stacked workspaces, auto-rebase, and auto-resolve.
 
 **Graphite** helps teams create, review, restack, and merge stacked pull requests. It sits on top of GitHub's pull request model and optimizes the social and process layer of code review: smaller diffs, clearer dependencies, and better merge sequencing. It is not a desktop environment for launching Claude, Codex, or Cursor agents in parallel workspaces.
 
