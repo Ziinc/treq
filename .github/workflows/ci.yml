@@ -1,5 +1,9 @@
 name: CI
 
+defaults:
+  run:
+    shell: bash
+
 on:
   pull_request:
     paths:
@@ -47,6 +51,14 @@ jobs:
             kind: rust
             task: test
             timeout-minutes: 15
+          - platform: windows-latest
+            kind: js
+            task: test:unit
+            timeout-minutes: 15
+          - platform: windows-latest
+            kind: rust
+            task: test
+            timeout-minutes: 30
 
     name: ${{ matrix.kind }} / ${{ matrix.task }} / ${{ matrix.platform }}
     runs-on: ${{ matrix.platform }}
@@ -125,7 +137,7 @@ jobs:
         if: matrix.task == 'test:integration' || matrix.kind == 'rust'
         uses: actions/cache/restore@v4
         with:
-          path: .ci-bin/jj
+          path: .ci-bin
           key: jj-${{ runner.os }}-${{ runner.arch }}-${{ steps.jj.outputs.tag }}
 
       - name: Install jj CLI
@@ -142,21 +154,35 @@ jobs:
             Linux-X64)   target=x86_64-unknown-linux-musl ;;
             macOS-ARM64) target=aarch64-apple-darwin ;;
             macOS-X64)   target=x86_64-apple-darwin ;;
+            Windows-X64) target=x86_64-pc-windows-msvc ;;
             *)
               echo "unsupported runner: ${{ runner.os }}-${{ runner.arch }}"
               exit 1
               ;;
           esac
-          asset="jj-${JJ_TAG}-${target}.tar.gz"
-          tmp=$(mktemp -d)
-          curl -fsSL \
-            -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-            -L "https://github.com/jj-vcs/jj/releases/download/${JJ_TAG}/${asset}" \
-            | tar -xz -C "$tmp"
-          # tarball may nest the binary; find it
-          jj_bin=$(find "$tmp" -type f -name jj | head -n 1)
-          test -n "$jj_bin"
-          install -m 755 "$jj_bin" .ci-bin/jj
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            asset="jj-${JJ_TAG}-${target}.zip"
+            tmp=$(mktemp -d)
+            curl -fsSL \
+              -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+              -L "https://github.com/jj-vcs/jj/releases/download/${JJ_TAG}/${asset}" \
+              -o "$tmp/jj.zip"
+            unzip -q "$tmp/jj.zip" -d "$tmp"
+            jj_bin=$(find "$tmp" -type f -name jj.exe | head -n 1)
+            test -n "$jj_bin"
+            install -m 755 "$jj_bin" .ci-bin/jj.exe
+          else
+            asset="jj-${JJ_TAG}-${target}.tar.gz"
+            tmp=$(mktemp -d)
+            curl -fsSL \
+              -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+              -L "https://github.com/jj-vcs/jj/releases/download/${JJ_TAG}/${asset}" \
+              | tar -xz -C "$tmp"
+            # tarball may nest the binary; find it
+            jj_bin=$(find "$tmp" -type f -name jj | head -n 1)
+            test -n "$jj_bin"
+            install -m 755 "$jj_bin" .ci-bin/jj
+          fi
 
       - name: Save jj CLI cache
         if: >
@@ -165,7 +191,7 @@ jobs:
         continue-on-error: true
         uses: actions/cache/save@v4
         with:
-          path: .ci-bin/jj
+          path: .ci-bin
           key: ${{ steps.jj-cache.outputs.cache-primary-key }}
 
       - name: Add jj to PATH

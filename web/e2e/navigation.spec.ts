@@ -53,6 +53,13 @@ test.describe('Homepage Features layout', () => {
 });
 
 test.describe('Navbar navigation', () => {
+  test('shows desktop platform availability', async ({ page }) => {
+    await page.goto('/');
+    await expect(page.getByLabel('macOS')).toBeVisible();
+    await expect(page.getByLabel('Windows')).toBeVisible();
+    await expect(page.getByLabel('Linux')).toBeVisible();
+  });
+
   test('Learn link navigates to learn section', async ({ page }) => {
     await page.goto('/');
     await clickNavDropdownItem(page, 'Discover', 'Learn');
@@ -69,6 +76,14 @@ test.describe('Navbar navigation', () => {
     await page.goto('/');
     await nav(page).getByRole('link', { name: 'Get Started' }).click();
     await expect(page.getByRole('heading', { name: 'Installation and Quickstart', level: 1 })).toBeVisible();
+  });
+
+  test('installation lists each release target', async ({ page }) => {
+    await page.goto('/');
+    await nav(page).getByRole('link', { name: 'Get Started' }).click();
+    await expect(page.getByRole('heading', { name: 'Installation and Quickstart', level: 1 })).toBeVisible();
+    await expect(page.getByRole('cell', { name: 'x86_64-pc-windows-msvc' })).toBeVisible();
+    await expect(page.getByRole('cell', { name: 'x86_64-unknown-linux-gnu' })).toBeVisible();
   });
 
   test('logo navigates home from a docs page', async ({ page }) => {
