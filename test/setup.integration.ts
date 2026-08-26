@@ -44,9 +44,41 @@ const tauriTest = require("../src-tauri/target") as {
   invoke: (cmd: string, args?: Record<string, unknown>) => Promise<unknown>;
 };
 
+// Tracks NAPI invoke() calls still in flight. Some UI polling (e.g. the
+// sidebar's workspace-status fetch) isn't cancelled on unmount, so a call
+// can still be running against a repo's local.db after its test finishes.
+// Deleting the fixture-copy directory (test/utils.tsx) while that call is
+// still in flight makes it reject with an "unable to open database file"
+// error nothing awaits anymore -- an unhandled rejection. Exposing the
+// pending count lets cleanup wait for it to reach zero first.
+let pendingInvokes = 0;
+let onAllSettled: (() => void) | null = null;
+
+export function waitForPendingInvokes(timeoutMs = 5_000): Promise<void> {
+  if (pendingInvokes === 0) return Promise.resolve();
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      onAllSettled = null;
+      resolve();
+    }, timeoutMs);
+    onAllSettled = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+  });
+}
+
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn((cmd: string, args?: Record<string, unknown>) => {
-    return tauriTest.invoke(cmd, args ?? {});
+    pendingInvokes++;
+    return tauriTest.invoke(cmd, args ?? {}).finally(() => {
+      pendingInvokes--;
+      if (pendingInvokes === 0 && onAllSettled) {
+        const settled = onAllSettled;
+        onAllSettled = null;
+        settled();
+      }
+    });
   }),
   // The real Rust dispatch behind this harness represents the shipped app's
   // production code path (unlike the screenshot harness, which flips this to
