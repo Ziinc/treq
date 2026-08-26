@@ -159,6 +159,7 @@ export default defineConfig([
     files: [
       "src/lib/api.ts",
       "src/lib/api-browser.ts",
+      "src/lib/api-checks-logs.ts",
       "src/lib/api-extra.ts",
       "src/lib/api-github.ts",
       "src/lib/api-pr-status.ts",

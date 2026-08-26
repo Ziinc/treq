@@ -579,3 +579,5 @@ export interface ConflictRegion {
   line_map: number[];
   comparison: ConflictComparisonView;
 }
+
+export * from "./api-types-checks";

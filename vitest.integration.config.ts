@@ -1,5 +1,13 @@
+import { fileURLToPath } from "node:url";
+import path from "node:path";
 import { defineConfig } from "vitest/config";
 import react from "@vitejs/plugin-react";
+
+const dirname = path.dirname(fileURLToPath(import.meta.url));
+// DUCKDB_DOWNLOAD_LIB copies the prebuilt libduckdb.so here (see
+// libduckdb-sys's build.rs); the dynamic loader needs it on the search path
+// to resolve the treq_lib addon's dependency at require() time.
+const duckdbLibDir = path.join(dirname, "target", "debug", "deps");
 
 /**
  * NAPI-backed integration tests: real Rust dispatch, real jj repos.
@@ -32,5 +40,10 @@ export default defineConfig({
     maxWorkers: 1,
     testTimeout: 15_000,
     hookTimeout: 15_000,
+    env: {
+      LD_LIBRARY_PATH: process.env.LD_LIBRARY_PATH
+        ? `${duckdbLibDir}:${process.env.LD_LIBRARY_PATH}`
+        : duckdbLibDir,
+    },
   },
 });
