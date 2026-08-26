@@ -1,8 +1,16 @@
 /**
- * Verifies the Virtuoso-based diff viewer (DiffVirtuoso.tsx) correctly
- * renders and virtualizes a file with many changed lines: expanding a
- * "large diff" placeholder should reveal all lines, and scrolling deep into
- * the list must keep rendering line content instead of showing blank rows.
+ * Verifies the Virtuoso-based diff viewer (DiffVirtuoso.tsx) for a file with
+ * many changed lines: expanding a "large diff" placeholder reveals its
+ * lines, and scrolling the diff viewer down to the file's last line keeps
+ * that line's content rendered rather than showing a blank row.
+ *
+ * Note: react-virtuoso itself is mocked in test/setup.common.ts to render
+ * every item unconditionally (real windowed virtualization needs layout
+ * measurements jsdom can't provide). So this spec drives a real scroll
+ * gesture on the diff viewer's actual scroll container and proves line
+ * content survives it, but it cannot catch a real windowing/virtualization
+ * regression that only shows up against react-virtuoso's real scroll-range
+ * calculation in a live browser.
  */
 
 import * as React from "react";
@@ -77,14 +85,17 @@ it("captures a large diff rendering fully once expanded and while scrolled", asy
     ],
   });
 
-  const scroller = document.querySelector(
-    '[data-testid="diff-scroll-container"], .h-full.px-4',
-  ) as HTMLElement | null;
-  const target = scroller ?? document.body;
-  target.scrollTop = target.scrollHeight;
-  target.dispatchEvent(new Event("scroll", { bubbles: true }));
-
+  // The diff viewer's actual scroll container is the div rendered by
+  // <Virtuoso> itself, tagged "diff-virtuoso" -- the element a real user's
+  // mouse wheel/scrollbar drag would scroll -- not the "h-full px-4"
+  // wrapper DiffContentArea renders around it.
+  const scroller = await screen.findByTestId("diff-virtuoso");
   const lastLineIndex = LINE_COUNT - 1;
+
+  scroller.scrollTop = 1_000_000;
+  scroller.dispatchEvent(new Event("scroll", { bubbles: true }));
+  expect(scroller.scrollTop).toBeGreaterThan(0);
+
   await waitFor(() => {
     expect(findDiffLine("big-file.ts", lastLineIndex)).toBeInTheDocument();
   });
@@ -92,7 +103,7 @@ it("captures a large diff rendering fully once expanded and while scrolled", asy
   await captureDocument(document, {
     name: "review-large-diff-virtualization-03-scrolled-to-bottom",
     expectations: [
-      `After scrolling to the bottom of the list, real line content (including line ${lastLineIndex}) is visible -- not blank/empty rows.`,
+      `After scrolling the diff viewer down to the bottom, real line content (including line ${lastLineIndex}) is visible -- not a blank/empty row.`,
     ],
   });
 
