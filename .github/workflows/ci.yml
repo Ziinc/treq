@@ -58,7 +58,7 @@ jobs:
           - platform: windows-latest
             kind: rust
             task: test
-            timeout-minutes: 15
+            timeout-minutes: 30
 
     name: ${{ matrix.kind }} / ${{ matrix.task }} / ${{ matrix.platform }}
     runs-on: ${{ matrix.platform }}
