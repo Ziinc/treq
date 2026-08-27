@@ -293,9 +293,27 @@ impl PtyManager {
             break;
           }
           Ok(n) => {
-            let data = process_utf8_chunk(&mut pending_bytes, &buffer[..n]);
+            let mut data = process_utf8_chunk(&mut pending_bytes, &buffer[..n]);
             if data.is_empty() {
               continue;
+            }
+
+            // Windows console apps running under ConPTY (e.g. PowerShell/PSReadLine
+            // at startup) query the cursor position via a VT100 Device Status Report
+            // and block on the pty until something answers. The app's real terminal
+            // (xterm.js) answers this itself; this raw reader has no such emulator
+            // attached, so answer it here with a fixed position to unblock the child.
+            const CURSOR_POS_QUERY: &str = "\x1b[6n";
+            if cfg!(windows) && data.contains(CURSOR_POS_QUERY) {
+              let mut sessions = reader_sessions.lock().unwrap();
+              if let Some(session) = sessions.get_mut(&reader_session_id) {
+                let _ = session.write(b"\x1b[1;1R");
+              }
+              drop(sessions);
+              data = data.replace(CURSOR_POS_QUERY, "");
+              if data.is_empty() {
+                continue;
+              }
             }
 
             // Check if filtering is active
