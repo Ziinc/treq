@@ -100,9 +100,11 @@ security set-key-partition-list -S apple-tool:,apple:,codesign: \
 case "$TARGET_ARCH" in
   arm64|aarch64)
     TAURI_TARGET="aarch64-apple-darwin"
+    TAURI_CONFIG="src-tauri/tauri.macos-aarch64.conf.json"
     ;;
   x64|x86_64)
     TAURI_TARGET="x86_64-apple-darwin"
+    TAURI_CONFIG="src-tauri/tauri.macos-x86_64.conf.json"
     ;;
   *)
     echo "Error: Unknown architecture $TARGET_ARCH"
@@ -116,8 +118,11 @@ cd "$PROJECT_ROOT"
 npm run build
 
 echo "Building and signing Tauri app for $TAURI_TARGET..."
-npm run tauri build -- --target "$TAURI_TARGET"
+npm run tauri build -- --target "$TAURI_TARGET" --config "$TAURI_CONFIG"
+
+APP_BUNDLE="target/$TAURI_TARGET/release/bundle/macos/Treq.app"
+bash scripts/verify-macos-bundle.sh "$APP_BUNDLE"
 
 echo ""
 echo "Build complete!"
-echo "Output: src-tauri/target/release/bundle/macos/"
+echo "Output: $APP_BUNDLE"
