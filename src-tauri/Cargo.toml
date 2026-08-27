@@ -119,7 +119,7 @@ debug = false           # Strip debug info from dependencies
 # Release profile - optimized for size and performance
 [profile.release]
 opt-level = "z"         # Optimize for size (alternative: "s" for slightly faster code)
-lto = "thin"            # Thin Link Time Optimization (good balance of speed vs build time)
+lto = true              # Full Link Time Optimization across module boundaries
 codegen-units = 1       # Single codegen unit for better optimization (slower build, smaller binary)
 strip = true            # Strip symbols from binary (reduces size significantly)
 panic = "abort"         # Abort on panic instead of unwinding (smaller binary)
