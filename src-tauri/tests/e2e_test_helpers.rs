@@ -209,11 +209,13 @@ impl TestRepo {
     gix::init_bare(&remote_dir).map_err(|e| format!("Failed to init bare remote: {}", e))?;
 
     // Add remote to main repo (a plain config write; gix has no high-level "remote add").
+    // Git config values treat `\` as an escape character, so on Windows a raw path
+    // (`C:\Users\...`) corrupts the file; forward slashes parse fine everywhere.
     Self::append_git_config(
       &repo.repo_path,
       &format!(
         "[remote \"origin\"]\n\turl = {}\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n",
-        remote_path
+        remote_path.replace('\\', "/")
       ),
     )?;
 
