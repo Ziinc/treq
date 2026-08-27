@@ -77,6 +77,10 @@ impl TestRepo {
     Self::run_git(&repo_path, &["config", "user.email", "test@example.com"])?;
     Self::run_git(&repo_path, &["config", "user.name", "Test User"])?;
 
+    // Tests assert on exact file bytes; without this, Windows git installs
+    // that default to core.autocrlf=true rewrite LF to CRLF on checkout.
+    Self::run_git(&repo_path, &["config", "core.autocrlf", "false"])?;
+
     let default_branch = random_default_branch_name();
     Self::run_git(&repo_path, &["branch", "-M", &default_branch])
       .map_err(|e| format!("Failed to create default branch: {}", e))?;
