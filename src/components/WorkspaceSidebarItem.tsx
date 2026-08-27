@@ -255,7 +255,7 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                       data-sidebar-index={index}
                       style={indentStyle}
                       className={cn(
-                        "group/workspace relative flex items-center tracking-wide rounded-sm transition-colors cursor-pointer py-1 pr-2",
+                        "group/workspace relative flex h-8 items-center tracking-wide rounded-sm transition-colors cursor-pointer py-1 pr-2",
                         {
                           "bg-primary/20": isSelected,
                           "hover:bg-muted/50": !isSelected,
