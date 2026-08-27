@@ -441,7 +441,26 @@ impl TestRepo {
     let commit_id = repo
       .commit("HEAD", message, tree_id, parents)
       .map_err(|e| format!("Failed to create commit: {}", e))?;
+
+    // Writing the commit via gix bypasses the git index entirely. Without syncing it
+    // to the new tree, git sees every working-tree file as untracked and later `git
+    // checkout` calls (used elsewhere in these tests, and by jj's colocated git backend)
+    // refuse to switch branches ("would be overwritten by checkout").
+    Self::sync_index_to_tree(&repo, &tree_id)?;
+
     Ok(commit_id.detach())
+  }
+
+  /// Rewrite `.git/index` to match `tree_id`, keeping git's view of the working
+  /// directory in sync with commits made directly through gix.
+  fn sync_index_to_tree(repo: &gix::Repository, tree_id: &gix::ObjectId) -> Result<(), String> {
+    let mut index = repo
+      .index_from_tree(tree_id)
+      .map_err(|e| format!("Failed to build index from tree: {}", e))?;
+    index
+      .write(gix::index::write::Options::default())
+      .map_err(|e| format!("Failed to write git index: {}", e))?;
+    Ok(())
   }
 
   /// Create a file in the repository.
