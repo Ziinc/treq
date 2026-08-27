@@ -7,6 +7,8 @@ defaults:
 env:
   # Disable incremental compilation for faster from-scratch builds
   CARGO_INCREMENTAL: 0
+  # Skip debug info for test binaries: faster builds, smaller artifacts
+  CARGO_PROFILE_TEST_DEBUG: 0
 
 on:
   pull_request:
@@ -104,6 +106,10 @@ jobs:
         with:
           components: rustfmt
           toolchain: stable
+
+      - name: Install cargo-nextest
+        if: matrix.kind == 'rust'
+        uses: taiki-e/install-action@nextest
 
       # windows-latest runners ship LLVM (lld-link.exe) but link.exe from MSVC
       # is the default; switch to lld for a much faster linker on Windows.
@@ -282,5 +288,5 @@ jobs:
             cargo fmt --check
             cargo check
           else
-            cargo test --no-fail-fast
+            cargo nextest run --no-fail-fast
           fi
