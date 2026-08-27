@@ -17,6 +17,7 @@ import { TerminalSendPreviews } from "./TerminalSendPreviews";
 
 interface ShellTerminalPanelProps {
   terminalData: ShellTerminalData;
+  remoteHost?: string;
   collapsed: boolean;
   isActive?: boolean;
   onFocus?: () => void;
@@ -33,6 +34,7 @@ interface ShellTerminalPanelProps {
 
 export const ShellTerminalPanel = ({
   terminalData,
+  remoteHost,
   collapsed,
   isActive,
   onFocus,
@@ -47,7 +49,10 @@ export const ShellTerminalPanel = ({
   width,
 }: ShellTerminalPanelProps) => {
   const isHidden = collapsed;
-  const { data: binDir } = useSWR("treq-bin-dir", getTreqBinDir);
+  const { data: binDir } = useSWR(
+    remoteHost ? null : "treq-bin-dir",
+    getTreqBinDir,
+  );
   const pathAutoCommand = binDir ? `export PATH="${binDir}:$PATH"` : undefined;
 
   return (
@@ -119,6 +124,7 @@ export const ShellTerminalPanel = ({
           sessionId={terminalData.id}
           workingDirectory={terminalData.workingDirectory}
           autoCommand={pathAutoCommand}
+          remoteHost={remoteHost}
           onSessionError={onSessionError}
           onTerminalOutput={onTerminalOutput}
           onTerminalInput={onTerminalInput}

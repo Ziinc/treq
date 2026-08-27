@@ -7,17 +7,22 @@ interface DialogProps {
   children: React.ReactNode;
 }
 
+const DialogTitleIdContext = React.createContext<string | undefined>(undefined);
+
 const Dialog: React.FC<DialogProps> = ({ open, onOpenChange, children }) => {
+  const titleId = React.useId();
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div
-        className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity"
-        onClick={() => onOpenChange?.(false)}
-      />
-      <div className="relative z-50">{children}</div>
-    </div>
+    <DialogTitleIdContext.Provider value={titleId}>
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div
+          className="fixed inset-0 bg-black/40 backdrop-blur-sm transition-opacity"
+          onClick={() => onOpenChange?.(false)}
+        />
+        <div className="relative z-50">{children}</div>
+      </div>
+    </DialogTitleIdContext.Provider>
   );
 };
 
@@ -26,19 +31,25 @@ const DialogContent = ({
   children,
   ref,
   ...props
-}: React.ComponentProps<"div">) => (
-  <div
-    ref={ref}
-    data-testid="modal"
-    className={cn(
-      "bg-popover text-popover-foreground p-6 shadow-2xl duration-200 rounded-xl border border-border/50 max-w-lg w-full",
-      className,
-    )}
-    {...props}
-  >
-    {children}
-  </div>
-);
+}: React.ComponentProps<"div">) => {
+  const titleId = React.useContext(DialogTitleIdContext);
+  return (
+    <div
+      ref={ref}
+      data-testid="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      className={cn(
+        "bg-popover text-popover-foreground p-6 shadow-2xl duration-200 rounded-xl border border-border/50 max-w-lg w-full",
+        className,
+      )}
+      {...props}
+    >
+      {children}
+    </div>
+  );
+};
 DialogContent.displayName = "DialogContent";
 
 const DialogHeader = ({ className, ...props }: React.ComponentProps<"div">) => (
@@ -54,18 +65,23 @@ DialogHeader.displayName = "DialogHeader";
 
 const DialogTitle = ({
   className,
+  id,
   ref,
   ...props
-}: React.ComponentProps<"h2">) => (
-  <h2
-    ref={ref}
-    className={cn(
-      "text-lg font-semibold leading-none tracking-tight",
-      className,
-    )}
-    {...props}
-  />
-);
+}: React.ComponentProps<"h2">) => {
+  const titleId = React.useContext(DialogTitleIdContext);
+  return (
+    <h2
+      ref={ref}
+      id={id ?? titleId}
+      className={cn(
+        "text-lg font-semibold leading-none tracking-tight",
+        className,
+      )}
+      {...props}
+    />
+  );
+};
 DialogTitle.displayName = "DialogTitle";
 
 const DialogDescription = ({

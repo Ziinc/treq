@@ -1,6 +1,6 @@
 use super::{
-  dispatch_agent_request, handle_cli_command, handle_cli_global_args, normalize_repo_path,
-  parse_agent_mode, parse_agent_mode_or_default, workspace_dir_name_from_cwd,
+  dispatch_agent_request, handle_cli_command, handle_cli_global_args, is_supported_cli_command,
+  normalize_repo_path, parse_agent_mode, parse_agent_mode_or_default, workspace_dir_name_from_cwd,
 };
 use crate::agent_dispatch;
 use crate::local_db;
@@ -32,6 +32,46 @@ fn help_is_handled_by_cli_dispatch() {
 fn unknown_subcommand_is_not_handled_by_cli_dispatch() {
   let subcommand = make_subcommand("open");
   assert!(handle_cli_command(&subcommand).is_none());
+}
+
+#[test]
+fn supports_new_top_level_commands() {
+  assert!(is_supported_cli_command("add"));
+  assert!(is_supported_cli_command("set"));
+  assert!(is_supported_cli_command("st"));
+  assert!(is_supported_cli_command("mv"));
+  assert!(is_supported_cli_command("agent"));
+  assert!(is_supported_cli_command("repo"));
+  assert!(is_supported_cli_command("workspace"));
+  assert!(is_supported_cli_command("changes"));
+  assert!(is_supported_cli_command("file"));
+  assert!(is_supported_cli_command("commits"));
+  assert!(is_supported_cli_command("conflicts"));
+  assert!(is_supported_cli_command("help"));
+  assert!(!is_supported_cli_command("open"));
+}
+
+#[test]
+fn rejects_removed_commands() {
+  assert!(!is_supported_cli_command("ls"));
+}
+
+#[test]
+fn remote_review_commands_are_declared_in_tauri_config() {
+  let config =
+    fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tauri.conf.json")).unwrap();
+  let json: Value = serde_json::from_str(&config).unwrap();
+  let commands = json["plugins"]["cli"]["subcommands"].as_object().unwrap();
+  for name in [
+    "repo",
+    "workspace",
+    "changes",
+    "file",
+    "commits",
+    "conflicts",
+  ] {
+    assert!(commands.contains_key(name), "missing CLI command {name}");
+  }
 }
 
 #[test]

@@ -7,11 +7,13 @@ import {
 export interface ShellTerminalData {
   id: string;
   workingDirectory: string;
+  remoteHost?: string;
 }
 
 export interface WorkspaceTerminalPaneProps {
   ref?: Ref<WorkspaceTerminalPaneHandle>;
   workingDirectory: string;
+  remoteHost?: string;
   onSessionError?: (message: string) => void;
   currentBranch?: string | null;
   claudeSessions?: ClaudeSessionData[];
