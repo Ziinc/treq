@@ -9,6 +9,7 @@ vi.mock("../../lib/api", async () => {
     ...actual,
     getWorkspaceDiff: vi.fn(),
     getWorkspaceChangedFiles: vi.fn().mockResolvedValue([]),
+    getWorkspaceFileHunksBatch: vi.fn(),
     getWorkspaceFileHunks: vi.fn().mockResolvedValue([]),
     getDiffCache: vi.fn().mockResolvedValue(null),
   };
@@ -331,5 +332,57 @@ describe("ChangesDiffViewer workspace diff contract", () => {
       expect(api.getWorkspaceDiff).toHaveBeenCalled();
     });
     expect(api.getWorkspaceChangedFiles).not.toHaveBeenCalled();
+  });
+
+  it("loads home repo changes without a workspace id", async () => {
+    const api = await import("../../lib/api");
+    vi.mocked(api.getWorkspaceChangedFiles).mockResolvedValue([
+      {
+        path: "src/home.ts",
+        status: "M",
+        changed_line_count: 1,
+        diff_deferred: false,
+      },
+    ]);
+    vi.mocked(api.getWorkspaceFileHunksBatch).mockResolvedValue({
+      snapshotToken: "home-snapshot",
+      files: [
+        {
+          path: "src/home.ts",
+          contentHash: "home-hash",
+          hunks: [
+            {
+              id: "home-hunk",
+              header: "@@ -1 +1 @@",
+              lines: ["-old", "+new"],
+              patch: "-old\n+new",
+            },
+          ],
+        },
+      ],
+    });
+
+    render(
+      <ChangesDiffViewer
+        workspacePath="/tmp/repo"
+        repoPath="/tmp/repo"
+        isHomeRepo
+        initialSelectedFile={null}
+        showCommittedChanges={false}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getAllByText("home.ts").length).toBeGreaterThanOrEqual(1);
+    });
+    expect(screen.queryByText("Loading diffs...")).not.toBeInTheDocument();
+    expect(api.getWorkspaceChangedFiles).toHaveBeenCalledWith(
+      "/tmp/repo",
+      null,
+    );
+    expect(api.getWorkspaceDiff).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(document.body.textContent).toContain("new");
+    });
   });
 });

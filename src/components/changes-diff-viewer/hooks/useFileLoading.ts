@@ -31,6 +31,7 @@ interface UseFileLoadingParams {
   workspacePath: string;
   repoPath: string | undefined;
   workspaceId: number | undefined;
+  isHomeRepo: boolean;
   showCommittedChanges: boolean | undefined;
   /** Backend conflicted-file hint — retained even when Committed is hidden. */
   conflictedFilesHint?: string[];
@@ -61,6 +62,7 @@ export function useFileLoading({
   workspacePath,
   repoPath,
   workspaceId,
+  isHomeRepo,
   showCommittedChanges,
   conflictedFilesHint = [],
   onRefreshingChange,
@@ -226,15 +228,16 @@ export function useFileLoading({
   // Call through the ref so toast/callback identity cannot retrigger this
   // effect. Including `loadChangedFiles` stacked overlapping getWorkspaceDiff
   // calls (jj WC lock) and unmounted the Review file list in later tests.
-  // Wait for workspaceId: a null-id getWorkspaceChangedFiles can hold the jj
-  // lock indefinitely, and the coalescer would then never run the real load.
+  // A regular workspace must wait for its database id. The home repo has no
+  // workspace id by design and loads through the optional-id changed-files API.
   useEffect(() => {
-    if (!workspacePath || workspaceId === undefined) return;
+    if (!workspacePath || (!isHomeRepo && workspaceId === undefined)) return;
     void loadChangedFilesRef.current();
   }, [
     workspacePath,
     repoPath,
     workspaceId,
+    isHomeRepo,
     showCommittedChanges,
     conflictedFilesKey,
   ]);
