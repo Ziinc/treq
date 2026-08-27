@@ -6,6 +6,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, expect } from "vitest";
 import { waitFor, within } from "./test-utils";
+import { waitForPendingInvokes } from "./setup.integration";
 
 export function openRepo(repoPath: string) {
   // Point the app at a repo via the URL search param it reads
@@ -67,7 +68,11 @@ afterEach(() => {
   testRepoPaths.clear();
 });
 
-afterAll(() => {
+afterAll(async () => {
+  // Let any straggling invoke() calls against these repos' local.db finish
+  // before removing the directories out from under them (see
+  // waitForPendingInvokes in test/setup.integration.ts).
+  await waitForPendingInvokes();
   for (const dir of copiedRepoDirs) {
     fs.rmSync(dir, { recursive: true, force: true });
   }
