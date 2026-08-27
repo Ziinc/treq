@@ -41,6 +41,7 @@ The existing remote implementation is a useful prototype but is not a complete m
 12. Integrate remote repositories into the existing workspace, review, terminal, and agent UI.
 13. Make provisioning and lifecycle operations idempotent and observable.
 14. Keep the provider model generic enough to replace or supplement Sprites later.
+15. Offer entries from the user's local `~/.ssh/config` as a discovery aid when registering a user-managed VM, without granting any of them implicit trust.
 
 ## Non-goals
 
@@ -49,7 +50,7 @@ The existing remote implementation is a useful prototype but is not a complete m
 - Region migration. Reprovisioning in another region creates a replacement VM and does not migrate data automatically.
 - Port forwarding, public preview URLs, SOCKS proxies, or SSH tunnel management.
 - Treq-managed user keypairs or escrow of user private keys.
-- A user-config mode that automatically trusts arbitrary entries discovered in `~/.ssh/config`.
+- A user-config mode that automatically trusts arbitrary entries discovered in `~/.ssh/config`. Surfacing those entries as autocomplete suggestions is in scope (Goal 15); granting them trust or connecting to them without explicit user selection and registration is not.
 - Restricting what an owner may do after obtaining a shell on their VM.
 - A WebSocket command gateway or public Treq daemon.
 - Multi-user operating-system isolation within one managed VM.
@@ -103,6 +104,8 @@ The user explicitly configures:
 - optional explicit SSH alias.
 
 An alias is used only when the user explicitly selects alias mode for that endpoint. Treq does not scan and automatically trust arbitrary aliases. The user is responsible for installing Treq, JJ, Git, agents, and their public key on the VM.
+
+To speed up entry, the registration UI may read host aliases from the user's local `~/.ssh/config` (and included files) and offer them as autocomplete suggestions for the hostname/alias field. This is discovery only: selecting a suggestion fills in the field but does not register, trust, or connect to that endpoint. The endpoint is trusted only after the user completes explicit registration, including host-key verification.
 
 User-managed endpoints use the same structured Treq CLI protocol and UI after connection. Control-plane certificate issuance is not required for these endpoints, though a future custom-CA option may be added.
 
@@ -542,6 +545,7 @@ Logs use correlation IDs spanning the desktop request, Edge Function operation, 
 - Define managed compute provider interfaces and normalized lifecycle states.
 - Add Supabase schema, RLS policies, Edge Function request contracts, and operation idempotency.
 - Define size presets, region records, and boot-manifest format.
+- Implement `~/.ssh/config` alias discovery as an autocomplete-only input to user-managed VM registration.
 
 ### Phase 2: Sprites provisioning
 
