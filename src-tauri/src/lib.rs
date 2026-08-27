@@ -214,9 +214,14 @@ pub fn run() {
                         .accelerator("CmdOrCtrl+Shift+O")
                         .build(app)?;
 
+                let open_ssh_item = MenuItemBuilder::with_id("open_ssh", "Open via SSH...")
+                    .accelerator("CmdOrCtrl+Alt+O")
+                    .build(app)?;
+
                 let file_menu = SubmenuBuilder::new(app, "File")
                     .item(&open_item)
                     .item(&open_new_window_item)
+                    .item(&open_ssh_item)
                     .build()?;
 
                 // Edit menu with native shortcuts
@@ -325,9 +330,14 @@ pub fn run() {
                         .accelerator("CmdOrCtrl+Shift+O")
                         .build(app)?;
 
+                let open_ssh_item = MenuItemBuilder::with_id("open_ssh", "Open via SSH...")
+                    .accelerator("CmdOrCtrl+Alt+O")
+                    .build(app)?;
+
                 let file_menu = SubmenuBuilder::new(app, "File")
                     .item(&open_item)
                     .item(&open_new_window_item)
+                    .item(&open_ssh_item)
                     .build()?;
 
                 // Go menu items
@@ -401,6 +411,7 @@ pub fn run() {
                 "settings" => emit_to_focused(app, "navigate-to-settings", ()),
                 "open" => emit_to_focused(app, "menu-open-repository", ()),
                 "open_new_window" => emit_to_focused(app, "menu-open-in-new-window", ()),
+                "open_ssh" => emit_to_focused(app, "menu-open-ssh", ()),
                 "open_web_inspector" =>
                 {
                     #[cfg(debug_assertions)]
@@ -498,6 +509,11 @@ pub fn run() {
             commands::load_pending_review,
             commands::save_pending_review,
             commands::clear_pending_review,
+            commands::list_ssh_hosts,
+            commands::check_ssh_host,
+            commands::remote_probe_repo,
+            commands::remote_clone_repo,
+            commands::remote_open_repo,
             commands::set_window_repo_path,
             commands::get_window_repo_path,
             commands::rebase_home_repo_branch,

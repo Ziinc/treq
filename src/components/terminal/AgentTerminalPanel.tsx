@@ -43,6 +43,7 @@ import { type ClaudeSessionData } from "./types";
 
 export interface AgentTerminalPanelProps {
 	sessionData: ClaudeSessionData;
+	remoteHost?: string;
 	collapsed: boolean;
 	isActive?: boolean;
 	onFocus?: () => void;
@@ -59,6 +60,7 @@ export interface AgentTerminalPanelProps {
 export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
 	({
 		sessionData,
+		remoteHost,
 		collapsed,
 		isActive,
 		onFocus,
@@ -106,10 +108,14 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
 				}
 			};
 			loadModel();
-			getTreqBinDir()
-				.then(setTreqBinDir)
-				.catch(() => {});
-		}, [sessionData.repoPath, sessionData.sessionId]);
+			if (remoteHost) {
+				setTreqBinDir(null);
+			} else {
+				getTreqBinDir()
+					.then(setTreqBinDir)
+					.catch(() => {});
+			}
+		}, [remoteHost, sessionData.repoPath, sessionData.sessionId]);
 
 		// Handle terminal output
 		const handleTerminalOutput = useCallback(
@@ -465,6 +471,7 @@ export const AgentTerminalPanel = memo<AgentTerminalPanelProps>(
 								sessionData.workspacePath || sessionData.repoPath
 							}
 							autoCommand={autoCommand}
+							remoteHost={remoteHost}
 							onSessionError={onSessionError}
 							onClose={onClose}
 							onTerminalOutput={handleTerminalOutput}

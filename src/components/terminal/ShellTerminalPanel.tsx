@@ -14,6 +14,7 @@ import { type ShellTerminalData, type TerminalRefsMap } from "./types";
 
 interface ShellTerminalPanelProps {
 	terminalData: ShellTerminalData;
+	remoteHost?: string;
 	collapsed: boolean;
 	isActive?: boolean;
 	onFocus?: () => void;
@@ -27,6 +28,7 @@ interface ShellTerminalPanelProps {
 export const ShellTerminalPanel = memo<ShellTerminalPanelProps>(
 	({
 		terminalData,
+		remoteHost,
 		collapsed,
 		isActive,
 		onFocus,
@@ -42,6 +44,10 @@ export const ShellTerminalPanel = memo<ShellTerminalPanelProps>(
 		);
 
 		useEffect(() => {
+			if (remoteHost) {
+				setPathAutoCommand(undefined);
+				return;
+			}
 			getTreqBinDir()
 				.then((binDir) => {
 					setPathAutoCommand(`export PATH="${binDir}:$PATH"`);
@@ -49,7 +55,7 @@ export const ShellTerminalPanel = memo<ShellTerminalPanelProps>(
 				.catch(() => {
 					// silently ignore — treq PATH injection is best-effort
 				});
-		}, []);
+		}, [remoteHost]);
 
 		return (
 			<div
@@ -110,6 +116,7 @@ export const ShellTerminalPanel = memo<ShellTerminalPanelProps>(
 						sessionId={terminalData.id}
 						workingDirectory={terminalData.workingDirectory}
 						autoCommand={pathAutoCommand}
+						remoteHost={remoteHost}
 						onSessionError={onSessionError}
 						onClose={onClose}
 						containerClassName="h-full w-full overflow-hidden"

@@ -3,10 +3,12 @@ import { type ClaudeSessionData } from "../terminal/types";
 export interface ShellTerminalData {
 	id: string;
 	workingDirectory: string;
+	remoteHost?: string;
 }
 
 export interface WorkspaceTerminalPaneProps {
 	workingDirectory: string;
+	remoteHost?: string;
 	onSessionError?: (message: string) => void;
 	currentBranch?: string | null;
 	claudeSessions?: ClaudeSessionData[];

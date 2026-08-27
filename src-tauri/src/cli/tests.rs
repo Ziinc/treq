@@ -29,6 +29,12 @@ fn supports_new_top_level_commands() {
     assert!(is_supported_cli_command("st"));
     assert!(is_supported_cli_command("mv"));
     assert!(is_supported_cli_command("agent"));
+    assert!(is_supported_cli_command("repo"));
+    assert!(is_supported_cli_command("workspace"));
+    assert!(is_supported_cli_command("changes"));
+    assert!(is_supported_cli_command("file"));
+    assert!(is_supported_cli_command("commits"));
+    assert!(is_supported_cli_command("conflicts"));
     assert!(is_supported_cli_command("help"));
     assert!(!is_supported_cli_command("open"));
 }
@@ -36,7 +42,24 @@ fn supports_new_top_level_commands() {
 #[test]
 fn rejects_removed_commands() {
     assert!(!is_supported_cli_command("ls"));
-    assert!(!is_supported_cli_command("workspace"));
+}
+
+#[test]
+fn remote_review_commands_are_declared_in_tauri_config() {
+    let config =
+        fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("tauri.conf.json")).unwrap();
+    let json: Value = serde_json::from_str(&config).unwrap();
+    let commands = json["plugins"]["cli"]["subcommands"].as_object().unwrap();
+    for name in [
+        "repo",
+        "workspace",
+        "changes",
+        "file",
+        "commits",
+        "conflicts",
+    ] {
+        assert!(commands.contains_key(name), "missing CLI command {name}");
+    }
 }
 
 #[test]

@@ -30,6 +30,7 @@ import { Button } from "./ui/button";
 interface ConsolidatedTerminalProps {
 	sessionId: string;
 	workingDirectory?: string;
+	remoteHost?: string;
 	shell?: string;
 	autoCommand?: string;
 	onSessionError?: (message: string) => void;
@@ -67,6 +68,7 @@ export const ConsolidatedTerminal = forwardRef<
 		{
 			sessionId,
 			workingDirectory,
+			remoteHost,
 			shell,
 			autoCommand,
 			onSessionError,
@@ -358,6 +360,7 @@ export const ConsolidatedTerminal = forwardRef<
 							shell,
 							undefined,
 							initialAutoCommandRef.current || undefined,
+							remoteHost,
 						);
 					}
 

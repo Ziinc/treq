@@ -13,6 +13,15 @@ import { CommandPalette } from "./CommandPalette";
 import { WorkspacePicker } from "./WorkspacePicker";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
 import { ErrorBoundary } from "./ErrorBoundary";
+import { Button } from "./ui/button";
+import {
+	Dialog,
+	DialogContent,
+	DialogDescription,
+	DialogHeader,
+	DialogTitle,
+} from "./ui/dialog";
+import { Input } from "./ui/input";
 import { ShowWorkspace } from "./ShowWorkspace";
 import {
 	WorkspaceTerminalPane,
@@ -36,9 +45,14 @@ import {
 	getSessions,
 	getSetting,
 	getWorkspaces,
+	checkSshHost,
 	initRepo,
 	listRepoBranches,
+	listSshHosts,
 	listWorkspaceStatuses,
+	remoteCloneRepo,
+	remoteOpenRepo,
+	remoteProbeRepo,
 	selectFolder,
 	setSessionModel,
 	setSetting,
@@ -61,6 +75,7 @@ import {
 } from "../lib/agentDeepLink";
 import { Onboarding } from "./Onboarding";
 import type { BranchListItem } from "./TargetBranchSelector";
+import type { RemoteReadiness, RemoteRepository } from "../lib/api-types";
 
 type ViewMode = "session" | "show-workspace" | "settings" | "merge-preview";
 
@@ -98,6 +113,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
 	const [showFilePicker, setShowFilePicker] = useState(false);
 	const [showWorkspacePicker, setShowWorkspacePicker] = useState(false);
 	const [showWorkspaceDeletion, setShowWorkspaceDeletion] = useState(false);
+	const [showRemoteSshDialog, setShowRemoteSshDialog] = useState(false);
+	const [remoteSshHost, setRemoteSshHost] = useState("");
+	const [remoteSshPath, setRemoteSshPath] = useState("~/src/project");
+	const [remoteSshRepoUrl, setRemoteSshRepoUrl] = useState("");
+	const [remoteSshNeedsClone, setRemoteSshNeedsClone] = useState(false);
+	const [remoteSshSubmitting, setRemoteSshSubmitting] = useState(false);
+	const [remoteSshStage, setRemoteSshStage] = useState("");
+	const [remoteSshHosts, setRemoteSshHosts] = useState<string[]>([]);
+	const [remoteReadiness, setRemoteReadiness] =
+		useState<RemoteReadiness | null>(null);
+	const [activeRemoteRepo, setActiveRemoteRepo] =
+		useState<RemoteRepository | null>(null);
 	const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
 	const [pendingSessionData, setPendingSessionData] = useState<
 		Map<
@@ -127,6 +154,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
 	const queryClient = useQueryClient();
 	const { addToast } = useToast();
+
+	useEffect(() => {
+		void getSetting("last_opened_remote_repo").then((saved) => {
+			if (!saved || repoPath) return;
+			try {
+				setActiveRemoteRepo(JSON.parse(saved) as RemoteRepository);
+			} catch {
+				void setSetting("last_opened_remote_repo", "");
+			}
+		});
+	}, [repoPath]);
 	const handleReturnToDashboard = useCallback(() => {
 		// Navigate to main repo ShowWorkspace > Code
 		setSelectedWorkspace(null);
@@ -360,6 +398,107 @@ export const Dashboard: React.FC<DashboardProps> = ({
 		},
 	});
 
+	const rememberRemoteHost = useCallback(async (host: string) => {
+		const raw = await getSetting("remote_ssh_recent_hosts").catch(() => null);
+		const hosts = raw
+			? (JSON.parse(raw) as string[]).filter((item) => item !== host)
+			: [];
+		await setSetting(
+			"remote_ssh_recent_hosts",
+			JSON.stringify([host, ...hosts].slice(0, 10)),
+		);
+	}, []);
+
+	const handleOpenRemoteSsh = useCallback(async () => {
+		const configuredHosts = await listSshHosts().catch(() => []);
+		const recentRaw = await getSetting("remote_ssh_recent_hosts").catch(
+			() => null,
+		);
+		const recentHosts = recentRaw ? (JSON.parse(recentRaw) as string[]) : [];
+		setRemoteSshHosts([
+			...new Set([
+				...recentHosts,
+				...configuredHosts.map(({ alias }) => alias),
+			]),
+		]);
+		setRemoteSshHost(recentHosts[0] ?? configuredHosts[0]?.alias ?? "");
+		setRemoteSshPath("~/src/project");
+		setRemoteSshRepoUrl("");
+		setRemoteSshNeedsClone(false);
+		setRemoteReadiness(null);
+		setRemoteSshStage("");
+		setShowRemoteSshDialog(true);
+	}, []);
+
+	const handleSubmitRemoteSsh = useCallback(async () => {
+		const host = remoteSshHost.trim();
+		const remotePath = remoteSshPath.trim();
+		const repoUrl = remoteSshRepoUrl.trim();
+		if (!host || !remotePath) {
+			addToast({
+				title: "Remote SSH details required",
+				description: "Enter both an SSH host alias and remote directory.",
+				type: "warning",
+			});
+			return;
+		}
+
+		setRemoteSshSubmitting(true);
+		try {
+			setRemoteSshStage("Checking remote prerequisites...");
+			const readiness = await checkSshHost(host);
+			setRemoteReadiness(readiness);
+			if (!readiness.connected) {
+				throw new Error("SSH connection failed. Check your SSH configuration.");
+			}
+			const missingTreq = readiness.checks.find(
+				(check) => check.name === "treq" && !check.available,
+			);
+			if (missingTreq)
+				throw new Error(
+					missingTreq.detail || "Treq is not installed remotely.",
+				);
+			setRemoteSshStage("Inspecting repository...");
+			const probe = await remoteProbeRepo(host, remotePath);
+			let remoteRepo = probe.is_repo
+				? await remoteOpenRepo(host, remotePath)
+				: null;
+			if (!remoteRepo) {
+				if (!repoUrl) {
+					setRemoteSshNeedsClone(true);
+					setRemoteSshStage("Repository not found. Enter a Git URL to clone.");
+					return;
+				}
+				setRemoteSshStage("Cloning and inspecting repository...");
+				remoteRepo = await remoteCloneRepo(host, repoUrl, remotePath);
+			}
+			await rememberRemoteHost(host);
+			await setSetting("last_opened_remote_repo", JSON.stringify(remoteRepo));
+			setActiveRemoteRepo(remoteRepo);
+			setShowRemoteSshDialog(false);
+			addToast({
+				title: "Remote SSH repository ready",
+				description: `${remoteRepo.display_name} is ready for SSH terminal sessions.`,
+				type: "success",
+			});
+		} catch (error) {
+			addToast({
+				title: "Remote SSH failed",
+				description: error instanceof Error ? error.message : String(error),
+				type: "error",
+			});
+		} finally {
+			setRemoteSshSubmitting(false);
+			setRemoteSshStage("");
+		}
+	}, [
+		addToast,
+		remoteSshHost,
+		remoteSshPath,
+		remoteSshRepoUrl,
+		rememberRemoteHost,
+	]);
+
 	const handleOpenRepository = useCallback(async () => {
 		const selected = await selectFolder();
 		if (!selected) return;
@@ -417,6 +556,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 			}),
 			// Menu open repository
 			listen("menu-open-repository", () => handleOpenRepository()),
+			listen("menu-open-ssh", () => handleOpenRemoteSsh()),
 			// Menu factory reset
 			listen("menu-factory-reset", async () => {
 				const confirmed = await ask(
@@ -527,6 +667,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 		queryClient,
 		deleteWorkspaceMutation,
 		handleOpenRepository,
+		handleOpenRemoteSsh,
 	]);
 
 	// Note: Git merge functionality removed - using JJ now
@@ -953,8 +1094,73 @@ export const Dashboard: React.FC<DashboardProps> = ({
 		[isSessionView],
 	);
 
-	return !repoPath ? (
-		<Onboarding onOpenRepo={handleOpenRepository} />
+	return activeRemoteRepo && !repoPath ? (
+		<div className="flex h-screen flex-col bg-background">
+			<header className="flex items-center justify-between border-b px-5 py-3">
+				<div>
+					<h1 className="font-semibold">{activeRemoteRepo.display_name}</h1>
+					<p className="text-sm text-muted-foreground">
+						{activeRemoteRepo.host}:{activeRemoteRepo.path}
+					</p>
+				</div>
+				<div className="flex gap-2">
+					<Button
+						variant="outline"
+						onClick={() => {
+							setRemoteSshSubmitting(true);
+							void remoteOpenRepo(activeRemoteRepo.host, activeRemoteRepo.path)
+								.then((repository) => {
+									setActiveRemoteRepo(repository);
+									return setSetting(
+										"last_opened_remote_repo",
+										JSON.stringify(repository),
+									);
+								})
+								.catch((error) =>
+									addToast({
+										title: "Remote refresh failed",
+										description:
+											error instanceof Error ? error.message : String(error),
+										type: "error",
+									}),
+								)
+								.finally(() => setRemoteSshSubmitting(false));
+						}}
+						disabled={remoteSshSubmitting}
+					>
+						Refresh
+					</Button>
+					<Button
+						variant="outline"
+						onClick={() => {
+							setActiveRemoteRepo(null);
+							void setSetting("last_opened_remote_repo", "");
+						}}
+					>
+						Close
+					</Button>
+				</div>
+			</header>
+			<div className="flex flex-1 items-center justify-center p-8 text-center">
+				<div className="max-w-lg space-y-2">
+					<h2 className="text-lg font-medium">Remote repository connected</h2>
+					<p className="text-sm text-muted-foreground">
+						Repository review remains read-only while remote workspace data is
+						loaded through the CLI. Use the SSH terminal below to work remotely.
+					</p>
+				</div>
+			</div>
+			<WorkspaceTerminalPane
+				workingDirectory={activeRemoteRepo.path}
+				remoteHost={activeRemoteRepo.host}
+				currentBranch={activeRemoteRepo.inspection.current_branch}
+			/>
+		</div>
+	) : !repoPath ? (
+		<Onboarding
+			onOpenRepo={handleOpenRepository}
+			onOpenRemoteSsh={handleOpenRemoteSsh}
+		/>
 	) : (
 		<div className="flex h-screen bg-background">
 			<WorkspaceSidebar
@@ -1267,6 +1473,88 @@ export const Dashboard: React.FC<DashboardProps> = ({
 				repoPath={repoPath}
 				workspaceChangeCounts={undefined}
 			/>
+
+			<Dialog open={showRemoteSshDialog} onOpenChange={setShowRemoteSshDialog}>
+				<DialogContent>
+					<DialogHeader>
+						<DialogTitle>Open via SSH</DialogTitle>
+						<DialogDescription>
+							Use an SSH host alias from your config and a remote repository
+							directory. If no repository exists, provide a Git URL to clone.
+						</DialogDescription>
+					</DialogHeader>
+					<div className="space-y-4 pt-4">
+						<label className="block space-y-2">
+							<span className="text-sm font-medium">SSH host</span>
+							<Input
+								value={remoteSshHost}
+								onChange={(event) => setRemoteSshHost(event.target.value)}
+								placeholder="devbox"
+								list="remote-ssh-hosts"
+							/>
+							<datalist id="remote-ssh-hosts">
+								{remoteSshHosts.map((host) => (
+									<option key={host} value={host} />
+								))}
+							</datalist>
+						</label>
+						<label className="block space-y-2">
+							<span className="text-sm font-medium">Remote directory</span>
+							<Input
+								value={remoteSshPath}
+								onChange={(event) => setRemoteSshPath(event.target.value)}
+								placeholder="~/src/project"
+							/>
+						</label>
+						{remoteSshNeedsClone && (
+							<label className="block space-y-2">
+								<span className="text-sm font-medium">Git URL to clone</span>
+								<Input
+									value={remoteSshRepoUrl}
+									onChange={(event) => setRemoteSshRepoUrl(event.target.value)}
+									placeholder="git@github.com:owner/repo.git"
+								/>
+							</label>
+						)}
+						{remoteReadiness && (
+							<div className="rounded-md border p-3 text-sm" aria-live="polite">
+								<p className="font-medium">
+									{remoteReadiness.connected
+										? "SSH connected"
+										: "SSH unavailable"}
+								</p>
+								<ul className="mt-2 space-y-1 text-muted-foreground">
+									{remoteReadiness.checks.map((check) => (
+										<li key={check.name}>
+											{check.available ? "Ready" : "Missing"}: {check.name}
+										</li>
+									))}
+								</ul>
+							</div>
+						)}
+						{remoteSshStage && (
+							<p className="text-sm text-muted-foreground" aria-live="polite">
+								{remoteSshStage}
+							</p>
+						)}
+					</div>
+					<div className="mt-6 flex justify-end gap-2">
+						<Button
+							variant="outline"
+							onClick={() => setShowRemoteSshDialog(false)}
+							disabled={remoteSshSubmitting}
+						>
+							Cancel
+						</Button>
+						<Button
+							onClick={handleSubmitRemoteSsh}
+							disabled={remoteSshSubmitting}
+						>
+							{remoteSshSubmitting ? "Connecting..." : "Open via SSH"}
+						</Button>
+					</div>
+				</DialogContent>
+			</Dialog>
 
 			<WorkspacePicker
 				open={showWorkspacePicker}

@@ -30,6 +30,7 @@ const WorkspaceTerminalPaneInner = forwardRef<
 	(
 		{
 			workingDirectory,
+			remoteHost,
 			onSessionError,
 			currentBranch,
 			claudeSessions = [],
@@ -552,6 +553,7 @@ const WorkspaceTerminalPaneInner = forwardRef<
 				containerWidth={containerWidth}
 				onNavigateToWorkspace={onNavigateToWorkspace}
 				currentBranch={currentBranch}
+				remoteHost={remoteHost}
 				activePtySessionId={activePtySessionId}
 				setActivePtySessionId={setActivePtySessionId}
 				handleCloseShell={handleCloseShell}
