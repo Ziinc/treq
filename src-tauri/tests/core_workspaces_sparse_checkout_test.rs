@@ -352,12 +352,16 @@ fn files_outside_sparse_patterns_are_not_snapshotted() {
   let tree_files = TestRepo::run_jj(ws_str, &["file", "list", "-r", "feat/sparse-snapshot"])
     .expect("Failed to list files at branch");
   assert!(
-    tree_files.lines().any(|l| l.trim() == "src/new.rs"),
+    tree_files
+      .lines()
+      .any(|l| l.trim().replace('\\', "/") == "src/new.rs"),
     "committed tree should contain src/new.rs, got: {}",
     tree_files
   );
   assert!(
-    !tree_files.lines().any(|l| l.trim() == "docs/new.md"),
+    !tree_files
+      .lines()
+      .any(|l| l.trim().replace('\\', "/") == "docs/new.md"),
     "committed tree should not contain docs/new.md, got: {}",
     tree_files
   );

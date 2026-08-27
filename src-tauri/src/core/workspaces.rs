@@ -1206,6 +1206,17 @@ mod tests {
       .status()
       .expect("jj init");
     assert!(status.success());
+    // get_default_branch() falls back to git's init.defaultBranch config once no
+    // "main"/"master" branch ref exists yet (true here: no commit has been made,
+    // so the colocated repo has no real git branch ref at all). That config
+    // depends on the runner's git version/settings (observed "master" on the
+    // Windows CI image); pin it to "main" so resolution is deterministic.
+    let status = Command::new("git")
+      .current_dir(temp.path())
+      .args(["config", "init.defaultBranch", "main"])
+      .status()
+      .expect("git config init.defaultBranch");
+    assert!(status.success());
     let repo_path = temp.path().to_str().expect("utf8 path").to_string();
     crate::jj::jj_set_bookmark(&repo_path, "main", "@").expect("set main bookmark");
     repo_path

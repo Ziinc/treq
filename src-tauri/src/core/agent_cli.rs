@@ -230,7 +230,10 @@ mod tests {
 
     let settings_path = files.settings_path.expect("settings path");
     let settings = fs::read_to_string(&settings_path).expect("read settings");
-    assert!(settings.contains(&files.skill_dir));
+    // skill_dir may contain backslashes (Windows), which JSON escapes as `\\`;
+    // compare against the JSON-encoded form rather than the raw path string.
+    let skill_dir_json = serde_json::to_string(&files.skill_dir).expect("encode skill_dir");
+    assert!(settings.contains(skill_dir_json.trim_matches('"')));
     assert!(settings.contains("/ws"));
     assert!(!settings.contains("sandbox"));
     let value: Value = serde_json::from_str(&settings).expect("parse settings");
@@ -292,7 +295,15 @@ mod tests {
 
   #[test]
   fn cleanup_refuses_paths_outside_temp_prefix() {
-    let result = cleanup_agent_cli_files(&["/etc/passwd".to_string()]);
+    // Must exist on every platform: canonicalize() only rejects paths that don't
+    // resolve; /etc/passwd doesn't exist on Windows, so it would be silently
+    // skipped instead of exercising the temp-prefix check. The running test
+    // binary always exists and is never under the treq-agent temp prefix.
+    let outside_path = std::env::current_exe()
+      .expect("current_exe")
+      .to_string_lossy()
+      .into_owned();
+    let result = cleanup_agent_cli_files(&[outside_path]);
     assert!(result.is_err());
   }
 
@@ -377,6 +388,10 @@ mod tests {
     cleanup_agent_cli_files(&[files.prompt_path, files.skill_dir]).expect("cleanup");
   }
 
+  // Windows' read-only directory attribute doesn't block creating files inside
+  // the directory (unlike Unix's write-permission bit), so this test's simulated
+  // permission denial is a no-op there and the skip path never triggers.
+  #[cfg(not(windows))]
   #[test]
   fn skips_project_skills_when_cwd_is_not_writable() {
     let cwd = tempfile::TempDir::new().expect("cwd");

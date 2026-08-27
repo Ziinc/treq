@@ -78,9 +78,31 @@ pub struct PtySession {
   auto_command: Arc<Mutex<Option<String>>>,
 }
 
+/// Windows shells (PowerShell/cmd) submit a line on carriage return; a bare `\n`
+/// with no preceding `\r` is inserted into PSReadLine's buffer instead of
+/// submitting it, so callers on Windows never see command output. Insert the
+/// missing `\r` before any bare `\n`, leaving existing `\r\n` untouched.
+fn translate_line_endings_for_windows(data: &[u8]) -> Vec<u8> {
+  let mut out = Vec::with_capacity(data.len());
+  let mut prev = 0u8;
+  for &b in data {
+    if b == b'\n' && prev != b'\r' {
+      out.push(b'\r');
+    }
+    out.push(b);
+    prev = b;
+  }
+  out
+}
+
 impl PtySession {
   pub fn write(&mut self, data: &[u8]) -> std::io::Result<()> {
-    self.writer.write_all(data)?;
+    if cfg!(windows) {
+      let translated = translate_line_endings_for_windows(data);
+      self.writer.write_all(&translated)?;
+    } else {
+      self.writer.write_all(data)?;
+    }
     self.writer.flush()
   }
 
@@ -293,9 +315,27 @@ impl PtyManager {
             break;
           }
           Ok(n) => {
-            let data = process_utf8_chunk(&mut pending_bytes, &buffer[..n]);
+            let mut data = process_utf8_chunk(&mut pending_bytes, &buffer[..n]);
             if data.is_empty() {
               continue;
+            }
+
+            // Windows console apps running under ConPTY (e.g. PowerShell/PSReadLine
+            // at startup) query the cursor position via a VT100 Device Status Report
+            // and block on the pty until something answers. The app's real terminal
+            // (xterm.js) answers this itself; this raw reader has no such emulator
+            // attached, so answer it here with a fixed position to unblock the child.
+            const CURSOR_POS_QUERY: &str = "\x1b[6n";
+            if cfg!(windows) && data.contains(CURSOR_POS_QUERY) {
+              let mut sessions = reader_sessions.lock().unwrap();
+              if let Some(session) = sessions.get_mut(&reader_session_id) {
+                let _ = session.write(b"\x1b[1;1R");
+              }
+              drop(sessions);
+              data = data.replace(CURSOR_POS_QUERY, "");
+              if data.is_empty() {
+                continue;
+              }
             }
 
             // Check if filtering is active
@@ -536,7 +576,14 @@ mod tests {
       )
       .unwrap();
 
-    let deadline = Instant::now() + Duration::from_secs(2);
+    // PowerShell's cold-start time on CI Windows runners can exceed 2s on its own,
+    // before it even processes the queued "exit" — give it more headroom there.
+    let timeout = if cfg!(windows) {
+      Duration::from_secs(10)
+    } else {
+      Duration::from_secs(2)
+    };
+    let deadline = Instant::now() + timeout;
     while manager.session_exists("eof") && Instant::now() < deadline {
       thread::sleep(Duration::from_millis(10));
     }
@@ -565,12 +612,22 @@ mod tests {
   fn echo_suppression_releases_output_after_bounded_buffer() {
     let manager = PtyManager::new();
     let (tx, rx) = mpsc::channel();
+    // `yes`/`head` aren't available under PowerShell; emit the same >32KB of
+    // filler in one shot so the filter's MAX_FILTER_BUFFER release path is
+    // exercised the same way on both platforms.
+    let command = if cfg!(windows) {
+      // Many small writes flush through ConPTY more reliably than one very long
+      // line, which can sit behind console line-wrap handling before it's sent.
+      "for($i=0;$i -lt 1000;$i++){Write-Output ('x' * 50)}".to_string()
+    } else {
+      "yes x | head -c 40000".to_string()
+    };
     manager
       .create_session(
         "bounded-filter".into(),
         None,
         shell(),
-        Some("yes x | head -c 40000".into()),
+        Some(command),
         Some("echo-that-will-never-appear-0123456789".into()),
         Box::new(move |chunk| {
           let _ = tx.send(chunk);
@@ -578,7 +635,14 @@ mod tests {
       )
       .unwrap();
 
-    assert!(rx.recv_timeout(Duration::from_secs(2)).is_ok());
+    // Windows CI runs this alongside ~300 other tests contending for CPU/IO, on
+    // top of PowerShell's own slower cold-start; give it much more headroom.
+    let timeout = if cfg!(windows) {
+      Duration::from_secs(30)
+    } else {
+      Duration::from_secs(2)
+    };
+    assert!(rx.recv_timeout(timeout).is_ok());
     manager.close_session("bounded-filter").unwrap();
   }
 }

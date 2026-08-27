@@ -95,7 +95,8 @@ mod tests {
     std::env::set_var("TREQ_APP_DATA_DIR", "/tmp/app-data");
 
     let resolved = resolve_app_db_path("/repo/path");
-    assert_eq!(resolved.to_string_lossy(), "/tmp/app-data/treq.db");
+    let expected = std::path::Path::new("/tmp/app-data").join("treq.db");
+    assert_eq!(resolved, expected);
 
     std::env::remove_var("TREQ_APP_DATA_DIR");
   }
