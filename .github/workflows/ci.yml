@@ -69,6 +69,15 @@ jobs:
     name: ${{ matrix.kind }} / ${{ matrix.task }} / ${{ matrix.platform }}
     runs-on: ${{ matrix.platform }}
     steps:
+      # Windows Defender's real-time scanning intercepts every process spawn
+      # and file write; the rust job spawns hundreds of jj/git subprocesses
+      # per test run, so this materially cuts wall time. Exclude the
+      # workspace before checkout writes anything into it.
+      - name: Disable Defender scanning (windows only)
+        if: matrix.platform == 'windows-latest' && matrix.kind == 'rust'
+        shell: pwsh
+        run: Add-MpPreference -ExclusionPath "${{ github.workspace }}"
+
       - uses: actions/checkout@v4
 
       - name: Setup Node.js
