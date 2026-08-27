@@ -29,7 +29,7 @@
       "subcommands": {
         "add": {
           "description": "Create a new workspace",
-          "args": [ 
+          "args": [
             {
               "name": "branch_name",
               "index": 1,
@@ -244,12 +244,223 @@
               "description": "Open the given localhost URL or local HTML file in the in-app browser instead of previewing it"
             }
           ]
+        },
+        "repo": {
+          "description": "Repository inspection and status commands",
+          "args": [
+            {
+              "name": "action",
+              "index": 1,
+              "takesValue": true,
+              "required": true,
+              "description": "Repository action, for example inspect"
+            },
+            {
+              "name": "repo",
+              "long": "repo",
+              "takesValue": true,
+              "required": true,
+              "description": "Repository path"
+            },
+            {
+              "name": "format",
+              "long": "format",
+              "takesValue": true,
+              "description": "Output format: human or json"
+            }
+          ]
+        },
+        "workspace": {
+          "description": "List and inspect workspaces",
+          "args": [
+            {
+              "name": "action",
+              "index": 1,
+              "takesValue": true,
+              "required": true,
+              "description": "Command action"
+            },
+            {
+              "name": "repo",
+              "long": "repo",
+              "takesValue": true,
+              "required": true,
+              "description": "Repository path"
+            },
+            {
+              "name": "workspace",
+              "long": "workspace",
+              "takesValue": true,
+              "description": "Workspace numeric ID"
+            },
+            {
+              "name": "format",
+              "long": "format",
+              "takesValue": true,
+              "description": "Output format: human or json"
+            }
+          ]
+        },
+        "changes": {
+          "description": "List changed files and file diffs",
+          "args": [
+            {
+              "name": "action",
+              "index": 1,
+              "takesValue": true,
+              "required": true,
+              "description": "Command action"
+            },
+            {
+              "name": "repo",
+              "long": "repo",
+              "takesValue": true,
+              "required": true,
+              "description": "Repository path"
+            },
+            {
+              "name": "workspace",
+              "long": "workspace",
+              "takesValue": true,
+              "description": "Workspace numeric ID"
+            },
+            {
+              "name": "path",
+              "long": "path",
+              "takesValue": true,
+              "description": "Repository-relative file path"
+            },
+            {
+              "name": "format",
+              "long": "format",
+              "takesValue": true,
+              "description": "Output format: human or json"
+            }
+          ]
+        },
+        "file": {
+          "description": "Read repository files",
+          "args": [
+            {
+              "name": "action",
+              "index": 1,
+              "takesValue": true,
+              "required": true,
+              "description": "Command action"
+            },
+            {
+              "name": "repo",
+              "long": "repo",
+              "takesValue": true,
+              "required": true,
+              "description": "Repository path"
+            },
+            {
+              "name": "workspace",
+              "long": "workspace",
+              "takesValue": true,
+              "description": "Workspace numeric ID"
+            },
+            {
+              "name": "path",
+              "long": "path",
+              "takesValue": true,
+              "required": true,
+              "description": "Repository-relative file path"
+            },
+            {
+              "name": "revision",
+              "long": "revision",
+              "takesValue": true,
+              "description": "working-copy or parent"
+            },
+            {
+              "name": "start-line",
+              "long": "start-line",
+              "takesValue": true
+            },
+            {
+              "name": "end-line",
+              "long": "end-line",
+              "takesValue": true
+            },
+            {
+              "name": "format",
+              "long": "format",
+              "takesValue": true,
+              "description": "Output format: human or json"
+            }
+          ]
+        },
+        "commits": {
+          "description": "List commits",
+          "args": [
+            {
+              "name": "action",
+              "index": 1,
+              "takesValue": true,
+              "required": true,
+              "description": "Command action"
+            },
+            {
+              "name": "repo",
+              "long": "repo",
+              "takesValue": true,
+              "required": true,
+              "description": "Repository path"
+            },
+            {
+              "name": "workspace",
+              "long": "workspace",
+              "takesValue": true,
+              "description": "Workspace numeric ID"
+            },
+            {
+              "name": "format",
+              "long": "format",
+              "takesValue": true,
+              "description": "Output format: human or json"
+            }
+          ]
+        },
+        "conflicts": {
+          "description": "List conflicted files",
+          "args": [
+            {
+              "name": "action",
+              "index": 1,
+              "takesValue": true,
+              "required": true,
+              "description": "Command action"
+            },
+            {
+              "name": "repo",
+              "long": "repo",
+              "takesValue": true,
+              "required": true,
+              "description": "Repository path"
+            },
+            {
+              "name": "workspace",
+              "long": "workspace",
+              "takesValue": true,
+              "description": "Workspace numeric ID"
+            },
+            {
+              "name": "format",
+              "long": "format",
+              "takesValue": true,
+              "description": "Output format: human or json"
+            }
+          ]
         }
       }
     },
     "deep-link": {
       "desktop": {
-        "schemes": ["treq"]
+        "schemes": [
+          "treq"
+        ]
       }
     }
   },

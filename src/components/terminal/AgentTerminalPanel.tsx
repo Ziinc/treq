@@ -36,6 +36,7 @@ import {
 
 export interface AgentTerminalPanelProps {
   sessionData: ClaudeSessionData;
+  remoteHost?: string;
   collapsed: boolean;
   isActive?: boolean;
   onFocus?: () => void;
@@ -53,6 +54,7 @@ export interface AgentTerminalPanelProps {
 
 export const AgentTerminalPanel = ({
   sessionData,
+  remoteHost,
   collapsed,
   isActive,
   onFocus,
@@ -392,6 +394,7 @@ export const AgentTerminalPanel = ({
                   sessionData.workspacePath || sessionData.repoPath
                 }
                 autoCommand={autoCommand}
+                remoteHost={remoteHost}
                 onSessionError={onSessionError}
                 onClose={onClose}
                 onTerminalOutput={handleTerminalOutput}

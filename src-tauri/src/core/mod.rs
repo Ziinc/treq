@@ -6,6 +6,7 @@ pub mod changes;
 pub mod checks;
 pub mod checks_logs;
 pub mod commits;
+pub mod remote;
 pub mod repo;
 pub mod resolve;
 pub mod stash;

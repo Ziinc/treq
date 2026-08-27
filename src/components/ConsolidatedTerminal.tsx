@@ -33,6 +33,7 @@ interface ConsolidatedTerminalProps {
   ref?: Ref<ConsolidatedTerminalHandle>;
   sessionId: string;
   workingDirectory?: string;
+  remoteHost?: string;
   shell?: string;
   autoCommand?: string;
   onSessionError?: (message: string) => void;
@@ -60,6 +61,7 @@ export interface ConsolidatedTerminalHandle {
 export const ConsolidatedTerminal = ({
   sessionId,
   workingDirectory,
+  remoteHost,
   shell,
   autoCommand,
   onSessionError,
@@ -355,6 +357,7 @@ export const ConsolidatedTerminal = ({
             shell,
             undefined,
             initialAutoCommandRef.current || undefined,
+            remoteHost,
           );
           if (cancelled) return;
         }
@@ -429,6 +432,7 @@ export const ConsolidatedTerminal = ({
   }, [
     sessionId,
     workingDirectory,
+    remoteHost,
     shell,
     fontSize,
     instanceKey,
@@ -580,5 +584,3 @@ export const ConsolidatedTerminal = ({
     </div>
   );
 };
-
-ConsolidatedTerminal.displayName = "ConsolidatedTerminal";
