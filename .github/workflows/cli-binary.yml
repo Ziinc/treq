@@ -43,7 +43,7 @@ jobs:
           npm run build
 
       - name: Build release CLI binary
-        run: cargo build --release --locked --bin treq
+        run: cargo build --release --locked --bin treq --target aarch64-apple-darwin
 
       - name: Run CLI with filesystem writes denied
         env:
@@ -51,11 +51,11 @@ jobs:
           # dynamically; libduckdb-sys's rpath link-arg doesn't propagate from
           # its build script into this binary, so point the loader at the
           # prebuilt dylib libduckdb-sys copies alongside the other deps.
-          DYLD_LIBRARY_PATH: ${{ github.workspace }}/target/release/deps
+          DYLD_LIBRARY_PATH: ${{ github.workspace }}/target/aarch64-apple-darwin/release/deps
         run: |
           sandbox-exec \
             -p '(version 1) (allow default) (deny file-write*)' \
-            target/release/treq --help > "$RUNNER_TEMP/treq-help.txt"
+            target/aarch64-apple-darwin/release/treq --help > "$RUNNER_TEMP/treq-help.txt"
           grep -F "Treq - Stacking ADE" "$RUNNER_TEMP/treq-help.txt"
           grep -F "Usage: treq" "$RUNNER_TEMP/treq-help.txt"
 
