@@ -58,3 +58,14 @@ jobs:
             target/release/treq --help > "$RUNNER_TEMP/treq-help.txt"
           grep -F "Treq - Stacking ADE" "$RUNNER_TEMP/treq-help.txt"
           grep -F "Usage: treq" "$RUNNER_TEMP/treq-help.txt"
+
+      - name: Build and verify packaged app without loader overrides
+        run: |
+          npm run tauri build -- --target aarch64-apple-darwin --config src-tauri/tauri.macos-aarch64.conf.json --bundles app
+          codesign --force --deep --sign - target/aarch64-apple-darwin/release/bundle/macos/Treq.app
+          bash scripts/verify-macos-bundle.sh target/aarch64-apple-darwin/release/bundle/macos/Treq.app
+          loader_log="$RUNNER_TEMP/treq-app-dyld.log"
+          env -u DYLD_LIBRARY_PATH DYLD_PRINT_LIBRARIES=1 \
+            target/aarch64-apple-darwin/release/bundle/macos/Treq.app/Contents/MacOS/treq --help \
+            > /dev/null 2> "$loader_log" || true
+          grep -F "target/aarch64-apple-darwin/release/bundle/macos/Treq.app/Contents/Frameworks/libduckdb.dylib" "$loader_log"
