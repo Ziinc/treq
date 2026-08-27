@@ -576,7 +576,14 @@ mod tests {
       )
       .unwrap();
 
-    let deadline = Instant::now() + Duration::from_secs(2);
+    // PowerShell's cold-start time on CI Windows runners can exceed 2s on its own,
+    // before it even processes the queued "exit" — give it more headroom there.
+    let timeout = if cfg!(windows) {
+      Duration::from_secs(10)
+    } else {
+      Duration::from_secs(2)
+    };
+    let deadline = Instant::now() + timeout;
     while manager.session_exists("eof") && Instant::now() < deadline {
       thread::sleep(Duration::from_millis(10));
     }
@@ -605,12 +612,20 @@ mod tests {
   fn echo_suppression_releases_output_after_bounded_buffer() {
     let manager = PtyManager::new();
     let (tx, rx) = mpsc::channel();
+    // `yes`/`head` aren't available under PowerShell; emit the same >32KB of
+    // filler in one shot so the filter's MAX_FILTER_BUFFER release path is
+    // exercised the same way on both platforms.
+    let command = if cfg!(windows) {
+      "Write-Output ('x' * 40000)".to_string()
+    } else {
+      "yes x | head -c 40000".to_string()
+    };
     manager
       .create_session(
         "bounded-filter".into(),
         None,
         shell(),
-        Some("yes x | head -c 40000".into()),
+        Some(command),
         Some("echo-that-will-never-appear-0123456789".into()),
         Box::new(move |chunk| {
           let _ = tx.send(chunk);
@@ -618,7 +633,12 @@ mod tests {
       )
       .unwrap();
 
-    assert!(rx.recv_timeout(Duration::from_secs(2)).is_ok());
+    let timeout = if cfg!(windows) {
+      Duration::from_secs(10)
+    } else {
+      Duration::from_secs(2)
+    };
+    assert!(rx.recv_timeout(timeout).is_ok());
     manager.close_session("bounded-filter").unwrap();
   }
 }

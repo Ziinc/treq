@@ -1206,6 +1206,15 @@ mod tests {
       .status()
       .expect("jj init");
     assert!(status.success());
+    // git's own default initial branch name depends on the runner's git version/config
+    // (some default to "master"); pin it to "main" so default-branch resolution is
+    // deterministic instead of following whatever the CI image happens to ship.
+    let status = Command::new("git")
+      .current_dir(temp.path())
+      .args(["symbolic-ref", "HEAD", "refs/heads/main"])
+      .status()
+      .expect("git symbolic-ref");
+    assert!(status.success());
     let repo_path = temp.path().to_str().expect("utf8 path").to_string();
     crate::jj::jj_set_bookmark(&repo_path, "main", "@").expect("set main bookmark");
     repo_path
