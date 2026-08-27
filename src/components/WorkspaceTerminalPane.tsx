@@ -20,6 +20,7 @@ export type { WorkspaceTerminalPaneHandle };
 
 const WorkspaceTerminalPaneInner = ({
   workingDirectory,
+  remoteHost,
   onSessionError,
   currentBranch,
   claudeSessions = [],
@@ -141,7 +142,7 @@ const WorkspaceTerminalPaneInner = ({
     const newId = `shell-${dir.replace(/[^a-zA-Z0-9]/g, "-")}-${Date.now()}`;
     setShellTerminals((prev) => [
       ...prev,
-      { id: newId, workingDirectory: dir },
+      { id: newId, workingDirectory: dir, remoteHost },
     ]);
     // Add to terminal order (rightmost position)
     setTerminalOrder((prev) => [...prev, newId]);
@@ -481,6 +482,7 @@ const WorkspaceTerminalPaneInner = ({
       containerWidth={containerWidth}
       onNavigateToWorkspace={onNavigateToWorkspace}
       currentBranch={currentBranch}
+      remoteHost={remoteHost}
       activePtySessionId={activePtySessionId}
       setActivePtySessionId={setActivePtySessionId}
       handleCloseShell={handleCloseShell}

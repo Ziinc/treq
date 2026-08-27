@@ -9,6 +9,7 @@ pub async fn pty_create_session(
   shell: Option<String>,
   initial_command: Option<String>,
   suppress_echo_for: Option<String>,
+  remote_host: Option<String>,
 ) -> Result<(), String> {
   log::debug!(
         "pty_create_session: session_id={}, working_dir={:?}, shell={:?}, initial_command_present={}, suppress_echo_for_present={}",
@@ -26,11 +27,23 @@ pub async fn pty_create_session(
   let sid = session_id.clone();
   let event_name = format!("pty-data-{}", sid);
 
+  let (shell, shell_args, working_dir, initial_command) = if let Some(host) = remote_host {
+    let (program, args) = crate::core::remote::build_ssh_shell_command(
+      &host,
+      working_dir.as_deref(),
+      initial_command.as_deref(),
+    )?;
+    (Some(program), args, None, None)
+  } else {
+    (shell, Vec::new(), working_dir, initial_command)
+  };
+
   tauri::async_runtime::spawn_blocking(move || {
     pty_manager.create_session(
       session_id,
       working_dir,
       shell,
+      shell_args,
       initial_command,
       suppress_echo_for,
       Box::new(move |data| {

@@ -165,6 +165,7 @@ impl PtyManager {
     session_id: String,
     working_dir: Option<String>,
     shell: Option<String>,
+    shell_args: Vec<String>,
     initial_command: Option<String>,
     suppress_echo_for: Option<String>,
     callback: Box<dyn Fn(String) + Send + 'static>,
@@ -181,6 +182,7 @@ impl PtyManager {
       session_id.clone(),
       working_dir,
       shell,
+      shell_args,
       initial_command,
       suppress_echo_for,
       callback,
@@ -194,6 +196,7 @@ impl PtyManager {
     session_id: String,
     working_dir: Option<String>,
     shell: Option<String>,
+    shell_args: Vec<String>,
     initial_command: Option<String>,
     suppress_echo_for: Option<String>,
     callback: Box<dyn Fn(String) + Send + 'static>,
@@ -234,6 +237,9 @@ impl PtyManager {
     });
 
     let mut cmd = CommandBuilder::new(&shell_cmd);
+    for arg in shell_args {
+      cmd.arg(arg);
+    }
     if let Some(dir) = working_dir {
       cmd.cwd(dir);
     }
@@ -542,6 +548,7 @@ mod tests {
         "duplicate".into(),
         None,
         shell(),
+        Vec::new(),
         None,
         None,
         Box::new(|_| {}),
@@ -552,6 +559,7 @@ mod tests {
       "duplicate".into(),
       None,
       shell(),
+      Vec::new(),
       None,
       None,
       Box::new(|_| {}),
@@ -570,6 +578,7 @@ mod tests {
         "eof".into(),
         None,
         shell(),
+        Vec::new(),
         Some("exit".into()),
         None,
         Box::new(|_| {}),
@@ -599,6 +608,7 @@ mod tests {
         "prompt".into(),
         None,
         shell(),
+        Vec::new(),
         Some("printf ready".into()),
         None,
         Box::new(|_| {}),
@@ -627,6 +637,7 @@ mod tests {
         "bounded-filter".into(),
         None,
         shell(),
+        Vec::new(),
         Some(command),
         Some("echo-that-will-never-appear-0123456789".into()),
         Box::new(move |chunk| {

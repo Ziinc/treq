@@ -25,6 +25,7 @@ import { type ClaudeSessionData } from "./terminal/types";
 interface ShellTerminalData {
   id: string;
   workingDirectory: string;
+  remoteHost?: string;
 }
 
 interface WorkspaceGroup {
@@ -53,6 +54,7 @@ interface WorkspaceTerminalPaneViewProps {
   containerWidth: number;
   onNavigateToWorkspace?: (workspaceKey: string, isMainRepo: boolean) => void;
   currentBranch?: string | null;
+  remoteHost?: string;
   activePtySessionId: string | null;
   setActivePtySessionId: React.Dispatch<React.SetStateAction<string | null>>;
   handleCloseShell: (terminalId: string) => void | Promise<void>;
@@ -93,6 +95,7 @@ export const WorkspaceTerminalPaneView: React.FC<
   containerWidth,
   onNavigateToWorkspace,
   currentBranch,
+  remoteHost,
   activePtySessionId,
   setActivePtySessionId,
   handleCloseShell,
@@ -267,6 +270,7 @@ export const WorkspaceTerminalPaneView: React.FC<
                         <React.Fragment key={terminalId}>
                           <ShellTerminalPanel
                             terminalData={terminal.data}
+                            remoteHost={terminal.data.remoteHost ?? remoteHost}
                             collapsed={collapsed}
                             isActive={activePtySessionId === terminalId}
                             onFocus={() => setActivePtySessionId(terminalId)}
@@ -319,6 +323,7 @@ export const WorkspaceTerminalPaneView: React.FC<
                       <React.Fragment key={terminalId}>
                         <AgentTerminalPanel
                           sessionData={terminal.data}
+                          remoteHost={remoteHost}
                           collapsed={collapsed}
                           isActive={activePtySessionId === ptyId}
                           onFocus={() => setActivePtySessionId(ptyId)}
