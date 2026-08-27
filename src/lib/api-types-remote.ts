@@ -146,7 +146,11 @@ export interface SshEndpoint {
   authentication: SshAuthentication;
 }
 
-export type OperationStatus = "pending" | "in_progress" | "succeeded" | "failed";
+export type OperationStatus =
+  | "pending"
+  | "in_progress"
+  | "succeeded"
+  | "failed";
 
 export interface OperationResponse {
   operation_id: string;

@@ -257,14 +257,12 @@
             },
             {
               "name": "repo",
-              "long": "repo",
               "takesValue": true,
               "required": true,
               "description": "Repository path"
             },
             {
               "name": "format",
-              "long": "format",
               "takesValue": true,
               "description": "Output format: human or json"
             }
@@ -282,20 +280,17 @@
             },
             {
               "name": "repo",
-              "long": "repo",
               "takesValue": true,
               "required": true,
               "description": "Repository path"
             },
             {
               "name": "workspace",
-              "long": "workspace",
               "takesValue": true,
               "description": "Workspace numeric ID"
             },
             {
               "name": "format",
-              "long": "format",
               "takesValue": true,
               "description": "Output format: human or json"
             }
@@ -313,26 +308,22 @@
             },
             {
               "name": "repo",
-              "long": "repo",
               "takesValue": true,
               "required": true,
               "description": "Repository path"
             },
             {
               "name": "workspace",
-              "long": "workspace",
               "takesValue": true,
               "description": "Workspace numeric ID"
             },
             {
               "name": "path",
-              "long": "path",
               "takesValue": true,
               "description": "Repository-relative file path"
             },
             {
               "name": "format",
-              "long": "format",
               "takesValue": true,
               "description": "Output format: human or json"
             }
@@ -350,43 +341,36 @@
             },
             {
               "name": "repo",
-              "long": "repo",
               "takesValue": true,
               "required": true,
               "description": "Repository path"
             },
             {
               "name": "workspace",
-              "long": "workspace",
               "takesValue": true,
               "description": "Workspace numeric ID"
             },
             {
               "name": "path",
-              "long": "path",
               "takesValue": true,
               "required": true,
               "description": "Repository-relative file path"
             },
             {
               "name": "revision",
-              "long": "revision",
               "takesValue": true,
               "description": "working-copy or parent"
             },
             {
               "name": "start-line",
-              "long": "start-line",
               "takesValue": true
             },
             {
               "name": "end-line",
-              "long": "end-line",
               "takesValue": true
             },
             {
               "name": "format",
-              "long": "format",
               "takesValue": true,
               "description": "Output format: human or json"
             }
@@ -404,20 +388,17 @@
             },
             {
               "name": "repo",
-              "long": "repo",
               "takesValue": true,
               "required": true,
               "description": "Repository path"
             },
             {
               "name": "workspace",
-              "long": "workspace",
               "takesValue": true,
               "description": "Workspace numeric ID"
             },
             {
               "name": "format",
-              "long": "format",
               "takesValue": true,
               "description": "Output format: human or json"
             }
@@ -435,20 +416,17 @@
             },
             {
               "name": "repo",
-              "long": "repo",
               "takesValue": true,
               "required": true,
               "description": "Repository path"
             },
             {
               "name": "workspace",
-              "long": "workspace",
               "takesValue": true,
               "description": "Workspace numeric ID"
             },
             {
               "name": "format",
-              "long": "format",
               "takesValue": true,
               "description": "Output format: human or json"
             }
