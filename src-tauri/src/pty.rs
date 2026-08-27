@@ -78,9 +78,31 @@ pub struct PtySession {
   auto_command: Arc<Mutex<Option<String>>>,
 }
 
+/// Windows shells (PowerShell/cmd) submit a line on carriage return; a bare `\n`
+/// with no preceding `\r` is inserted into PSReadLine's buffer instead of
+/// submitting it, so callers on Windows never see command output. Insert the
+/// missing `\r` before any bare `\n`, leaving existing `\r\n` untouched.
+fn translate_line_endings_for_windows(data: &[u8]) -> Vec<u8> {
+  let mut out = Vec::with_capacity(data.len());
+  let mut prev = 0u8;
+  for &b in data {
+    if b == b'\n' && prev != b'\r' {
+      out.push(b'\r');
+    }
+    out.push(b);
+    prev = b;
+  }
+  out
+}
+
 impl PtySession {
   pub fn write(&mut self, data: &[u8]) -> std::io::Result<()> {
-    self.writer.write_all(data)?;
+    if cfg!(windows) {
+      let translated = translate_line_endings_for_windows(data);
+      self.writer.write_all(&translated)?;
+    } else {
+      self.writer.write_all(data)?;
+    }
     self.writer.flush()
   }
 
