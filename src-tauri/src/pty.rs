@@ -616,7 +616,9 @@ mod tests {
     // filler in one shot so the filter's MAX_FILTER_BUFFER release path is
     // exercised the same way on both platforms.
     let command = if cfg!(windows) {
-      "Write-Output ('x' * 40000)".to_string()
+      // Many small writes flush through ConPTY more reliably than one very long
+      // line, which can sit behind console line-wrap handling before it's sent.
+      "for($i=0;$i -lt 1000;$i++){Write-Output ('x' * 50)}".to_string()
     } else {
       "yes x | head -c 40000".to_string()
     };
@@ -633,8 +635,10 @@ mod tests {
       )
       .unwrap();
 
+    // Windows CI runs this alongside ~300 other tests contending for CPU/IO, on
+    // top of PowerShell's own slower cold-start; give it much more headroom.
     let timeout = if cfg!(windows) {
-      Duration::from_secs(10)
+      Duration::from_secs(30)
     } else {
       Duration::from_secs(2)
     };
