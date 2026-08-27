@@ -21,7 +21,16 @@ export type RemoteAuditEventType =
   | "instance_delete_failed"
   | "host_key_registered"
   | "host_key_rotated"
-  | "readiness_stage_failed";
+  | "host_keyscan_failed"
+  | "readiness_stage_failed"
+  | "client_key_registered"
+  | "client_key_revoked"
+  | "certificate_issued"
+  | "certificate_issue_failed"
+  | "authorized_key_installed"
+  | "authorized_key_removed"
+  | "ca_trust_installed"
+  | "ca_trust_install_failed";
 
 export async function recordAuditEvent(
   supabase: SupabaseClient,

@@ -154,6 +154,54 @@ pub struct IssueCertificateResponse {
   pub endpoint: SshEndpoint,
 }
 
+/// Direct existing-key auth alternative (PRD "Existing keys without
+/// certificates"): installs or removes a registered public key from the
+/// managed VM's `authorized_keys`. Both directions are idempotent and
+/// auditable on the server side.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InstallAuthorizedKeyRequest {
+  pub instance_id: String,
+  pub key_id: String,
+  pub idempotency_key: IdempotencyKey,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RemoveAuthorizedKeyRequest {
+  pub instance_id: String,
+  pub key_id: String,
+  pub idempotency_key: IdempotencyKey,
+}
+
+/// A recorded host-key rotation, per the PRD's "Reprovisioning may rotate
+/// the host key" paragraph: old and new fingerprints, the generation the new
+/// key was observed at, the provider resource it was scanned from, and who
+/// initiated the transition that produced it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HostKeyRotationRecord {
+  pub endpoint_id: String,
+  pub previous_fingerprint_sha256: Option<String>,
+  pub new_fingerprint_sha256: String,
+  pub generation: u64,
+  pub provider_resource_id: Option<String>,
+  pub initiating_principal: String,
+  pub rotated_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ClientKeyRecord {
+  pub id: String,
+  pub algorithm: String,
+  pub fingerprint_sha256: String,
+  pub comment: Option<String>,
+  pub created_at: String,
+  pub revoked_at: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListClientKeysResponse {
+  pub keys: Vec<ClientKeyRecord>,
+}
+
 // -- User-managed endpoints ---------------------------------------------------
 
 /// Registers a fully explicit user-owned VM endpoint. Every field is supplied

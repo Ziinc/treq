@@ -5,6 +5,7 @@
 
 import type {
   CreateInstanceParams,
+  MachineExecResult,
   ManagedComputeProvider,
   ManagedInstanceState,
   ProviderInstance,
@@ -74,6 +75,14 @@ export class StubSpritesProvider implements ManagedComputeProvider {
   deleteInstance(providerId: string): Promise<void> {
     machines.delete(providerId);
     return Promise.resolve();
+  }
+
+  execOnMachine(providerId: string, _command: string[], _timeoutSeconds?: number): Promise<MachineExecResult> {
+    if (!machines.has(providerId)) throw new ProviderError("not_found", "stub instance not found");
+    // Local/service-qa stub: there is no real machine to run a command on, so
+    // this records success without touching anything, matching the rest of
+    // this adapter's "warm in-memory fake" behavior.
+    return Promise.resolve({ exitCode: 0, stdout: "", stderr: "" });
   }
 }
 
