@@ -64,8 +64,25 @@ pub fn get_exe_dir() -> Option<String> {
   }
 }
 
-/// Detect binary path using `which` command with extended PATH
+/// Detect binary path using `which` (Unix) or `where` (Windows) with extended PATH
 pub fn detect_binary(name: &str) -> Option<String> {
+  if cfg!(windows) {
+    // `which` isn't available by default on Windows, and `get_extended_path`
+    // joins entries with `:` (a Unix path separator), so neither applies here.
+    // `where` uses the process's own PATH and is present on all supported Windows versions.
+    let output = Command::new("where").arg(name).output().ok()?;
+
+    if output.status.success() {
+      let stdout = String::from_utf8(output.stdout).ok()?;
+      let path = stdout.lines().next().unwrap_or("").trim().to_string();
+      if !path.is_empty() {
+        return Some(path);
+      }
+    }
+
+    return None;
+  }
+
   let extended_path = get_extended_path();
 
   // Try using `which` with extended PATH
