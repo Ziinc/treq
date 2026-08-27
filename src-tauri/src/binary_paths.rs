@@ -9,6 +9,27 @@ static BINARY_PATHS_CACHE: OnceLock<HashMap<String, String>> = OnceLock::new();
 pub fn get_extended_path() -> String {
   let current_path = env::var("PATH").unwrap_or_default();
 
+  if cfg!(windows) {
+    // The extra locations and `:` joiner below are Unix-specific (Homebrew,
+    // /usr/bin, etc.) and would clobber the inherited PATH — which includes
+    // System32 and PowerShell's own directory — with a broken value. Just
+    // append the running exe's directory, using the Windows `;` separator.
+    let mut all_paths: Vec<String> = current_path
+      .split(';')
+      .filter(|p| !p.is_empty())
+      .map(String::from)
+      .collect();
+    if let Ok(exe_path) = std::env::current_exe() {
+      if let Some(exe_dir) = exe_path.parent() {
+        let exe_dir_str = exe_dir.to_string_lossy().to_string();
+        if !exe_dir_str.is_empty() && !all_paths.contains(&exe_dir_str) {
+          all_paths.push(exe_dir_str);
+        }
+      }
+    }
+    return all_paths.join(";");
+  }
+
   // Common binary locations to add
   let additional_paths = vec![
     "/opt/homebrew/bin", // macOS ARM Homebrew
