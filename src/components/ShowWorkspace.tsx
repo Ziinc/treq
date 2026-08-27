@@ -1610,6 +1610,7 @@ export const ShowWorkspace = ({
             ref={changesDiffViewerRef}
             workspacePath={workingDirectory}
             workspaceId={workspace?.id}
+            isHomeRepo={!workspace}
             repoPath={effectiveRepoPath}
             branchName={workspace?.branch_name}
             onChangedFilesChange={handleChangedFilesUpdate}

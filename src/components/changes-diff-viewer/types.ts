@@ -23,6 +23,8 @@ export interface ChangesDiffViewerProps {
   workspacePath: string;
   repoPath?: string;
   workspaceId?: number;
+  /** True when the viewer targets the repository's own working copy. */
+  isHomeRepo?: boolean;
   branchName?: string;
   readOnly?: boolean;
   onStagedFilesChange?: (files: string[]) => void;
