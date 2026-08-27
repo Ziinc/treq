@@ -4,6 +4,10 @@ defaults:
   run:
     shell: bash
 
+env:
+  # Disable incremental compilation for faster from-scratch builds
+  CARGO_INCREMENTAL: 0
+
 on:
   pull_request:
     paths:
@@ -100,6 +104,23 @@ jobs:
         with:
           components: rustfmt
           toolchain: stable
+
+      # windows-latest runners ship LLVM (lld-link.exe) but link.exe from MSVC
+      # is the default; switch to lld for a much faster linker on Windows.
+      - name: Use lld linker (windows only)
+        if: matrix.platform == 'windows-latest' && matrix.kind == 'rust'
+        run: |
+          echo "RUSTFLAGS=-C linker=lld-link" >> "$GITHUB_ENV"
+
+      - name: Setup sccache (windows only)
+        if: matrix.platform == 'windows-latest' && matrix.kind == 'rust'
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Configure sccache (windows only)
+        if: matrix.platform == 'windows-latest' && matrix.kind == 'rust'
+        run: |
+          echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
+          echo "SCCACHE_GHA_ENABLED=true" >> "$GITHUB_ENV"
 
       # Cold apt install of WebKit/GTK is ~30–60s per job; restore from Actions
       # cache on subsequent runs. execute_install_scripts is required so dpkg
