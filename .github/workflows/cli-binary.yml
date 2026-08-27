@@ -43,7 +43,7 @@ jobs:
           npm run build
 
       - name: Build release CLI binary
-        run: cargo build --release --bin treq
+        run: cargo build --release --locked --bin treq
 
       - name: Run CLI with filesystem writes denied
         env:

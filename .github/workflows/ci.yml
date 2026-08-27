@@ -286,7 +286,7 @@ jobs:
         run: |
           if [ "${{ matrix.kind }}" = "verify" ] || [ "${{ matrix.task }}" = "verify" ]; then
             cargo fmt --check
-            cargo check
+            cargo check --locked
           else
-            cargo nextest run --no-fail-fast
+            cargo nextest run --locked --no-fail-fast
           fi
