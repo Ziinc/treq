@@ -61,12 +61,22 @@ jobs:
             kind: js
             task: test:unit
             timeout-minutes: 15
+          # Windows rust tests are dominated by jj/git subprocess spawn
+          # overhead rather than compute, so shard the run across two
+          # parallel jobs via nextest partitioning to cut wall time.
           - platform: windows-latest
             kind: rust
             task: test
-            timeout-minutes: 45
+            timeout-minutes: 30
+            partition: "1/2"
+          - platform: windows-latest
+            kind: rust
+            task: test
+            timeout-minutes: 30
+            partition: "2/2"
 
-    name: ${{ matrix.kind }} / ${{ matrix.task }} / ${{ matrix.platform }}
+    name: >-
+      ${{ matrix.kind }} / ${{ matrix.task }} / ${{ matrix.platform }}${{ matrix.partition && format(' ({0})', matrix.partition) || '' }}
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
@@ -283,10 +293,13 @@ jobs:
         working-directory: src-tauri
         env:
           RUST_BACKTRACE: 1
+          PARTITION: ${{ matrix.partition }}
         run: |
           if [ "${{ matrix.kind }}" = "verify" ] || [ "${{ matrix.task }}" = "verify" ]; then
             cargo fmt --check
             cargo check --locked
+          elif [ -n "$PARTITION" ]; then
+            cargo nextest run --locked --no-fail-fast --partition "count:$PARTITION"
           else
             cargo nextest run --locked --no-fail-fast
           fi
