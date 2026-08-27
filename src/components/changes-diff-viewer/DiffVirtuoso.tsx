@@ -1,4 +1,4 @@
-import React, { useLayoutEffect } from "react";
+import React, { useLayoutEffect, useMemo } from "react";
 import { Virtuoso, type VirtuosoHandle } from "react-virtuoso";
 import type { DiffContentAreaProps } from "./DiffContentArea";
 import {
@@ -8,9 +8,9 @@ import {
 import { DiffVirtuosoRow } from "./DiffVirtuosoRow";
 import {
   type DiffVirtuosoIndexMaps,
-  buildDiffVirtuosoItems,
   committedFileToParsed,
 } from "./buildDiffVirtuosoItems";
+import { useDiffVirtuosoItems } from "./useDiffVirtuosoItems";
 import { mergeVirtuosoListStyle } from "./mergeVirtuosoListStyle";
 import { filterVisibleCommittedFiles } from "./utils";
 
@@ -37,7 +37,7 @@ export function DiffVirtuosoList({
   indexMapsRef: React.MutableRefObject<DiffVirtuosoIndexMaps>;
   scrollerRef: React.RefObject<HTMLDivElement | null>;
 }) {
-  const visibleCommittedFiles = (() => {
+  const visibleCommittedFiles = useMemo(() => {
     const paths = new Set<string>(props.actualConflictedFiles);
     for (const file of props.files) paths.add(file.path);
     return filterVisibleCommittedFiles(
@@ -45,9 +45,14 @@ export function DiffVirtuosoList({
       props.showCommittedChanges ?? false,
       paths,
     ).map(committedFileToParsed);
-  })();
+  }, [
+    props.actualConflictedFiles,
+    props.files,
+    props.committedFiles,
+    props.showCommittedChanges,
+  ]);
 
-  const { items, maps } = buildDiffVirtuosoItems({
+  const { items, maps } = useDiffVirtuosoItems({
     actualConflictedFiles: props.actualConflictedFiles,
     allFileHunks: props.allFileHunks,
     collapsedFiles: props.collapsedFiles,
