@@ -4,6 +4,12 @@ defaults:
   run:
     shell: bash
 
+env:
+  # Disable incremental compilation for faster from-scratch builds
+  CARGO_INCREMENTAL: 0
+  # Skip debug info for test binaries: faster builds, smaller artifacts
+  CARGO_PROFILE_TEST_DEBUG: 0
+
 on:
   pull_request:
     paths:
@@ -100,6 +106,27 @@ jobs:
         with:
           components: rustfmt
           toolchain: stable
+
+      - name: Install cargo-nextest
+        if: matrix.kind == 'rust'
+        uses: taiki-e/install-action@nextest
+
+      # windows-latest runners ship LLVM (lld-link.exe) but link.exe from MSVC
+      # is the default; switch to lld for a much faster linker on Windows.
+      - name: Use lld linker (windows only)
+        if: matrix.platform == 'windows-latest' && matrix.kind == 'rust'
+        run: |
+          echo "RUSTFLAGS=-C linker=lld-link" >> "$GITHUB_ENV"
+
+      - name: Setup sccache (windows only)
+        if: matrix.platform == 'windows-latest' && matrix.kind == 'rust'
+        uses: mozilla-actions/sccache-action@v0.0.9
+
+      - name: Configure sccache (windows only)
+        if: matrix.platform == 'windows-latest' && matrix.kind == 'rust'
+        run: |
+          echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
+          echo "SCCACHE_GHA_ENABLED=true" >> "$GITHUB_ENV"
 
       # Cold apt install of WebKit/GTK is ~30–60s per job; restore from Actions
       # cache on subsequent runs. execute_install_scripts is required so dpkg
@@ -259,7 +286,7 @@ jobs:
         run: |
           if [ "${{ matrix.kind }}" = "verify" ] || [ "${{ matrix.task }}" = "verify" ]; then
             cargo fmt --check
-            cargo check
+            cargo check --locked
           else
-            cargo test --no-fail-fast
+            cargo nextest run --locked --no-fail-fast
           fi

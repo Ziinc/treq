@@ -137,6 +137,10 @@ jobs:
 
       - uses: tauri-apps/tauri-action@v0
         env:
+          # Full LTO + single codegen unit for CI release builds only; local
+          # release builds keep the faster thin-LTO settings in Cargo.toml.
+          CARGO_PROFILE_RELEASE_LTO: "true"
+          CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "1"
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
