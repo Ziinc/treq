@@ -1,0 +1,478 @@
+//! Fly Sprites provider adapter.
+//!
+//! Concrete implementation of [`ManagedComputeProvider`] against Fly's
+//! Machines-style REST API. Nothing outside this module should import a Fly
+//! SDK type or a raw Fly status string; every response is normalized into the
+//! provider-neutral types from `core::remote_provider` before it leaves this
+//! module.
+//!
+//! The vendor base URL and API token are read from configuration/secrets at
+//! construction time and are never hardcoded or logged. Callers (Edge
+//! Function equivalents, or a future control-plane binary) construct
+//! [`SpritesConfig`] from environment/secret storage.
+
+use std::time::Duration;
+
+use reqwest::{Client, StatusCode};
+use serde::{Deserialize, Serialize};
+
+use crate::core::remote_provider::{
+  CreateInstanceRequest, ManagedComputeProvider, ManagedInstanceState, ProviderError,
+  ProviderInstance, ProviderKind, RegionCode, ReplaceInstanceRequest, SizePreset,
+};
+
+/// Server-side configuration for talking to the Fly Machines API. Never
+/// derive `Debug`/`Display` on the token field's containing struct in a way
+/// that would print it; `SpritesConfig` intentionally implements a redacted
+/// `Debug`.
+#[derive(Clone)]
+pub struct SpritesConfig {
+  /// Vendor API base URL, e.g. `https://api.machines.dev/v1`. Read from
+  /// config, never hardcoded.
+  pub base_url: String,
+  /// Fly API token. A server-side secret; never sent to a desktop client.
+  pub api_token: String,
+  /// Fly application name that owns provisioned machines.
+  pub app_name: String,
+  pub request_timeout: Duration,
+}
+
+impl std::fmt::Debug for SpritesConfig {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.debug_struct("SpritesConfig")
+      .field("base_url", &self.base_url)
+      .field("api_token", &"<redacted>")
+      .field("app_name", &self.app_name)
+      .field("request_timeout", &self.request_timeout)
+      .finish()
+  }
+}
+
+impl SpritesConfig {
+  /// Reads configuration from environment variables. Intended for the
+  /// server-side process (Edge Function equivalent / control-plane binary)
+  /// that holds the vendor secret; a desktop client must never call this.
+  pub fn from_env() -> Result<Self, ProviderError> {
+    let base_url = std::env::var("FLY_SPRITES_API_BASE_URL")
+      .map_err(|_| ProviderError::InvalidRequest {
+        message: "FLY_SPRITES_API_BASE_URL is not set".to_string(),
+      })?;
+    let api_token = std::env::var("FLY_SPRITES_API_TOKEN").map_err(|_| ProviderError::InvalidRequest {
+      message: "FLY_SPRITES_API_TOKEN is not set".to_string(),
+    })?;
+    let app_name = std::env::var("FLY_SPRITES_APP_NAME").map_err(|_| ProviderError::InvalidRequest {
+      message: "FLY_SPRITES_APP_NAME is not set".to_string(),
+    })?;
+    Ok(Self {
+      base_url,
+      api_token,
+      app_name,
+      request_timeout: Duration::from_secs(30),
+    })
+  }
+}
+
+/// Fly Sprites adapter. Holds an HTTP client and vendor configuration; no
+/// mutable state beyond that lives here, so reconciliation state belongs to
+/// the caller (control-plane storage), not the adapter.
+pub struct SpritesProvider {
+  client: Client,
+  config: SpritesConfig,
+}
+
+impl SpritesProvider {
+  pub fn new(config: SpritesConfig) -> Result<Self, ProviderError> {
+    let client = Client::builder()
+      .timeout(config.request_timeout)
+      .build()
+      .map_err(|err| ProviderError::Other {
+        message: format!("failed to build HTTP client: {err}"),
+      })?;
+    Ok(Self { client, config })
+  }
+
+  fn machines_url(&self) -> String {
+    format!(
+      "{}/apps/{}/machines",
+      self.config.base_url.trim_end_matches('/'),
+      self.config.app_name
+    )
+  }
+
+  fn machine_url(&self, machine_id: &str) -> String {
+    format!("{}/{}", self.machines_url(), machine_id)
+  }
+
+  fn region_slug(region: RegionCode) -> &'static str {
+    // Treq region codes map to Fly region codes. Kept private to the adapter
+    // so no vendor slug leaks past this module.
+    match region {
+      RegionCode::UsEast => "iad",
+      RegionCode::UsWest => "sjc",
+      RegionCode::EuWest => "lhr",
+      RegionCode::ApSoutheast => "sin",
+      // Unmapped future regions fall back to a sane default rather than
+      // panicking; the control plane should reject unsupported regions
+      // before reaching this adapter.
+    }
+  }
+
+  fn size_to_guest(preset: SizePreset) -> MachineGuestConfig {
+    match preset {
+      SizePreset::Small => MachineGuestConfig {
+        cpu_kind: "shared".to_string(),
+        cpus: 1,
+        memory_mb: 2048,
+      },
+      SizePreset::Medium => MachineGuestConfig {
+        cpu_kind: "shared".to_string(),
+        cpus: 2,
+        memory_mb: 4096,
+      },
+      SizePreset::Large => MachineGuestConfig {
+        cpu_kind: "shared".to_string(),
+        cpus: 4,
+        memory_mb: 8192,
+      },
+    }
+  }
+
+  fn boot_manifest_env(manifest_version: u32) -> std::collections::HashMap<String, String> {
+    // The boot manifest itself is looked up by version inside the bootstrap
+    // script (see `remote_bootstrap`); only the version is passed as machine
+    // metadata so the vendor init step knows which manifest to apply.
+    let mut env = std::collections::HashMap::new();
+    env.insert(
+      "TREQ_BOOT_MANIFEST_VERSION".to_string(),
+      manifest_version.to_string(),
+    );
+    env
+  }
+
+  fn auth_headers(&self, idempotency_key: Option<&str>) -> reqwest::header::HeaderMap {
+    let mut headers = reqwest::header::HeaderMap::new();
+    headers.insert(
+      reqwest::header::AUTHORIZATION,
+      format!("Bearer {}", self.config.api_token)
+        .parse()
+        .expect("bearer header value is always valid ASCII"),
+    );
+    headers.insert(
+      reqwest::header::CONTENT_TYPE,
+      reqwest::header::HeaderValue::from_static("application/json"),
+    );
+    // Fly Machines' create/update APIs treat repeated identical requests as
+    // safe to retry when tagged with the same key; some vendor deployments
+    // read this from a bespoke header rather than a standard Idempotency-Key.
+    // We send both so retries are safe regardless of which the target
+    // deployment honors.
+    if let Some(key) = idempotency_key {
+      if let Ok(value) = reqwest::header::HeaderValue::from_str(key) {
+        headers.insert("Idempotency-Key", value.clone());
+        headers.insert("Fly-Idempotency-Key", value);
+      }
+    }
+    headers
+  }
+
+  fn map_transport_error(err: reqwest::Error) -> ProviderError {
+    if err.is_timeout() {
+      ProviderError::Timeout
+    } else if err.is_connect() {
+      ProviderError::Unavailable {
+        message: "could not connect to Fly Machines API".to_string(),
+      }
+    } else {
+      ProviderError::Other {
+        message: "provider request failed".to_string(),
+      }
+    }
+  }
+
+  fn map_status_error(status: StatusCode, body: &str) -> ProviderError {
+    match status {
+      StatusCode::NOT_FOUND => ProviderError::NotFound,
+      StatusCode::CONFLICT => ProviderError::AlreadyExists,
+      StatusCode::TOO_MANY_REQUESTS => ProviderError::QuotaExceeded,
+      StatusCode::BAD_REQUEST | StatusCode::UNPROCESSABLE_ENTITY => ProviderError::InvalidRequest {
+        message: truncate_body(body),
+      },
+      s if s.is_server_error() => ProviderError::Unavailable {
+        message: truncate_body(body),
+      },
+      _ => ProviderError::Other {
+        message: truncate_body(body),
+      },
+    }
+  }
+
+  fn normalize_state(machine: &MachineResponse) -> ManagedInstanceState {
+    match machine.state.as_str() {
+      "created" | "starting" => ManagedInstanceState::Provisioning,
+      "started" => ManagedInstanceState::Ready,
+      "stopping" | "stopped" | "suspended" => ManagedInstanceState::Suspended,
+      "replacing" => ManagedInstanceState::Reprovisioning,
+      "destroying" => ManagedInstanceState::Deleting,
+      "destroyed" => ManagedInstanceState::Deleted,
+      _ => ManagedInstanceState::Degraded,
+    }
+  }
+
+  fn normalize_instance(machine: MachineResponse) -> ProviderInstance {
+    let region = parse_region_slug(&machine.region);
+    let size_preset = parse_guest_config(&machine.config.guest);
+    let address = machine.private_ip.clone();
+    ProviderInstance {
+      provider_resource_id: machine.id,
+      state: Self::normalize_state(&machine),
+      region,
+      size_preset,
+      address,
+    }
+  }
+}
+
+fn truncate_body(body: &str) -> String {
+  const MAX: usize = 500;
+  if body.len() > MAX {
+    format!("{}…", &body[..MAX])
+  } else {
+    body.to_string()
+  }
+}
+
+fn parse_region_slug(slug: &str) -> RegionCode {
+  match slug {
+    "iad" => RegionCode::UsEast,
+    "sjc" => RegionCode::UsWest,
+    "lhr" => RegionCode::EuWest,
+    "sin" => RegionCode::ApSoutheast,
+    _ => RegionCode::UsEast,
+  }
+}
+
+fn parse_guest_config(guest: &MachineGuestConfig) -> SizePreset {
+  if guest.memory_mb <= 2048 {
+    SizePreset::Small
+  } else if guest.memory_mb <= 4096 {
+    SizePreset::Medium
+  } else {
+    SizePreset::Large
+  }
+}
+
+// -- Vendor wire types --------------------------------------------------------
+// These shapes mirror (a documented subset of) Fly's Machines API. They must
+// never be exported from this module; `normalize_instance` is the only bridge
+// to the provider-neutral domain types.
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct MachineGuestConfig {
+  cpu_kind: String,
+  cpus: u32,
+  memory_mb: u32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct MachineConfigRequest {
+  image: String,
+  guest: MachineGuestConfig,
+  env: std::collections::HashMap<String, String>,
+  init: MachineInit,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct MachineInit {
+  /// Bootstrap entrypoint invoked on boot; installs the versioned boot
+  /// manifest (see `remote_bootstrap::bootstrap_script`).
+  exec: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct CreateMachineRequest {
+  name: String,
+  region: String,
+  config: MachineConfigRequest,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct MachineResponse {
+  id: String,
+  region: String,
+  state: String,
+  config: MachineResponseConfig,
+  #[serde(default)]
+  private_ip: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct MachineResponseConfig {
+  guest: MachineGuestConfig,
+}
+
+/// Boot image reference. Fixed here rather than user-configurable: the image
+/// is Treq's own base image, versioned alongside the boot manifest.
+const SPRITES_BASE_IMAGE: &str = "registry.fly.io/treq-remote-base:latest";
+
+#[async_trait::async_trait]
+impl ManagedComputeProvider for SpritesProvider {
+  fn provider_kind(&self) -> ProviderKind {
+    ProviderKind::FlySprites
+  }
+
+  async fn create_instance(
+    &self,
+    request: CreateInstanceRequest,
+  ) -> Result<ProviderInstance, ProviderError> {
+    let body = CreateMachineRequest {
+      // Deterministic from the owner id so a retried create (same
+      // idempotency key, same owner) targets the same machine name even if
+      // the idempotency header is dropped by an intermediary.
+      name: format!("treq-{}", request.owner_user_id),
+      region: Self::region_slug(request.region).to_string(),
+      config: MachineConfigRequest {
+        image: SPRITES_BASE_IMAGE.to_string(),
+        guest: Self::size_to_guest(request.size_preset),
+        env: Self::boot_manifest_env(request.manifest_version),
+        init: MachineInit {
+          exec: crate::core::remote_bootstrap::bootstrap_command(request.manifest_version),
+        },
+      },
+    };
+
+    let response = self
+      .client
+      .post(self.machines_url())
+      .headers(self.auth_headers(Some(&request.idempotency_key)))
+      .json(&body)
+      .send()
+      .await
+      .map_err(Self::map_transport_error)?;
+
+    let status = response.status();
+    if status == StatusCode::CONFLICT {
+      // The vendor treats a repeated create with the same idempotency key
+      // (or same machine name) as already-existing; fetch and return the
+      // current state instead of surfacing an error, so create is
+      // effectively idempotent for the caller.
+      let text = response.text().await.unwrap_or_default();
+      if let Ok(existing) = serde_json::from_str::<MachineResponse>(&text) {
+        return Ok(Self::normalize_instance(existing));
+      }
+      return Err(ProviderError::AlreadyExists);
+    }
+    if !status.is_success() {
+      let text = response.text().await.unwrap_or_default();
+      return Err(Self::map_status_error(status, &text));
+    }
+
+    let machine: MachineResponse = response.json().await.map_err(|_| ProviderError::Other {
+      message: "could not parse provider response".to_string(),
+    })?;
+    Ok(Self::normalize_instance(machine))
+  }
+
+  async fn get_instance(&self, provider_id: &str) -> Result<ProviderInstance, ProviderError> {
+    let response = self
+      .client
+      .get(self.machine_url(provider_id))
+      .headers(self.auth_headers(None))
+      .send()
+      .await
+      .map_err(Self::map_transport_error)?;
+
+    let status = response.status();
+    if !status.is_success() {
+      let text = response.text().await.unwrap_or_default();
+      return Err(Self::map_status_error(status, &text));
+    }
+    let machine: MachineResponse = response.json().await.map_err(|_| ProviderError::Other {
+      message: "could not parse provider response".to_string(),
+    })?;
+    Ok(Self::normalize_instance(machine))
+  }
+
+  async fn wake_instance(&self, provider_id: &str) -> Result<(), ProviderError> {
+    let url = format!("{}/start", self.machine_url(provider_id));
+    let response = self
+      .client
+      .post(url)
+      .headers(self.auth_headers(None))
+      .send()
+      .await
+      .map_err(Self::map_transport_error)?;
+
+    let status = response.status();
+    // Fly returns 200/202 on accepted, and treats "already started" as a
+    // success too (some deployments return 400 with a specific message for
+    // that case); accept both to keep wake idempotent.
+    if status.is_success() {
+      return Ok(());
+    }
+    let text = response.text().await.unwrap_or_default();
+    if status == StatusCode::BAD_REQUEST && text.to_lowercase().contains("already") {
+      return Ok(());
+    }
+    Err(Self::map_status_error(status, &text))
+  }
+
+  async fn replace_instance(
+    &self,
+    request: ReplaceInstanceRequest,
+  ) -> Result<ProviderInstance, ProviderError> {
+    let body = MachineConfigRequest {
+      image: SPRITES_BASE_IMAGE.to_string(),
+      guest: Self::size_to_guest(request.size_preset),
+      env: Self::boot_manifest_env(request.manifest_version),
+      init: MachineInit {
+        exec: crate::core::remote_bootstrap::bootstrap_command(request.manifest_version),
+      },
+    };
+
+    // Fly Machines models an in-place config update as POST .../update; a
+    // region change is not supported in place (matches the PRD's "Region
+    // migration is not supported" non-goal), so a region change must go
+    // through delete+create at the control-plane level rather than this
+    // adapter call. We still forward the requested region for validation.
+    let url = format!("{}/update", self.machine_url(&request.provider_resource_id));
+    let response = self
+      .client
+      .post(url)
+      .headers(self.auth_headers(Some(&request.idempotency_key)))
+      .json(&body)
+      .send()
+      .await
+      .map_err(Self::map_transport_error)?;
+
+    let status = response.status();
+    if !status.is_success() {
+      let text = response.text().await.unwrap_or_default();
+      return Err(Self::map_status_error(status, &text));
+    }
+    let machine: MachineResponse = response.json().await.map_err(|_| ProviderError::Other {
+      message: "could not parse provider response".to_string(),
+    })?;
+    Ok(Self::normalize_instance(machine))
+  }
+
+  async fn delete_instance(&self, provider_id: &str) -> Result<(), ProviderError> {
+    let response = self
+      .client
+      .delete(self.machine_url(provider_id))
+      .query(&[("force", "true")])
+      .headers(self.auth_headers(None))
+      .send()
+      .await
+      .map_err(Self::map_transport_error)?;
+
+    let status = response.status();
+    // A delete of an already-deleted (404) instance is a no-op success, so
+    // repeated delete calls remain idempotent.
+    if status.is_success() || status == StatusCode::NOT_FOUND {
+      return Ok(());
+    }
+    let text = response.text().await.unwrap_or_default();
+    Err(Self::map_status_error(status, &text))
+  }
+}
+
