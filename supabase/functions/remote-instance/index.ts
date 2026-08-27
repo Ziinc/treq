@@ -1,0 +1,549 @@
+// Edge function: managed compute instance lifecycle for Remote SSH Control
+// (prds/remote-ssh.md, Phase 2: Sprites provisioning).
+//
+// POST body: { action, idempotency_key?, region?, size_preset? }
+// action:
+//   "ensure"       - provision lazily, idempotent (Goal 1 / "Provisioning trigger")
+//   "status"       - read current instance + endpoint status
+//   "wake"         - request a suspended instance resume
+//   "reprovision"  - replace the instance (new size/region/manifest), increments generation
+//   "delete"       - tear down the instance
+//   "list_regions" - closed set of region codes
+//   "list_sizes"   - closed set of size presets
+//
+// Auth: user JWT in Authorization header. Every mutating action verifies the
+// Supabase principal and that the instance (if referenced) belongs to them —
+// per the PRD's "Edge Functions verify both the Supabase principal and
+// resource ownership instead of relying only on client-supplied IDs."
+//
+// Provider credentials (Fly Sprites token) are read from Edge Function
+// secrets and never returned to the client.
+
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { isRegionCode, isSizePreset, REGION_CODES, SIZE_PRESETS, type RegionCode, type SizePreset } from "../_shared/remote/catalog.ts";
+import { CURRENT_MANIFEST_VERSION } from "../_shared/remote/boot-manifest.ts";
+import {
+  ProviderError,
+  SpritesProvider,
+  spritesConfigFromEnv,
+  type ManagedComputeProvider,
+} from "../_shared/remote/sprites-adapter.ts";
+import { isSpritesStubEnabled, StubSpritesProvider } from "../_shared/remote/stub-sprites-adapter.ts";
+import { recordAuditEvent } from "../_shared/remote/audit.ts";
+import {
+  beginOperation,
+  completeOperation,
+  createProvisioningInstance,
+  findExistingOperation,
+  getInstanceForOwner,
+  previousHostKeyFingerprint,
+  recordManagedEndpoint,
+  updateInstance,
+  type InstanceRow,
+} from "../_shared/remote/instance-store.ts";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+const MANAGED_SSH_PORT = 22;
+const MANAGED_SSH_USERNAME = "treq";
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
+function getProvider(): ManagedComputeProvider {
+  if (isSpritesStubEnabled()) return new StubSpritesProvider();
+  return new SpritesProvider(spritesConfigFromEnv());
+}
+
+function providerErrorStatus(err: ProviderError): number {
+  switch (err.kind) {
+    case "not_found":
+      return 404;
+    case "already_exists":
+      return 409;
+    case "quota_exceeded":
+      return 429;
+    case "invalid_request":
+      return 400;
+    case "timeout":
+      return 504;
+    case "unavailable":
+      return 502;
+    default:
+      return 500;
+  }
+}
+
+Deno.serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders, status: 204 });
+  if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
+
+  const authHeader = req.headers.get("authorization") ?? "";
+  const userToken = authHeader.replace(/^Bearer\s+/i, "");
+  if (!userToken) return json({ error: "Unauthorized" }, 401);
+
+  const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+  const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
+  const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+
+  const supabaseUser = createClient(supabaseUrl, supabaseAnonKey, {
+    global: { headers: { Authorization: `Bearer ${userToken}` } },
+  });
+  const {
+    data: { user },
+    error: authError,
+  } = await supabaseUser.auth.getUser();
+  if (authError || !user) return json({ error: "Unauthorized" }, 401);
+
+  // deno-lint-ignore no-explicit-any
+  let body: Record<string, any>;
+  try {
+    body = await req.json();
+  } catch {
+    return json({ error: "Invalid JSON" }, 400);
+  }
+
+  const action = body.action;
+  const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+  try {
+    switch (action) {
+      case "list_regions":
+        return json({ regions: REGION_CODES });
+      case "list_sizes":
+        return json({ presets: SIZE_PRESETS });
+      case "status":
+        return await handleStatus(supabase, user.id);
+      case "ensure":
+        return await handleEnsure(supabase, user.id, body);
+      case "wake":
+        return await handleWake(supabase, user.id, body);
+      case "reprovision":
+        return await handleReprovision(supabase, user.id, body);
+      case "delete":
+        return await handleDelete(supabase, user.id, body);
+      default:
+        return json({ error: `Unknown action '${action}'` }, 400);
+    }
+  } catch (err) {
+    if (err instanceof ProviderError) {
+      return json({ error: err.message, provider_error: err.kind }, providerErrorStatus(err));
+    }
+    if (err instanceof ValidationErrorWithStatus) {
+      return json({ error: err.message }, err.status);
+    }
+    console.error(`remote-instance action=${action} failed: ${(err as Error).message}`);
+    return json({ error: "Internal error" }, 500);
+  }
+});
+
+async function handleStatus(supabase: SupabaseClient, ownerUserId: string): Promise<Response> {
+  const instance = await getInstanceForOwner(supabase, ownerUserId);
+  if (!instance) return json({ instance: null, endpoint: null });
+
+  let endpoint = null;
+  if (instance.endpoint_id) {
+    const { data } = await supabase
+      .from("remote_endpoints")
+      .select("id, hostname, port, username, source")
+      .eq("id", instance.endpoint_id)
+      .maybeSingle();
+    endpoint = data ?? null;
+  }
+  return json({ instance, endpoint });
+}
+
+function requireIdempotencyKey(body: Record<string, unknown>): string {
+  const key = body.idempotency_key;
+  if (typeof key !== "string" || key.length === 0) {
+    throw new ValidationError("idempotency_key is required");
+  }
+  return key;
+}
+
+class ValidationError extends Error {}
+
+async function handleEnsure(
+  supabase: SupabaseClient,
+  ownerUserId: string,
+  // deno-lint-ignore no-explicit-any
+  body: Record<string, any>,
+): Promise<Response> {
+  let idempotencyKey: string;
+  try {
+    idempotencyKey = requireIdempotencyKey(body);
+  } catch (err) {
+    return json({ error: (err as Error).message }, 400);
+  }
+
+  const region: RegionCode = isRegionCode(body.region) ? body.region : "us_east";
+  const sizePreset: SizePreset = isSizePreset(body.size_preset) ? body.size_preset : "small";
+
+  const existingOp = await findExistingOperation(supabase, ownerUserId, idempotencyKey);
+  if (existingOp) {
+    // Repeated request with the same key: never create a second instance.
+    const instance = await getInstanceForOwner(supabase, ownerUserId);
+    return json({ operation_id: existingOp.id, status: existingOp.status, instance });
+  }
+
+  const existingInstance = await getInstanceForOwner(supabase, ownerUserId);
+  if (existingInstance && existingInstance.status !== "deleted") {
+    // One managed instance per user (Goal 1): ensure is a no-op once
+    // provisioned, regardless of idempotency key, so a second "first open of
+    // a managed repo" never provisions a second VM.
+    const op = await beginOperation(supabase, {
+      ownerUserId,
+      instanceId: existingInstance.id,
+      operationType: "provision",
+      idempotencyKey,
+    });
+    await completeOperation(supabase, op.id, { status: "succeeded" });
+    return json({ operation_id: op.id, status: "succeeded", instance: existingInstance });
+  }
+
+  const instance = await createProvisioningInstance(supabase, {
+    ownerUserId,
+    region,
+    sizePreset,
+    manifestVersion: CURRENT_MANIFEST_VERSION,
+  });
+
+  const op = await beginOperation(supabase, {
+    ownerUserId,
+    instanceId: instance.id,
+    operationType: "provision",
+    idempotencyKey,
+  });
+
+  await recordAuditEvent(supabase, {
+    ownerUserId,
+    instanceId: instance.id,
+    eventType: "instance_create_requested",
+    detail: { region, size_preset: sizePreset, manifest_version: CURRENT_MANIFEST_VERSION, idempotency_key: idempotencyKey },
+  });
+
+  try {
+    const provider = getProvider();
+    const providerInstance = await provider.createInstance({
+      ownerUserId,
+      region,
+      sizePreset,
+      manifestVersion: CURRENT_MANIFEST_VERSION,
+      idempotencyKey,
+    });
+
+    const status = mapProviderStateToInstanceStatus(providerInstance.state);
+    await updateInstance(supabase, instance.id, {
+      provider_resource_id: providerInstance.providerResourceId,
+      status,
+      ready_at: status === "ready" ? new Date().toISOString() : null,
+    });
+
+    if (providerInstance.address) {
+      const endpointId = await recordManagedEndpoint(supabase, {
+        ownerUserId,
+        instanceId: instance.id,
+        hostname: providerInstance.address,
+        port: MANAGED_SSH_PORT,
+        username: MANAGED_SSH_USERNAME,
+        existingEndpointId: null,
+      });
+      await updateInstance(supabase, instance.id, { endpoint_id: endpointId });
+      await recordAuditEvent(supabase, {
+        ownerUserId,
+        instanceId: instance.id,
+        endpointId,
+        eventType: "host_key_registered",
+        detail: {
+          note: "host key fingerprint not yet available from provider create response; recorded once obtained through a trusted provisioning path",
+          generation: 0,
+        },
+      });
+    } else {
+      await recordAuditEvent(supabase, {
+        ownerUserId,
+        instanceId: instance.id,
+        eventType: "readiness_stage_failed",
+        detail: { stage: "endpoint_address", reason: "provider did not return an address yet" },
+      });
+    }
+
+    await completeOperation(supabase, op.id, {
+      status: "succeeded",
+      providerRequestId: providerInstance.providerResourceId,
+    });
+    await recordAuditEvent(supabase, {
+      ownerUserId,
+      instanceId: instance.id,
+      eventType: "instance_create_succeeded",
+      detail: { provider_resource_id: providerInstance.providerResourceId, observed_state: providerInstance.state },
+    });
+
+    const refreshed = await getInstanceForOwner(supabase, ownerUserId);
+    return json({ operation_id: op.id, status: "succeeded", instance: refreshed });
+  } catch (err) {
+    await updateInstance(supabase, instance.id, { status: "failed" });
+    await completeOperation(supabase, op.id, { status: "failed", errorMessage: (err as Error).message });
+    await recordAuditEvent(supabase, {
+      ownerUserId,
+      instanceId: instance.id,
+      eventType: "instance_create_failed",
+      detail: { error: (err as Error).message },
+    });
+    throw err;
+  }
+}
+
+async function handleWake(
+  supabase: SupabaseClient,
+  ownerUserId: string,
+  // deno-lint-ignore no-explicit-any
+  body: Record<string, any>,
+): Promise<Response> {
+  let idempotencyKey: string;
+  try {
+    idempotencyKey = requireIdempotencyKey(body);
+  } catch (err) {
+    return json({ error: (err as Error).message }, 400);
+  }
+
+  const instance = await requireOwnedInstance(supabase, ownerUserId, body.instance_id);
+  if (!instance.provider_resource_id) return json({ error: "Instance has no provider resource yet" }, 409);
+
+  const existingOp = await findExistingOperation(supabase, ownerUserId, idempotencyKey);
+  if (existingOp) return json({ operation_id: existingOp.id, status: existingOp.status });
+
+  const op = await beginOperation(supabase, { ownerUserId, instanceId: instance.id, operationType: "wake", idempotencyKey });
+  await recordAuditEvent(supabase, { ownerUserId, instanceId: instance.id, eventType: "instance_wake_requested" });
+
+  try {
+    await updateInstance(supabase, instance.id, { status: "waking" });
+    const provider = getProvider();
+    await provider.wakeInstance(instance.provider_resource_id);
+    const providerInstance = await provider.getInstance(instance.provider_resource_id);
+    const status = mapProviderStateToInstanceStatus(providerInstance.state);
+    await updateInstance(supabase, instance.id, {
+      status,
+      ready_at: status === "ready" ? new Date().toISOString() : instance.ready_at,
+    });
+    await completeOperation(supabase, op.id, { status: "succeeded" });
+    await recordAuditEvent(supabase, {
+      ownerUserId,
+      instanceId: instance.id,
+      eventType: "instance_wake_succeeded",
+      detail: { observed_state: providerInstance.state },
+    });
+    return json({ operation_id: op.id, status: "succeeded" });
+  } catch (err) {
+    await completeOperation(supabase, op.id, { status: "failed", errorMessage: (err as Error).message });
+    await recordAuditEvent(supabase, {
+      ownerUserId,
+      instanceId: instance.id,
+      eventType: "instance_wake_failed",
+      detail: { error: (err as Error).message },
+    });
+    throw err;
+  }
+}
+
+async function handleReprovision(
+  supabase: SupabaseClient,
+  ownerUserId: string,
+  // deno-lint-ignore no-explicit-any
+  body: Record<string, any>,
+): Promise<Response> {
+  let idempotencyKey: string;
+  try {
+    idempotencyKey = requireIdempotencyKey(body);
+  } catch (err) {
+    return json({ error: (err as Error).message }, 400);
+  }
+
+  const instance = await requireOwnedInstance(supabase, ownerUserId, body.instance_id);
+  if (!instance.provider_resource_id) return json({ error: "Instance has no provider resource yet" }, 409);
+
+  const region: RegionCode = isRegionCode(body.region) ? body.region : instance.region;
+  const sizePreset: SizePreset = isSizePreset(body.size_preset) ? body.size_preset : instance.size_preset;
+  // Region migration is not supported (PRD non-goal): a region change is a
+  // brand-new resource at the vendor, not an in-place update, so surface it
+  // as a validation error here rather than silently reprovisioning in place.
+  if (region !== instance.region) {
+    return json(
+      { error: "Region migration is not supported. Delete and re-provision in the new region instead." },
+      400,
+    );
+  }
+
+  const existingOp = await findExistingOperation(supabase, ownerUserId, idempotencyKey);
+  if (existingOp) return json({ operation_id: existingOp.id, status: existingOp.status });
+
+  const op = await beginOperation(supabase, {
+    ownerUserId,
+    instanceId: instance.id,
+    operationType: "reprovision",
+    idempotencyKey,
+  });
+  const nextGeneration = instance.generation + 1;
+  await recordAuditEvent(supabase, {
+    ownerUserId,
+    instanceId: instance.id,
+    eventType: "instance_replace_requested",
+    detail: { region, size_preset: sizePreset, from_generation: instance.generation, to_generation: nextGeneration },
+  });
+
+  try {
+    await updateInstance(supabase, instance.id, { status: "reprovisioning" });
+    const provider = getProvider();
+    const providerInstance = await provider.replaceInstance({
+      providerResourceId: instance.provider_resource_id,
+      region,
+      sizePreset,
+      manifestVersion: CURRENT_MANIFEST_VERSION,
+      idempotencyKey,
+    });
+
+    const status = mapProviderStateToInstanceStatus(providerInstance.state);
+    // The control plane increments the instance generation on every replace
+    // (PRD "Reprovisioning"), regardless of whether the address changed —
+    // clients treat this as an explicit trust transition.
+    await updateInstance(supabase, instance.id, {
+      status,
+      generation: nextGeneration,
+      size_preset: sizePreset,
+      image_manifest_version: CURRENT_MANIFEST_VERSION,
+      ready_at: status === "ready" ? new Date().toISOString() : null,
+    });
+
+    if (providerInstance.address) {
+      const endpointId = await recordManagedEndpoint(supabase, {
+        ownerUserId,
+        instanceId: instance.id,
+        hostname: providerInstance.address,
+        port: MANAGED_SSH_PORT,
+        username: MANAGED_SSH_USERNAME,
+        existingEndpointId: instance.endpoint_id,
+      });
+      if (!instance.endpoint_id) await updateInstance(supabase, instance.id, { endpoint_id: endpointId });
+
+      const previousFingerprint = instance.endpoint_id
+        ? await previousHostKeyFingerprint(supabase, instance.endpoint_id)
+        : null;
+      // Host key material is not yet returned by the vendor create/replace
+      // response (see remote-instance/index.ts handleEnsure comment); this
+      // records the rotation slot so Phase 3 verification has old/new
+      // fingerprint + generation to compare once a real fingerprint is
+      // available.
+      await recordAuditEvent(supabase, {
+        ownerUserId,
+        instanceId: instance.id,
+        endpointId,
+        eventType: "host_key_rotated",
+        detail: {
+          previous_fingerprint: previousFingerprint,
+          generation: nextGeneration,
+          provider_resource_id: providerInstance.providerResourceId,
+        },
+      });
+    }
+
+    await completeOperation(supabase, op.id, { status: "succeeded", providerRequestId: providerInstance.providerResourceId });
+    await recordAuditEvent(supabase, {
+      ownerUserId,
+      instanceId: instance.id,
+      eventType: "instance_replace_succeeded",
+      detail: { generation: nextGeneration, observed_state: providerInstance.state },
+    });
+
+    const refreshed = await getInstanceForOwner(supabase, ownerUserId);
+    return json({ operation_id: op.id, status: "succeeded", instance: refreshed });
+  } catch (err) {
+    await completeOperation(supabase, op.id, { status: "failed", errorMessage: (err as Error).message });
+    await recordAuditEvent(supabase, {
+      ownerUserId,
+      instanceId: instance.id,
+      eventType: "instance_replace_failed",
+      detail: { error: (err as Error).message },
+    });
+    throw err;
+  }
+}
+
+async function handleDelete(
+  supabase: SupabaseClient,
+  ownerUserId: string,
+  // deno-lint-ignore no-explicit-any
+  body: Record<string, any>,
+): Promise<Response> {
+  let idempotencyKey: string;
+  try {
+    idempotencyKey = requireIdempotencyKey(body);
+  } catch (err) {
+    return json({ error: (err as Error).message }, 400);
+  }
+
+  const instance = await requireOwnedInstance(supabase, ownerUserId, body.instance_id);
+
+  const existingOp = await findExistingOperation(supabase, ownerUserId, idempotencyKey);
+  if (existingOp) return json({ operation_id: existingOp.id, status: existingOp.status });
+
+  const op = await beginOperation(supabase, { ownerUserId, instanceId: instance.id, operationType: "delete", idempotencyKey });
+  await recordAuditEvent(supabase, { ownerUserId, instanceId: instance.id, eventType: "instance_delete_requested" });
+
+  try {
+    await updateInstance(supabase, instance.id, { status: "deleting" });
+    if (instance.provider_resource_id) {
+      const provider = getProvider();
+      await provider.deleteInstance(instance.provider_resource_id);
+    }
+    await updateInstance(supabase, instance.id, { status: "deleted", endpoint_id: null });
+    await completeOperation(supabase, op.id, { status: "succeeded" });
+    await recordAuditEvent(supabase, { ownerUserId, instanceId: instance.id, eventType: "instance_delete_succeeded" });
+    return json({ operation_id: op.id, status: "succeeded" });
+  } catch (err) {
+    await completeOperation(supabase, op.id, { status: "failed", errorMessage: (err as Error).message });
+    await recordAuditEvent(supabase, {
+      ownerUserId,
+      instanceId: instance.id,
+      eventType: "instance_delete_failed",
+      detail: { error: (err as Error).message },
+    });
+    throw err;
+  }
+}
+
+// Resolves the instance to act on and verifies ownership server-side, per
+// the PRD's security requirement to check both principal and resource
+// ownership rather than trusting a client-supplied instance id alone. A
+// caller may omit instance_id (there is only ever one managed instance per
+// user); if they supply one, it must match the caller's own instance.
+async function requireOwnedInstance(
+  supabase: SupabaseClient,
+  ownerUserId: string,
+  suppliedInstanceId: unknown,
+): Promise<InstanceRow> {
+  const instance = await getInstanceForOwner(supabase, ownerUserId);
+  if (!instance) throw new ValidationErrorWithStatus("No managed instance for this user", 404);
+  if (typeof suppliedInstanceId === "string" && suppliedInstanceId !== instance.id) {
+    throw new ValidationErrorWithStatus("Instance does not belong to this user", 403);
+  }
+  return instance;
+}
+
+class ValidationErrorWithStatus extends Error {
+  constructor(message: string, public readonly status: number) {
+    super(message);
+  }
+}
+
+function mapProviderStateToInstanceStatus(state: string): string {
+  // Provider states map 1:1 onto the domain lifecycle states already
+  // enumerated in the remote_instances status check constraint.
+  return state;
+}

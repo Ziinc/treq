@@ -53,16 +53,18 @@ impl SpritesConfig {
   /// server-side process (Edge Function equivalent / control-plane binary)
   /// that holds the vendor secret; a desktop client must never call this.
   pub fn from_env() -> Result<Self, ProviderError> {
-    let base_url = std::env::var("FLY_SPRITES_API_BASE_URL")
-      .map_err(|_| ProviderError::InvalidRequest {
+    let base_url =
+      std::env::var("FLY_SPRITES_API_BASE_URL").map_err(|_| ProviderError::InvalidRequest {
         message: "FLY_SPRITES_API_BASE_URL is not set".to_string(),
       })?;
-    let api_token = std::env::var("FLY_SPRITES_API_TOKEN").map_err(|_| ProviderError::InvalidRequest {
-      message: "FLY_SPRITES_API_TOKEN is not set".to_string(),
-    })?;
-    let app_name = std::env::var("FLY_SPRITES_APP_NAME").map_err(|_| ProviderError::InvalidRequest {
-      message: "FLY_SPRITES_APP_NAME is not set".to_string(),
-    })?;
+    let api_token =
+      std::env::var("FLY_SPRITES_API_TOKEN").map_err(|_| ProviderError::InvalidRequest {
+        message: "FLY_SPRITES_API_TOKEN is not set".to_string(),
+      })?;
+    let app_name =
+      std::env::var("FLY_SPRITES_APP_NAME").map_err(|_| ProviderError::InvalidRequest {
+        message: "FLY_SPRITES_APP_NAME is not set".to_string(),
+      })?;
     Ok(Self {
       base_url,
       api_token,
@@ -219,15 +221,15 @@ impl SpritesProvider {
   }
 
   fn normalize_instance(machine: MachineResponse) -> ProviderInstance {
+    let state = Self::normalize_state(&machine);
     let region = parse_region_slug(&machine.region);
     let size_preset = parse_guest_config(&machine.config.guest);
-    let address = machine.private_ip.clone();
     ProviderInstance {
       provider_resource_id: machine.id,
-      state: Self::normalize_state(&machine),
+      state,
       region,
       size_preset,
-      address,
+      address: machine.private_ip,
     }
   }
 }
@@ -476,3 +478,220 @@ impl ManagedComputeProvider for SpritesProvider {
   }
 }
 
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::core::remote_provider::{ManagedInstanceState, RegionCode, SizePreset};
+  use serde_json::json;
+  use wiremock::matchers::{method, path};
+  use wiremock::{Mock, MockServer, ResponseTemplate};
+
+  fn test_config(base_url: String) -> SpritesConfig {
+    SpritesConfig {
+      base_url,
+      api_token: "test-token".to_string(),
+      app_name: "treq-remote".to_string(),
+      request_timeout: Duration::from_secs(5),
+    }
+  }
+
+  fn machine_json(id: &str, state: &str) -> serde_json::Value {
+    json!({
+      "id": id,
+      "region": "iad",
+      "state": state,
+      "config": { "guest": { "cpu_kind": "shared", "cpus": 1, "memory_mb": 2048 } },
+      "private_ip": "fdaa:0:1::1"
+    })
+  }
+
+  #[tokio::test]
+  async fn create_instance_normalizes_a_started_machine() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+      .and(path("/apps/treq-remote/machines"))
+      .respond_with(ResponseTemplate::new(200).set_body_json(machine_json("m1", "started")))
+      .mount(&server)
+      .await;
+
+    let provider = SpritesProvider::new(test_config(server.uri())).unwrap();
+    let result = provider
+      .create_instance(CreateInstanceRequest {
+        owner_user_id: "user-1".to_string(),
+        region: RegionCode::UsEast,
+        size_preset: SizePreset::Small,
+        manifest_version: 1,
+        idempotency_key: "key-1".to_string(),
+      })
+      .await
+      .unwrap();
+
+    assert_eq!(result.provider_resource_id, "m1");
+    assert_eq!(result.state, ManagedInstanceState::Ready);
+    assert_eq!(result.region, RegionCode::UsEast);
+    assert_eq!(result.size_preset, SizePreset::Small);
+    assert_eq!(result.address.as_deref(), Some("fdaa:0:1::1"));
+  }
+
+  #[tokio::test]
+  async fn create_instance_sends_idempotency_headers() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+      .and(path("/apps/treq-remote/machines"))
+      .and(wiremock::matchers::header("Idempotency-Key", "key-42"))
+      .respond_with(ResponseTemplate::new(200).set_body_json(machine_json("m2", "created")))
+      .mount(&server)
+      .await;
+
+    let provider = SpritesProvider::new(test_config(server.uri())).unwrap();
+    let result = provider
+      .create_instance(CreateInstanceRequest {
+        owner_user_id: "user-1".to_string(),
+        region: RegionCode::EuWest,
+        size_preset: SizePreset::Medium,
+        manifest_version: 1,
+        idempotency_key: "key-42".to_string(),
+      })
+      .await
+      .unwrap();
+
+    assert_eq!(result.state, ManagedInstanceState::Provisioning);
+  }
+
+  #[tokio::test]
+  async fn create_instance_conflict_returns_existing_machine_instead_of_erroring() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+      .and(path("/apps/treq-remote/machines"))
+      .respond_with(ResponseTemplate::new(409).set_body_json(machine_json("m1", "started")))
+      .mount(&server)
+      .await;
+
+    let provider = SpritesProvider::new(test_config(server.uri())).unwrap();
+    let result = provider
+      .create_instance(CreateInstanceRequest {
+        owner_user_id: "user-1".to_string(),
+        region: RegionCode::UsEast,
+        size_preset: SizePreset::Small,
+        manifest_version: 1,
+        idempotency_key: "key-1".to_string(),
+      })
+      .await
+      .unwrap();
+
+    assert_eq!(result.provider_resource_id, "m1");
+  }
+
+  #[tokio::test]
+  async fn get_instance_maps_not_found() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+      .and(path("/apps/treq-remote/machines/missing"))
+      .respond_with(ResponseTemplate::new(404))
+      .mount(&server)
+      .await;
+
+    let provider = SpritesProvider::new(test_config(server.uri())).unwrap();
+    let err = provider.get_instance("missing").await.unwrap_err();
+    assert_eq!(err, ProviderError::NotFound);
+  }
+
+  #[tokio::test]
+  async fn get_instance_maps_suspended_state() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+      .and(path("/apps/treq-remote/machines/m1"))
+      .respond_with(ResponseTemplate::new(200).set_body_json(machine_json("m1", "stopped")))
+      .mount(&server)
+      .await;
+
+    let provider = SpritesProvider::new(test_config(server.uri())).unwrap();
+    let result = provider.get_instance("m1").await.unwrap();
+    assert_eq!(result.state, ManagedInstanceState::Suspended);
+  }
+
+  #[tokio::test]
+  async fn wake_instance_succeeds_on_accepted() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+      .and(path("/apps/treq-remote/machines/m1/start"))
+      .respond_with(ResponseTemplate::new(202))
+      .mount(&server)
+      .await;
+
+    let provider = SpritesProvider::new(test_config(server.uri())).unwrap();
+    provider.wake_instance("m1").await.unwrap();
+  }
+
+  #[tokio::test]
+  async fn wake_instance_is_idempotent_when_already_started() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+      .and(path("/apps/treq-remote/machines/m1/start"))
+      .respond_with(ResponseTemplate::new(400).set_body_string("machine already started"))
+      .mount(&server)
+      .await;
+
+    let provider = SpritesProvider::new(test_config(server.uri())).unwrap();
+    provider.wake_instance("m1").await.unwrap();
+  }
+
+  #[tokio::test]
+  async fn replace_instance_normalizes_updated_machine() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+      .and(path("/apps/treq-remote/machines/m1/update"))
+      .respond_with(ResponseTemplate::new(200).set_body_json(machine_json("m1", "starting")))
+      .mount(&server)
+      .await;
+
+    let provider = SpritesProvider::new(test_config(server.uri())).unwrap();
+    let result = provider
+      .replace_instance(ReplaceInstanceRequest {
+        provider_resource_id: "m1".to_string(),
+        region: RegionCode::UsEast,
+        size_preset: SizePreset::Large,
+        manifest_version: 1,
+        idempotency_key: "replace-1".to_string(),
+      })
+      .await
+      .unwrap();
+
+    assert_eq!(result.state, ManagedInstanceState::Provisioning);
+  }
+
+  #[tokio::test]
+  async fn delete_instance_is_idempotent_on_repeat_calls() {
+    let server = MockServer::start().await;
+    Mock::given(method("DELETE"))
+      .and(path("/apps/treq-remote/machines/m1"))
+      .respond_with(ResponseTemplate::new(404))
+      .mount(&server)
+      .await;
+
+    let provider = SpritesProvider::new(test_config(server.uri())).unwrap();
+    provider.delete_instance("m1").await.unwrap();
+  }
+
+  #[tokio::test]
+  async fn delete_instance_maps_server_error() {
+    let server = MockServer::start().await;
+    Mock::given(method("DELETE"))
+      .and(path("/apps/treq-remote/machines/m1"))
+      .respond_with(ResponseTemplate::new(500).set_body_string("boom"))
+      .mount(&server)
+      .await;
+
+    let provider = SpritesProvider::new(test_config(server.uri())).unwrap();
+    let err = provider.delete_instance("m1").await.unwrap_err();
+    assert!(matches!(err, ProviderError::Unavailable { .. }));
+  }
+
+  #[test]
+  fn config_debug_redacts_token() {
+    let config = test_config("https://example.test".to_string());
+    let debug = format!("{:?}", config);
+    assert!(!debug.contains("test-token"));
+    assert!(debug.contains("<redacted>"));
+  }
+}
