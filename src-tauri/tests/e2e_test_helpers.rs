@@ -70,8 +70,13 @@ impl TestRepo {
     let temp_dir = TempDir::new().map_err(|e| format!("Failed to create temp dir: {}", e))?;
     let repo_path = temp_dir.path().to_string_lossy().to_string();
 
-    // Initialize git repo
-    Self::run_git(&repo_path, &["init"])?;
+    // Initialize git repo with its initial branch already named, in one
+    // spawn instead of `init` + `branch -M` + `checkout -b`. Each test
+    // creates its own repo, and on Windows process-spawn overhead (not
+    // git's actual work) dominates these setup calls, so cutting the
+    // subprocess count here matters for CI wall time.
+    let default_branch = random_default_branch_name();
+    Self::run_git(&repo_path, &["init", "-b", &default_branch])?;
 
     // Configure git user (required for commits)
     Self::run_git(&repo_path, &["config", "user.email", "test@example.com"])?;
@@ -80,12 +85,6 @@ impl TestRepo {
     // Tests assert on exact file bytes; without this, Windows git installs
     // that default to core.autocrlf=true rewrite LF to CRLF on checkout.
     Self::run_git(&repo_path, &["config", "core.autocrlf", "false"])?;
-
-    let default_branch = random_default_branch_name();
-    Self::run_git(&repo_path, &["branch", "-M", &default_branch])
-      .map_err(|e| format!("Failed to create default branch: {}", e))?;
-
-    Self::run_git(&repo_path, &["checkout", "-b", &default_branch])?;
 
     // Record the default branch in local git config so get_default_branch() can
     // discover it via the merged init.defaultBranch fallback, even when HEAD moves
