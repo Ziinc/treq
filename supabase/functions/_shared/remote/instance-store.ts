@@ -10,7 +10,19 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { RegionCode, SizePreset } from "./catalog.ts";
 
-export type OperationType = "provision" | "wake" | "reprovision" | "delete";
+export type OperationType =
+  | "provision"
+  | "wake"
+  | "reprovision"
+  | "delete"
+  | "register_client_key"
+  | "revoke_client_key"
+  | "issue_certificate"
+  | "register_endpoint"
+  | "register_repository"
+  | "install_authorized_key"
+  | "remove_authorized_key"
+  | "keyscan_host_key";
 export type OperationStatus = "pending" | "in_progress" | "succeeded" | "failed";
 
 export interface OperationRow {

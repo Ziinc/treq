@@ -63,12 +63,21 @@ export interface ReplaceInstanceParams {
   idempotencyKey: string;
 }
 
+export interface MachineExecResult {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+}
+
 export interface ManagedComputeProvider {
   createInstance(params: CreateInstanceParams): Promise<ProviderInstance>;
   getInstance(providerId: string): Promise<ProviderInstance>;
   wakeInstance(providerId: string): Promise<void>;
   replaceInstance(params: ReplaceInstanceParams): Promise<ProviderInstance>;
   deleteInstance(providerId: string): Promise<void>;
+  // Runs a command inside a running machine (Fly Machines `/exec`), used to
+  // install CA trust and authorized_keys onto an already-booted managed VM.
+  execOnMachine(providerId: string, command: string[], timeoutSeconds?: number): Promise<MachineExecResult>;
 }
 
 function sizeToGuest(preset: SizePreset) {
@@ -157,6 +166,30 @@ export class SpritesProvider implements ManagedComputeProvider {
 
   private machineUrl(id: string): string {
     return `${this.machinesUrl()}/${id}`;
+  }
+
+  // Runs a command inside a running machine via the Fly Machines `/exec`
+  // endpoint. This is how server-side config (CA trust, authorized_keys) is
+  // pushed onto an already-booted managed VM without a native SSH client -
+  // the same mechanism `init.exec` uses at boot, just invoked after the fact.
+  async execOnMachine(providerId: string, command: string[], timeoutSeconds = 20): Promise<MachineExecResult> {
+    let response: Response;
+    try {
+      response = await fetch(`${this.machineUrl(providerId)}/exec`, {
+        method: "POST",
+        headers: this.headers(),
+        body: JSON.stringify({ cmd: command, timeout: timeoutSeconds }),
+      });
+    } catch (err) {
+      throw new ProviderError("unavailable", `could not reach Fly Machines API: ${(err as Error).message}`);
+    }
+    if (!response.ok) throw await this.mapErrorResponse(response);
+    const body = await response.json();
+    return {
+      exitCode: typeof body.exit_code === "number" ? body.exit_code : -1,
+      stdout: typeof body.stdout === "string" ? body.stdout : "",
+      stderr: typeof body.stderr === "string" ? body.stderr : "",
+    };
   }
 
   private headers(idempotencyKey?: string): HeadersInit {

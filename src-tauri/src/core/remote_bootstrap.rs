@@ -140,9 +140,111 @@ echo "treq bootstrap: manifest version $TREQ_MANIFEST_VERSION installed"
   )
 }
 
+/// Idempotent shell command that installs the Treq SSH CA's public key on a
+/// managed VM and points `sshd`'s `TrustedUserCAKeys` at it (PRD "Configure
+/// the managed VM to trust the Treq SSH CA"). Mirrors
+/// `_shared/remote/ssh-vm-config.ts::installCaTrustCommand` in the Edge
+/// Function, which is the path actually wired into provisioning today; this
+/// Rust copy exists so a native (Phase 4) transport can push the same
+/// config without going through the control plane's exec channel.
+pub fn install_ca_trust_command(ca_public_key_line: &str) -> Vec<String> {
+  let script = format!(
+    r#"#!/bin/sh
+set -eu
+mkdir -p /etc/ssh/sshd_config.d
+cat > /etc/ssh/treq_ca.pub <<'TREQ_CA_EOF'
+{ca_public_key_line}
+TREQ_CA_EOF
+cat > /etc/ssh/sshd_config.d/60-treq-ca.conf <<'TREQ_SSHD_EOF'
+TrustedUserCAKeys /etc/ssh/treq_ca.pub
+TREQ_SSHD_EOF
+if command -v systemctl >/dev/null 2>&1 && systemctl is-active sshd >/dev/null 2>&1; then
+  systemctl reload sshd
+elif command -v systemctl >/dev/null 2>&1 && systemctl is-active ssh >/dev/null 2>&1; then
+  systemctl reload ssh
+elif [ -f /var/run/sshd.pid ]; then
+  kill -HUP "$(cat /var/run/sshd.pid)"
+fi
+echo "treq: CA trust installed"
+"#
+  );
+  vec!["/bin/sh".to_string(), "-c".to_string(), script]
+}
+
+/// Idempotent authorized_keys install for the direct existing-key auth
+/// alternative (PRD "Existing keys without certificates"). Guards on a
+/// fingerprint marker comment so a repeated install never duplicates the
+/// entry. Mirrors `_shared/remote/ssh-vm-config.ts::installAuthorizedKeyCommand`.
+pub fn install_authorized_key_command(
+  public_key_line: &str,
+  fingerprint_sha256: &str,
+) -> Vec<String> {
+  let marker = format!("# treq-client-key:{fingerprint_sha256}");
+  let script = format!(
+    r#"#!/bin/sh
+set -eu
+mkdir -p /home/treq/.ssh
+chmod 700 /home/treq/.ssh
+touch /home/treq/.ssh/authorized_keys
+if ! grep -qF "{marker}" /home/treq/.ssh/authorized_keys 2>/dev/null; then
+  printf '%s\n%s\n' "{marker}" "{public_key_line}" >> /home/treq/.ssh/authorized_keys
+fi
+chmod 600 /home/treq/.ssh/authorized_keys
+echo "treq: authorized key installed"
+"#
+  );
+  vec!["/bin/sh".to_string(), "-c".to_string(), script]
+}
+
+/// Removes exactly the marker + key line pair `install_authorized_key_command`
+/// added for `fingerprint_sha256`, leaving every other entry untouched.
+/// Mirrors `_shared/remote/ssh-vm-config.ts::removeAuthorizedKeyCommand`.
+pub fn remove_authorized_key_command(fingerprint_sha256: &str) -> Vec<String> {
+  let marker = format!("# treq-client-key:{fingerprint_sha256}");
+  let script = format!(
+    r#"#!/bin/sh
+set -eu
+FILE=/home/treq/.ssh/authorized_keys
+if [ -f "$FILE" ]; then
+  MARKER="{marker}"
+  awk -v marker="$MARKER" '
+    $0 == marker {{ skip = 2; next }}
+    skip > 0 {{ skip--; next }}
+    {{ print }}
+  ' "$FILE" > "$FILE.treq_tmp"
+  mv "$FILE.treq_tmp" "$FILE"
+fi
+echo "treq: authorized key removed"
+"#
+  );
+  vec!["/bin/sh".to_string(), "-c".to_string(), script]
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn ca_trust_command_installs_trusted_user_ca_keys() {
+    let command = install_ca_trust_command("ssh-ed25519 AAAA... treq-ssh-ca");
+    assert_eq!(command[0], "/bin/sh");
+    assert!(command[2].contains("ssh-ed25519 AAAA... treq-ssh-ca"));
+    assert!(command[2].contains("TrustedUserCAKeys /etc/ssh/treq_ca.pub"));
+  }
+
+  #[test]
+  fn authorized_key_install_is_guarded_by_fingerprint_marker() {
+    let command = install_authorized_key_command("ssh-ed25519 AAAA... me", "SHA256:abc");
+    assert!(command[2].contains("# treq-client-key:SHA256:abc"));
+    assert!(command[2].contains("grep -qF"));
+  }
+
+  #[test]
+  fn authorized_key_removal_targets_the_same_marker() {
+    let command = remove_authorized_key_command("SHA256:abc");
+    assert!(command[2].contains("# treq-client-key:SHA256:abc"));
+    assert!(command[2].contains("skip = 2"));
+  }
 
   #[test]
   fn known_manifest_version_resolves() {
