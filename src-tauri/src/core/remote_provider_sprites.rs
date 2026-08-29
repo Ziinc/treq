@@ -80,6 +80,12 @@ impl SpritesConfig {
 pub struct SpritesProvider {
   client: Client,
   config: SpritesConfig,
+  /// The vendor request id from the most recently completed HTTP call, if
+  /// the response carried one. Populated from Fly's `fly-request-id`
+  /// response header (matches the PRD's "capture provider request
+  /// identifiers" observability requirement); feeds into audit/correlation
+  /// records at the control-plane layer and into Phase 8's e2e assertions.
+  last_request_id: std::sync::Mutex<Option<String>>,
 }
 
 impl SpritesProvider {
@@ -90,7 +96,51 @@ impl SpritesProvider {
       .map_err(|err| ProviderError::Other {
         message: format!("failed to build HTTP client: {err}"),
       })?;
-    Ok(Self { client, config })
+    Ok(Self {
+      client,
+      config,
+      last_request_id: std::sync::Mutex::new(None),
+    })
+  }
+
+  /// The vendor request id captured from the most recently completed HTTP
+  /// call to the Fly Machines API, if any. `None` before any call has been
+  /// made, or if the vendor response carried no request-id header.
+  pub fn last_request_id(&self) -> Option<String> {
+    self.last_request_id.lock().unwrap().clone()
+  }
+
+  /// Reads and records the vendor request id from a response's headers.
+  /// Called for every request this adapter makes, success or failure, so a
+  /// caller can always correlate the most recent call with the vendor's own
+  /// logs/support tooling, per the PRD's audit requirements.
+  fn capture_request_id(&self, response: &reqwest::Response) {
+    let id = response
+      .headers()
+      .get("fly-request-id")
+      .or_else(|| response.headers().get("x-request-id"))
+      .and_then(|value| value.to_str().ok())
+      .map(str::to_string);
+    if let Some(id) = id {
+      *self.last_request_id.lock().unwrap() = Some(id);
+    }
+  }
+
+  /// Read-only accessors for the adapter's own configuration. Intended for
+  /// callers (e.g. the Phase 8 real-API test harness) that need to rebuild
+  /// an equivalent provider on another task/thread - such as a
+  /// compensating-cleanup guard that must run from a `Drop` impl - without
+  /// exposing mutable or serializable config elsewhere.
+  pub fn config_base_url(&self) -> String {
+    self.config.base_url.clone()
+  }
+
+  pub fn config_api_token(&self) -> String {
+    self.config.api_token.clone()
+  }
+
+  pub fn config_app_name(&self) -> String {
+    self.config.app_name.clone()
   }
 
   fn machines_url(&self) -> String {
@@ -350,6 +400,7 @@ impl ManagedComputeProvider for SpritesProvider {
       .send()
       .await
       .map_err(Self::map_transport_error)?;
+    self.capture_request_id(&response);
 
     let status = response.status();
     if status == StatusCode::CONFLICT {
@@ -382,6 +433,7 @@ impl ManagedComputeProvider for SpritesProvider {
       .send()
       .await
       .map_err(Self::map_transport_error)?;
+    self.capture_request_id(&response);
 
     let status = response.status();
     if !status.is_success() {
@@ -403,6 +455,7 @@ impl ManagedComputeProvider for SpritesProvider {
       .send()
       .await
       .map_err(Self::map_transport_error)?;
+    self.capture_request_id(&response);
 
     let status = response.status();
     // Fly returns 200/202 on accepted, and treats "already started" as a
@@ -445,6 +498,7 @@ impl ManagedComputeProvider for SpritesProvider {
       .send()
       .await
       .map_err(Self::map_transport_error)?;
+    self.capture_request_id(&response);
 
     let status = response.status();
     if !status.is_success() {
@@ -466,6 +520,7 @@ impl ManagedComputeProvider for SpritesProvider {
       .send()
       .await
       .map_err(Self::map_transport_error)?;
+    self.capture_request_id(&response);
 
     let status = response.status();
     // A delete of an already-deleted (404) instance is a no-op success, so
@@ -531,6 +586,43 @@ mod tests {
     assert_eq!(result.region, RegionCode::UsEast);
     assert_eq!(result.size_preset, SizePreset::Small);
     assert_eq!(result.address.as_deref(), Some("fdaa:0:1::1"));
+  }
+
+  #[tokio::test]
+  async fn create_instance_captures_vendor_request_id_header() {
+    // Ungated, mocked coverage for the Phase 8 "capture provider request
+    // IDs" requirement: the real-API path (remote_e2e.rs) exercises this
+    // against the genuine header from Fly, but the capture/storage logic
+    // itself is provider-adapter code this repo owns and can verify here
+    // without a live vendor.
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+      .and(path("/apps/treq-remote/machines"))
+      .respond_with(
+        ResponseTemplate::new(200)
+          .insert_header("fly-request-id", "01H000REQUESTID")
+          .set_body_json(machine_json("m3", "started")),
+      )
+      .mount(&server)
+      .await;
+
+    let provider = SpritesProvider::new(test_config(server.uri())).unwrap();
+    assert_eq!(provider.last_request_id(), None);
+    provider
+      .create_instance(CreateInstanceRequest {
+        owner_user_id: "user-1".to_string(),
+        region: RegionCode::UsEast,
+        size_preset: SizePreset::Small,
+        manifest_version: 1,
+        idempotency_key: "key-request-id".to_string(),
+      })
+      .await
+      .unwrap();
+
+    assert_eq!(
+      provider.last_request_id().as_deref(),
+      Some("01H000REQUESTID")
+    );
   }
 
   #[tokio::test]

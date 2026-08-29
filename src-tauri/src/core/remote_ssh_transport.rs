@@ -1680,4 +1680,69 @@ mod tests {
     let snapshot = pool.metrics_snapshot();
     assert_eq!(snapshot.pty_exit_count, 1);
   }
+
+  // -- Client restart and reconnection (Phase 8 ungated coverage) -------------
+  //
+  // "Client restart and reconnection" from Phase 8's coverage list does not
+  // require a real Fly VM - only a real SSH server that can go away and come
+  // back, which the in-process mock server here already models. This
+  // exercises the same path a desktop client takes after its own process
+  // restart: the pool holds no live connection for the endpoint, so the next
+  // command must open a fresh one and record it as a reconnect once a
+  // previously-live connection is known to be dead.
+
+  #[tokio::test]
+  async fn exec_command_reconnects_after_pooled_connection_is_marked_dead() {
+    let (addr, host_key) = start_mock_server(0).await;
+    let client_key = test_host_key();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let key_reference = write_client_key(temp_dir.path(), &client_key);
+    let endpoint = test_endpoint(addr, &host_key, key_reference);
+
+    let pool = SshConnectionPool::new();
+    let cancellation = CancellationToken::new();
+
+    // First command establishes and pools a connection - not a reconnect,
+    // since there was nothing to reconnect to.
+    exec_command(
+      &pool,
+      &endpoint,
+      &["repo".to_string(), "inspect".to_string()],
+      ExecLimits::default(),
+      &cancellation,
+    )
+    .await
+    .unwrap();
+    assert_eq!(pool.pooled_connection_count().await, 1);
+    assert_eq!(pool.metrics_snapshot().reconnect_attempts, 0);
+
+    // Simulate the server side of that connection going away (mirrors a
+    // client process restart just as plausibly as a server restart: either
+    // way, the pool's cached session is no longer usable and must not be
+    // reused blindly). Same effect as the client itself having just
+    // restarted with an empty in-memory pool for this endpoint, then
+    // discovering the old session is gone.
+    pool.mark_dead(&endpoint).await;
+    // `mark_dead` only flips the liveness flag; the stale entry is not
+    // evicted from the map until the next `get_or_connect` call replaces
+    // it, so the count is unchanged here.
+    assert_eq!(pool.pooled_connection_count().await, 1);
+
+    // The server is still listening (mock server accepts new TCP
+    // connections indefinitely), so the next command must transparently
+    // open a fresh connection to the same endpoint and record it as a
+    // reconnect attempt rather than failing the caller.
+    let output = exec_command(
+      &pool,
+      &endpoint,
+      &["repo".to_string(), "status".to_string()],
+      ExecLimits::default(),
+      &cancellation,
+    )
+    .await
+    .unwrap();
+    assert!(output.success());
+    assert_eq!(pool.pooled_connection_count().await, 1);
+    assert_eq!(pool.metrics_snapshot().reconnect_attempts, 1);
+  }
 }
