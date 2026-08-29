@@ -19,6 +19,7 @@ pub mod remote_control;
 pub mod repo_config;
 pub mod session;
 pub mod settings;
+pub mod skills;
 pub mod stash;
 pub mod workspace;
 
@@ -43,5 +44,6 @@ pub use remote_control::*;
 pub use repo_config::*;
 pub use session::*;
 pub use settings::*;
+pub use skills::*;
 pub use stash::*;
 pub use workspace::*;

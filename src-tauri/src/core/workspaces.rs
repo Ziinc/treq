@@ -579,6 +579,12 @@ pub fn create_workspace_with_symlinked_dirs(
       .map_err(|e| format!("Failed to copy .claude/settings.local.json: {}", e))?;
   }
 
+  crate::core::skills::materialize_installed_skills(
+    repo_path,
+    ws_full.to_str().unwrap_or_default(),
+  )
+  .map_err(|e| format!("Failed to install library skills into workspace: {e}"))?;
+
   let workspace_id = local_db::add_workspace(
     repo_path,
     workspace_path.clone(),

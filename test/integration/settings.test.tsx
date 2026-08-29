@@ -36,6 +36,7 @@ describe("Settings integration", () => {
     });
     expect(screen.getByRole("tab", { name: /account/i })).toBeVisible();
     expect(screen.getByRole("tab", { name: /integrations/i })).toBeVisible();
+    expect(screen.getByRole("tab", { name: /skills/i })).toBeVisible();
     await user.click(applicationTab);
     await screen.findByLabelText(/theme/i);
     const fontSizeInput = await screen.findByLabelText(/font size/i);

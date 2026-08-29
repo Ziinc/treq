@@ -16,4 +16,5 @@ Concise, task-focused guides for accomplishing specific things with Treq.
   {type: 'link', href: '/docs/how-to/connecting-github', label: 'Connecting GitHub'},
   {type: 'link', href: '/docs/how-to/creating-and-viewing-pull-requests', label: 'Creating and Viewing Pull Requests'},
   {type: 'link', href: '/docs/how-to/using-the-merge-queue', label: 'Using the Merge Queue'},
+  {type: 'link', href: '/docs/how-to/installing-skills', label: 'Installing Skills from the Library'},
 ]} />
