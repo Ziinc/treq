@@ -115,7 +115,6 @@ const config: Config = {
   // Set the production url of your site here
   url: 'https://treq.dev',
   // Set the /<baseUrl>/ pathname under which your site is served
-  // For GitHub pages deployment, it is often '/<projectName>/'
   baseUrl: '/',
 
   // NOTE: trailingSlash intentionally left unset (Docusaurus default).
@@ -124,11 +123,6 @@ const config: Config = {
   // (undefined) resolution behavior. The /page vs /page/ duplicate-URL
   // issue seen in GSC should instead be fixed at the hosting/CDN layer by
   // adding a single 301-redirect rule normalizing one form to the other.
-
-  // GitHub pages deployment config.
-  // If you aren't using GitHub pages, you don't need these.
-  organizationName: 'Ziinc', // Usually your GitHub org/user name.
-  projectName: 'treq', // Usually your repo name.
 
   customFields: {
     featureFlags,
