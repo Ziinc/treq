@@ -66,7 +66,9 @@ describe("send-asset-drag", () => {
     Object.defineProperty(dt, "files", {
       value: [{ path: "/tmp/a file.txt" }, { path: "/tmp/b.txt" }],
     });
-    expect(terminalInsertTextFromDrop(dt)).toBe("'/tmp/a file.txt' '/tmp/b.txt'");
+    expect(terminalInsertTextFromDrop(dt)).toBe(
+      "'/tmp/a file.txt' '/tmp/b.txt'",
+    );
   });
 
   it("ignores unrelated text/plain drops", () => {
