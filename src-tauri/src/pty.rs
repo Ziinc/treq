@@ -588,7 +588,7 @@ mod tests {
     // PowerShell's cold-start time on CI Windows runners can exceed 2s on its own,
     // before it even processes the queued "exit" — give it more headroom there.
     let timeout = if cfg!(windows) {
-      Duration::from_secs(10)
+      Duration::from_secs(30)
     } else {
       Duration::from_secs(2)
     };

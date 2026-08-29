@@ -103,8 +103,6 @@ export function SkillLibrarySettings({
           <SkillRow
             key={skill.id}
             skill={skill}
-            repoPath={repoPath}
-            catalogUrl={catalogUrl}
             busy={pendingId === skill.id}
             onInstall={(scope) =>
               runAction(skill.id, () =>
@@ -134,14 +132,12 @@ function SkillRow({
   onScope,
 }: {
   skill: SkillCatalogSkill;
-  repoPath: string;
-  catalogUrl?: string | null;
   busy: boolean;
   onInstall: (scope: SkillInstallScope) => void;
   onUninstall: () => void;
   onScope: (scope: SkillInstallScope) => void;
 }) {
-  const installed = skill.installed;
+  const { installed } = skill;
   return (
     <li className="border rounded-md p-3 space-y-2">
       <div className="flex items-start justify-between gap-3">
