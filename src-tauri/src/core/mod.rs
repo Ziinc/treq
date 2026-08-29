@@ -1,4 +1,5 @@
 pub mod agent_cli;
+pub mod agent_supervisor;
 pub mod app;
 pub mod auto_update;
 pub mod browser_review;

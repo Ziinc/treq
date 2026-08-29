@@ -42,6 +42,13 @@ mod e2e_test_helpers;
 mod tauri_test_bridge;
 
 #[cfg(feature = "tauri-test")]
+use crate::core::remote::TreqCommandRequest;
+#[cfg(feature = "tauri-test")]
+use crate::core::remote_control_plane::SshEndpoint;
+#[cfg(feature = "tauri-test")]
+use commands::RemoteExecState;
+
+#[cfg(feature = "tauri-test")]
 #[tauri_test::setup(init = tauri_test_bridge::init_test_state)]
 pub struct TauriTestApp;
 
@@ -408,6 +415,7 @@ pub fn run() {
             );
 
             app.manage(app_state);
+            app.manage(commands::remote_control::RemoteExecState::default());
             start_agent_ipc_listener(app.handle().clone(), dispatch_listener);
             start_instance_registry_heartbeat(app.handle().clone());
 
@@ -826,6 +834,8 @@ pub fn run() {
             commands::remote_probe_repo,
             commands::remote_clone_repo,
             commands::remote_open_repo,
+            commands::remote_dispatch_local,
+            commands::remote_dispatch_over_ssh,
             commands::set_window_repo_path,
             commands::get_window_repo_path,
             commands::rebase_home_repo_branch,
