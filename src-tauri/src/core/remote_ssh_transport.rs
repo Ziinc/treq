@@ -24,7 +24,7 @@
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -120,6 +120,178 @@ impl From<russh::Error> for SshTransportError {
 }
 
 // ---------------------------------------------------------------------------
+// Metrics (Phase 7: "Client and transport telemetry")
+// ---------------------------------------------------------------------------
+//
+// This repo has no existing metrics backend (no `metrics`/`prometheus`
+// crate, no telemetry-export pipeline) - `tracing` is used for structured
+// logs only. Rather than inventing a fake export path or bolting on an
+// external dependency for a single module, this is a small in-process
+// counters/histograms struct: cheap atomics, no locks on the hot path, and
+// a plain snapshot a Tauri command (or a future diagnostics panel) can read.
+// It records exactly the fields the PRD's "Client and transport telemetry"
+// list enumerates, and nothing from the "Never log" list ever reaches it -
+// every field here is a count or a duration, never key material, output, or
+// prompts.
+
+/// A minimal duration histogram: count, sum, and max, in milliseconds.
+/// Deliberately not a full HDR histogram - this module does not need
+/// percentiles, only "how many, how long in total, what was the worst one",
+/// which is enough to drive an operational dashboard or a regression alert.
+#[derive(Debug, Default)]
+pub struct DurationStats {
+  count: AtomicU64,
+  sum_ms: AtomicU64,
+  max_ms: AtomicU64,
+}
+
+impl DurationStats {
+  fn record(&self, duration: Duration) {
+    let ms = duration.as_millis().min(u128::from(u64::MAX)) as u64;
+    self.count.fetch_add(1, Ordering::Relaxed);
+    self.sum_ms.fetch_add(ms, Ordering::Relaxed);
+    self.max_ms.fetch_max(ms, Ordering::Relaxed);
+  }
+
+  pub fn snapshot(&self) -> DurationStatsSnapshot {
+    let count = self.count.load(Ordering::Relaxed);
+    let sum_ms = self.sum_ms.load(Ordering::Relaxed);
+    DurationStatsSnapshot {
+      count,
+      sum_ms,
+      max_ms: self.max_ms.load(Ordering::Relaxed),
+      avg_ms: if count > 0 {
+        sum_ms as f64 / count as f64
+      } else {
+        0.0
+      },
+    }
+  }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct DurationStatsSnapshot {
+  pub count: u64,
+  pub sum_ms: u64,
+  pub max_ms: u64,
+  pub avg_ms: f64,
+}
+
+/// Coarse exit categories for a completed exec channel (PRD: "exec channel
+/// duration and exit category").
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ExecExitCategory {
+  Success,
+  CommandFailed,
+  Timeout,
+  Cancelled,
+  OutputLimitExceeded,
+  TransportError,
+}
+
+/// Process-wide (per-`SshConnectionPool`) transport telemetry. Every field
+/// maps directly onto one bullet of the PRD's "Client and transport
+/// telemetry" list; see the doc comment on each field.
+#[derive(Debug, Default)]
+pub struct SshTransportMetrics {
+  /// "DNS and TCP connection duration" - TCP connect is not separable from
+  /// DNS resolution with `russh::client::connect`'s address-tuple API, so
+  /// this timer spans both, from the start of `connect()` to a successfully
+  /// opened (pre-auth) transport.
+  pub dns_tcp_connect: DurationStats,
+  /// "SSH negotiation and authentication duration" - from a successfully
+  /// opened transport through a completed `authenticate` call.
+  pub ssh_negotiation_and_auth: DurationStats,
+  /// "host-key mismatch count".
+  pub host_key_mismatch_count: AtomicU64,
+  /// "pooled connection reuse" - incremented every time `get_or_connect`
+  /// returns an existing live connection instead of dialing a new one.
+  pub pooled_connection_reuse_count: AtomicU64,
+  /// "reconnect attempts" - incremented every time a dead/missing pooled
+  /// connection triggers a fresh `connect()` call for a key that previously
+  /// had one (a first-ever connection for a key is not a reconnect).
+  pub reconnect_attempts: AtomicU64,
+  /// "exec channel duration" - wall-clock time of one `exec_command` call,
+  /// regardless of outcome.
+  pub exec_channel_duration: DurationStats,
+  /// "exec channel ... exit category" plus "timeout, cancellation, and
+  /// output-limit failures", all recorded as counts keyed by category so a
+  /// dashboard can chart the breakdown without re-deriving it from raw
+  /// error strings.
+  exec_exit_counts: std::sync::Mutex<HashMap<ExecExitCategory, u64>>,
+  /// "PTY start and exit".
+  pub pty_start_count: AtomicU64,
+  pub pty_exit_count: AtomicU64,
+  /// "remote Treq version mismatch" - incremented by a Phase 5+ caller once
+  /// it compares the remote `treq --version` output against the client's
+  /// expected version; this module does not itself know the CLI's version
+  /// contract, so it only exposes the counter.
+  pub remote_version_mismatch_count: AtomicU64,
+}
+
+impl SshTransportMetrics {
+  fn record_exec_exit(&self, category: ExecExitCategory) {
+    let mut counts = self
+      .exec_exit_counts
+      .lock()
+      .unwrap_or_else(|e| e.into_inner());
+    *counts.entry(category).or_insert(0) += 1;
+  }
+
+  pub fn exec_exit_snapshot(&self) -> HashMap<ExecExitCategory, u64> {
+    self
+      .exec_exit_counts
+      .lock()
+      .unwrap_or_else(|e| e.into_inner())
+      .clone()
+  }
+
+  pub fn snapshot(&self) -> SshTransportMetricsSnapshot {
+    let exit_counts = self.exec_exit_snapshot();
+    let count_of = |category: ExecExitCategory| exit_counts.get(&category).copied().unwrap_or(0);
+    SshTransportMetricsSnapshot {
+      dns_tcp_connect: self.dns_tcp_connect.snapshot(),
+      ssh_negotiation_and_auth: self.ssh_negotiation_and_auth.snapshot(),
+      host_key_mismatch_count: self.host_key_mismatch_count.load(Ordering::Relaxed),
+      pooled_connection_reuse_count: self.pooled_connection_reuse_count.load(Ordering::Relaxed),
+      reconnect_attempts: self.reconnect_attempts.load(Ordering::Relaxed),
+      exec_channel_duration: self.exec_channel_duration.snapshot(),
+      exec_success_count: count_of(ExecExitCategory::Success),
+      exec_command_failed_count: count_of(ExecExitCategory::CommandFailed),
+      exec_timeout_count: count_of(ExecExitCategory::Timeout),
+      exec_cancelled_count: count_of(ExecExitCategory::Cancelled),
+      exec_output_limit_exceeded_count: count_of(ExecExitCategory::OutputLimitExceeded),
+      exec_transport_error_count: count_of(ExecExitCategory::TransportError),
+      pty_start_count: self.pty_start_count.load(Ordering::Relaxed),
+      pty_exit_count: self.pty_exit_count.load(Ordering::Relaxed),
+      remote_version_mismatch_count: self.remote_version_mismatch_count.load(Ordering::Relaxed),
+    }
+  }
+}
+
+/// Plain-data snapshot of [`SshTransportMetrics`], serializable so a Tauri
+/// command can hand it straight to the frontend (or a future diagnostics
+/// panel) without exposing the atomics themselves.
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct SshTransportMetricsSnapshot {
+  pub dns_tcp_connect: DurationStatsSnapshot,
+  pub ssh_negotiation_and_auth: DurationStatsSnapshot,
+  pub host_key_mismatch_count: u64,
+  pub pooled_connection_reuse_count: u64,
+  pub reconnect_attempts: u64,
+  pub exec_channel_duration: DurationStatsSnapshot,
+  pub exec_success_count: u64,
+  pub exec_command_failed_count: u64,
+  pub exec_timeout_count: u64,
+  pub exec_cancelled_count: u64,
+  pub exec_output_limit_exceeded_count: u64,
+  pub exec_transport_error_count: u64,
+  pub pty_start_count: u64,
+  pub pty_exit_count: u64,
+  pub remote_version_mismatch_count: u64,
+}
+
+// ---------------------------------------------------------------------------
 // Host-key verification
 // ---------------------------------------------------------------------------
 
@@ -196,6 +368,7 @@ impl HostKeyVerifier {
 #[derive(Clone)]
 struct TreqSshClientHandler {
   verifier: HostKeyVerifier,
+  metrics: Arc<SshTransportMetrics>,
 }
 
 impl ClientHandlerTrait for TreqSshClientHandler {
@@ -208,6 +381,10 @@ impl ClientHandlerTrait for TreqSshClientHandler {
     match self.verifier.verify(server_public_key) {
       Ok(()) => Ok(true),
       Err(error) => {
+        self
+          .metrics
+          .host_key_mismatch_count
+          .fetch_add(1, Ordering::Relaxed);
         // Redaction: log only the endpoint id and fingerprint (public,
         // non-sensitive values), never key material.
         tracing::warn!(
@@ -394,6 +571,7 @@ pub struct SshConnectionPool {
   connections: AsyncMutex<HashMap<PoolKey, PooledConnection>>,
   keepalive_interval: Duration,
   idle_timeout: Duration,
+  pub metrics: Arc<SshTransportMetrics>,
 }
 
 impl Default for SshConnectionPool {
@@ -408,7 +586,14 @@ impl SshConnectionPool {
       connections: AsyncMutex::new(HashMap::new()),
       keepalive_interval: Duration::from_secs(30),
       idle_timeout: Duration::from_secs(600),
+      metrics: Arc::new(SshTransportMetrics::default()),
     }
+  }
+
+  /// Snapshot of this pool's transport telemetry (PRD "Client and transport
+  /// telemetry"). Cheap to call; safe to poll from a Tauri command.
+  pub fn metrics_snapshot(&self) -> SshTransportMetricsSnapshot {
+    self.metrics.snapshot()
   }
 
   /// Returns a live authenticated connection for `endpoint`, reusing a
@@ -422,16 +607,28 @@ impl SshConnectionPool {
     endpoint: &SshEndpoint,
   ) -> Result<Arc<AsyncMutex<Handle<TreqSshClientHandler>>>, SshTransportError> {
     let key = PoolKey::for_endpoint(endpoint);
+    let mut is_reconnect = false;
     {
       let mut connections = self.connections.lock().await;
       if let Some(existing) = connections.get_mut(&key) {
         if existing.alive.load(Ordering::SeqCst) {
           existing.last_used = Instant::now();
+          self
+            .metrics
+            .pooled_connection_reuse_count
+            .fetch_add(1, Ordering::Relaxed);
           return Ok(existing.handle.clone());
         }
         tracing::info!(endpoint_id = %endpoint.id, "pooled ssh connection is dead, reconnecting");
         connections.remove(&key);
+        is_reconnect = true;
       }
+    }
+    if is_reconnect {
+      self
+        .metrics
+        .reconnect_attempts
+        .fetch_add(1, Ordering::Relaxed);
     }
 
     let handle = self.connect(endpoint).await?;
@@ -453,7 +650,10 @@ impl SshConnectionPool {
     endpoint: &SshEndpoint,
   ) -> Result<Arc<AsyncMutex<Handle<TreqSshClientHandler>>>, SshTransportError> {
     let verifier = HostKeyVerifier::new(endpoint.id.clone(), &endpoint.host_keys);
-    let handler = TreqSshClientHandler { verifier };
+    let handler = TreqSshClientHandler {
+      verifier,
+      metrics: self.metrics.clone(),
+    };
 
     let mut config = russh::client::Config::default();
     config.keepalive_interval = Some(self.keepalive_interval);
@@ -463,12 +663,27 @@ impl SshConnectionPool {
     let address = (endpoint.hostname.as_str(), endpoint.port);
     tracing::debug!(endpoint_id = %endpoint.id, hostname = %endpoint.hostname, port = endpoint.port, "opening ssh connection");
 
+    let dial_started = Instant::now();
     let mut handle = russh::client::connect(config, address, handler)
       .await
       .map_err(|error| SshTransportError::ConnectionFailed(error.to_string()))?;
+    // "DNS and TCP connection duration": the interval up to a successfully
+    // opened (pre-auth) transport, since `russh::client::connect` does DNS
+    // resolution and the TCP dial internally and does not expose a
+    // narrower hook between the two.
+    self.metrics.dns_tcp_connect.record(dial_started.elapsed());
 
+    let auth_started = Instant::now();
     ClientAuthenticator::authenticate(&mut handle, &endpoint.username, &endpoint.authentication)
       .await?;
+    // "SSH negotiation and authentication duration": key exchange already
+    // happened inside `connect()` above, but the negotiated session is not
+    // usable until authentication completes, so this is the duration a
+    // caller actually waits on before the connection is usable.
+    self
+      .metrics
+      .ssh_negotiation_and_auth
+      .record(auth_started.elapsed());
 
     tracing::info!(endpoint_id = %endpoint.id, "ssh connection established and authenticated");
     Ok(Arc::new(AsyncMutex::new(handle)))
@@ -593,7 +808,10 @@ pub async fn exec_command(
   limits: ExecLimits,
   cancellation: &CancellationToken,
 ) -> Result<ExecOutput, SshTransportError> {
+  let started = Instant::now();
   if cancellation.is_cancelled() {
+    pool.metrics.exec_channel_duration.record(started.elapsed());
+    pool.metrics.record_exec_exit(ExecExitCategory::Cancelled);
     return Err(SshTransportError::Cancelled);
   }
 
@@ -668,6 +886,16 @@ pub async fn exec_command(
     _ => {}
   }
 
+  pool.metrics.exec_channel_duration.record(started.elapsed());
+  pool.metrics.record_exec_exit(match &outcome {
+    Ok(output) if output.success() => ExecExitCategory::Success,
+    Ok(_) => ExecExitCategory::CommandFailed,
+    Err(SshTransportError::DeadlineExceeded) => ExecExitCategory::Timeout,
+    Err(SshTransportError::Cancelled) => ExecExitCategory::Cancelled,
+    Err(SshTransportError::OutputLimitExceeded) => ExecExitCategory::OutputLimitExceeded,
+    Err(_) => ExecExitCategory::TransportError,
+  });
+
   let output = outcome?;
   if !output.success() {
     return Err(SshTransportError::CommandFailed {
@@ -699,6 +927,7 @@ fn build_remote_command_line(args: &[String]) -> String {
 /// the two are separate transports.
 pub struct RemotePtyChannel {
   channel: AsyncMutex<russh::Channel<russh::client::Msg>>,
+  metrics: Arc<SshTransportMetrics>,
 }
 
 impl RemotePtyChannel {
@@ -732,8 +961,10 @@ impl RemotePtyChannel {
         .await
         .map_err(|error| SshTransportError::ChannelError(error.to_string()))?,
     }
+    pool.metrics.pty_start_count.fetch_add(1, Ordering::Relaxed);
     Ok(Self {
       channel: AsyncMutex::new(channel),
+      metrics: pool.metrics.clone(),
     })
   }
 
@@ -775,10 +1006,12 @@ impl RemotePtyChannel {
 
   pub async fn close(&self) -> Result<(), SshTransportError> {
     let channel = self.channel.lock().await;
-    channel
+    let result = channel
       .close()
       .await
-      .map_err(|error| SshTransportError::ChannelError(error.to_string()))
+      .map_err(|error| SshTransportError::ChannelError(error.to_string()));
+    self.metrics.pty_exit_count.fetch_add(1, Ordering::Relaxed);
+    result
   }
 }
 
@@ -1265,5 +1498,186 @@ mod tests {
       "/srv/my app".to_string(),
     ]);
     assert_eq!(line, "treq 'repo' 'inspect' '/srv/my app'");
+  }
+
+  // -- Metrics ----------------------------------------------------------------
+
+  #[test]
+  fn duration_stats_tracks_count_sum_max_and_avg() {
+    let stats = DurationStats::default();
+    stats.record(Duration::from_millis(10));
+    stats.record(Duration::from_millis(30));
+    stats.record(Duration::from_millis(20));
+
+    let snapshot = stats.snapshot();
+    assert_eq!(snapshot.count, 3);
+    assert_eq!(snapshot.sum_ms, 60);
+    assert_eq!(snapshot.max_ms, 30);
+    assert!((snapshot.avg_ms - 20.0).abs() < f64::EPSILON);
+  }
+
+  #[test]
+  fn duration_stats_snapshot_is_zeroed_before_any_recording() {
+    let stats = DurationStats::default();
+    let snapshot = stats.snapshot();
+    assert_eq!(snapshot.count, 0);
+    assert_eq!(snapshot.sum_ms, 0);
+    assert_eq!(snapshot.max_ms, 0);
+    assert_eq!(snapshot.avg_ms, 0.0);
+  }
+
+  #[test]
+  fn transport_metrics_exec_exit_counts_are_keyed_by_category() {
+    let metrics = SshTransportMetrics::default();
+    metrics.record_exec_exit(ExecExitCategory::Success);
+    metrics.record_exec_exit(ExecExitCategory::Success);
+    metrics.record_exec_exit(ExecExitCategory::Timeout);
+
+    let snapshot = metrics.snapshot();
+    assert_eq!(snapshot.exec_success_count, 2);
+    assert_eq!(snapshot.exec_timeout_count, 1);
+    assert_eq!(snapshot.exec_cancelled_count, 0);
+  }
+
+  #[test]
+  fn transport_metrics_snapshot_reflects_counters() {
+    let metrics = SshTransportMetrics::default();
+    metrics
+      .host_key_mismatch_count
+      .fetch_add(2, Ordering::Relaxed);
+    metrics
+      .pooled_connection_reuse_count
+      .fetch_add(5, Ordering::Relaxed);
+    metrics.reconnect_attempts.fetch_add(1, Ordering::Relaxed);
+    metrics.pty_start_count.fetch_add(3, Ordering::Relaxed);
+    metrics.pty_exit_count.fetch_add(2, Ordering::Relaxed);
+    metrics
+      .remote_version_mismatch_count
+      .fetch_add(1, Ordering::Relaxed);
+
+    let snapshot = metrics.snapshot();
+    assert_eq!(snapshot.host_key_mismatch_count, 2);
+    assert_eq!(snapshot.pooled_connection_reuse_count, 5);
+    assert_eq!(snapshot.reconnect_attempts, 1);
+    assert_eq!(snapshot.pty_start_count, 3);
+    assert_eq!(snapshot.pty_exit_count, 2);
+    assert_eq!(snapshot.remote_version_mismatch_count, 1);
+  }
+
+  #[tokio::test]
+  async fn exec_command_records_success_exit_category_and_duration() {
+    let (addr, host_key) = start_mock_server(0).await;
+    let client_key = test_host_key();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let key_reference = write_client_key(temp_dir.path(), &client_key);
+    let endpoint = test_endpoint(addr, &host_key, key_reference);
+
+    let pool = SshConnectionPool::new();
+    let cancellation = CancellationToken::new();
+
+    exec_command(
+      &pool,
+      &endpoint,
+      &["repo".to_string(), "inspect".to_string()],
+      ExecLimits::default(),
+      &cancellation,
+    )
+    .await
+    .unwrap();
+
+    let snapshot = pool.metrics_snapshot();
+    assert_eq!(snapshot.exec_success_count, 1);
+    assert_eq!(snapshot.exec_channel_duration.count, 1);
+    // A second call against the same endpoint reuses the pooled connection
+    // rather than reconnecting.
+    exec_command(
+      &pool,
+      &endpoint,
+      &["repo".to_string(), "status".to_string()],
+      ExecLimits::default(),
+      &cancellation,
+    )
+    .await
+    .unwrap();
+    let snapshot = pool.metrics_snapshot();
+    assert_eq!(snapshot.pooled_connection_reuse_count, 1);
+    assert_eq!(snapshot.dns_tcp_connect.count, 1);
+  }
+
+  #[tokio::test]
+  async fn exec_command_records_deadline_exceeded_as_timeout_category() {
+    let (addr, host_key) = start_mock_server(1).await;
+    let client_key = test_host_key();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let key_reference = write_client_key(temp_dir.path(), &client_key);
+    let endpoint = test_endpoint(addr, &host_key, key_reference);
+
+    let pool = SshConnectionPool::new();
+    let cancellation = CancellationToken::new();
+    let limits = ExecLimits {
+      deadline: Duration::from_millis(200),
+      ..ExecLimits::default()
+    };
+
+    let _ = exec_command(
+      &pool,
+      &endpoint,
+      &["repo".to_string(), "inspect".to_string()],
+      limits,
+      &cancellation,
+    )
+    .await
+    .unwrap_err();
+
+    let snapshot = pool.metrics_snapshot();
+    assert_eq!(snapshot.exec_timeout_count, 1);
+  }
+
+  #[tokio::test]
+  async fn exec_command_rejects_unknown_host_key_and_records_mismatch() {
+    let (addr, host_key) = start_mock_server(0).await;
+    let client_key = test_host_key();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let key_reference = write_client_key(temp_dir.path(), &client_key);
+    let mut endpoint = test_endpoint(addr, &host_key, key_reference);
+    endpoint.host_keys[0].fingerprint_sha256 = "SHA256:not-the-real-key".to_string();
+
+    let pool = SshConnectionPool::new();
+    let cancellation = CancellationToken::new();
+
+    let _ = exec_command(
+      &pool,
+      &endpoint,
+      &["repo".to_string(), "inspect".to_string()],
+      ExecLimits::default(),
+      &cancellation,
+    )
+    .await
+    .unwrap_err();
+
+    let snapshot = pool.metrics_snapshot();
+    assert_eq!(snapshot.host_key_mismatch_count, 1);
+  }
+
+  #[tokio::test]
+  async fn pty_open_and_close_record_start_and_exit_counts() {
+    let (addr, host_key) = start_mock_server(0).await;
+    let client_key = test_host_key();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let key_reference = write_client_key(temp_dir.path(), &client_key);
+    let endpoint = test_endpoint(addr, &host_key, key_reference);
+
+    let pool = SshConnectionPool::new();
+    let pty = RemotePtyChannel::open(&pool, &endpoint, "xterm", 80, 24, None)
+      .await
+      .unwrap();
+
+    let snapshot = pool.metrics_snapshot();
+    assert_eq!(snapshot.pty_start_count, 1);
+    assert_eq!(snapshot.pty_exit_count, 0);
+
+    let _ = pty.close().await;
+    let snapshot = pool.metrics_snapshot();
+    assert_eq!(snapshot.pty_exit_count, 1);
   }
 }

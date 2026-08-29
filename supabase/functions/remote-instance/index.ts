@@ -29,7 +29,8 @@ import {
   type ManagedComputeProvider,
 } from "../_shared/remote/sprites-adapter.ts";
 import { isSpritesStubEnabled, StubSpritesProvider } from "../_shared/remote/stub-sprites-adapter.ts";
-import { recordAuditEvent } from "../_shared/remote/audit.ts";
+import { recordAuditEvent, startTimer } from "../_shared/remote/audit.ts";
+import { correlationIdFromRequest, logWithCorrelation } from "../_shared/remote/correlation.ts";
 import {
   beginOperation,
   completeOperation,
@@ -54,10 +55,14 @@ const corsHeaders = {
 const MANAGED_SSH_PORT = 22;
 const MANAGED_SSH_USERNAME = "treq";
 
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
+function json(body: unknown, status = 200, correlationId?: string): Response {
+  return new Response(JSON.stringify(correlationId ? { ...(body as object), correlation_id: correlationId } : body), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "application/json",
+      ...(correlationId ? { "x-correlation-id": correlationId } : {}),
+    },
   });
 }
 
@@ -116,41 +121,42 @@ Deno.serve(async (req) => {
 
   const action = body.action;
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  const correlationId = correlationIdFromRequest(req);
 
   try {
     switch (action) {
       case "list_regions":
-        return json({ regions: REGION_CODES });
+        return json({ regions: REGION_CODES }, 200, correlationId);
       case "list_sizes":
-        return json({ presets: SIZE_PRESETS });
+        return json({ presets: SIZE_PRESETS }, 200, correlationId);
       case "status":
-        return await handleStatus(supabase, user.id);
+        return await handleStatus(supabase, user.id, correlationId);
       case "ensure":
-        return await handleEnsure(supabase, user.id, body);
+        return await handleEnsure(supabase, user.id, body, correlationId);
       case "wake":
-        return await handleWake(supabase, user.id, body);
+        return await handleWake(supabase, user.id, body, correlationId);
       case "reprovision":
-        return await handleReprovision(supabase, user.id, body);
+        return await handleReprovision(supabase, user.id, body, correlationId);
       case "delete":
-        return await handleDelete(supabase, user.id, body);
+        return await handleDelete(supabase, user.id, body, correlationId);
       default:
-        return json({ error: `Unknown action '${action}'` }, 400);
+        return json({ error: `Unknown action '${action}'` }, 400, correlationId);
     }
   } catch (err) {
     if (err instanceof ProviderError) {
-      return json({ error: err.message, provider_error: err.kind }, providerErrorStatus(err));
+      return json({ error: err.message, provider_error: err.kind }, providerErrorStatus(err), correlationId);
     }
     if (err instanceof ValidationErrorWithStatus) {
-      return json({ error: err.message }, err.status);
+      return json({ error: err.message }, err.status, correlationId);
     }
-    console.error(`remote-instance action=${action} failed: ${(err as Error).message}`);
-    return json({ error: "Internal error" }, 500);
+    logWithCorrelation(correlationId, "error", `remote-instance action=${action} failed: ${(err as Error).message}`);
+    return json({ error: "Internal error" }, 500, correlationId);
   }
 });
 
-async function handleStatus(supabase: SupabaseClient, ownerUserId: string): Promise<Response> {
+async function handleStatus(supabase: SupabaseClient, ownerUserId: string, correlationId: string): Promise<Response> {
   const instance = await getInstanceForOwner(supabase, ownerUserId);
-  if (!instance) return json({ instance: null, endpoint: null });
+  if (!instance) return json({ instance: null, endpoint: null }, 200, correlationId);
 
   let endpoint = null;
   if (instance.endpoint_id) {
@@ -161,7 +167,7 @@ async function handleStatus(supabase: SupabaseClient, ownerUserId: string): Prom
       .maybeSingle();
     endpoint = data ?? null;
   }
-  return json({ instance, endpoint });
+  return json({ instance, endpoint }, 200, correlationId);
 }
 
 // Closes the Phase 2 "host key fingerprint not yet available" gap with a
@@ -184,6 +190,7 @@ async function establishSshTrust(
     hostname: string;
     port: number;
     generation: number;
+    correlationId: string;
   },
 ): Promise<void> {
   if (isSpritesStubEnabled()) {
@@ -204,6 +211,7 @@ async function establishSshTrust(
       endpointId: params.endpointId,
       eventType: "host_key_registered",
       detail: { note: "REMOTE_SPRITES_STUB active: recorded a placeholder fingerprint, not a real scan", generation: params.generation },
+      correlationId: params.correlationId,
     });
     return;
   }
@@ -223,6 +231,7 @@ async function establishSshTrust(
       endpointId: params.endpointId,
       eventType: "host_key_registered",
       detail: { algorithm: scanned.algorithm, fingerprint: scanned.fingerprintSha256, generation: params.generation },
+      correlationId: params.correlationId,
     });
   } catch (err) {
     const kind = err instanceof KeyscanError ? err.kind : "other";
@@ -232,6 +241,7 @@ async function establishSshTrust(
       endpointId: params.endpointId,
       eventType: "readiness_stage_failed",
       detail: { stage: "host_keyscan", reason: (err as Error).message, kind },
+      correlationId: params.correlationId,
     });
   }
 
@@ -245,6 +255,7 @@ async function establishSshTrust(
       endpointId: params.endpointId,
       eventType: "ca_trust_installed",
       detail: { generation: params.generation },
+      correlationId: params.correlationId,
     });
   } catch (err) {
     await recordAuditEvent(supabase, {
@@ -253,6 +264,7 @@ async function establishSshTrust(
       endpointId: params.endpointId,
       eventType: "ca_trust_install_failed",
       detail: { error: (err as Error).message },
+      correlationId: params.correlationId,
     });
   }
 }
@@ -272,12 +284,14 @@ async function handleEnsure(
   ownerUserId: string,
   // deno-lint-ignore no-explicit-any
   body: Record<string, any>,
+  correlationId: string,
 ): Promise<Response> {
+  const elapsed = startTimer();
   let idempotencyKey: string;
   try {
     idempotencyKey = requireIdempotencyKey(body);
   } catch (err) {
-    return json({ error: (err as Error).message }, 400);
+    return json({ error: (err as Error).message }, 400, correlationId);
   }
 
   const region: RegionCode = isRegionCode(body.region) ? body.region : "us_east";
@@ -287,7 +301,7 @@ async function handleEnsure(
   if (existingOp) {
     // Repeated request with the same key: never create a second instance.
     const instance = await getInstanceForOwner(supabase, ownerUserId);
-    return json({ operation_id: existingOp.id, status: existingOp.status, instance });
+    return json({ operation_id: existingOp.id, status: existingOp.status, instance }, 200, correlationId);
   }
 
   const existingInstance = await getInstanceForOwner(supabase, ownerUserId);
@@ -302,7 +316,7 @@ async function handleEnsure(
       idempotencyKey,
     });
     await completeOperation(supabase, op.id, { status: "succeeded" });
-    return json({ operation_id: op.id, status: "succeeded", instance: existingInstance });
+    return json({ operation_id: op.id, status: "succeeded", instance: existingInstance }, 200, correlationId);
   }
 
   const instance = await createProvisioningInstance(supabase, {
@@ -323,7 +337,9 @@ async function handleEnsure(
     ownerUserId,
     instanceId: instance.id,
     eventType: "instance_create_requested",
-    detail: { region, size_preset: sizePreset, manifest_version: CURRENT_MANIFEST_VERSION, idempotency_key: idempotencyKey },
+    detail: { region, size_preset: sizePreset, manifest_version: CURRENT_MANIFEST_VERSION },
+    correlationId,
+    idempotencyKey,
   });
 
   try {
@@ -361,6 +377,7 @@ async function handleEnsure(
         hostname: providerInstance.address,
         port: MANAGED_SSH_PORT,
         generation: 0,
+        correlationId,
       });
     } else {
       await recordAuditEvent(supabase, {
@@ -368,6 +385,7 @@ async function handleEnsure(
         instanceId: instance.id,
         eventType: "readiness_stage_failed",
         detail: { stage: "endpoint_address", reason: "provider did not return an address yet" },
+        correlationId,
       });
     }
 
@@ -380,10 +398,13 @@ async function handleEnsure(
       instanceId: instance.id,
       eventType: "instance_create_succeeded",
       detail: { provider_resource_id: providerInstance.providerResourceId, observed_state: providerInstance.state },
+      correlationId,
+      providerRequestId: providerInstance.providerResourceId,
+      durationMs: elapsed(),
     });
 
     const refreshed = await getInstanceForOwner(supabase, ownerUserId);
-    return json({ operation_id: op.id, status: "succeeded", instance: refreshed });
+    return json({ operation_id: op.id, status: "succeeded", instance: refreshed }, 200, correlationId);
   } catch (err) {
     await updateInstance(supabase, instance.id, { status: "failed" });
     await completeOperation(supabase, op.id, { status: "failed", errorMessage: (err as Error).message });
@@ -392,6 +413,8 @@ async function handleEnsure(
       instanceId: instance.id,
       eventType: "instance_create_failed",
       detail: { error: (err as Error).message },
+      correlationId,
+      durationMs: elapsed(),
     });
     throw err;
   }
@@ -402,22 +425,24 @@ async function handleWake(
   ownerUserId: string,
   // deno-lint-ignore no-explicit-any
   body: Record<string, any>,
+  correlationId: string,
 ): Promise<Response> {
+  const elapsed = startTimer();
   let idempotencyKey: string;
   try {
     idempotencyKey = requireIdempotencyKey(body);
   } catch (err) {
-    return json({ error: (err as Error).message }, 400);
+    return json({ error: (err as Error).message }, 400, correlationId);
   }
 
   const instance = await requireOwnedInstance(supabase, ownerUserId, body.instance_id);
-  if (!instance.provider_resource_id) return json({ error: "Instance has no provider resource yet" }, 409);
+  if (!instance.provider_resource_id) return json({ error: "Instance has no provider resource yet" }, 409, correlationId);
 
   const existingOp = await findExistingOperation(supabase, ownerUserId, idempotencyKey);
-  if (existingOp) return json({ operation_id: existingOp.id, status: existingOp.status });
+  if (existingOp) return json({ operation_id: existingOp.id, status: existingOp.status }, 200, correlationId);
 
   const op = await beginOperation(supabase, { ownerUserId, instanceId: instance.id, operationType: "wake", idempotencyKey });
-  await recordAuditEvent(supabase, { ownerUserId, instanceId: instance.id, eventType: "instance_wake_requested" });
+  await recordAuditEvent(supabase, { ownerUserId, instanceId: instance.id, eventType: "instance_wake_requested", correlationId, idempotencyKey });
 
   try {
     await updateInstance(supabase, instance.id, { status: "waking" });
@@ -435,8 +460,10 @@ async function handleWake(
       instanceId: instance.id,
       eventType: "instance_wake_succeeded",
       detail: { observed_state: providerInstance.state },
+      correlationId,
+      durationMs: elapsed(),
     });
-    return json({ operation_id: op.id, status: "succeeded" });
+    return json({ operation_id: op.id, status: "succeeded" }, 200, correlationId);
   } catch (err) {
     await completeOperation(supabase, op.id, { status: "failed", errorMessage: (err as Error).message });
     await recordAuditEvent(supabase, {
@@ -444,6 +471,8 @@ async function handleWake(
       instanceId: instance.id,
       eventType: "instance_wake_failed",
       detail: { error: (err as Error).message },
+      correlationId,
+      durationMs: elapsed(),
     });
     throw err;
   }
@@ -454,16 +483,18 @@ async function handleReprovision(
   ownerUserId: string,
   // deno-lint-ignore no-explicit-any
   body: Record<string, any>,
+  correlationId: string,
 ): Promise<Response> {
+  const elapsed = startTimer();
   let idempotencyKey: string;
   try {
     idempotencyKey = requireIdempotencyKey(body);
   } catch (err) {
-    return json({ error: (err as Error).message }, 400);
+    return json({ error: (err as Error).message }, 400, correlationId);
   }
 
   const instance = await requireOwnedInstance(supabase, ownerUserId, body.instance_id);
-  if (!instance.provider_resource_id) return json({ error: "Instance has no provider resource yet" }, 409);
+  if (!instance.provider_resource_id) return json({ error: "Instance has no provider resource yet" }, 409, correlationId);
 
   const region: RegionCode = isRegionCode(body.region) ? body.region : instance.region;
   const sizePreset: SizePreset = isSizePreset(body.size_preset) ? body.size_preset : instance.size_preset;
@@ -474,11 +505,12 @@ async function handleReprovision(
     return json(
       { error: "Region migration is not supported. Delete and re-provision in the new region instead." },
       400,
+      correlationId,
     );
   }
 
   const existingOp = await findExistingOperation(supabase, ownerUserId, idempotencyKey);
-  if (existingOp) return json({ operation_id: existingOp.id, status: existingOp.status });
+  if (existingOp) return json({ operation_id: existingOp.id, status: existingOp.status }, 200, correlationId);
 
   const op = await beginOperation(supabase, {
     ownerUserId,
@@ -492,6 +524,8 @@ async function handleReprovision(
     instanceId: instance.id,
     eventType: "instance_replace_requested",
     detail: { region, size_preset: sizePreset, from_generation: instance.generation, to_generation: nextGeneration },
+    correlationId,
+    idempotencyKey,
   });
 
   try {
@@ -548,6 +582,7 @@ async function handleReprovision(
         hostname: providerInstance.address,
         port: MANAGED_SSH_PORT,
         generation: nextGeneration,
+        correlationId,
       });
       await recordAuditEvent(supabase, {
         ownerUserId,
@@ -560,6 +595,7 @@ async function handleReprovision(
           provider_resource_id: providerInstance.providerResourceId,
           initiating_principal: ownerUserId,
         },
+        correlationId,
       });
     }
 
@@ -569,10 +605,13 @@ async function handleReprovision(
       instanceId: instance.id,
       eventType: "instance_replace_succeeded",
       detail: { generation: nextGeneration, observed_state: providerInstance.state },
+      correlationId,
+      providerRequestId: providerInstance.providerResourceId,
+      durationMs: elapsed(),
     });
 
     const refreshed = await getInstanceForOwner(supabase, ownerUserId);
-    return json({ operation_id: op.id, status: "succeeded", instance: refreshed });
+    return json({ operation_id: op.id, status: "succeeded", instance: refreshed }, 200, correlationId);
   } catch (err) {
     await completeOperation(supabase, op.id, { status: "failed", errorMessage: (err as Error).message });
     await recordAuditEvent(supabase, {
@@ -580,6 +619,8 @@ async function handleReprovision(
       instanceId: instance.id,
       eventType: "instance_replace_failed",
       detail: { error: (err as Error).message },
+      correlationId,
+      durationMs: elapsed(),
     });
     throw err;
   }
@@ -590,21 +631,23 @@ async function handleDelete(
   ownerUserId: string,
   // deno-lint-ignore no-explicit-any
   body: Record<string, any>,
+  correlationId: string,
 ): Promise<Response> {
+  const elapsed = startTimer();
   let idempotencyKey: string;
   try {
     idempotencyKey = requireIdempotencyKey(body);
   } catch (err) {
-    return json({ error: (err as Error).message }, 400);
+    return json({ error: (err as Error).message }, 400, correlationId);
   }
 
   const instance = await requireOwnedInstance(supabase, ownerUserId, body.instance_id);
 
   const existingOp = await findExistingOperation(supabase, ownerUserId, idempotencyKey);
-  if (existingOp) return json({ operation_id: existingOp.id, status: existingOp.status });
+  if (existingOp) return json({ operation_id: existingOp.id, status: existingOp.status }, 200, correlationId);
 
   const op = await beginOperation(supabase, { ownerUserId, instanceId: instance.id, operationType: "delete", idempotencyKey });
-  await recordAuditEvent(supabase, { ownerUserId, instanceId: instance.id, eventType: "instance_delete_requested" });
+  await recordAuditEvent(supabase, { ownerUserId, instanceId: instance.id, eventType: "instance_delete_requested", correlationId, idempotencyKey });
 
   try {
     await updateInstance(supabase, instance.id, { status: "deleting" });
@@ -614,8 +657,14 @@ async function handleDelete(
     }
     await updateInstance(supabase, instance.id, { status: "deleted", endpoint_id: null });
     await completeOperation(supabase, op.id, { status: "succeeded" });
-    await recordAuditEvent(supabase, { ownerUserId, instanceId: instance.id, eventType: "instance_delete_succeeded" });
-    return json({ operation_id: op.id, status: "succeeded" });
+    await recordAuditEvent(supabase, {
+      ownerUserId,
+      instanceId: instance.id,
+      eventType: "instance_delete_succeeded",
+      correlationId,
+      durationMs: elapsed(),
+    });
+    return json({ operation_id: op.id, status: "succeeded" }, 200, correlationId);
   } catch (err) {
     await completeOperation(supabase, op.id, { status: "failed", errorMessage: (err as Error).message });
     await recordAuditEvent(supabase, {
@@ -623,6 +672,8 @@ async function handleDelete(
       instanceId: instance.id,
       eventType: "instance_delete_failed",
       detail: { error: (err as Error).message },
+      correlationId,
+      durationMs: elapsed(),
     });
     throw err;
   }

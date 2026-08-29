@@ -578,3 +578,13 @@ export const remoteDispatchOverSsh = <T = unknown>(
   endpoint: unknown,
   request: unknown,
 ): Promise<T> => invoke("remote_dispatch_over_ssh", { endpoint, request });
+
+/**
+ * Snapshot of this session's SSH transport telemetry (PRD Phase 7 "Client
+ * and transport telemetry"). Kept as the typed frontend counterpart of the
+ * registered Tauri command; a diagnostics panel to display it is future
+ * work.
+ */
+// eslint-disable-next-line local/no-unused-exported-ts-functions, local/require-tauri-api-exports-used
+export const remoteTransportMetrics = <T = unknown>(): Promise<T> =>
+  invoke("remote_transport_metrics");

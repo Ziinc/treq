@@ -21,7 +21,8 @@
 // never included in any response or database write.
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { recordAuditEvent } from "../_shared/remote/audit.ts";
+import { recordAuditEvent, startTimer } from "../_shared/remote/audit.ts";
+import { correlationIdFromRequest, logWithCorrelation } from "../_shared/remote/correlation.ts";
 import {
   beginOperation,
   completeOperation,
@@ -64,10 +65,14 @@ const corsHeaders = {
 const CERTIFICATE_VALIDITY_MINUTES = 20;
 const CERTIFICATE_CLOCK_SKEW_MINUTES = 2;
 
-function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
+function json(body: unknown, status = 200, correlationId?: string): Response {
+  return new Response(JSON.stringify(correlationId ? { ...(body as object), correlation_id: correlationId } : body), {
     status,
-    headers: { ...corsHeaders, "Content-Type": "application/json" },
+    headers: {
+      ...corsHeaders,
+      "Content-Type": "application/json",
+      ...(correlationId ? { "x-correlation-id": correlationId } : {}),
+    },
   });
 }
 
@@ -125,33 +130,34 @@ Deno.serve(async (req) => {
 
   const action = body.action;
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
+  const correlationId = correlationIdFromRequest(req);
 
   try {
     switch (action) {
       case "register_client_key":
-        return await handleRegisterClientKey(supabase, user.id, body);
+        return await handleRegisterClientKey(supabase, user.id, body, correlationId);
       case "list_client_keys":
-        return await handleListClientKeys(supabase, user.id);
+        return await handleListClientKeys(supabase, user.id, correlationId);
       case "revoke_client_key":
-        return await handleRevokeClientKey(supabase, user.id, body);
+        return await handleRevokeClientKey(supabase, user.id, body, correlationId);
       case "issue_certificate":
-        return await handleIssueCertificate(supabase, user.id, body);
+        return await handleIssueCertificate(supabase, user.id, body, correlationId);
       case "install_authorized_key":
-        return await handleAuthorizedKeyChange(supabase, user.id, body, "install");
+        return await handleAuthorizedKeyChange(supabase, user.id, body, "install", correlationId);
       case "remove_authorized_key":
-        return await handleAuthorizedKeyChange(supabase, user.id, body, "remove");
+        return await handleAuthorizedKeyChange(supabase, user.id, body, "remove", correlationId);
       case "keyscan_endpoint":
-        return await handleKeyscanEndpoint(supabase, user.id, body);
+        return await handleKeyscanEndpoint(supabase, user.id, body, correlationId);
       default:
-        return json({ error: `Unknown action '${action}'` }, 400);
+        return json({ error: `Unknown action '${action}'` }, 400, correlationId);
     }
   } catch (err) {
-    if (err instanceof ValidationError) return json({ error: err.message }, err.status);
-    if (err instanceof UnsupportedKeyError) return json({ error: err.message }, 400);
-    if (err instanceof ProviderError) return json({ error: err.message, provider_error: err.kind }, 502);
-    if (err instanceof KeyscanError) return json({ error: err.message, keyscan_error: err.kind }, 502);
-    console.error(`remote-ssh-trust action=${action} failed: ${(err as Error).message}`);
-    return json({ error: "Internal error" }, 500);
+    if (err instanceof ValidationError) return json({ error: err.message }, err.status, correlationId);
+    if (err instanceof UnsupportedKeyError) return json({ error: err.message }, 400, correlationId);
+    if (err instanceof ProviderError) return json({ error: err.message, provider_error: err.kind }, 502, correlationId);
+    if (err instanceof KeyscanError) return json({ error: err.message, keyscan_error: err.kind }, 502, correlationId);
+    logWithCorrelation(correlationId, "error", `remote-ssh-trust action=${action} failed: ${(err as Error).message}`);
+    return json({ error: "Internal error" }, 500, correlationId);
   }
 });
 
@@ -174,6 +180,7 @@ async function handleRegisterClientKey(
   ownerUserId: string,
   // deno-lint-ignore no-explicit-any
   body: Record<string, any>,
+  correlationId: string,
 ): Promise<Response> {
   const idempotencyKey = requireIdempotencyKey(body);
   const publicKeyLine = requireString(body, "public_key");
@@ -182,7 +189,7 @@ async function handleRegisterClientKey(
   const existingOp = await findExistingOperation(supabase, ownerUserId, idempotencyKey);
   if (existingOp) {
     const keys = await listClientKeys(supabase, ownerUserId);
-    return json({ operation_id: existingOp.id, status: existingOp.status, keys: keys.map(toClientKeyResponse) });
+    return json({ operation_id: existingOp.id, status: existingOp.status, keys: keys.map(toClientKeyResponse) }, 200, correlationId);
   }
 
   const parsed = await parseOpenSshPublicKey(publicKeyLine);
@@ -197,7 +204,7 @@ async function handleRegisterClientKey(
   const existing = await findClientKeyByFingerprint(supabase, ownerUserId, parsed.fingerprintSha256);
   if (existing && !existing.revoked_at) {
     await completeOperation(supabase, op.id, { status: "succeeded" });
-    return json({ operation_id: op.id, status: "succeeded", key: toClientKeyResponse(existing) });
+    return json({ operation_id: op.id, status: "succeeded", key: toClientKeyResponse(existing) }, 200, correlationId);
   }
 
   const row = await insertClientKey(supabase, {
@@ -212,13 +219,15 @@ async function handleRegisterClientKey(
     ownerUserId,
     eventType: "client_key_registered",
     detail: { key_id: row.id, algorithm: row.algorithm, fingerprint: row.fingerprint_sha256 },
+    correlationId,
+    idempotencyKey,
   });
-  return json({ operation_id: op.id, status: "succeeded", key: toClientKeyResponse(row) });
+  return json({ operation_id: op.id, status: "succeeded", key: toClientKeyResponse(row) }, 200, correlationId);
 }
 
-async function handleListClientKeys(supabase: SupabaseClient, ownerUserId: string): Promise<Response> {
+async function handleListClientKeys(supabase: SupabaseClient, ownerUserId: string, correlationId: string): Promise<Response> {
   const keys = await listClientKeys(supabase, ownerUserId);
-  return json({ keys: keys.map(toClientKeyResponse) });
+  return json({ keys: keys.map(toClientKeyResponse) }, 200, correlationId);
 }
 
 // Each client key is independently revocable (PRD Goal 6/7). Revoking does
@@ -229,12 +238,13 @@ async function handleRevokeClientKey(
   ownerUserId: string,
   // deno-lint-ignore no-explicit-any
   body: Record<string, any>,
+  correlationId: string,
 ): Promise<Response> {
   const idempotencyKey = requireIdempotencyKey(body);
   const keyId = requireString(body, "key_id");
 
   const existingOp = await findExistingOperation(supabase, ownerUserId, idempotencyKey);
-  if (existingOp) return json({ operation_id: existingOp.id, status: existingOp.status });
+  if (existingOp) return json({ operation_id: existingOp.id, status: existingOp.status }, 200, correlationId);
 
   const key = await getOwnedClientKey(supabase, ownerUserId, keyId);
   if (!key) throw new ValidationError("Key does not belong to this user", 404);
@@ -251,8 +261,10 @@ async function handleRevokeClientKey(
     ownerUserId,
     eventType: "client_key_revoked",
     detail: { key_id: keyId, fingerprint: key.fingerprint_sha256 },
+    correlationId,
+    idempotencyKey,
   });
-  return json({ operation_id: op.id, status: "succeeded" });
+  return json({ operation_id: op.id, status: "succeeded" }, 200, correlationId);
 }
 
 // Resolves and verifies an owned, ready managed instance with its endpoint,
@@ -291,7 +303,9 @@ async function handleIssueCertificate(
   ownerUserId: string,
   // deno-lint-ignore no-explicit-any
   body: Record<string, any>,
+  correlationId: string,
 ): Promise<Response> {
+  const elapsed = startTimer();
   const instanceId = requireString(body, "instance_id");
   const keyId = requireString(body, "key_id");
 
@@ -351,6 +365,8 @@ async function handleIssueCertificate(
       endpointId: endpointRow.id,
       eventType: "certificate_issue_failed",
       detail: { error: (err as Error).message },
+      correlationId,
+      durationMs: elapsed(),
     });
     throw err;
   }
@@ -367,6 +383,8 @@ async function handleIssueCertificate(
       expires_at: validBefore.toISOString(),
       key_id: key.id,
     },
+    correlationId,
+    durationMs: elapsed(),
   });
 
   return json({
@@ -387,7 +405,7 @@ async function handleIssueCertificate(
       })),
       authentication: { type: "certificate", key_reference: key.id },
     },
-  });
+  }, 200, correlationId);
 }
 
 // Direct existing-key auth alternative (PRD "Existing keys without
@@ -399,13 +417,14 @@ async function handleAuthorizedKeyChange(
   // deno-lint-ignore no-explicit-any
   body: Record<string, any>,
   mode: "install" | "remove",
+  correlationId: string,
 ): Promise<Response> {
   const idempotencyKey = requireIdempotencyKey(body);
   const instanceId = requireString(body, "instance_id");
   const keyId = requireString(body, "key_id");
 
   const existingOp = await findExistingOperation(supabase, ownerUserId, idempotencyKey);
-  if (existingOp) return json({ operation_id: existingOp.id, status: existingOp.status });
+  if (existingOp) return json({ operation_id: existingOp.id, status: existingOp.status }, 200, correlationId);
 
   const instance = await requireReadyOwnedInstance(supabase, ownerUserId, instanceId);
   const key = await getOwnedClientKey(supabase, ownerUserId, keyId);
@@ -448,8 +467,10 @@ async function handleAuthorizedKeyChange(
       endpointId: instance.endpoint_id,
       eventType: mode === "install" ? "authorized_key_installed" : "authorized_key_removed",
       detail: { key_id: key.id, fingerprint: key.fingerprint_sha256 },
+      correlationId,
+      idempotencyKey,
     });
-    return json({ operation_id: op.id, status: "succeeded" });
+    return json({ operation_id: op.id, status: "succeeded" }, 200, correlationId);
   } catch (err) {
     await completeOperation(supabase, op.id, { status: "failed", errorMessage: (err as Error).message });
     throw err;
@@ -466,6 +487,7 @@ async function handleKeyscanEndpoint(
   ownerUserId: string,
   // deno-lint-ignore no-explicit-any
   body: Record<string, any>,
+  correlationId: string,
 ): Promise<Response> {
   const instanceId = requireString(body, "instance_id");
   const instance = await getInstanceById(supabase, ownerUserId, instanceId);
@@ -496,8 +518,9 @@ async function handleKeyscanEndpoint(
       endpointId: endpointRow.id,
       eventType: "host_key_registered",
       detail: { algorithm: scanned.algorithm, fingerprint: scanned.fingerprintSha256, generation: instance.generation },
+      correlationId,
     });
-    return json({ host_key: { algorithm: scanned.algorithm, fingerprint_sha256: scanned.fingerprintSha256 } });
+    return json({ host_key: { algorithm: scanned.algorithm, fingerprint_sha256: scanned.fingerprintSha256 } }, 200, correlationId);
   } catch (err) {
     await recordAuditEvent(supabase, {
       ownerUserId,
@@ -505,6 +528,7 @@ async function handleKeyscanEndpoint(
       endpointId: endpointRow.id,
       eventType: "host_keyscan_failed",
       detail: { error: (err as Error).message },
+      correlationId,
     });
     throw err;
   }

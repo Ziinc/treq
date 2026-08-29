@@ -837,6 +837,7 @@ pub fn run() {
             commands::remote_open_repo,
             commands::remote_dispatch_local,
             commands::remote_dispatch_over_ssh,
+            commands::remote_transport_metrics,
             commands::set_window_repo_path,
             commands::get_window_repo_path,
             commands::rebase_home_repo_branch,

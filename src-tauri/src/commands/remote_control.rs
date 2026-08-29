@@ -17,7 +17,9 @@
 
 use crate::core::remote::{RemoteCommandError, TreqCommandRequest};
 use crate::core::remote_control_plane::SshEndpoint;
-use crate::core::remote_ssh_transport::{CancellationToken, ExecLimits, SshConnectionPool};
+use crate::core::remote_ssh_transport::{
+  CancellationToken, ExecLimits, SshConnectionPool, SshTransportMetricsSnapshot,
+};
 use std::sync::Arc;
 use tauri::State;
 
@@ -68,6 +70,19 @@ pub async fn remote_dispatch_over_ssh(
 
 fn remote_command_error_to_string(error: RemoteCommandError) -> String {
   error.to_string()
+}
+
+/// Returns a snapshot of this session's SSH transport telemetry (PRD Phase 7
+/// "Client and transport telemetry" — DNS/TCP and negotiation/auth duration,
+/// host-key mismatches, pooled connection reuse, reconnects, exec channel
+/// duration and exit categories, PTY start/exit, and version-mismatch
+/// counts). A future diagnostics panel can poll this; it is not wired into
+/// any UI component here.
+#[tauri::command]
+pub fn remote_transport_metrics(
+  state: State<'_, RemoteExecState>,
+) -> Result<SshTransportMetricsSnapshot, String> {
+  Ok(state.0.metrics_snapshot())
 }
 
 #[cfg(test)]

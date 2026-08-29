@@ -30,7 +30,20 @@ export type RemoteAuditEventType =
   | "authorized_key_installed"
   | "authorized_key_removed"
   | "ca_trust_installed"
-  | "ca_trust_install_failed";
+  | "ca_trust_install_failed"
+  | "admin_client_key_revoked"
+  | "admin_instance_recovered";
+
+export type RemoteAuditSeverity = "info" | "warning" | "error";
+
+// Event types whose name alone marks them as a failure, so callers do not
+// need to remember to pass severity: "error" for every one of these -
+// forgetting it would silently drop the row out of `remote_recent_failures`.
+const FAILURE_EVENT_SUFFIXES = ["_failed"];
+
+function inferSeverity(eventType: RemoteAuditEventType): RemoteAuditSeverity {
+  return FAILURE_EVENT_SUFFIXES.some((suffix) => eventType.endsWith(suffix)) ? "error" : "info";
+}
 
 export async function recordAuditEvent(
   supabase: SupabaseClient,
@@ -41,19 +54,43 @@ export async function recordAuditEvent(
     eventType: RemoteAuditEventType;
     // deno-lint-ignore no-explicit-any
     detail?: Record<string, any>;
+    /** Threads the desktop request / Edge Function operation / provider call
+     * together. See `_shared/remote/correlation.ts`. Optional only for call
+     * sites (background reconciliation, admin actions with their own
+     * identifier scheme) that do not have an inbound HTTP request. */
+    correlationId?: string | null;
+    providerRequestId?: string | null;
+    idempotencyKey?: string | null;
+    durationMs?: number | null;
+    severity?: RemoteAuditSeverity;
   },
 ): Promise<void> {
+  const severity = params.severity ?? inferSeverity(params.eventType);
   const { error } = await supabase.from("remote_audit_events").insert({
     owner_user_id: params.ownerUserId,
     instance_id: params.instanceId ?? null,
     endpoint_id: params.endpointId ?? null,
     event_type: params.eventType,
     detail: params.detail ?? {},
+    correlation_id: params.correlationId ?? null,
+    provider_request_id: params.providerRequestId ?? null,
+    idempotency_key: params.idempotencyKey ?? null,
+    duration_ms: params.durationMs ?? null,
+    severity,
   });
   // Audit recording failures must not silently vanish, but they also must
   // not fail the underlying lifecycle operation the caller already
   // committed to the provider — log and continue.
   if (error) {
-    console.error(`failed to record audit event ${params.eventType}: ${error.message}`);
+    const correlationSuffix = params.correlationId ? ` correlation_id=${params.correlationId}` : "";
+    console.error(`failed to record audit event ${params.eventType}${correlationSuffix}: ${error.message}`);
   }
+}
+
+/** Small timing helper so call sites recording an operation's duration don't
+ * each hand-roll `Date.now()` bookkeeping (PRD: "idempotency key and
+ * operation duration"). */
+export function startTimer(): () => number {
+  const start = Date.now();
+  return () => Date.now() - start;
 }
