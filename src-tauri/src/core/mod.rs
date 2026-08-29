@@ -9,7 +9,6 @@ pub mod checks_logs;
 pub mod commits;
 pub mod remote;
 pub mod remote_bootstrap;
-pub mod remote_local_keys;
 pub mod remote_control_plane;
 pub mod remote_local_keys;
 pub mod remote_provider;
