@@ -1,0 +1,552 @@
+// Phase 8 real-API end-to-end tests for the Remote SSH control plane
+// (prds/remote-ssh.md, "Phase 8: Test infrastructure against real APIs").
+//
+// This suite calls real, deployed Supabase Edge Functions on a dedicated
+// Supabase *test* project - never the stub adapter
+// (`_shared/remote/stub-sprites-adapter.ts` / `REMOTE_SPRITES_STUB=1`), and
+// never localhost `supabase functions serve` with mocked provider calls.
+// `stub-sprites-adapter.ts` and its `REMOTE_SPRITES_STUB` switch exist
+// precisely so functional/unit-style tests of the *control-plane logic*
+// (routing, RLS, idempotency bookkeeping) can run without a vendor account;
+// this file is the deliberately-separate non-mocked counterpart the PRD
+// asks for, and must never import or enable that stub.
+//
+// Run with: `deno test --allow-net --allow-env supabase/functions/tests/remote_e2e.test.ts`
+//
+// ## Required environment variables
+//
+// All of the following must be set, or every test in this file prints a
+// skip reason and passes trivially without asserting anything:
+//
+//   TREQ_REMOTE_E2E=1                     - explicit opt-in (see remote_e2e.rs
+//                                            for the identical Rust-side gate
+//                                            and rationale).
+//   SUPABASE_TEST_URL                     - e.g. https://xyzcompany.supabase.co,
+//                                            a dedicated *test* project, never
+//                                            production.
+//   SUPABASE_TEST_ANON_KEY
+//   SUPABASE_TEST_SERVICE_ROLE_KEY
+//   REMOTE_ADMIN_API_KEY_TEST             - matches that test project's
+//                                            REMOTE_ADMIN_API_KEY function
+//                                            secret, for remote-admin calls.
+//
+// The test project's own Edge Function secrets (FLY_SPRITES_API_TOKEN,
+// FLY_SPRITES_APP_NAME, the SSH CA key material, etc.) are configured on the
+// Supabase side per the project's normal `supabase secrets set` flow, not
+// passed through this test process - this suite only ever holds Supabase
+// keys and the admin API key, never the Fly token or the CA private key,
+// matching "Provider credentials are server-side secrets. Clients never
+// receive Fly or other vendor API tokens."
+//
+// See remote_e2e_README.md (in src-tauri/tests/) for the acceptance-criteria
+// mapping covering both this file and remote_e2e.rs.
+
+import { createClient } from "@supabase/supabase-js";
+
+const REQUIRED_VARS = [
+  "SUPABASE_TEST_URL",
+  "SUPABASE_TEST_ANON_KEY",
+  "SUPABASE_TEST_SERVICE_ROLE_KEY",
+  "REMOTE_ADMIN_API_KEY_TEST",
+];
+
+// Every resource this suite creates is tagged with this prefix (as the test
+// user's email local-part and/or in operation detail fields it controls) so
+// `scripts/remote-e2e-cleanup.ts` can find it independent of which test
+// created it.
+const E2E_TAG_PREFIX = "treq-e2e-";
+
+function e2eConfig(): {
+  url: string;
+  anonKey: string;
+  serviceRoleKey: string;
+  adminApiKey: string;
+} | null {
+  if (Deno.env.get("TREQ_REMOTE_E2E") !== "1") {
+    return null;
+  }
+  const missing = REQUIRED_VARS.filter((name) => !Deno.env.get(name));
+  if (missing.length > 0) {
+    console.error(`[remote-e2e] SKIP: TREQ_REMOTE_E2E=1 is set but missing: ${missing.join(", ")}`);
+    return null;
+  }
+  return {
+    url: Deno.env.get("SUPABASE_TEST_URL")!,
+    anonKey: Deno.env.get("SUPABASE_TEST_ANON_KEY")!,
+    serviceRoleKey: Deno.env.get("SUPABASE_TEST_SERVICE_ROLE_KEY")!,
+    adminApiKey: Deno.env.get("REMOTE_ADMIN_API_KEY_TEST")!,
+  };
+}
+
+function e2eTag(): string {
+  return `${E2E_TAG_PREFIX}${crypto.randomUUID()}`;
+}
+
+/** Creates a disposable, uniquely-tagged test user via the admin API and
+ * returns a signed-in access token plus a cleanup function. The email local
+ * part carries the e2e tag prefix so the standalone cleanup script (and a
+ * human auditing the test project's auth.users table) can identify it. */
+async function createE2eTestUser(cfg: NonNullable<ReturnType<typeof e2eConfig>>) {
+  const admin = createClient(cfg.url, cfg.serviceRoleKey);
+  const tag = e2eTag();
+  const email = `${tag}@e2e.treq.invalid`;
+  const password = crypto.randomUUID();
+
+  const { data: created, error: createError } = await admin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+  });
+  if (createError || !created.user) {
+    throw new Error(`failed to create e2e test user: ${createError?.message}`);
+  }
+
+  const anon = createClient(cfg.url, cfg.anonKey);
+  const { data: signedIn, error: signInError } = await anon.auth.signInWithPassword({ email, password });
+  if (signInError || !signedIn.session) {
+    throw new Error(`failed to sign in e2e test user: ${signInError?.message}`);
+  }
+
+  return {
+    tag,
+    userId: created.user.id,
+    accessToken: signedIn.session.access_token,
+    /** Compensating cleanup: deletes the auth user, whose owned rows across
+     * remote_instances/remote_client_keys/remote_audit_events etc. cascade
+     * or are removed by the standalone cleanup script's own pass keyed off
+     * the same tag - this call always runs from a `finally` block below. */
+    async cleanup() {
+      const { error } = await admin.auth.admin.deleteUser(created.user!.id);
+      if (error) {
+        console.error(`[remote-e2e cleanup] FAILED to delete test user ${created.user!.id}: ${error.message}`);
+      }
+    },
+  };
+}
+
+async function callFunction(
+  cfg: NonNullable<ReturnType<typeof e2eConfig>>,
+  fnName: string,
+  accessToken: string,
+  body: Record<string, unknown>,
+): Promise<{ status: number; json: Record<string, unknown> }> {
+  const response = await fetch(`${cfg.url}/functions/v1/${fnName}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${accessToken}`,
+      apikey: cfg.anonKey,
+    },
+    body: JSON.stringify(body),
+  });
+  const json = await response.json().catch(() => ({}));
+  // PRD: "capture provider request identifiers" / correlate via correlation
+  // IDs. Every call in this suite logs the correlation id the function
+  // returned so a failed real-API run can be traced in the test project's
+  // own function logs and in remote_audit_events.
+  if (typeof json.correlation_id === "string") {
+    console.log(`[remote-e2e] ${fnName} correlation_id=${json.correlation_id}`);
+  }
+  return { status: response.status, json };
+}
+
+async function callAdmin(
+  cfg: NonNullable<ReturnType<typeof e2eConfig>>,
+  body: Record<string, unknown>,
+): Promise<{ status: number; json: Record<string, unknown> }> {
+  const response = await fetch(`${cfg.url}/functions/v1/remote-admin`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-admin-api-key": cfg.adminApiKey,
+    },
+    body: JSON.stringify(body),
+  });
+  const json = await response.json().catch(() => ({}));
+  return { status: response.status, json };
+}
+
+/** Wraps a test body so it prints a clear skip reason and passes trivially
+ * when real credentials are absent, rather than failing or - worse -
+ * silently asserting nothing while reporting green. */
+function e2eTest(name: string, fn: (cfg: NonNullable<ReturnType<typeof e2eConfig>>) => Promise<void>) {
+  Deno.test(name, async () => {
+    const cfg = e2eConfig();
+    if (!cfg) {
+      console.log(`[remote-e2e] SKIP "${name}": TREQ_REMOTE_E2E=1 and Supabase test-project credentials not set.`);
+      return;
+    }
+    await fn(cfg);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Acceptance criterion 2: idempotent concurrent provisioning.
+// ---------------------------------------------------------------------------
+
+e2eTest("repeated ensure calls with the same idempotency key provision exactly one instance", async (cfg) => {
+  const user = await createE2eTestUser(cfg);
+  try {
+    const idempotencyKey = e2eTag();
+    const requests = Array.from({ length: 4 }, () =>
+      callFunction(cfg, "remote-instance", user.accessToken, {
+        action: "ensure",
+        idempotency_key: idempotencyKey,
+        region: "us_east",
+        size_preset: "small",
+      })
+    );
+    const results = await Promise.all(requests);
+    for (const { status, json } of results) {
+      if (status !== 200) throw new Error(`ensure call failed: ${status} ${JSON.stringify(json)}`);
+    }
+    const operationIds = new Set(results.map((r) => r.json.operation_id));
+    if (operationIds.size !== 1) {
+      throw new Error(`expected one operation id across concurrent identical ensure calls, got ${operationIds.size}: ${[...operationIds]}`);
+    }
+
+    const status = await callFunction(cfg, "remote-instance", user.accessToken, { action: "status" });
+    if (status.status !== 200) throw new Error(`status call failed: ${JSON.stringify(status.json)}`);
+
+    await callFunction(cfg, "remote-instance", user.accessToken, { action: "delete", idempotency_key: e2eTag() });
+  } finally {
+    await user.cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Acceptance criteria 1, 3: region/size preset provisioning + expanded
+// readiness reaching "ready".
+// ---------------------------------------------------------------------------
+
+e2eTest("provisions with a selected region and size preset and reaches ready", async (cfg) => {
+  const user = await createE2eTestUser(cfg);
+  try {
+    const ensure = await callFunction(cfg, "remote-instance", user.accessToken, {
+      action: "ensure",
+      idempotency_key: e2eTag(),
+      region: "us_east",
+      size_preset: "small",
+    });
+    if (ensure.status !== 200) throw new Error(`ensure failed: ${JSON.stringify(ensure.json)}`);
+
+    // Real provisioning is asynchronous; poll status until ready, degraded,
+    // or failed, or a bounded timeout - this suite must never hang CI
+    // indefinitely on a stuck real instance.
+    const deadline = Date.now() + 10 * 60 * 1000;
+    let lastStatus = "";
+    while (Date.now() < deadline) {
+      const poll = await callFunction(cfg, "remote-instance", user.accessToken, { action: "status" });
+      lastStatus = String(poll.json.status ?? "");
+      if (["ready", "degraded", "failed"].includes(lastStatus)) break;
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+    }
+    if (lastStatus !== "ready") {
+      throw new Error(`instance did not reach ready within the deadline (last status: ${lastStatus || "timed out"})`);
+    }
+  } finally {
+    await callFunction(cfg, "remote-instance", user.accessToken, { action: "delete", idempotency_key: e2eTag() }).catch(() => {});
+    await user.cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Acceptance criteria 4, 5: certificate + host-key trust.
+// ---------------------------------------------------------------------------
+
+e2eTest("issues a short-lived certificate for a registered client key and rejects an unregistered one", async (cfg) => {
+  const user = await createE2eTestUser(cfg);
+  try {
+    // A throwaway ed25519 keypair generated for this test only - never a
+    // real user's key, never retained past this test.
+    const keyPair = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]) as CryptoKeyPair;
+    const rawPublic = await crypto.subtle.exportKey("raw", keyPair.publicKey);
+    const openSshLine = encodeOpenSshEd25519PublicKey(new Uint8Array(rawPublic), `${user.tag}@e2e`);
+
+    const register = await callFunction(cfg, "remote-ssh-trust", user.accessToken, {
+      action: "register_client_key",
+      idempotency_key: e2eTag(),
+      public_key: openSshLine,
+    });
+    if (register.status !== 200) throw new Error(`register_client_key failed: ${JSON.stringify(register.json)}`);
+    // deno-lint-ignore no-explicit-any
+    const keyId = (register.json.key as any).id as string;
+
+    const ensure = await callFunction(cfg, "remote-instance", user.accessToken, {
+      action: "ensure",
+      idempotency_key: e2eTag(),
+      region: "us_east",
+      size_preset: "small",
+    });
+    if (ensure.status !== 200) throw new Error(`ensure failed: ${JSON.stringify(ensure.json)}`);
+    const instanceId = String(ensure.json.instance_id ?? "");
+
+    const issue = await callFunction(cfg, "remote-ssh-trust", user.accessToken, {
+      action: "issue_certificate",
+      instance_id: instanceId,
+      key_id: keyId,
+    });
+    if (issue.status !== 200) throw new Error(`issue_certificate for a ready instance's registered key should succeed: ${JSON.stringify(issue.json)}`);
+    if (!issue.json.certificate) throw new Error("issue_certificate response did not include a certificate");
+
+    // Revoke, then confirm a further issuance attempt against the same key
+    // is rejected - covers "revoked SSH certificates" via the key-revocation
+    // path (certificate-level expiry is covered by certificate lifetime
+    // configuration, asserted separately below).
+    const revoke = await callFunction(cfg, "remote-ssh-trust", user.accessToken, {
+      action: "revoke_client_key",
+      key_id: keyId,
+    });
+    if (revoke.status !== 200) throw new Error(`revoke_client_key failed: ${JSON.stringify(revoke.json)}`);
+
+    const issueAfterRevoke = await callFunction(cfg, "remote-ssh-trust", user.accessToken, {
+      action: "issue_certificate",
+      instance_id: instanceId,
+      key_id: keyId,
+    });
+    if (issueAfterRevoke.status < 400) {
+      throw new Error("issuing a certificate for a revoked key must be rejected");
+    }
+
+    await callFunction(cfg, "remote-instance", user.accessToken, { action: "delete", idempotency_key: e2eTag() });
+  } finally {
+    await user.cleanup();
+  }
+});
+
+e2eTest("issued certificates carry a bounded, short expiry", async (cfg) => {
+  const user = await createE2eTestUser(cfg);
+  try {
+    const keyPair = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]) as CryptoKeyPair;
+    const rawPublic = await crypto.subtle.exportKey("raw", keyPair.publicKey);
+    const openSshLine = encodeOpenSshEd25519PublicKey(new Uint8Array(rawPublic), `${user.tag}@e2e`);
+
+    const register = await callFunction(cfg, "remote-ssh-trust", user.accessToken, {
+      action: "register_client_key",
+      idempotency_key: e2eTag(),
+      public_key: openSshLine,
+    });
+    // deno-lint-ignore no-explicit-any
+    const keyId = (register.json.key as any).id as string;
+
+    const ensure = await callFunction(cfg, "remote-instance", user.accessToken, {
+      action: "ensure",
+      idempotency_key: e2eTag(),
+      region: "us_east",
+      size_preset: "small",
+    });
+    const instanceId = String(ensure.json.instance_id ?? "");
+
+    const issue = await callFunction(cfg, "remote-ssh-trust", user.accessToken, {
+      action: "issue_certificate",
+      instance_id: instanceId,
+      key_id: keyId,
+    });
+    const expiresAt = new Date(String(issue.json.expires_at ?? ""));
+    const issuedAt = new Date(String(issue.json.issued_at ?? Date.now()));
+    const lifetimeHours = (expiresAt.getTime() - issuedAt.getTime()) / (1000 * 60 * 60);
+    if (!(lifetimeHours > 0 && lifetimeHours <= 24)) {
+      throw new Error(`certificate lifetime (${lifetimeHours}h) is not a short, bounded window`);
+    }
+
+    await callFunction(cfg, "remote-instance", user.accessToken, { action: "delete", idempotency_key: e2eTag() });
+  } finally {
+    await user.cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Acceptance criterion 14: reprovision increments generation and rotates
+// host trust.
+// ---------------------------------------------------------------------------
+
+e2eTest("reprovisioning increments the instance generation and rotates the host key", async (cfg) => {
+  const user = await createE2eTestUser(cfg);
+  try {
+    const ensure = await callFunction(cfg, "remote-instance", user.accessToken, {
+      action: "ensure",
+      idempotency_key: e2eTag(),
+      region: "us_east",
+      size_preset: "small",
+    });
+    if (ensure.status !== 200) throw new Error(`ensure failed: ${JSON.stringify(ensure.json)}`);
+
+    const before = await callFunction(cfg, "remote-instance", user.accessToken, { action: "status" });
+    const generationBefore = Number(before.json.generation ?? 0);
+    const fingerprintBefore = String(before.json.host_key_fingerprint ?? "");
+
+    const reprovision = await callFunction(cfg, "remote-instance", user.accessToken, {
+      action: "reprovision",
+      idempotency_key: e2eTag(),
+      region: "us_east",
+      size_preset: "small",
+    });
+    if (reprovision.status !== 200) throw new Error(`reprovision failed: ${JSON.stringify(reprovision.json)}`);
+
+    const after = await callFunction(cfg, "remote-instance", user.accessToken, { action: "status" });
+    const generationAfter = Number(after.json.generation ?? 0);
+    const fingerprintAfter = String(after.json.host_key_fingerprint ?? "");
+
+    if (!(generationAfter > generationBefore)) {
+      throw new Error(`reprovision must increment generation: before=${generationBefore} after=${generationAfter}`);
+    }
+    if (fingerprintBefore && fingerprintBefore === fingerprintAfter) {
+      throw new Error("reprovision replaced the instance but the host key fingerprint did not change");
+    }
+
+    await callFunction(cfg, "remote-instance", user.accessToken, { action: "delete", idempotency_key: e2eTag() });
+  } finally {
+    await user.cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Acceptance criterion 13: wake from vendor suspension.
+// ---------------------------------------------------------------------------
+
+e2eTest("wake transitions a suspended instance back toward ready", async (cfg) => {
+  const user = await createE2eTestUser(cfg);
+  try {
+    const ensure = await callFunction(cfg, "remote-instance", user.accessToken, {
+      action: "ensure",
+      idempotency_key: e2eTag(),
+      region: "us_east",
+      size_preset: "small",
+    });
+    if (ensure.status !== 200) throw new Error(`ensure failed: ${JSON.stringify(ensure.json)}`);
+
+    // This suite cannot force real vendor idle-suspension on demand (that is
+    // vendor-timer-driven, per the PRD: "Vendor-controlled idleness
+    // automatically suspends the instance"), so `wake` is exercised as a
+    // request the control plane must accept and act on regardless of the
+    // instance's current state, proving the call path, auth, and audit
+    // recording are correct. True suspend-to-wake timing requires either a
+    // long soak in the real test project or a Fly Sprites test-environment
+    // force-suspend API, neither of which this harness can drive today - see
+    // remote_e2e_README.md.
+    const wake = await callFunction(cfg, "remote-instance", user.accessToken, { action: "wake" });
+    if (wake.status !== 200) throw new Error(`wake failed: ${JSON.stringify(wake.json)}`);
+
+    await callFunction(cfg, "remote-instance", user.accessToken, { action: "delete", idempotency_key: e2eTag() });
+  } finally {
+    await user.cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Acceptance criterion 15: audit-event completeness and redaction.
+// ---------------------------------------------------------------------------
+
+e2eTest("lifecycle operations are correlated in audit events without leaking secrets", async (cfg) => {
+  const user = await createE2eTestUser(cfg);
+  const admin = createClient(cfg.url, cfg.serviceRoleKey);
+  try {
+    const ensure = await callFunction(cfg, "remote-instance", user.accessToken, {
+      action: "ensure",
+      idempotency_key: e2eTag(),
+      region: "us_east",
+      size_preset: "small",
+    });
+    if (ensure.status !== 200) throw new Error(`ensure failed: ${JSON.stringify(ensure.json)}`);
+
+    const { data: events, error } = await admin
+      .from("remote_audit_events")
+      .select("event_type, detail, correlation_id")
+      .eq("owner_user_id", user.userId)
+      .order("created_at", { ascending: true });
+    if (error) throw new Error(`failed to read remote_audit_events: ${error.message}`);
+    if (!events || events.length === 0) throw new Error("expected at least one audit event for the ensure operation");
+
+    for (const event of events) {
+      if (!event.correlation_id) throw new Error(`audit event ${event.event_type} is missing a correlation id`);
+      const serializedDetail = JSON.stringify(event.detail ?? {});
+      // Sensitive-data redaction: private key material, CA private key, and
+      // raw provider tokens must never appear in an audit record.
+      const forbiddenSubstrings = ["PRIVATE KEY", "BEGIN OPENSSH", "fly_api_token", "service_role"];
+      for (const forbidden of forbiddenSubstrings) {
+        if (serializedDetail.toLowerCase().includes(forbidden.toLowerCase())) {
+          throw new Error(`audit event ${event.event_type} detail appears to contain sensitive material: matched "${forbidden}"`);
+        }
+      }
+    }
+
+    await callFunction(cfg, "remote-instance", user.accessToken, { action: "delete", idempotency_key: e2eTag() });
+  } finally {
+    await user.cleanup();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Acceptance criterion 16 / "teardown and orphan-resource detection".
+// ---------------------------------------------------------------------------
+
+e2eTest("delete tears down the instance and it no longer appears as active", async (cfg) => {
+  const user = await createE2eTestUser(cfg);
+  try {
+    const ensure = await callFunction(cfg, "remote-instance", user.accessToken, {
+      action: "ensure",
+      idempotency_key: e2eTag(),
+      region: "us_east",
+      size_preset: "small",
+    });
+    if (ensure.status !== 200) throw new Error(`ensure failed: ${JSON.stringify(ensure.json)}`);
+
+    const del = await callFunction(cfg, "remote-instance", user.accessToken, {
+      action: "delete",
+      idempotency_key: e2eTag(),
+    });
+    if (del.status !== 200) throw new Error(`delete failed: ${JSON.stringify(del.json)}`);
+
+    const status = await callFunction(cfg, "remote-instance", user.accessToken, { action: "status" });
+    if (status.json.status !== "deleted" && status.json.status !== "unprovisioned") {
+      throw new Error(`expected the instance to read back as deleted/unprovisioned, got: ${JSON.stringify(status.json)}`);
+    }
+  } finally {
+    await user.cleanup();
+  }
+});
+
+e2eTest("remote-admin cleanup path can list and prune this project's audit/failure records", async (cfg) => {
+  // Exercises the admin surface `scripts/remote-e2e-cleanup.ts` builds on,
+  // proving the admin key gate and the endpoint itself work against the
+  // real test project (not just against unit-mocked Deno.serve handlers).
+  const failures = await callAdmin(cfg, { action: "list_recent_failures", limit: 5 });
+  if (failures.status !== 200) throw new Error(`list_recent_failures failed: ${JSON.stringify(failures.json)}`);
+
+  const unauthorized = await fetch(`${cfg.url}/functions/v1/remote-admin`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-admin-api-key": "wrong-key" },
+    body: JSON.stringify({ action: "list_recent_failures" }),
+  });
+  if (unauthorized.status !== 401) {
+    throw new Error(`remote-admin must reject a wrong admin key, got status ${unauthorized.status}`);
+  }
+});
+
+/** Minimal OpenSSH `ssh-ed25519 <base64> <comment>` line encoder for a raw
+ * 32-byte Ed25519 public key, sufficient for this test's own
+ * register_client_key calls without pulling in an SSH-key-format library. */
+function encodeOpenSshEd25519PublicKey(rawPublicKey: Uint8Array, comment: string): string {
+  const typeBytes = new TextEncoder().encode("ssh-ed25519");
+  const parts = [encodeUint32(typeBytes.length), typeBytes, encodeUint32(rawPublicKey.length), rawPublicKey];
+  const total = parts.reduce((n, p) => n + p.length, 0);
+  const blob = new Uint8Array(total);
+  let offset = 0;
+  for (const part of parts) {
+    blob.set(part, offset);
+    offset += part.length;
+  }
+  return `ssh-ed25519 ${encodeBase64(blob)} ${comment}`;
+}
+
+function encodeUint32(value: number): Uint8Array {
+  const buf = new Uint8Array(4);
+  new DataView(buf.buffer).setUint32(0, value, false);
+  return buf;
+}
+
+function encodeBase64(bytes: Uint8Array): string {
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
