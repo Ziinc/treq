@@ -2,6 +2,13 @@ export interface SshHost {
   alias: string;
 }
 
+export interface LocalSshIdentity {
+  reference: string;
+  label: string;
+  fingerprint_sha256: string;
+  algorithm: string;
+}
+
 export interface RemoteReadinessCheck {
   name: string;
   available: boolean;

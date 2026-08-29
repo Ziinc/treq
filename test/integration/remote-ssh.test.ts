@@ -18,17 +18,19 @@ describe("remote SSH integration", () => {
     window.history.replaceState({}, "", "/");
   });
 
-  it("opens the SSH repository dialog from onboarding", async () => {
+  it("opens the remote setup dialog from onboarding", async () => {
     render(React.createElement(Dashboard));
     await user.click(
       await screen.findByRole("button", { name: "Open via SSH" }),
     );
 
     expect(
-      await screen.findByRole("dialog", { name: "Open via SSH" }),
+      await screen.findByRole("dialog", { name: "Connect a remote repository" }),
     ).toBeTruthy();
-    expect(screen.getByLabelText("SSH host")).toBeTruthy();
-    expect(screen.getByLabelText("Remote directory")).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: /Treq-managed VM/ }),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: /Your own VM/ })).toBeTruthy();
   });
 
   it("restores the last remote repository without reading it locally", async () => {
