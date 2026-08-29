@@ -30,7 +30,7 @@ import type {
   LocalSshIdentity,
   DeviceKeyInfo,
 } from "./api-types";
-import type { RepoYamlConfig } from "./api-extra";
+import type { InstalledSkill, RepoYamlConfig } from "./api-extra";
 
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -575,3 +575,8 @@ export const listLocalSshIdentities = (): Promise<LocalSshIdentity[]> =>
  */
 export const ensureMobileDeviceKey = (): Promise<DeviceKeyInfo> =>
   invoke("ensure_mobile_device_key");
+
+export const listInstalledSkills = (
+  repoPath?: string | null,
+): Promise<InstalledSkill[]> =>
+  invoke("list_installed_skills", { repoPath: repoPath ?? null });

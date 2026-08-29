@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import useSWR from "swr";
 import {
   installSkill,
+  listInstalledSkills,
   listSkillCatalog,
   setSkillInstallScope,
   uninstallSkill,
@@ -37,6 +38,10 @@ export function SkillLibrarySettings({
     ["skill-catalog", repoPath, catalogUrl ?? ""],
     () => listSkillCatalog(repoPath, catalogUrl),
   );
+  const { data: installed, mutate: mutateInstalled } = useSWR(
+    ["installed-skills", repoPath],
+    () => listInstalledSkills(repoPath),
+  );
 
   const skills = useMemo(() => {
     const list = data?.skills ?? [];
@@ -47,7 +52,7 @@ export function SkillLibrarySettings({
     setPendingId(skillId);
     try {
       await action();
-      await mutate();
+      await Promise.all([mutate(), mutateInstalled()]);
     } catch (err) {
       addToast({
         title: "Skill library",
@@ -67,6 +72,9 @@ export function SkillLibrarySettings({
           Browse the Treq skill registry and install skills into this
           application or the current repository. Installed skills are copied
           into new workspaces after checksum verification.
+        </p>
+        <p className="text-sm text-muted-foreground mt-1">
+          {installed?.length ?? 0} installed
         </p>
       </div>
 
