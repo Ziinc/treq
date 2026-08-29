@@ -71,6 +71,10 @@ describe("artifacts page", () => {
     expect(screen.getByTestId("artifact-thumb-send-100")).toBeTruthy();
     expect(window.location.hash).toContain(ARTIFACTS_BASE_PATH);
 
+    expect(screen.getByTestId("artifact-thumb-send-100").getAttribute("draggable")).toBe(
+      "true",
+    );
+
     await user.click(screen.getByTestId("artifact-thumb-send-100"));
     expect(
       await screen.findByTestId("treq-send-preview-lightbox"),

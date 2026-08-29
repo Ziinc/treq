@@ -3,7 +3,7 @@ import type { ReactElement } from "react";
 import userEvent from "@testing-library/user-event";
 import { listen } from "@tauri-apps/api/event";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { TerminalSendPreviews } from "./TerminalSendPreviews";
 import { ToastProvider } from "../ui/toast";
 import { AppStoreEffects } from "../../stores/AppStoreEffects";
@@ -12,6 +12,7 @@ import { TREQ_SEND_EVENT } from "../../lib/treqSend";
 import * as api from "../../lib/api";
 import * as treqSend from "../../lib/treqSend";
 import * as utils from "../../lib/utils";
+import { SEND_ASSET_MIME } from "../../lib/send-asset-drag";
 import * as sendAssetReview from "../../lib/sendAssetReview";
 
 vi.spyOn(api, "readFile").mockResolvedValue("hello from send");
@@ -24,10 +25,12 @@ function SendHarness({
   ptySessionId,
   isActive = true,
   onSendReview,
+  onInsertIntoTerminal,
 }: {
   ptySessionId: string;
   isActive?: boolean;
   onSendReview?: (prompt: string) => void;
+  onInsertIntoTerminal?: (text: string) => void;
 }) {
   const ingestPayload = useTreqSendStore((s) => s.ingestPayload);
   return (
@@ -68,6 +71,7 @@ function SendHarness({
         ptySessionId={ptySessionId}
         isActive={isActive}
         onSendReview={onSendReview}
+        onInsertIntoTerminal={onInsertIntoTerminal}
       />
     </div>
   );
@@ -439,6 +443,52 @@ describe("TerminalSendPreviews", () => {
     );
     expect(onSendReview).toHaveBeenCalledWith(
       expect.stringContaining("Highlights:"),
+    );
+  });
+
+  it("drags a thumbnail with the quoted asset path and inserts it on drop", async () => {
+    const user = userEvent.setup();
+    const onInsertIntoTerminal = vi.fn();
+    renderSend(
+      <SendHarness
+        ptySessionId="session-1"
+        onInsertIntoTerminal={onInsertIntoTerminal}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Inject text" }));
+    const thumb = await screen.findByTestId("terminal-send-preview-send-1");
+    expect(thumb.getAttribute("draggable")).toBe("true");
+
+    const store = new Map<string, string>();
+    const types: string[] = [];
+    const dataTransfer = {
+      dropEffect: "none",
+      effectAllowed: "all",
+      files: [] as unknown as FileList,
+      items: [] as unknown as DataTransferItemList,
+      types,
+      clearData: () => store.clear(),
+      getData: (format: string) => store.get(format) ?? "",
+      setData: (format: string, data: string) => {
+        store.set(format, data);
+        if (!types.includes(format)) types.push(format);
+      },
+      setDragImage: () => {},
+    } as DataTransfer;
+
+    fireEvent.dragStart(thumb, { dataTransfer });
+    expect(dataTransfer.getData(SEND_ASSET_MIME)).toContain(
+      "/tmp/repo/.treq/send/note.txt",
+    );
+    expect(dataTransfer.getData("text/plain")).toBe(
+      "'/tmp/repo/.treq/send/note.txt'",
+    );
+
+    fireEvent.drop(screen.getByTestId("terminal-send-previews-drop"), {
+      dataTransfer,
+    });
+    expect(onInsertIntoTerminal).toHaveBeenCalledWith(
+      "'/tmp/repo/.treq/send/note.txt'",
     );
   });
 });

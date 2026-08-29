@@ -120,6 +120,11 @@ it("captures treq send attachment thumbs and lightbox carousel previews", async 
   );
   expect(await screen.findByTestId("terminal-send-previews")).toBeTruthy();
   expect(
+    screen
+      .getByTestId("terminal-send-preview-qa-send-text")
+      .getAttribute("draggable"),
+  ).toBe("true");
+  expect(
     imageThumb.closest('[data-slot="attachment"]')?.querySelector("img"),
   ).toBeTruthy();
 

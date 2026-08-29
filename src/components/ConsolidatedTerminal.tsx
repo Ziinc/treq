@@ -29,6 +29,10 @@ import { cn } from "../lib/utils";
 import { Loader2 } from "lucide-react";
 import { TerminalErrorOverlay } from "./terminal/TerminalErrorOverlay";
 import { normalizeCommand } from "./terminal/normalizeCommand";
+import {
+  canAcceptTerminalDrop,
+  terminalInsertTextFromDrop,
+} from "../lib/send-asset-drag";
 
 interface ConsolidatedTerminalProps {
   ref?: Ref<ConsolidatedTerminalHandle>;
@@ -540,22 +544,16 @@ export const ConsolidatedTerminal = ({
             "[&_.xterm-viewport::-webkit-scrollbar-thumb]:rounded",
           )}
           onDragOver={(e) => {
+            if (!canAcceptTerminalDrop(e.dataTransfer)) return;
             e.preventDefault();
             e.dataTransfer.dropEffect = "copy";
           }}
           onDrop={(e) => {
+            const text = terminalInsertTextFromDrop(e.dataTransfer);
+            if (!text) return;
             e.preventDefault();
-            // Get file paths from the drop event
-            const files = Array.from(e.dataTransfer.files);
-            if (files.length > 0 && isPtyReadyRef.current) {
-              // In Tauri/Electron, files have a 'path' property
-              const paths = files
-                .map((f: File & { path?: string }) => f.path)
-                .filter(Boolean)
-                .join(" ");
-              if (paths) {
-                ptyWrite(sessionId, paths).catch(console.error);
-              }
+            if (isPtyReadyRef.current) {
+              ptyWrite(sessionId, text).catch(console.error);
             }
           }}
         />

@@ -1,6 +1,11 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { FileText, X } from "lucide-react";
 import { assetsForPtySession, treqSendFileSrc } from "../../lib/treqSend";
+import {
+  canAcceptTerminalDrop,
+  setSendAssetDragData,
+  terminalInsertTextFromDrop,
+} from "../../lib/send-asset-drag";
 import { cn } from "../../lib/utils";
 import { useTreqSendStore } from "../../stores/treqSendStore";
 import {
@@ -19,6 +24,7 @@ interface TerminalSendPreviewsProps {
   isActive?: boolean;
   className?: string;
   onSendReview?: (prompt: string) => void;
+  onInsertIntoTerminal?: (text: string) => void;
 }
 
 export function TerminalSendPreviews({
@@ -26,11 +32,13 @@ export function TerminalSendPreviews({
   isActive = false,
   className,
   onSendReview,
+  onInsertIntoTerminal,
 }: TerminalSendPreviewsProps) {
   const sendAssets = useTreqSendStore((s) => s.assets);
   const dismissAsset = useTreqSendStore((s) => s.dismissAsset);
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const skipClickAfterDragRef = useRef(false);
 
   const assets = assetsForPtySession(sendAssets, ptySessionId, isActive).filter(
     (asset) => asset.mediaType !== "browser",
@@ -56,20 +64,59 @@ export function TerminalSendPreviews({
             aria-hidden
             className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#1e1e1e] via-[#1e1e1e]/85 to-transparent"
           />
-          <div className="pointer-events-auto relative px-3 pb-8 pt-3">
+          <div
+            data-testid="terminal-send-previews-drop"
+            className="pointer-events-auto relative px-3 pb-8 pt-3"
+            onDragOver={(e) => {
+              if (!canAcceptTerminalDrop(e.dataTransfer)) return;
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "copy";
+            }}
+            onDrop={(e) => {
+              const text = terminalInsertTextFromDrop(e.dataTransfer);
+              if (!text || !onInsertIntoTerminal) return;
+              e.preventDefault();
+              onInsertIntoTerminal(text);
+            }}
+          >
             <AttachmentGroup className="gap-2 overflow-x-auto py-0 pt-2 pr-2">
               {assets.map((asset) => (
                 <Attachment
                   key={asset.id}
                   state="done"
                   variant="thumbnail"
+                  draggable
+                  className="cursor-grab active:cursor-grabbing"
                   onMouseEnter={() => setHoveredId(asset.id)}
                   onMouseLeave={() => setHoveredId(null)}
+                  onDragStart={(event) => {
+                    skipClickAfterDragRef.current = true;
+                    setSendAssetDragData(event.dataTransfer, {
+                      path: asset.path,
+                      title: asset.title,
+                    });
+                  }}
+                  onDragEnd={() => {
+                    window.setTimeout(() => {
+                      skipClickAfterDragRef.current = false;
+                    }, 0);
+                  }}
                 >
                   <AttachmentTrigger
                     data-testid={`terminal-send-preview-${asset.id}`}
                     aria-label={`Preview ${asset.title}`}
-                    onClick={() => openPreview(asset.id)}
+                    draggable
+                    onDragStart={(event) => {
+                      skipClickAfterDragRef.current = true;
+                      setSendAssetDragData(event.dataTransfer, {
+                        path: asset.path,
+                        title: asset.title,
+                      });
+                    }}
+                    onClick={() => {
+                      if (skipClickAfterDragRef.current) return;
+                      openPreview(asset.id);
+                    }}
                   />
                   <AttachmentMedia
                     variant={asset.mediaType === "image" ? "image" : "icon"}
