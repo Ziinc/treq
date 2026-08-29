@@ -1,3 +1,5 @@
+use gix::refs::transaction::{Change, LogChange, PreviousValue, RefEdit, RefLog};
+use gix::refs::Target;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -70,38 +72,38 @@ impl TestRepo {
     let temp_dir = TempDir::new().map_err(|e| format!("Failed to create temp dir: {}", e))?;
     let repo_path = temp_dir.path().to_string_lossy().to_string();
 
-    // Initialize git repo with its initial branch already named, in one
-    // spawn instead of `init` + `branch -M` + `checkout -b`. Each test
-    // creates its own repo, and on Windows process-spawn overhead (not
-    // git's actual work) dominates these setup calls, so cutting the
-    // subprocess count here matters for CI wall time.
+    // Initialize git repo via gix instead of shelling out — this cuts the
+    // subprocess spawns entirely (not just to one call), which matters most
+    // on Windows where process-spawn overhead dominates these setup calls.
+    gix::init(&repo_path).map_err(|e| format!("Failed to init git repo: {}", e))?;
+
+    // Configure git user (required for commits) and record the default branch in
+    // local git config so get_default_branch() can discover it via the merged
+    // init.defaultBranch fallback, even when HEAD moves to a feature branch and
+    // there is no remote or main/master branch.
+    //
+    // core.autocrlf=false is set too: tests assert on exact file bytes, and
+    // Windows git installs that default to core.autocrlf=true would rewrite LF
+    // to CRLF on checkout.
     let default_branch = random_default_branch_name();
-    Self::run_git(&repo_path, &["init", "-b", &default_branch])?;
-
-    // Configure git user (required for commits)
-    Self::run_git(&repo_path, &["config", "user.email", "test@example.com"])?;
-    Self::run_git(&repo_path, &["config", "user.name", "Test User"])?;
-
-    // Tests assert on exact file bytes; without this, Windows git installs
-    // that default to core.autocrlf=true rewrite LF to CRLF on checkout.
-    Self::run_git(&repo_path, &["config", "core.autocrlf", "false"])?;
-
-    // Record the default branch in local git config so get_default_branch() can
-    // discover it via the merged init.defaultBranch fallback, even when HEAD moves
-    // to a feature branch and there is no remote or main/master branch.
-    Self::run_git(
+    Self::append_git_config(
       &repo_path,
-      &["config", "init.defaultBranch", &default_branch],
-    )
-    .map_err(|e| format!("Failed to set init.defaultBranch: {}", e))?;
+      &format!(
+        "[core]\n\tautocrlf = false\n[user]\n\tname = Test User\n\temail = test@example.com\n[init]\n\tdefaultBranch = {}\n",
+        default_branch
+      ),
+    )?;
+
+    // Point HEAD at the default branch before the first commit exists (equivalent
+    // to `git branch -M` + `git checkout -b` on a fresh repo with an unborn HEAD).
+    Self::set_head_branch(&repo_path, &default_branch)?;
 
     // Create initial commit (git repos need at least one commit)
     let readme_path = temp_dir.path().join("README.md");
     fs::write(&readme_path, "# Test Repository\n")
       .map_err(|e| format!("Failed to write README: {}", e))?;
 
-    Self::run_git(&repo_path, &["add", "."])?;
-    Self::run_git(&repo_path, &["commit", "-m", "Initial commit"])?;
+    Self::gix_commit_all(&repo_path, "Initial commit")?;
 
     if init {
       treq_lib::core::init(&repo_path)?;
@@ -204,12 +206,21 @@ impl TestRepo {
     fs::create_dir_all(&remote_dir).map_err(|e| format!("Failed to create remote dir: {}", e))?;
 
     let remote_path = remote_dir.to_string_lossy().to_string();
-    Self::run_git(&remote_path, &["init", "--bare"])?;
+    gix::init_bare(&remote_dir).map_err(|e| format!("Failed to init bare remote: {}", e))?;
 
-    // Add remote to main repo
-    Self::run_git(&repo.repo_path, &["remote", "add", "origin", &remote_path])?;
+    // Add remote to main repo (a plain config write; gix has no high-level "remote add").
+    // Git config values treat `\` as an escape character, so on Windows a raw path
+    // (`C:\Users\...`) corrupts the file; forward slashes parse fine everywhere.
+    Self::append_git_config(
+      &repo.repo_path,
+      &format!(
+        "[remote \"origin\"]\n\turl = {}\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n",
+        remote_path.replace('\\', "/")
+      ),
+    )?;
 
-    // Push default branch to remote
+    // Push default branch to remote. gix (this version) has no push support, so this
+    // still shells out to git, same as the other genuinely network-bound operations below.
     let default_branch = repo.default_branch();
     Self::run_git(&repo.repo_path, &["push", "-u", "origin", default_branch])?;
     Self::run_git(
@@ -218,20 +229,20 @@ impl TestRepo {
     )?;
     // Create a remote branch with a commit for testing
     // The test expects a "feature.txt" file in the remote branch
-    Self::run_git(&repo.repo_path, &["checkout", "-b", "feature-remote"])?;
+    Self::gix_create_branch_at_head(&repo.repo_path, "feature-remote")?;
+    Self::set_head_branch(&repo.repo_path, "feature-remote")?;
 
     let feature_file = repo.temp_dir.path().join("feature.txt");
     fs::write(&feature_file, "This is a feature from remote branch")
       .map_err(|e| format!("Failed to write feature file: {}", e))?;
 
-    Self::run_git(&repo.repo_path, &["add", "feature.txt"])?;
-    Self::run_git(&repo.repo_path, &["commit", "-m", "Add feature.txt"])?;
+    Self::gix_commit_all(&repo.repo_path, "Add feature.txt")?;
 
     // Push the feature branch to remote
     Self::run_git(&repo.repo_path, &["push", "-u", "origin", "feature-remote"])?;
 
     // Return to default branch
-    Self::run_git(&repo.repo_path, &["checkout", default_branch])?;
+    Self::set_head_branch(&repo.repo_path, default_branch)?;
 
     // Fetch to ensure jj knows about the remote branch
     if init {
@@ -277,6 +288,181 @@ impl TestRepo {
     }
 
     Ok(String::from_utf8_lossy(&output.stdout).to_string())
+  }
+
+  /// Append raw INI text to a repo's local `.git/config`. Used instead of `git config`
+  /// because gix has no high-level "set config and persist to disk" call in its facade API.
+  fn append_git_config(repo_path: &str, content: &str) -> Result<(), String> {
+    use std::io::Write;
+    let config_path = Path::new(repo_path).join(".git").join("config");
+    let mut file = fs::OpenOptions::new()
+      .create(true)
+      .append(true)
+      .open(&config_path)
+      .map_err(|e| format!("Failed to open git config: {}", e))?;
+    file
+      .write_all(content.as_bytes())
+      .map_err(|e| format!("Failed to write git config: {}", e))
+  }
+
+  /// Point HEAD at `refs/heads/{branch}` via a gix ref-transaction (works both on an
+  /// unborn HEAD, i.e. before any commit exists, and to switch branches afterward).
+  fn set_head_branch(repo_path: &str, branch: &str) -> Result<(), String> {
+    let repo = gix::open(repo_path).map_err(|e| format!("Failed to open repo: {}", e))?;
+    let target: gix::refs::FullName = format!("refs/heads/{}", branch)
+      .try_into()
+      .map_err(|e| format!("Invalid branch ref name: {}", e))?;
+    let head_name: gix::refs::FullName = "HEAD"
+      .try_into()
+      .map_err(|e| format!("Invalid HEAD ref name: {}", e))?;
+
+    repo
+      .edit_reference(RefEdit {
+        change: Change::Update {
+          log: Default::default(),
+          expected: PreviousValue::Any,
+          new: Target::Symbolic(target),
+        },
+        name: head_name,
+        deref: false,
+      })
+      .map_err(|e| format!("Failed to update HEAD ref: {}", e))?;
+    Ok(())
+  }
+
+  /// Create `refs/heads/{branch}` pointing at the current HEAD commit (equivalent to
+  /// `git branch <branch>` without switching to it).
+  fn gix_create_branch_at_head(repo_path: &str, branch: &str) -> Result<(), String> {
+    let repo = gix::open(repo_path).map_err(|e| format!("Failed to open repo: {}", e))?;
+    let head_id = repo
+      .head_id()
+      .map_err(|e| format!("Failed to resolve HEAD: {}", e))?
+      .detach();
+    let branch_name: gix::refs::FullName = format!("refs/heads/{}", branch)
+      .try_into()
+      .map_err(|e| format!("Invalid branch ref name: {}", e))?;
+
+    repo
+      .edit_reference(RefEdit {
+        change: Change::Update {
+          log: LogChange {
+            mode: RefLog::AndReference,
+            force_create_reflog: false,
+            message: "branch: Created".into(),
+          },
+          expected: PreviousValue::MustNotExist,
+          new: Target::Object(head_id),
+        },
+        name: branch_name,
+        deref: false,
+      })
+      .map_err(|e| format!("Failed to create branch '{}': {}", branch, e))?;
+    Ok(())
+  }
+
+  /// Recursively build a git tree object from the contents of `dir`, writing blobs and
+  /// trees via gix. Skips treq/jj/git's own metadata directories.
+  fn write_tree_from_dir(repo: &gix::Repository, dir: &Path) -> Result<gix::ObjectId, String> {
+    let mut read_entries: Vec<_> = fs::read_dir(dir)
+      .map_err(|e| format!("Failed to read dir {}: {}", dir.display(), e))?
+      .filter_map(|e| e.ok())
+      .collect();
+    read_entries.sort_by_key(|e| e.file_name());
+
+    let mut entries = Vec::new();
+    for entry in read_entries {
+      let name = entry.file_name();
+      let name_str = name.to_string_lossy();
+      if name_str == ".git" || name_str == ".jj" || name_str == ".treq" {
+        continue;
+      }
+      let path = entry.path();
+      let file_type = entry
+        .file_type()
+        .map_err(|e| format!("Failed to read file type for {}: {}", path.display(), e))?;
+
+      if file_type.is_dir() {
+        let sub_tree_id = Self::write_tree_from_dir(repo, &path)?;
+        entries.push(gix::objs::tree::Entry {
+          mode: gix::objs::tree::EntryKind::Tree.into(),
+          filename: name_str.into_owned().into(),
+          oid: sub_tree_id,
+        });
+      } else if file_type.is_file() {
+        let content =
+          fs::read(&path).map_err(|e| format!("Failed to read {}: {}", path.display(), e))?;
+        let blob_id = repo
+          .write_blob(content)
+          .map_err(|e| format!("Failed to write blob for {}: {}", path.display(), e))?
+          .detach();
+
+        #[cfg(unix)]
+        let is_executable = {
+          use std::os::unix::fs::PermissionsExt;
+          entry
+            .metadata()
+            .map(|m| m.permissions().mode() & 0o111 != 0)
+            .unwrap_or(false)
+        };
+        #[cfg(not(unix))]
+        let is_executable = false;
+
+        let mode = if is_executable {
+          gix::objs::tree::EntryKind::BlobExecutable
+        } else {
+          gix::objs::tree::EntryKind::Blob
+        };
+
+        entries.push(gix::objs::tree::Entry {
+          mode: mode.into(),
+          filename: name_str.into_owned().into(),
+          oid: blob_id,
+        });
+      }
+    }
+
+    entries.sort();
+    let tree_id = repo
+      .write_object(&gix::objs::Tree { entries })
+      .map_err(|e| format!("Failed to write tree for {}: {}", dir.display(), e))?
+      .detach();
+    Ok(tree_id)
+  }
+
+  /// Stage the entire working directory and create a commit on HEAD, mirroring
+  /// `git add . && git commit -m <message>` but via gix.
+  fn gix_commit_all(repo_path: &str, message: &str) -> Result<gix::ObjectId, String> {
+    let repo = gix::open(repo_path).map_err(|e| format!("Failed to open repo: {}", e))?;
+    let tree_id = Self::write_tree_from_dir(&repo, Path::new(repo_path))?;
+
+    let parents: Vec<gix::ObjectId> = match repo.head_id() {
+      Ok(id) => vec![id.detach()],
+      Err(_) => Vec::new(),
+    };
+
+    let commit_id = repo
+      .commit("HEAD", message, tree_id, parents)
+      .map_err(|e| format!("Failed to create commit: {}", e))?;
+
+    // Writing the commit via gix bypasses the git index entirely. Without syncing it
+    // to the new tree, git sees every working-tree file as untracked and later `git
+    // checkout` calls (used elsewhere in these tests, and by jj's colocated git backend)
+    // refuse to switch branches ("would be overwritten by checkout").
+    Self::sync_index_to_tree(&repo, &tree_id)?;
+
+    Ok(commit_id.detach())
+  }
+
+  /// Rewrite `.git/index` to match `tree_id`, keeping git's view of the working
+  /// directory in sync with commits made directly through gix.
+  fn sync_index_to_tree(repo: &gix::Repository, tree_id: &gix::ObjectId) -> Result<(), String> {
+    let mut index = repo
+      .index_from_tree(tree_id)
+      .map_err(|e| format!("Failed to build index from tree: {}", e))?;
+    index
+      .write(gix::index::write::Options::default())
+      .map_err(|e| format!("Failed to write git index: {}", e))?;
+    Ok(())
   }
 
   /// Create a file in the repository.
@@ -399,8 +585,7 @@ impl TestRepo {
     message: &str,
   ) -> Result<(), String> {
     self.create_file(relative_path, content)?;
-    Self::run_git(&self.repo_path, &["add", relative_path])?;
-    Self::run_git(&self.repo_path, &["commit", "-m", message])?;
+    Self::gix_commit_all(&self.repo_path, message)?;
     Ok(())
   }
 
