@@ -42,6 +42,13 @@ mod e2e_test_helpers;
 mod tauri_test_bridge;
 
 #[cfg(feature = "tauri-test")]
+use crate::core::remote::TreqCommandRequest;
+#[cfg(feature = "tauri-test")]
+use crate::core::remote_control_plane::SshEndpoint;
+#[cfg(feature = "tauri-test")]
+use commands::RemoteExecState;
+
+#[cfg(feature = "tauri-test")]
 #[tauri_test::setup(init = tauri_test_bridge::init_test_state)]
 pub struct TauriTestApp;
 
