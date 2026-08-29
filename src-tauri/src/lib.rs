@@ -830,6 +830,7 @@ pub fn run() {
             commands::set_browser_select_mode,
             commands::sync_browser_webview_bounds,
             commands::list_ssh_hosts,
+            commands::list_local_ssh_identities,
             commands::check_ssh_host,
             commands::remote_probe_repo,
             commands::remote_clone_repo,

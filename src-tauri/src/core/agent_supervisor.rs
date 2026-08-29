@@ -83,15 +83,37 @@ fn process_is_alive(pid: u32) -> bool {
   unsafe { libc_kill(pid as i32, 0) == 0 }
 }
 
-#[cfg(not(unix))]
-fn process_is_alive(_pid: u32) -> bool {
-  false
+/// A process is considered alive when `tasklist` still lists its pid.
+#[cfg(windows)]
+fn process_is_alive(pid: u32) -> bool {
+  Command::new("tasklist")
+    .args(["/FI", &format!("PID eq {pid}"), "/NH"])
+    .output()
+    .map(|out| {
+      out.status.success() && String::from_utf8_lossy(&out.stdout).contains(&pid.to_string())
+    })
+    .unwrap_or(false)
 }
 
 #[cfg(unix)]
 extern "C" {
   #[link_name = "kill"]
   fn libc_kill(pid: i32, sig: i32) -> i32;
+}
+
+/// Terminates a running agent process. Best-effort: a failure here still
+/// lets the caller drop its own record of the process.
+fn kill_process(pid: u32) {
+  #[cfg(unix)]
+  unsafe {
+    libc_kill(pid as i32, 15); // SIGTERM
+  }
+  #[cfg(windows)]
+  {
+    let _ = Command::new("taskkill")
+      .args(["/PID", &pid.to_string(), "/F"])
+      .output();
+  }
 }
 
 /// Starts an agent process for `workspace`, resolving the binary from the
@@ -231,10 +253,7 @@ pub fn stop_agent(repo_path: &str, workspace: &str) -> Result<AgentStatusResult,
     });
   };
   if process_is_alive(record.pid) {
-    #[cfg(unix)]
-    unsafe {
-      libc_kill(record.pid as i32, 15); // SIGTERM
-    }
+    kill_process(record.pid);
   }
   remove_record(repo_path, workspace);
   Ok(AgentStatusResult {

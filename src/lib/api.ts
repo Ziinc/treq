@@ -27,6 +27,7 @@ import type {
   RemoteReadiness,
   RemoteRepoProbe,
   RemoteRepository,
+  LocalSshIdentity,
 } from "./api-types";
 import type { RepoYamlConfig } from "./api-extra";
 
@@ -555,3 +556,6 @@ export const remoteOpenRepo = (
   host: string,
   path: string,
 ): Promise<RemoteRepository> => invoke("remote_open_repo", { host, path });
+
+export const listLocalSshIdentities = (): Promise<LocalSshIdentity[]> =>
+  invoke("list_local_ssh_identities");

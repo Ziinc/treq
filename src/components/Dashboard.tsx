@@ -34,6 +34,7 @@ import {
   getSetting,
   getWorkspaces,
   initRepo,
+  listLocalSshIdentities,
   listRepoBranches,
   listSshHosts,
   listWorkspaceStatuses,
@@ -49,6 +50,40 @@ import {
   type Workspace,
 } from "../lib/api";
 import type { RemoteReadiness, RemoteRepository } from "../lib/api-types";
+import type {
+  InstanceStatusResponse,
+  RegionCode,
+  SizePreset,
+  SshEndpoint,
+} from "../lib/api-types-remote";
+import {
+  deleteInstance as deleteManagedInstance,
+  ensureInstance,
+  getInstanceStatus,
+  listRegions,
+  listSizePresets,
+  reprovisionInstance,
+  revokeClientKey,
+  wakeInstance,
+} from "../lib/remote-control-plane";
+import {
+  saveUserManagedEndpoint,
+  saveRemoteRepository,
+  trustedHostKeyFromFingerprint,
+  publicKeyAuthentication,
+} from "../lib/remote-endpoints";
+import { dispatchOverSsh } from "../lib/remote-dispatch";
+import {
+  RemoteSetupDialog,
+  type LocalKeyIdentity,
+  type UserManagedFormValues,
+} from "./remote/RemoteSetupDialog";
+import { RemoteReviewPanel } from "./remote/RemoteReviewPanel";
+import {
+  RemoteStatusBanner,
+  connectionStateFromInstanceState,
+} from "./remote/RemoteStatusBanner";
+import { locationFromHostAndPath } from "../lib/remote-query-keys";
 import { ARTIFACTS_BASE_PATH, artifactsPath } from "../lib/artifactRoutes";
 import {
   type ChangeFilesMoveRequest,
@@ -230,6 +265,228 @@ export const Dashboard: React.FC<DashboardProps> = ({
     useState<RemoteReadiness | null>(null);
   const [activeRemoteRepo, setActiveRemoteRepo] =
     useState<RemoteRepository | null>(null);
+
+  // -- Phase 6: remote setup flow (managed + user-owned endpoints) ---------
+  const [showRemoteSetupDialog, setShowRemoteSetupDialog] = useState(false);
+  const [remoteRegions, setRemoteRegions] = useState<RegionCode[]>([]);
+  const [remoteSizePresets, setRemoteSizePresets] = useState<SizePreset[]>([]);
+  const [localKeyIdentities, setLocalKeyIdentities] = useState<
+    LocalKeyIdentity[]
+  >([]);
+  const [instanceStatus, setInstanceStatus] =
+    useState<InstanceStatusResponse | null>(null);
+  const [provisioningStage, setProvisioningStage] = useState<string>();
+  const [provisioningError, setProvisioningError] = useState<string>();
+  // Set only for an explicit (non-alias) user-managed or managed endpoint,
+  // where structured review data can be fetched through Phase 5's native
+  // dispatch. Alias-mode endpoints keep using the terminal-only path below,
+  // since the native SSH transport requires an explicit host key rather
+  // than resolving `~/.ssh/config` (see "Host-key verification").
+  const [activeSshEndpoint, setActiveSshEndpoint] =
+    useState<SshEndpoint | null>(null);
+  const [activeEndpointGeneration, setActiveEndpointGeneration] = useState(0);
+  const [explicitEndpointRepoPath, setExplicitEndpointRepoPath] =
+    useState("~/src/project");
+  const [explicitEndpointRepoConnected, setExplicitEndpointRepoConnected] =
+    useState(false);
+  const [explicitEndpointError, setExplicitEndpointError] = useState<string>();
+
+  const handleConnectExplicitEndpointRepo = async () => {
+    if (!activeSshEndpoint) return;
+    setExplicitEndpointError(undefined);
+    try {
+      const probe = await dispatchOverSsh<{ is_repo: boolean }>(
+        activeSshEndpoint,
+        { kind: "ProbeRepo", repo: explicitEndpointRepoPath },
+      );
+      if (!probe.is_repo) {
+        setExplicitEndpointError(
+          "No repository found at that path on the remote machine.",
+        );
+        return;
+      }
+      await saveRemoteRepository({
+        id: `${activeSshEndpoint.id}:${explicitEndpointRepoPath}`,
+        endpoint_id: activeSshEndpoint.id,
+        remote_path: explicitEndpointRepoPath,
+        display_name: explicitEndpointRepoPath,
+        endpoint_generation: activeEndpointGeneration,
+      });
+      setExplicitEndpointRepoConnected(true);
+    } catch (error) {
+      setExplicitEndpointError(
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  };
+
+  const handleOpenRemoteSetup = async () => {
+    setProvisioningError(undefined);
+    try {
+      const [hosts, identities, regions, sizes, status] = await Promise.all([
+        listSshHosts().catch(() => []),
+        listLocalSshIdentities().catch(() => []),
+        listRegions().catch(() => []),
+        listSizePresets().catch(() => []),
+        getInstanceStatus().catch(() => null),
+      ]);
+      setRemoteSshHosts(hosts.map((h) => h.alias));
+      setLocalKeyIdentities(
+        identities.map((identity) => ({
+          reference: identity.reference,
+          label: identity.label,
+          fingerprint: identity.fingerprint_sha256,
+        })),
+      );
+      setRemoteRegions(regions);
+      setRemoteSizePresets(sizes);
+      setInstanceStatus(status);
+    } catch {
+      // Best-effort: the dialog still opens and shows what it could load.
+    }
+    setShowRemoteSetupDialog(true);
+  };
+
+  const refreshInstanceStatus = async () => {
+    try {
+      setInstanceStatus(await getInstanceStatus());
+    } catch {
+      // Leave the last-known status in place; the banner reflects staleness.
+    }
+  };
+
+  const handleProvisionManaged = async (
+    region: RegionCode,
+    size: SizePreset,
+    keyReference: string,
+  ) => {
+    setProvisioningError(undefined);
+    setProvisioningStage("Requesting provisioning...");
+    try {
+      await ensureInstance({
+        region,
+        size_preset: size,
+        idempotency_key: `provision-${keyReference}-${Date.now()}`,
+      });
+      await refreshInstanceStatus();
+    } catch (error) {
+      setProvisioningError(
+        error instanceof Error ? error.message : String(error),
+      );
+    } finally {
+      setProvisioningStage(undefined);
+    }
+  };
+
+  const handleWakeManaged = async () => {
+    const instanceId = instanceStatus?.instance?.instance_id;
+    if (!instanceId) return;
+    setProvisioningError(undefined);
+    try {
+      await wakeInstance({
+        instance_id: instanceId,
+        idempotency_key: `wake-${instanceId}-${Date.now()}`,
+      });
+      await refreshInstanceStatus();
+    } catch (error) {
+      setProvisioningError(
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  };
+
+  const handleReprovisionManaged = async (
+    region: RegionCode,
+    size: SizePreset,
+  ) => {
+    const instanceId = instanceStatus?.instance?.instance_id;
+    if (!instanceId) return;
+    setProvisioningError(undefined);
+    try {
+      await reprovisionInstance({
+        instance_id: instanceId,
+        region,
+        size_preset: size,
+        idempotency_key: `reprovision-${instanceId}-${Date.now()}`,
+      });
+      await refreshInstanceStatus();
+    } catch (error) {
+      setProvisioningError(
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  };
+
+  const handleDeleteManagedInstance = async () => {
+    const instanceId = instanceStatus?.instance?.instance_id;
+    if (!instanceId) return;
+    setProvisioningError(undefined);
+    try {
+      await deleteManagedInstance({
+        instance_id: instanceId,
+        idempotency_key: `delete-${instanceId}-${Date.now()}`,
+      });
+      await refreshInstanceStatus();
+    } catch (error) {
+      setProvisioningError(
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  };
+
+  const handleRevokeKey = async (keyReference: string) => {
+    setProvisioningError(undefined);
+    try {
+      await revokeClientKey({
+        key_id: keyReference,
+        idempotency_key: `revoke-${keyReference}-${Date.now()}`,
+      });
+    } catch (error) {
+      setProvisioningError(
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  };
+
+  const handleRegisterUserManaged = async (values: UserManagedFormValues) => {
+    setProvisioningError(undefined);
+    const id = `user-managed-${Date.now()}`;
+    await saveUserManagedEndpoint({
+      id,
+      display_name: values.display_name,
+      hostname: values.hostname,
+      port: values.port,
+      username: values.username,
+      host_key_fingerprint: values.host_key_fingerprint,
+      auth_identity_reference: values.auth_identity_reference,
+      alias: values.alias,
+      created_at: new Date().toISOString(),
+    });
+
+    if (values.alias) {
+      // Alias mode: keep using the working alias-based probe/clone/terminal
+      // path below rather than the native transport, which cannot resolve
+      // `~/.ssh/config` aliases (it requires an explicit trusted host key).
+      setShowRemoteSetupDialog(false);
+      await handleOpenRemoteSsh();
+      setRemoteSshHost(values.alias);
+      return;
+    }
+
+    const endpoint: SshEndpoint = {
+      id,
+      instance_id: null,
+      source: { type: "user_managed" },
+      hostname: values.hostname,
+      port: values.port,
+      username: values.username,
+      host_keys: [trustedHostKeyFromFingerprint(values.host_key_fingerprint)],
+      authentication: publicKeyAuthentication(values.auth_identity_reference),
+    };
+    setActiveSshEndpoint(endpoint);
+    setActiveEndpointGeneration(0);
+    setShowRemoteSetupDialog(false);
+  };
 
   const terminalPaneRef = useRef<WorkspaceTerminalPaneHandle>(null);
 
@@ -739,7 +996,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       }),
       // Menu open via SSH
       listen("menu-open-ssh", () => {
-        void handleOpenRemoteSsh();
+        void handleOpenRemoteSetup();
       }),
       // Menu factory reset
       listen("menu-factory-reset", async () => {
@@ -1565,7 +1822,40 @@ export const Dashboard: React.FC<DashboardProps> = ({
     </Dialog>
   );
 
-  if (!repoPath && activeRemoteRepo) {
+  const remoteSetupDialog = (
+    <RemoteSetupDialog
+      open={showRemoteSetupDialog}
+      onOpenChange={setShowRemoteSetupDialog}
+      regions={remoteRegions}
+      sizePresets={remoteSizePresets}
+      localKeyIdentities={localKeyIdentities}
+      sshConfigAliasSuggestions={remoteSshHosts}
+      instanceStatus={instanceStatus}
+      provisioningStage={provisioningStage}
+      provisioningError={provisioningError}
+      onProvisionManaged={handleProvisionManaged}
+      onWake={handleWakeManaged}
+      onReprovision={handleReprovisionManaged}
+      onDeleteInstance={handleDeleteManagedInstance}
+      onRevokeKey={handleRevokeKey}
+      onRegisterUserManaged={handleRegisterUserManaged}
+    />
+  );
+
+  if (!repoPath && (activeRemoteRepo || activeSshEndpoint)) {
+    const connectionState = activeSshEndpoint
+      ? connectionStateFromInstanceState(
+          instanceStatus?.instance?.status,
+          explicitEndpointRepoConnected,
+        )
+      : "online";
+    const closeRemote = () => {
+      void setSetting("last_opened_remote_repo", "");
+      setActiveRemoteRepo(null);
+      setActiveSshEndpoint(null);
+      setExplicitEndpointRepoConnected(false);
+    };
+
     return (
       <>
         <div className="flex h-screen flex-col bg-background">
@@ -1573,35 +1863,79 @@ export const Dashboard: React.FC<DashboardProps> = ({
             <div>
               <p className="text-sm font-medium">Remote repository connected</p>
               <p className="text-xs text-muted-foreground">
-                {activeRemoteRepo.host}:{activeRemoteRepo.path}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Repository review remains read-only while remote workspace data
-                is loaded through the CLI. Use the SSH terminal below to work
-                remotely.
+                {activeRemoteRepo
+                  ? `${activeRemoteRepo.host}:${activeRemoteRepo.path}`
+                  : `${activeSshEndpoint!.username}@${activeSshEndpoint!.hostname}:${activeSshEndpoint!.port}`}
               </p>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                void setSetting("last_opened_remote_repo", "");
-                setActiveRemoteRepo(null);
-              }}
-            >
+            <Button variant="outline" size="sm" onClick={closeRemote}>
               Close
             </Button>
           </div>
-          <div className="flex-1 min-h-0">
-            <WorkspaceTerminalPane
-              ref={terminalPaneRef}
-              key={activeRemoteRepo.host + activeRemoteRepo.path}
-              workingDirectory={activeRemoteRepo.path}
-              remoteHost={activeRemoteRepo.host}
-              onCreateNewSession={() => {}}
+          <div className="border-b px-4 py-1.5">
+            <RemoteStatusBanner
+              state={connectionState}
+              onRefresh={() => void refreshInstanceStatus()}
+              onWake={() => void handleWakeManaged()}
+              onReconnect={() => void refreshInstanceStatus()}
             />
           </div>
+
+          {activeSshEndpoint && !explicitEndpointRepoConnected && (
+            <div className="flex flex-col gap-2 border-b px-4 py-3">
+              <label className="flex flex-col gap-1 max-w-md">
+                <span className="text-sm font-medium">
+                  Remote repository path
+                </span>
+                <input
+                  className="rounded-md border border-border/60 bg-background px-2 py-1.5"
+                  value={explicitEndpointRepoPath}
+                  onChange={(e) => setExplicitEndpointRepoPath(e.target.value)}
+                />
+              </label>
+              {explicitEndpointError && (
+                <p className="text-sm text-red-600 dark:text-red-400">
+                  {explicitEndpointError}
+                </p>
+              )}
+              <Button
+                size="sm"
+                className="w-fit"
+                onClick={() => void handleConnectExplicitEndpointRepo()}
+              >
+                Connect
+              </Button>
+            </div>
+          )}
+
+          <div className="flex-1 min-h-0">
+            {activeRemoteRepo ? (
+              <WorkspaceTerminalPane
+                ref={terminalPaneRef}
+                key={activeRemoteRepo.host + activeRemoteRepo.path}
+                workingDirectory={activeRemoteRepo.path}
+                remoteHost={activeRemoteRepo.host}
+                onCreateNewSession={() => {}}
+              />
+            ) : (
+              activeSshEndpoint &&
+              explicitEndpointRepoConnected && (
+                <RemoteReviewPanel
+                  endpoint={activeSshEndpoint}
+                  endpointGeneration={activeEndpointGeneration}
+                  location={
+                    locationFromHostAndPath(
+                      activeSshEndpoint.hostname,
+                      explicitEndpointRepoPath,
+                    )!
+                  }
+                  onRefreshRequested={() => void refreshInstanceStatus()}
+                />
+              )
+            )}
+          </div>
         </div>
+        {remoteSetupDialog}
         {remoteSshDialog}
       </>
     );
@@ -1611,8 +1945,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
     <>
       <Onboarding
         onOpenRepo={handleOpenRepository}
-        onOpenRemoteSsh={handleOpenRemoteSsh}
+        onOpenRemoteSsh={handleOpenRemoteSetup}
       />
+      {remoteSetupDialog}
       {remoteSshDialog}
     </>
   ) : (

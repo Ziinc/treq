@@ -1,8 +1,17 @@
 use crate::core::remote::{self, RemoteReadiness, RemoteRepoProbe, RemoteRepository, SshHost};
+use crate::core::remote_local_keys::{self, LocalSshIdentity};
 
 #[tauri::command]
 pub fn list_ssh_hosts() -> Result<Vec<SshHost>, String> {
   remote::list_configured_hosts()
+}
+
+/// Lists the user's existing local SSH public-key identities, for the
+/// managed-VM setup flow's identity picker. Never reads or returns private
+/// key material - see `core::remote_local_keys`.
+#[tauri::command]
+pub fn list_local_ssh_identities() -> Result<Vec<LocalSshIdentity>, String> {
+  remote_local_keys::list_local_ssh_identities()
 }
 
 #[tauri::command]

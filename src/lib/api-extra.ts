@@ -565,23 +565,15 @@ export interface RepoYamlConfig {
 
 /**
  * Typed remote command dispatch. `request` must be a fully typed
- * `TreqCommandRequest` variant - never a raw string - so the allow-list
- * holds at the IPC boundary the same way it holds inside the exec
- * transport.
- *
- * Kept as the typed frontend counterpart of the registered Tauri command;
- * UI wiring for the remote review surface follows in a later phase.
+ * `TreqCommandRequest` variant from `remote-dispatch.ts` - never a raw
+ * string - so the allow-list holds at the IPC boundary the same way it
+ * holds inside the exec transport.
  */
-// eslint-disable-next-line local/no-unused-exported-ts-functions, local/require-tauri-api-exports-used
 export const remoteDispatchLocal = <T = unknown>(
   request: unknown,
 ): Promise<T> => invoke("remote_dispatch_local", { request });
 
-/**
- * Same as {@link remoteDispatchLocal}, but runs over the SSH exec channel
- * for `endpoint`.
- */
-// eslint-disable-next-line local/no-unused-exported-ts-functions, local/require-tauri-api-exports-used
+/** Same as {@link remoteDispatchLocal}, but runs over the SSH exec channel for `endpoint`. */
 export const remoteDispatchOverSsh = <T = unknown>(
   endpoint: unknown,
   request: unknown,
