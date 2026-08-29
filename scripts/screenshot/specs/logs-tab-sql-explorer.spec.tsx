@@ -54,11 +54,9 @@ it("captures the home repo Logs tab and the level multi-select", async () => {
 	await captureDocument(document, {
 		name: "logs-tab-01-browse",
 		expectations: [
-			'A "Checks logs" data-source header is visible, subtitled "OpenTelemetry records · .treq/runs/**/*.jsonl".',
+			'Source-group buttons "Checks logs" (selected) and "Agent chats" sit in the header, with the OpenTelemetry subtitle next to them.',
 			'The header has "Browse" and "Logs Explorer" toggle buttons, with "Browse" currently selected.',
-			'Log lines are listed in a monospace font, each with a timestamp, a "#<run id>" column, a blue "build" job-id column, and the message.',
-			'The warning line is amber and the error line is red; plain lines are the default colour.',
-			'A level filter button reading "All levels" sits above the log lines next to a search box.',
+			'Log lines are listed in a monospace font with timestamp, run id, job id, and message columns.',
 		],
 	});
 

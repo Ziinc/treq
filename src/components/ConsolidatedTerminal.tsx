@@ -56,6 +56,8 @@ export interface ConsolidatedTerminalHandle {
   clearSearch: () => void;
   focus: () => void;
   scrollToBottom: () => void;
+  /** Printable snapshot of the active xterm buffer, used to split agent chat logs. */
+  getScreenText: () => string;
 }
 
 export const ConsolidatedTerminal = ({
@@ -520,6 +522,16 @@ export const ConsolidatedTerminal = ({
     },
     scrollToBottom: () => {
       xtermRef.current?.scrollToBottom();
+    },
+    getScreenText: () => {
+      const xterm = xtermRef.current;
+      if (!xterm) return "";
+      const buffer = xterm.buffer.active;
+      const lines: string[] = [];
+      for (let i = 0; i < buffer.length; i++) {
+        lines.push(buffer.getLine(i)?.translateToString(true) ?? "");
+      }
+      return lines.join("\n").replace(/\n+$/, "");
     },
   }));
 

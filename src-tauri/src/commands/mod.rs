@@ -1,4 +1,5 @@
 // Command modules
+pub mod agent_chat;
 pub mod agent_dispatch;
 pub mod auto_update;
 pub mod binary;
@@ -22,6 +23,7 @@ pub mod stash;
 pub mod workspace;
 
 // Re-export all commands for convenient access
+pub use agent_chat::*;
 pub use agent_dispatch::*;
 pub use auto_update::*;
 pub use binary::*;

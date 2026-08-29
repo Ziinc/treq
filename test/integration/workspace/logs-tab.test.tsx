@@ -6,7 +6,13 @@ import {
   openRepo,
   writeRepoFile,
 } from "../../utils";
-import { createWorkspace, trustRepo } from "../../../src/lib/api";
+import {
+  createWorkspace,
+  recordAgentChatScreen,
+  recordAgentChatUserMessage,
+  registerAgentChat,
+  trustRepo,
+} from "../../../src/lib/api";
 import { render, screen, waitFor, within } from "../../test-utils";
 import { Dashboard } from "../../../src/components/Dashboard";
 import userEvent from "@testing-library/user-event";
@@ -289,5 +295,40 @@ describe("Home repo Logs tab", () => {
     const items = await screen.findAllByRole("menuitem");
     expect(items).toHaveLength(5);
     await screen.findByText("Newest records across every run");
+  });
+
+  it("lists agent chats as a log source group and hides shell terminals", async () => {
+    const { repoPath } = createTestRepo(false);
+    openRepo(repoPath);
+
+    await registerAgentChat(repoPath, 11, "pty-agent", "Claude", "claude", null);
+    await recordAgentChatScreen(repoPath, 11, "Welcome to Claude Code");
+    await recordAgentChatUserMessage(
+      repoPath,
+      11,
+      "Welcome to Claude Code",
+      "please review the diff",
+    );
+    await recordAgentChatScreen(
+      repoPath,
+      11,
+      "Welcome to Claude Code\nplease review the diff\nLooking at the stacked changes now",
+    );
+
+    await openLogsTab();
+    await user.click(await screen.findByRole("button", { name: /Agent chats/i }));
+    await screen.findByText("please review the diff");
+    await screen.findByText(/Looking at the stacked changes now/i);
+
+    const roles = [...document.querySelectorAll('[data-testid="agent-chat-line"]')]
+      .map((line) => line.textContent ?? "");
+    expect(roles.some((text) => text.includes("user"))).toBe(true);
+    expect(roles.some((text) => text.includes("agent"))).toBe(true);
+
+    const picker = await screen.findByRole("combobox", {
+      name: /Agent terminal/i,
+    });
+    expect(picker).toHaveTextContent(/Claude/);
+    expect(screen.queryByText(/Shell/i)).toBeNull();
   });
 });

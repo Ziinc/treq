@@ -1,3 +1,4 @@
+pub mod agent_chat;
 pub mod agent_cli;
 pub mod agent_supervisor;
 pub mod app;
@@ -19,6 +20,7 @@ pub mod resolve;
 pub mod stash;
 pub mod submodules;
 pub mod workspaces;
+pub use agent_chat::*;
 pub use agent_cli::*;
 pub use app::*;
 pub use auto_update::*;

@@ -879,6 +879,11 @@ pub fn run() {
             commands::get_repo_logs,
             commands::run_logs_sql,
             commands::get_log_timeseries,
+            commands::register_agent_chat,
+            commands::record_agent_chat_user_message,
+            commands::record_agent_chat_screen,
+            commands::list_agent_chats,
+            commands::get_agent_chat,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
