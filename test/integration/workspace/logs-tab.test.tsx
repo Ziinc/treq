@@ -301,7 +301,14 @@ describe("Home repo Logs tab", () => {
     const { repoPath } = createTestRepo(false);
     openRepo(repoPath);
 
-    await registerAgentChat(repoPath, 11, "pty-agent", "Claude", "claude", null);
+    await registerAgentChat(
+      repoPath,
+      11,
+      "pty-agent",
+      "Claude",
+      "claude",
+      null,
+    );
     await recordAgentChatScreen(repoPath, 11, "Welcome to Claude Code");
     await recordAgentChatUserMessage(
       repoPath,
@@ -316,12 +323,15 @@ describe("Home repo Logs tab", () => {
     );
 
     await openLogsTab();
-    await user.click(await screen.findByRole("button", { name: /Agent chats/i }));
+    await user.click(
+      await screen.findByRole("button", { name: /Agent chats/i }),
+    );
     await screen.findByText("please review the diff");
     await screen.findByText(/Looking at the stacked changes now/i);
 
-    const roles = [...document.querySelectorAll('[data-testid="agent-chat-line"]')]
-      .map((line) => line.textContent ?? "");
+    const roles = [
+      ...document.querySelectorAll('[data-testid="agent-chat-line"]'),
+    ].map((line) => line.textContent ?? "");
     expect(roles.some((text) => text.includes("user"))).toBe(true);
     expect(roles.some((text) => text.includes("agent"))).toBe(true);
 

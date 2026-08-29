@@ -23,6 +23,7 @@ import {
   ptyWriteSuppressEcho,
 } from "../lib/api";
 import { consumePtyEcho } from "./terminal/consumePtyEcho";
+import { readXtermScreen } from "./terminal/readXtermScreen";
 import { useTerminalSettingsStore } from "../stores/terminalSettingsStore";
 import { cn } from "../lib/utils";
 import { Loader2 } from "lucide-react";
@@ -56,7 +57,6 @@ export interface ConsolidatedTerminalHandle {
   clearSearch: () => void;
   focus: () => void;
   scrollToBottom: () => void;
-  /** Printable snapshot of the active xterm buffer, used to split agent chat logs. */
   getScreenText: () => string;
 }
 
@@ -506,33 +506,14 @@ export const ConsolidatedTerminal = ({
   }, [isHidden, sessionId]);
 
   useImperativeHandle(ref, () => ({
-    findNext: (term: string, options?: ISearchOptions) => {
-      if (!term || !searchAddonRef.current) return false;
-      return searchAddonRef.current.findNext(term, options);
-    },
-    findPrevious: (term: string, options?: ISearchOptions) => {
-      if (!term || !searchAddonRef.current) return false;
-      return searchAddonRef.current.findPrevious(term, options);
-    },
-    clearSearch: () => {
-      searchAddonRef.current?.clearDecorations();
-    },
-    focus: () => {
-      xtermRef.current?.focus();
-    },
-    scrollToBottom: () => {
-      xtermRef.current?.scrollToBottom();
-    },
-    getScreenText: () => {
-      const xterm = xtermRef.current;
-      if (!xterm) return "";
-      const buffer = xterm.buffer.active;
-      const lines: string[] = [];
-      for (let i = 0; i < buffer.length; i++) {
-        lines.push(buffer.getLine(i)?.translateToString(true) ?? "");
-      }
-      return lines.join("\n").replace(/\n+$/, "");
-    },
+    findNext: (term, options) =>
+      !!term && !!searchAddonRef.current?.findNext(term, options),
+    findPrevious: (term, options) =>
+      !!term && !!searchAddonRef.current?.findPrevious(term, options),
+    clearSearch: () => searchAddonRef.current?.clearDecorations(),
+    focus: () => xtermRef.current?.focus(),
+    scrollToBottom: () => xtermRef.current?.scrollToBottom(),
+    getScreenText: () => readXtermScreen(xtermRef.current),
   }));
 
   return (

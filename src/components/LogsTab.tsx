@@ -201,15 +201,11 @@ function AgentChatsSource({
   );
 
   const records = (chat ? agentChatToLogRecords(chat) : []).filter((record) =>
-    search
-      ? record.body.toLowerCase().includes(search.toLowerCase())
-      : true,
+    search ? record.body.toLowerCase().includes(search.toLowerCase()) : true,
   );
 
   function handleSendToAgent(chosen: LogRecordView[]) {
-    const label = chat
-      ? `agent chat "${chat.name}"`
-      : "an agent chat";
+    const label = chat ? `agent chat "${chat.name}"` : "an agent chat";
     onSendToAgent?.(buildLogLinesPrompt(chosen, label));
   }
 

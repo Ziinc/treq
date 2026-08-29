@@ -12,35 +12,35 @@ import {
 import { captureDocument } from "../capture";
 
 it("captures the Agent chats log source group", async () => {
-	const { repoPath } = createTestRepo(false);
-	openRepo(repoPath);
-	await registerAgentChat(repoPath, 21, "pty-21", "Claude", "claude", null);
-	await recordAgentChatScreen(repoPath, 21, "Welcome to Claude");
-	await recordAgentChatUserMessage(
-		repoPath,
-		21,
-		"Welcome to Claude",
-		"explain the stack",
-	);
-	await recordAgentChatScreen(
-		repoPath,
-		21,
-		"Welcome to Claude\nexplain the stack\nThis stack has two workspaces.",
-	);
+  const { repoPath } = createTestRepo(false);
+  openRepo(repoPath);
+  await registerAgentChat(repoPath, 21, "pty-21", "Claude", "claude", null);
+  await recordAgentChatScreen(repoPath, 21, "Welcome to Claude");
+  await recordAgentChatUserMessage(
+    repoPath,
+    21,
+    "Welcome to Claude",
+    "explain the stack",
+  );
+  await recordAgentChatScreen(
+    repoPath,
+    21,
+    "Welcome to Claude\nexplain the stack\nThis stack has two workspaces.",
+  );
 
-	const user = userEvent.setup();
-	render(<Dashboard />);
-	await user.click(await screen.findByRole("tab", { name: /^Logs/ }));
-	await user.click(await screen.findByRole("button", { name: /Agent chats/i }));
-	await screen.findByText("explain the stack");
-	await screen.findByText(/This stack has two workspaces/i);
+  const user = userEvent.setup();
+  render(<Dashboard />);
+  await user.click(await screen.findByRole("tab", { name: /^Logs/ }));
+  await user.click(await screen.findByRole("button", { name: /Agent chats/i }));
+  await screen.findByText("explain the stack");
+  await screen.findByText(/This stack has two workspaces/i);
 
-	await captureDocument(document, {
-		name: "logs-tab-agent-chats-01",
-		expectations: [
-			'The source-group toggle shows "Checks logs" and "Agent chats", with Agent chats selected.',
-			'A dropdown lists the "Claude · claude" agent terminal; Browse/Logs Explorer are not shown.',
-			"Conversation lines show a Role column (user/agent) plus the cleaned message text.",
-		],
-	});
+  await captureDocument(document, {
+    name: "logs-tab-agent-chats-01",
+    expectations: [
+      'The source-group toggle shows "Checks logs" and "Agent chats", with Agent chats selected.',
+      'A dropdown lists the "Claude · claude" agent terminal; Browse/Logs Explorer are not shown.',
+      "Conversation lines show a Role column (user/agent) plus the cleaned message text.",
+    ],
+  });
 }, 60000);
