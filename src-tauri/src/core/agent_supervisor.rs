@@ -310,6 +310,8 @@ mod tests {
     // claude/codex to be installed in this sandbox.
     let record = start_test_process(repo, "demo", &workspace_path, "sleep");
     assert!(record.pid > 0);
+    // Windows `tasklist` can miss a pid that has not yet shown up.
+    std::thread::sleep(std::time::Duration::from_millis(200));
 
     let status = agent_status(repo, "demo").unwrap();
     assert!(status.running);
@@ -347,9 +349,9 @@ mod tests {
     stop_agent(repo, "demo").unwrap();
   }
 
-  /// Spawns a real `sleep 30` in place of `start_agent`'s allow-listed agent
-  /// binaries (unavailable in this sandbox) so the lifecycle test still
-  /// exercises a genuine OS process rather than a fake handle.
+  /// Spawns a real long-lived process in place of `start_agent`'s allow-listed
+  /// agent binaries (unavailable in this sandbox). Unix uses `sleep 30`;
+  /// Windows uses `ping` because `sleep` is not a lasting executable there.
   fn start_test_process(
     repo_path: &str,
     workspace: &str,
@@ -363,8 +365,16 @@ mod tests {
       .append(true)
       .open(&log_file_path)
       .unwrap();
-    let child = Command::new("sleep")
-      .arg("30")
+    let mut command = if cfg!(windows) {
+      let mut command = Command::new("ping");
+      command.args(["-n", "30", "127.0.0.1"]);
+      command
+    } else {
+      let mut command = Command::new("sleep");
+      command.arg("30");
+      command
+    };
+    let child = command
       .current_dir(workspace_path)
       .stdout(Stdio::from(log_file.try_clone().unwrap()))
       .stderr(Stdio::from(log_file))
