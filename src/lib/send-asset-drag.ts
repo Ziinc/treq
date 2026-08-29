@@ -1,4 +1,5 @@
 import { shellQuote } from "./shellQuote";
+import { copyTextToClipboard } from "./utils";
 
 /** MIME type for dragging a treq-send asset onto a terminal. */
 export const SEND_ASSET_MIME = "application/x-treq-send-asset";
@@ -70,4 +71,27 @@ export function terminalInsertTextFromDrop(
   }
 
   return null;
+}
+
+/** Copy a send asset so paste into a terminal inserts the quoted path. */
+export async function copySendAssetToClipboard(
+  payload: SendAssetDragPayload,
+): Promise<void> {
+  const quoted = shellQuote(payload.path);
+  if (typeof ClipboardItem !== "undefined" && navigator.clipboard?.write) {
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          "text/plain": new Blob([quoted], { type: "text/plain" }),
+          [SEND_ASSET_MIME]: new Blob([JSON.stringify(payload)], {
+            type: SEND_ASSET_MIME,
+          }),
+        }),
+      ]);
+      return;
+    } catch {
+      // Some WebViews reject custom MIME types on ClipboardItem.
+    }
+  }
+  await copyTextToClipboard(quoted);
 }

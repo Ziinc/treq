@@ -117,6 +117,14 @@ function ArtifactThumbnail({
         if (skipClickAfterDragRef.current) return;
         onOpen();
       }}
+      onCopy={(event) => {
+        if (!event.clipboardData) return;
+        event.preventDefault();
+        setSendAssetDragData(event.clipboardData, {
+          path: asset.path,
+          title: asset.title,
+        });
+      }}
       className="group flex flex-col overflow-hidden rounded-lg border border-border bg-muted/40 text-left hover:border-primary/50 hover:bg-muted/70 transition-colors cursor-grab active:cursor-grabbing"
     >
       <div className="aspect-[4/3] bg-[#1e1e1e] flex items-center justify-center overflow-hidden">

@@ -30,9 +30,10 @@ import { Loader2 } from "lucide-react";
 import { TerminalErrorOverlay } from "./terminal/TerminalErrorOverlay";
 import { normalizeCommand } from "./terminal/normalizeCommand";
 import {
-  canAcceptTerminalDrop,
-  terminalInsertTextFromDrop,
-} from "../lib/send-asset-drag";
+  handleTerminalDragOver,
+  handleTerminalDrop,
+  handleTerminalPaste,
+} from "./terminal/handleTerminalClipboard";
 
 interface ConsolidatedTerminalProps {
   ref?: Ref<ConsolidatedTerminalHandle>;
@@ -320,27 +321,15 @@ export const ConsolidatedTerminal = ({
     const xtermDataSubscription = xterm.onData(localHandleXtermData);
 
     const handlePaste = (e: ClipboardEvent) => {
-      const items = e.clipboardData?.items;
-      if (!items) return;
-
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        if (item.type.startsWith("image/")) {
-          e.preventDefault();
-          const blob = item.getAsFile();
-          if (!blob) continue;
-
-          const reader = new FileReader();
-          reader.onload = () => {
-            const [, base64] = (reader.result as string).split(",");
-            // iTerm2 inline image protocol: OSC 1337 ; File=inline=1:BASE64 BEL
-            const escapeSeq = `\x1b]1337;File=inline=1:${base64}\x07`;
-            xterm.write(escapeSeq);
-          };
-          reader.readAsDataURL(blob);
-          return; // Handle first image only
-        }
-      }
+      handleTerminalPaste(e, {
+        isPtyReady: isPtyReadyRef.current,
+        write: (text) => {
+          ptyWrite(sessionId, text).catch(console.error);
+        },
+        writeInlineImage: (escapeSeq) => {
+          xterm.write(escapeSeq);
+        },
+      });
     };
 
     terminalRef.current?.addEventListener("paste", handlePaste);
@@ -543,18 +532,14 @@ export const ConsolidatedTerminal = ({
             "[&_.xterm-viewport::-webkit-scrollbar-thumb]:bg-border",
             "[&_.xterm-viewport::-webkit-scrollbar-thumb]:rounded",
           )}
-          onDragOver={(e) => {
-            if (!canAcceptTerminalDrop(e.dataTransfer)) return;
-            e.preventDefault();
-            e.dataTransfer.dropEffect = "copy";
-          }}
+          onDragOver={handleTerminalDragOver}
           onDrop={(e) => {
-            const text = terminalInsertTextFromDrop(e.dataTransfer);
-            if (!text) return;
-            e.preventDefault();
-            if (isPtyReadyRef.current) {
-              ptyWrite(sessionId, text).catch(console.error);
-            }
+            handleTerminalDrop(e, {
+              isPtyReady: isPtyReadyRef.current,
+              write: (text) => {
+                ptyWrite(sessionId, text).catch(console.error);
+              },
+            });
           }}
         />
         {!isPtyReady && !terminalError && !skipLoadingState && (

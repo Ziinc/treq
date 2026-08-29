@@ -1,8 +1,9 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { FileText, X } from "lucide-react";
 import { assetsForPtySession, treqSendFileSrc } from "../../lib/treqSend";
 import {
   canAcceptTerminalDrop,
+  copySendAssetToClipboard,
   setSendAssetDragData,
   terminalInsertTextFromDrop,
 } from "../../lib/send-asset-drag";
@@ -43,6 +44,33 @@ export function TerminalSendPreviews({
   const assets = assetsForPtySession(sendAssets, ptySessionId, isActive).filter(
     (asset) => asset.mediaType !== "browser",
   );
+
+  const hoveredAsset = hoveredId
+    ? assets.find((item) => item.id === hoveredId)
+    : undefined;
+
+  useEffect(() => {
+    if (!hoveredAsset) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key !== "c") return;
+      const target = event.target as HTMLElement | null;
+      if (
+        target?.tagName === "INPUT" ||
+        target?.tagName === "TEXTAREA" ||
+        target?.getAttribute("contenteditable") === "true"
+      ) {
+        return;
+      }
+      event.preventDefault();
+      copySendAssetToClipboard({
+        path: hoveredAsset.path,
+        title: hoveredAsset.title,
+      }).catch(console.error);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [hoveredAsset]);
+
   if (assets.length === 0 && previewIndex == null) return null;
 
   const openPreview = (assetId: string) => {
@@ -100,6 +128,14 @@ export function TerminalSendPreviews({
                     window.setTimeout(() => {
                       skipClickAfterDragRef.current = false;
                     }, 0);
+                  }}
+                  onCopy={(event) => {
+                    if (!event.clipboardData) return;
+                    event.preventDefault();
+                    setSendAssetDragData(event.clipboardData, {
+                      path: asset.path,
+                      title: asset.title,
+                    });
                   }}
                 >
                   <AttachmentTrigger
