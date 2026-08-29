@@ -11,6 +11,7 @@ pub mod remote_bootstrap;
 pub mod remote_control_plane;
 pub mod remote_provider;
 pub mod remote_provider_sprites;
+pub mod remote_ssh_transport;
 pub mod repo;
 pub mod resolve;
 pub mod stash;

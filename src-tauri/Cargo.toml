@@ -63,12 +63,16 @@ duckdb = "1.10505.0"
 tempfile = { version = "3", optional = true }
 async-trait = "0.1.92"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
-tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "time"] }
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "time", "io-util", "net", "sync"] }
+russh = "0.63.1"
+bytes = "1"
 
 [dev-dependencies]
 mockall = "0.14.0"
 tempfile = "3"
 criterion = { version = "0.8.2", features = ["html_reports"] }
+getrandom = "0.4"
+rand_core = "0.10"
 wiremock = "0.6"
 
 [[bench]]
