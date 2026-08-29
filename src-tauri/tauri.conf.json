@@ -259,7 +259,17 @@
               "name": "repo",
               "takesValue": true,
               "required": true,
-              "description": "Repository path"
+              "description": "Repository path (probe/init target, or clone destination)"
+            },
+            {
+              "name": "value",
+              "takesValue": true,
+              "description": "Free-form payload: repository URL for clone"
+            },
+            {
+              "name": "idempotency-key",
+              "takesValue": true,
+              "description": "Idempotency key for mutations where a retry could duplicate work"
             },
             {
               "name": "format",
@@ -288,6 +298,21 @@
               "name": "workspace",
               "takesValue": true,
               "description": "Workspace numeric ID"
+            },
+            {
+              "name": "target",
+              "takesValue": true,
+              "description": "Secondary id for a mutation: target branch, destination workspace, or revision"
+            },
+            {
+              "name": "value",
+              "takesValue": true,
+              "description": "Free-form mutation payload: new name, message, prompt, or bookmark name"
+            },
+            {
+              "name": "idempotency-key",
+              "takesValue": true,
+              "description": "Idempotency key for mutations where a retry could duplicate work"
             },
             {
               "name": "format",
@@ -370,6 +395,16 @@
               "takesValue": true
             },
             {
+              "name": "value",
+              "takesValue": true,
+              "description": "Free-form payload: base64-encoded patch content for the patch action"
+            },
+            {
+              "name": "idempotency-key",
+              "takesValue": true,
+              "description": "Idempotency key for mutations where a retry could duplicate work"
+            },
+            {
               "name": "format",
               "takesValue": true,
               "description": "Output format: human or json"
@@ -398,6 +433,21 @@
               "description": "Workspace numeric ID"
             },
             {
+              "name": "target",
+              "takesValue": true,
+              "description": "Secondary id for a mutation: target branch, destination workspace, or revision"
+            },
+            {
+              "name": "value",
+              "takesValue": true,
+              "description": "Free-form mutation payload: new name, message, prompt, or bookmark name"
+            },
+            {
+              "name": "idempotency-key",
+              "takesValue": true,
+              "description": "Idempotency key for mutations where a retry could duplicate work"
+            },
+            {
               "name": "format",
               "takesValue": true,
               "description": "Output format: human or json"
@@ -424,6 +474,93 @@
               "name": "workspace",
               "takesValue": true,
               "description": "Workspace numeric ID"
+            },
+            {
+              "name": "format",
+              "takesValue": true,
+              "description": "Output format: human or json"
+            }
+          ]
+        },
+        "git": {
+          "description": "Git fetch, bookmark tracking, and push",
+          "args": [
+            {
+              "name": "action",
+              "index": 1,
+              "takesValue": true,
+              "required": true,
+              "description": "Command action: fetch, bookmark-track, push"
+            },
+            {
+              "name": "repo",
+              "takesValue": true,
+              "required": true,
+              "description": "Repository path"
+            },
+            {
+              "name": "workspace",
+              "takesValue": true,
+              "description": "Workspace numeric ID"
+            },
+            {
+              "name": "target",
+              "takesValue": true,
+              "description": "Remote name for bookmark-track"
+            },
+            {
+              "name": "value",
+              "takesValue": true,
+              "description": "Bookmark name for bookmark-track"
+            },
+            {
+              "name": "idempotency-key",
+              "takesValue": true,
+              "description": "Idempotency key for mutations where a retry could duplicate work"
+            },
+            {
+              "name": "format",
+              "takesValue": true,
+              "description": "Output format: human or json"
+            }
+          ]
+        },
+        "agent-remote": {
+          "description": "Coding-agent lifecycle backed by the VM-local supervisor",
+          "args": [
+            {
+              "name": "action",
+              "index": 1,
+              "takesValue": true,
+              "required": true,
+              "description": "Command action: start, input, status, stop, logs"
+            },
+            {
+              "name": "repo",
+              "takesValue": true,
+              "required": true,
+              "description": "Repository path"
+            },
+            {
+              "name": "workspace",
+              "takesValue": true,
+              "required": true,
+              "description": "Workspace numeric ID"
+            },
+            {
+              "name": "target",
+              "takesValue": true,
+              "description": "Agent name for start (claude, codex, cursor-agent)"
+            },
+            {
+              "name": "value",
+              "takesValue": true,
+              "description": "Free-form payload: prompt for start, input text for input"
+            },
+            {
+              "name": "idempotency-key",
+              "takesValue": true,
+              "description": "Idempotency key for mutations where a retry could duplicate work"
             },
             {
               "name": "format",

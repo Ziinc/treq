@@ -408,6 +408,7 @@ pub fn run() {
             );
 
             app.manage(app_state);
+            app.manage(commands::remote_control::RemoteExecState::default());
             start_agent_ipc_listener(app.handle().clone(), dispatch_listener);
             start_instance_registry_heartbeat(app.handle().clone());
 
@@ -826,6 +827,8 @@ pub fn run() {
             commands::remote_probe_repo,
             commands::remote_clone_repo,
             commands::remote_open_repo,
+            commands::remote_dispatch_local,
+            commands::remote_dispatch_over_ssh,
             commands::set_window_repo_path,
             commands::get_window_repo_path,
             commands::rebase_home_repo_branch,

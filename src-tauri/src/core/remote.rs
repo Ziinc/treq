@@ -80,7 +80,8 @@ pub struct CliErrorDetail {
   pub message: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind")]
 pub enum TreqCommandRequest {
   InspectRepository {
     repo: String,
@@ -123,58 +124,451 @@ pub enum TreqCommandRequest {
     repo: String,
     workspace: Option<String>,
   },
+  // -- Phase 5: probe/clone/init as typed commands ---------------------------
+  ProbeRepo {
+    repo: String,
+  },
+  CloneRepo {
+    repo_url: String,
+    destination: String,
+    idempotency_key: Option<String>,
+  },
+  InitRepo {
+    repo: String,
+    idempotency_key: Option<String>,
+  },
+  // -- Phase 5: workspace mutations -------------------------------------------
+  CreateWorkspace {
+    repo: String,
+    branch_name: String,
+    source_branch: Option<String>,
+    idempotency_key: Option<String>,
+  },
+  RenameWorkspace {
+    repo: String,
+    workspace: String,
+    new_name: String,
+  },
+  UpdateWorkspace {
+    repo: String,
+    workspace: String,
+    target_branch: Option<String>,
+    description: Option<String>,
+  },
+  DeleteWorkspace {
+    repo: String,
+    workspace: String,
+  },
+  MoveWorkspaceChanges {
+    repo: String,
+    workspace: String,
+    destination: String,
+    commits: Vec<String>,
+    idempotency_key: Option<String>,
+  },
+  RebaseWorkspace {
+    repo: String,
+    workspace: String,
+    target_branch: String,
+  },
+  // -- Phase 5: file mutations -------------------------------------------------
+  RestoreFile {
+    repo: String,
+    workspace: Option<String>,
+    path: String,
+  },
+  PatchFile {
+    repo: String,
+    workspace: Option<String>,
+    path: String,
+    patch_base64: String,
+    idempotency_key: Option<String>,
+  },
+  // -- Phase 5: commit mutations ------------------------------------------------
+  CreateCommit {
+    repo: String,
+    workspace: Option<String>,
+    message: String,
+    idempotency_key: Option<String>,
+  },
+  DescribeCommit {
+    repo: String,
+    workspace: String,
+    commit: String,
+    message: String,
+  },
+  SplitCommit {
+    repo: String,
+    workspace: String,
+    commit: String,
+  },
+  MoveCommit {
+    repo: String,
+    workspace: String,
+    commit: String,
+    target_workspace: String,
+  },
+  AbandonCommit {
+    repo: String,
+    workspace: String,
+    commit: String,
+  },
+  // -- Phase 5: conflict mutations ----------------------------------------------
+  ResolveConflict {
+    repo: String,
+    revision: String,
+    sides: Vec<String>,
+  },
+  // -- Phase 5: git operations ---------------------------------------------------
+  GitFetch {
+    repo: String,
+  },
+  GitBookmarkTrack {
+    repo: String,
+    bookmark: String,
+    remote_name: String,
+  },
+  GitPush {
+    repo: String,
+    workspace: Option<String>,
+    idempotency_key: Option<String>,
+  },
+  // -- Phase 5: agent lifecycle (VM-local supervisor) -----------------------------
+  AgentStart {
+    repo: String,
+    workspace: String,
+    agent: String,
+    prompt: String,
+    idempotency_key: Option<String>,
+  },
+  AgentInput {
+    repo: String,
+    workspace: String,
+    input: String,
+  },
+  AgentStatus {
+    repo: String,
+    workspace: String,
+  },
+  AgentStop {
+    repo: String,
+    workspace: String,
+  },
+  AgentLogs {
+    repo: String,
+    workspace: String,
+  },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum FileRevision {
   WorkingCopy,
   Parent,
+}
+
+/// Allow-listed argument fields shared by every Phase 5 typed command. Only
+/// commands built from a [`TreqCommandRequest`] variant can populate these —
+/// no frontend-provided raw string is ever assembled into this shape, which
+/// is what keeps arbitrary commands out of the exec channel.
+#[derive(Default)]
+struct CliArgFields<'a> {
+  workspace: Option<&'a str>,
+  path: Option<&'a str>,
+  target: Option<&'a str>,
+  value: Option<String>,
+  idempotency_key: Option<&'a str>,
 }
 
 impl TreqCommandRequest {
   /// Convert a typed request into remote CLI arguments. Values remain separate
   /// process arguments so no frontend-provided value is interpreted as shell.
   pub fn cli_args(&self) -> Result<Vec<String>, String> {
-    let (command, action, repo, workspace, path) = match self {
-      Self::InspectRepository { repo } => ("repo", "inspect", repo, None, None),
-      Self::RepositoryStatus { repo } => ("repo", "status", repo, None, None),
-      Self::ListBranches { repo } => ("repo", "branches", repo, None, None),
-      Self::ListWorkspaces { repo } => ("workspace", "list", repo, None, None),
-      Self::InspectWorkspace { repo, workspace } => {
-        ("workspace", "inspect", repo, Some(workspace), None)
+    let mut fields = CliArgFields::default();
+    let (command, action, repo): (&str, &str, &str) = match self {
+      Self::InspectRepository { repo } => ("repo", "inspect", repo),
+      Self::RepositoryStatus { repo } => ("repo", "status", repo),
+      Self::ListBranches { repo } => ("repo", "branches", repo),
+      Self::ProbeRepo { repo } => ("repo", "probe", repo),
+      Self::InitRepo {
+        repo,
+        idempotency_key,
+      } => {
+        fields.idempotency_key = idempotency_key.as_deref();
+        ("repo", "init", repo)
       }
-      Self::ListChanges { repo, workspace } => ("changes", "list", repo, workspace.as_ref(), None),
+      Self::CloneRepo {
+        repo_url,
+        destination,
+        idempotency_key,
+      } => {
+        if repo_url.trim().is_empty() {
+          return Err("Repository URL is required".to_string());
+        }
+        fields.value = Some(repo_url.clone());
+        fields.idempotency_key = idempotency_key.as_deref();
+        ("repo", "clone", destination)
+      }
+      Self::ListWorkspaces { repo } => ("workspace", "list", repo),
+      Self::InspectWorkspace { repo, workspace } => {
+        fields.workspace = Some(workspace);
+        ("workspace", "inspect", repo)
+      }
+      Self::CreateWorkspace {
+        repo,
+        branch_name,
+        source_branch,
+        idempotency_key,
+      } => {
+        fields.value = Some(branch_name.clone());
+        fields.target = source_branch.as_deref();
+        fields.idempotency_key = idempotency_key.as_deref();
+        ("workspace", "create", repo)
+      }
+      Self::RenameWorkspace {
+        repo,
+        workspace,
+        new_name,
+      } => {
+        fields.workspace = Some(workspace);
+        fields.value = Some(new_name.clone());
+        ("workspace", "rename", repo)
+      }
+      Self::UpdateWorkspace {
+        repo,
+        workspace,
+        target_branch,
+        description,
+      } => {
+        fields.workspace = Some(workspace);
+        fields.target = target_branch.as_deref();
+        fields.value = description.clone();
+        ("workspace", "update", repo)
+      }
+      Self::DeleteWorkspace { repo, workspace } => {
+        fields.workspace = Some(workspace);
+        ("workspace", "delete", repo)
+      }
+      Self::MoveWorkspaceChanges {
+        repo,
+        workspace,
+        destination,
+        commits,
+        idempotency_key,
+      } => {
+        fields.workspace = Some(workspace);
+        fields.target = Some(destination);
+        fields.value = Some(commits.join(","));
+        fields.idempotency_key = idempotency_key.as_deref();
+        ("workspace", "move", repo)
+      }
+      Self::RebaseWorkspace {
+        repo,
+        workspace,
+        target_branch,
+      } => {
+        fields.workspace = Some(workspace);
+        fields.target = Some(target_branch);
+        ("workspace", "rebase", repo)
+      }
+      Self::ListChanges { repo, workspace } => {
+        fields.workspace = workspace.as_deref();
+        ("changes", "list", repo)
+      }
       Self::DiffFile {
         repo,
         workspace,
         path,
-      } => ("changes", "diff", repo, workspace.as_ref(), Some(path)),
+      } => {
+        fields.workspace = workspace.as_deref();
+        fields.path = Some(path);
+        ("changes", "diff", repo)
+      }
       Self::ReadFile {
         repo,
         workspace,
         path,
         ..
-      } => ("file", "read", repo, workspace.as_ref(), Some(path)),
-      Self::ListCommits { repo, workspace } => ("commits", "list", repo, workspace.as_ref(), None),
+      } => {
+        fields.workspace = workspace.as_deref();
+        fields.path = Some(path);
+        ("file", "read", repo)
+      }
+      Self::RestoreFile {
+        repo,
+        workspace,
+        path,
+      } => {
+        fields.workspace = workspace.as_deref();
+        fields.path = Some(path);
+        ("file", "restore", repo)
+      }
+      Self::PatchFile {
+        repo,
+        workspace,
+        path,
+        patch_base64,
+        idempotency_key,
+      } => {
+        fields.workspace = workspace.as_deref();
+        fields.path = Some(path);
+        fields.value = Some(patch_base64.clone());
+        fields.idempotency_key = idempotency_key.as_deref();
+        ("file", "patch", repo)
+      }
+      Self::ListCommits { repo, workspace } => {
+        fields.workspace = workspace.as_deref();
+        ("commits", "list", repo)
+      }
+      Self::CreateCommit {
+        repo,
+        workspace,
+        message,
+        idempotency_key,
+      } => {
+        fields.workspace = workspace.as_deref();
+        fields.value = Some(message.clone());
+        fields.idempotency_key = idempotency_key.as_deref();
+        ("commits", "create", repo)
+      }
+      Self::DescribeCommit {
+        repo,
+        workspace,
+        commit,
+        message,
+      } => {
+        fields.workspace = Some(workspace);
+        fields.target = Some(commit);
+        fields.value = Some(message.clone());
+        ("commits", "describe", repo)
+      }
+      Self::SplitCommit {
+        repo,
+        workspace,
+        commit,
+      } => {
+        fields.workspace = Some(workspace);
+        fields.target = Some(commit);
+        ("commits", "split", repo)
+      }
+      Self::MoveCommit {
+        repo,
+        workspace,
+        commit,
+        target_workspace,
+      } => {
+        fields.workspace = Some(workspace);
+        fields.target = Some(commit);
+        fields.value = Some(target_workspace.clone());
+        ("commits", "move", repo)
+      }
+      Self::AbandonCommit {
+        repo,
+        workspace,
+        commit,
+      } => {
+        fields.workspace = Some(workspace);
+        fields.target = Some(commit);
+        ("commits", "abandon", repo)
+      }
       Self::ListConflicts { repo, workspace } => {
-        ("conflicts", "list", repo, workspace.as_ref(), None)
+        fields.workspace = workspace.as_deref();
+        ("conflicts", "list", repo)
+      }
+      Self::ResolveConflict {
+        repo,
+        revision,
+        sides,
+      } => {
+        fields.target = Some(revision);
+        fields.value = Some(sides.join(","));
+        ("conflicts", "resolve", repo)
+      }
+      Self::GitFetch { repo } => ("git", "fetch", repo),
+      Self::GitBookmarkTrack {
+        repo,
+        bookmark,
+        remote_name,
+      } => {
+        fields.value = Some(bookmark.clone());
+        fields.target = Some(remote_name);
+        ("git", "bookmark-track", repo)
+      }
+      Self::GitPush {
+        repo,
+        workspace,
+        idempotency_key,
+      } => {
+        fields.workspace = workspace.as_deref();
+        fields.idempotency_key = idempotency_key.as_deref();
+        ("git", "push", repo)
+      }
+      Self::AgentStart {
+        repo,
+        workspace,
+        agent,
+        prompt,
+        idempotency_key,
+      } => {
+        fields.workspace = Some(workspace);
+        fields.target = Some(agent);
+        fields.value = Some(prompt.clone());
+        fields.idempotency_key = idempotency_key.as_deref();
+        ("agent-remote", "start", repo)
+      }
+      Self::AgentInput {
+        repo,
+        workspace,
+        input,
+      } => {
+        fields.workspace = Some(workspace);
+        fields.value = Some(input.clone());
+        ("agent-remote", "input", repo)
+      }
+      Self::AgentStatus { repo, workspace } => {
+        fields.workspace = Some(workspace);
+        ("agent-remote", "status", repo)
+      }
+      Self::AgentStop { repo, workspace } => {
+        fields.workspace = Some(workspace);
+        ("agent-remote", "stop", repo)
+      }
+      Self::AgentLogs { repo, workspace } => {
+        fields.workspace = Some(workspace);
+        ("agent-remote", "logs", repo)
       }
     };
     validate_remote_path(repo)?;
-    if let Some(path) = path {
+    if let Some(path) = fields.path {
       if path.trim().is_empty() {
         return Err("Remote file path is required".to_string());
       }
     }
-    let mut args = vec![command.into(), action.into(), "--repo".into(), repo.clone()];
-    if let Some(workspace) = workspace {
+    let mut args = vec![
+      command.into(),
+      action.into(),
+      "--repo".into(),
+      repo.to_string(),
+    ];
+    if let Some(workspace) = fields.workspace {
       if workspace.trim().is_empty() {
         return Err("Remote workspace is required".to_string());
       }
-      args.extend(["--workspace".into(), workspace.clone()]);
+      args.extend(["--workspace".into(), workspace.to_string()]);
     }
-    if let Some(path) = path {
-      args.extend(["--path".into(), path.clone()]);
+    if let Some(path) = fields.path {
+      args.extend(["--path".into(), path.to_string()]);
+    }
+    if let Some(target) = fields.target {
+      args.extend(["--target".into(), target.to_string()]);
+    }
+    if let Some(value) = &fields.value {
+      args.extend(["--value".into(), value.clone()]);
+    }
+    if let Some(key) = fields.idempotency_key {
+      if key.trim().is_empty() {
+        return Err("Idempotency key must not be empty when provided".to_string());
+      }
+      args.extend(["--idempotency-key".into(), key.to_string()]);
     }
     if let Self::ReadFile {
       revision,
@@ -226,6 +620,76 @@ impl TreqCommandTransport for LocalTransport {
   fn execute<T: DeserializeOwned>(&self, request: TreqCommandRequest) -> Result<T, TransportError> {
     let value = execute_local_request(request).map_err_command()?;
     serde_json::from_value(value).map_err(|error| TransportError::InvalidJson(error.to_string()))
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Idempotency
+// ---------------------------------------------------------------------------
+//
+// Mutations that could duplicate work on retry (create, movement, git push,
+// agent start) accept an idempotency key. A repeated call with the same key
+// replays the cached response instead of re-running the mutation. This is an
+// in-process, per-`treq` invocation-boundary cache: on the remote VM the CLI
+// process starting fresh for every exec channel would defeat it, so the
+// process-wide store here matters most for the VM-local agent supervisor
+// (Phase 5 scope) and for local/dev use; a durable cross-process store would
+// be a natural Phase 7 (observability/ops) follow-up.
+//
+// Naturally idempotent operations (describe/update, which simply overwrite;
+// fetch/inspect/list, which are read-only) do not accept a key at all —
+// adding dedupe machinery for those would be needless per the PRD's own
+// carve-out.
+static IDEMPOTENCY_STORE: std::sync::OnceLock<
+  std::sync::Mutex<std::collections::HashMap<String, serde_json::Value>>,
+> = std::sync::OnceLock::new();
+
+fn idempotency_store(
+) -> &'static std::sync::Mutex<std::collections::HashMap<String, serde_json::Value>> {
+  IDEMPOTENCY_STORE.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
+}
+
+/// Runs `run` unless `key` was already used for `operation`, in which case the
+/// previously recorded response is replayed and `run` is never invoked again.
+fn with_idempotency_key<F>(
+  operation: &str,
+  key: Option<&str>,
+  run: F,
+) -> Result<serde_json::Value, String>
+where
+  F: FnOnce() -> Result<serde_json::Value, String>,
+{
+  let Some(key) = key.filter(|k| !k.trim().is_empty()) else {
+    return run();
+  };
+  let cache_key = format!("{operation}:{key}");
+  if let Some(cached) = idempotency_store().lock().unwrap().get(&cache_key) {
+    return Ok(cached.clone());
+  }
+  let result = run()?;
+  idempotency_store()
+    .lock()
+    .unwrap()
+    .insert(cache_key, result.clone());
+  Ok(result)
+}
+
+fn resolve_workspace_path(repo: &str, id: Option<i64>) -> Result<String, String> {
+  match id {
+    None => Ok(repo.to_string()),
+    Some(id) => {
+      let workspace = crate::local_db::get_workspace_by_id(repo, id)
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| format!("workspace_not_found: Workspace {id} was not found"))?;
+      Ok(
+        Path::new(repo)
+          .join(".treq")
+          .join("workspaces")
+          .join(workspace.workspace_path)
+          .to_string_lossy()
+          .into_owned(),
+      )
+    }
   }
 }
 
@@ -296,25 +760,390 @@ pub fn execute_local_request(request: TreqCommandRequest) -> Result<serde_json::
     }
     TreqCommandRequest::ListConflicts { repo, workspace } => {
       let id = workspace_id(workspace.as_ref())?;
-      let workspace_path = match id {
-        None => repo.clone(),
-        Some(id) => {
-          let workspace = crate::local_db::get_workspace_by_id(&repo, id)
-            .map_err(|error| error.to_string())?
-            .ok_or_else(|| format!("workspace_not_found: Workspace {id} was not found"))?;
-          Path::new(&repo)
-            .join(".treq")
-            .join("workspaces")
-            .join(workspace.workspace_path)
-            .to_string_lossy()
-            .into_owned()
-        }
-      };
+      let workspace_path = resolve_workspace_path(&repo, id)?;
       let files = crate::jj::get_conflicted_files(&workspace_path, None)
         .map_err(|error| format!("jj_command_failed: {error}"))?;
       serde_json::to_value(files).map_err(|error| error.to_string())
     }
+    TreqCommandRequest::ProbeRepo { repo } => json(probe_repo_path(&repo)),
+    TreqCommandRequest::InitRepo {
+      repo,
+      idempotency_key,
+    } => with_idempotency_key("repo.init", idempotency_key.as_deref(), || {
+      json(init_repo_path(&repo))
+    }),
+    TreqCommandRequest::CloneRepo {
+      repo_url,
+      destination,
+      idempotency_key,
+    } => with_idempotency_key("repo.clone", idempotency_key.as_deref(), || {
+      json(clone_repo_local(&repo_url, &destination))
+    }),
+    TreqCommandRequest::CreateWorkspace {
+      repo,
+      branch_name,
+      source_branch,
+      idempotency_key,
+    } => with_idempotency_key("workspace.create", idempotency_key.as_deref(), || {
+      json(crate::core::workspaces::create_workspace(
+        &repo,
+        &branch_name,
+        None,
+        None,
+        source_branch.as_deref(),
+        None,
+        None,
+      ))
+    }),
+    TreqCommandRequest::RenameWorkspace {
+      repo,
+      workspace,
+      new_name,
+    } => json(crate::core::workspaces::rename_workspace(
+      &repo,
+      workspace_id(Some(&workspace))?.ok_or("invalid_arguments: workspace is required")?,
+      &new_name,
+      false,
+    )),
+    TreqCommandRequest::UpdateWorkspace {
+      repo,
+      workspace,
+      target_branch,
+      description,
+    } => json(crate::core::workspaces::update_workspace(
+      &repo,
+      workspace_id(Some(&workspace))?.ok_or("invalid_arguments: workspace is required")?,
+      target_branch.map_or(
+        crate::core::workspaces::MaybeEmptyParam::Omitted,
+        crate::core::workspaces::MaybeEmptyParam::Some,
+      ),
+      description.map_or(
+        crate::core::workspaces::MaybeEmptyParam::Omitted,
+        crate::core::workspaces::MaybeEmptyParam::Some,
+      ),
+    )),
+    TreqCommandRequest::DeleteWorkspace { repo, workspace } => {
+      let id = workspace_id(Some(&workspace))?.ok_or("invalid_arguments: workspace is required")?;
+      json(crate::core::workspaces::delete_workspace(&repo, &id))
+    }
+    TreqCommandRequest::MoveWorkspaceChanges {
+      repo,
+      workspace,
+      destination,
+      commits,
+      idempotency_key,
+    } => with_idempotency_key("workspace.move", idempotency_key.as_deref(), || {
+      let request = crate::core::workspaces::WorkspaceMoveRequest {
+        files: vec![],
+        hunks: vec![],
+        commits: commits.iter().filter(|c| !c.is_empty()).cloned().collect(),
+      };
+      json(crate::core::workspaces::move_workspace_changes(
+        &repo,
+        &workspace,
+        &destination,
+        request,
+      ))
+    }),
+    TreqCommandRequest::RebaseWorkspace {
+      repo,
+      workspace,
+      target_branch,
+    } => {
+      let id = workspace_id(Some(&workspace))?.ok_or("invalid_arguments: workspace is required")?;
+      json(crate::core::workspaces::retarget_workspace(
+        &repo,
+        id,
+        &target_branch,
+        "main",
+      ))
+    }
+    TreqCommandRequest::RestoreFile {
+      repo,
+      workspace,
+      path,
+    } => {
+      let workspace_path = resolve_workspace_path(&repo, workspace_id(workspace.as_ref())?)?;
+      json(crate::core::changes::discard_file_changes(
+        &workspace_path,
+        &path,
+      ))
+    }
+    TreqCommandRequest::PatchFile {
+      repo,
+      workspace,
+      path,
+      patch_base64,
+      idempotency_key,
+    } => with_idempotency_key("file.patch", idempotency_key.as_deref(), || {
+      json(apply_remote_patch(
+        &repo,
+        workspace_id(workspace.as_ref())?,
+        &path,
+        &patch_base64,
+      ))
+    }),
+    TreqCommandRequest::CreateCommit {
+      repo,
+      workspace,
+      message,
+      idempotency_key,
+    } => with_idempotency_key("commit.create", idempotency_key.as_deref(), || {
+      json(crate::core::workspaces::commit_workspace_with_auto_push(
+        &repo,
+        workspace_id(workspace.as_ref())?,
+        &message,
+      ))
+    }),
+    TreqCommandRequest::DescribeCommit {
+      repo,
+      workspace,
+      commit,
+      message,
+    } => {
+      let id = workspace_id(Some(&workspace))?.ok_or("invalid_arguments: workspace is required")?;
+      // Naturally idempotent: it overwrites the description each call, so no
+      // idempotency key is needed or accepted.
+      json(crate::core::commits::describe_commit(
+        &repo, id, &commit, &message,
+      ))
+    }
+    TreqCommandRequest::SplitCommit { .. } => Err(
+      "not_implemented: remote commit split requires an interactive hunk selector and is not yet available over the exec channel"
+        .to_string(),
+    ),
+    TreqCommandRequest::MoveCommit {
+      repo,
+      workspace,
+      commit,
+      target_workspace,
+    } => {
+      let source_id =
+        workspace_id(Some(&workspace))?.ok_or("invalid_arguments: workspace is required")?;
+      let target_id = workspace_id(Some(&target_workspace))?
+        .ok_or("invalid_arguments: target workspace is required")?;
+      json(crate::core::commits::move_commit_to_existing_workspace(
+        &repo, source_id, &commit, target_id,
+      ))
+    }
+    TreqCommandRequest::AbandonCommit {
+      repo,
+      workspace,
+      commit,
+    } => {
+      let id = workspace_id(Some(&workspace))?.ok_or("invalid_arguments: workspace is required")?;
+      json(crate::core::commits::abandon_commit(&repo, id, &commit))
+    }
+    TreqCommandRequest::ResolveConflict {
+      repo,
+      revision,
+      sides,
+    } => {
+      let sides = crate::core::resolve::parse_resolve_sides(
+        &sides.into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>(),
+      )?;
+      json(crate::core::resolve::resolve_commit(
+        &repo, &revision, &sides, None,
+      ))
+    }
+    TreqCommandRequest::GitFetch { repo } => json(
+      crate::jj::jj_git_fetch(&repo).map_err(|error| format!("jj_command_failed: {error}")),
+    ),
+    TreqCommandRequest::GitBookmarkTrack {
+      repo,
+      bookmark,
+      remote_name,
+    } => {
+      // Tracking an already-tracked bookmark is a no-op in jj, so this is
+      // naturally idempotent and does not need a key.
+      json(
+        crate::jj::jj_bookmark_track(&repo, &bookmark, &remote_name)
+          .map_err(|error| format!("jj_command_failed: {error}")),
+      )
+    }
+    TreqCommandRequest::GitPush {
+      repo,
+      workspace,
+      idempotency_key,
+    } => with_idempotency_key("git.push", idempotency_key.as_deref(), || {
+      json(crate::core::workspaces::push_workspace_to_remote(
+        &repo,
+        workspace_id(workspace.as_ref())?,
+      ))
+    }),
+    TreqCommandRequest::AgentStart {
+      repo,
+      workspace,
+      agent,
+      prompt,
+      idempotency_key,
+    } => with_idempotency_key("agent.start", idempotency_key.as_deref(), || {
+      let id = workspace_id(Some(&workspace))?.ok_or("invalid_arguments: workspace is required")?;
+      let workspace_path = resolve_workspace_path(&repo, Some(id))?;
+      json(crate::core::agent_supervisor::start_agent(
+        &repo,
+        &workspace,
+        &workspace_path,
+        &agent,
+        &prompt,
+      ))
+    }),
+    TreqCommandRequest::AgentInput {
+      repo,
+      workspace,
+      input,
+    } => json(crate::core::agent_supervisor::send_agent_input(
+      &repo, &workspace, &input,
+    )),
+    TreqCommandRequest::AgentStatus { repo, workspace } => json(
+      crate::core::agent_supervisor::agent_status(&repo, &workspace),
+    ),
+    TreqCommandRequest::AgentStop { repo, workspace } => {
+      json(crate::core::agent_supervisor::stop_agent(&repo, &workspace))
+    }
+    TreqCommandRequest::AgentLogs { repo, workspace } => {
+      json(crate::core::agent_supervisor::agent_logs(&repo, &workspace))
+    }
   }
+}
+
+fn probe_repo_path(repo_path: &str) -> Result<RemoteRepoProbe, String> {
+  let trimmed = repo_path.trim();
+  if trimmed.is_empty() {
+    return Err("Remote path is required".to_string());
+  }
+  let path = Path::new(trimmed);
+  let exists = path.exists();
+  let is_repo = exists && (path.join(".jj").is_dir() || path.join(".git").exists());
+  Ok(RemoteRepoProbe {
+    host: String::new(),
+    path: trimmed.to_string(),
+    exists,
+    is_repo,
+    needs_clone: !is_repo,
+  })
+}
+
+fn init_repo_path(repo_path: &str) -> Result<RepositoryInspection, String> {
+  let trimmed = repo_path.trim();
+  if trimmed.is_empty() {
+    return Err("Remote path is required".to_string());
+  }
+  let path = Path::new(trimmed);
+  fs::create_dir_all(path)
+    .map_err(|e| format!("filesystem_error: Failed to create {trimmed}: {e}"))?;
+  if !path.join(".jj").is_dir() && !path.join(".git").exists() {
+    let output = Command::new("jj")
+      .current_dir(path)
+      .args(["git", "init", "--colocate", "."])
+      .output()
+      .map_err(|e| format!("dependency_error: Failed to run jj: {e}"))?;
+    if !output.status.success() {
+      return Err(format!(
+        "jj_command_failed: {}",
+        String::from_utf8_lossy(&output.stderr).trim()
+      ));
+    }
+  }
+  inspect_repository_path(trimmed)
+}
+
+fn clone_repo_local(repo_url: &str, destination: &str) -> Result<RepositoryInspection, String> {
+  if repo_url.trim().is_empty() {
+    return Err("Repository URL is required".to_string());
+  }
+  validate_remote_path(destination)?;
+  let output = Command::new("git")
+    .args(["clone", repo_url, destination])
+    .output()
+    .map_err(|e| format!("dependency_error: Failed to run git: {e}"))?;
+  if !output.status.success() {
+    return Err(format!(
+      "git_command_failed: {}",
+      String::from_utf8_lossy(&output.stderr).trim()
+    ));
+  }
+  inspect_repository_path(destination)
+}
+
+/// Applies a base64-encoded unified diff to `path` inside the given
+/// workspace (or the repo root) using `git apply`. Base64 keeps the exec
+/// argument vector a plain string even though the payload contains newlines.
+fn apply_remote_patch(
+  repo: &str,
+  workspace: Option<i64>,
+  path: &str,
+  patch_base64: &str,
+) -> Result<String, String> {
+  use std::io::Write;
+  let workspace_path = resolve_workspace_path(repo, workspace)?;
+  let decoded = decode_base64(patch_base64.trim())
+    .map_err(|e| format!("invalid_arguments: patch is not valid base64: {e}"))?;
+  let mut child = Command::new("git")
+    .current_dir(&workspace_path)
+    .args(["apply", "--whitespace=nowarn", "--", path])
+    .stdin(std::process::Stdio::piped())
+    .stdout(std::process::Stdio::piped())
+    .stderr(std::process::Stdio::piped())
+    .spawn()
+    .map_err(|e| format!("dependency_error: Failed to run git apply: {e}"))?;
+  child
+    .stdin
+    .take()
+    .ok_or("dependency_error: Failed to open git apply stdin")?
+    .write_all(&decoded)
+    .map_err(|e| format!("filesystem_error: Failed to write patch input: {e}"))?;
+  let output = child
+    .wait_with_output()
+    .map_err(|e| format!("dependency_error: git apply failed: {e}"))?;
+  if !output.status.success() {
+    return Err(format!(
+      "git_command_failed: {}",
+      String::from_utf8_lossy(&output.stderr).trim()
+    ));
+  }
+  Ok(format!("Applied patch to {path}"))
+}
+
+/// Minimal RFC 4648 base64 decoder (standard alphabet, `=` padding) so patch
+/// payloads can travel through the plain-string exec argument vector without
+/// pulling in an extra crate dependency.
+fn decode_base64(input: &str) -> Result<Vec<u8>, String> {
+  fn value(byte: u8) -> Option<u8> {
+    match byte {
+      b'A'..=b'Z' => Some(byte - b'A'),
+      b'a'..=b'z' => Some(byte - b'a' + 26),
+      b'0'..=b'9' => Some(byte - b'0' + 52),
+      b'+' => Some(62),
+      b'/' => Some(63),
+      _ => None,
+    }
+  }
+  let cleaned: Vec<u8> = input.bytes().filter(|b| !b.is_ascii_whitespace()).collect();
+  let mut out = Vec::with_capacity(cleaned.len() / 4 * 3);
+  for chunk in cleaned.chunks(4) {
+    if chunk.len() < 2 {
+      return Err("truncated base64 input".to_string());
+    }
+    let padding = chunk.iter().filter(|&&b| b == b'=').count();
+    let vals: Vec<u8> = chunk
+      .iter()
+      .filter(|&&b| b != b'=')
+      .map(|&b| value(b).ok_or_else(|| "invalid base64 character".to_string()))
+      .collect::<Result<_, _>>()?;
+    let mut buf = [0u8; 4];
+    for (i, v) in vals.iter().enumerate() {
+      buf[i] = *v;
+    }
+    out.push((buf[0] << 2) | (buf[1] >> 4));
+    if padding < 2 && vals.len() > 2 {
+      out.push((buf[1] << 4) | (buf[2] >> 2));
+    }
+    if padding < 1 && vals.len() > 3 {
+      out.push((buf[2] << 6) | buf[3]);
+    }
+  }
+  Ok(out)
 }
 
 impl SshCliTransport {
@@ -360,6 +1189,97 @@ impl TreqCommandTransport for SshCliTransport {
     serde_json::from_slice::<T>(&output.stdout)
       .map_err(|e| TransportError::InvalidJson(e.to_string()))
   }
+}
+
+// ---------------------------------------------------------------------------
+// Native (Phase 4) SSH exec transport for typed commands
+// ---------------------------------------------------------------------------
+//
+// `SshCliTransport` above is the legacy alias/subprocess transport, kept for
+// the explicit-alias endpoint mode (`SshEndpointSource::ExplicitAlias`) where
+// a user has deliberately opted into an ambient `~/.ssh` alias rather than a
+// fully-modeled `SshEndpoint`. Every other path — managed and user-managed
+// endpoints with real host-key pinning — goes through `SshExecTransport`,
+// which never shells out to a system `ssh` binary and instead reuses the
+// Phase 4 pooled `russh` connection.
+
+/// Structured error for a typed command executed over the native transport.
+/// Distinguishes a transport-layer failure (connection/host-key/auth/limits —
+/// see [`crate::core::remote_ssh_transport::SshTransportError`]) from a
+/// command-layer failure the remote Treq CLI itself reported, so a caller
+/// can tell "we could not reach the CLI" from "the CLI ran and rejected the
+/// request" and keep the CLI's own error code intact either way.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RemoteCommandError {
+  Transport(String),
+  Command { code: String, message: String },
+  InvalidJson(String),
+}
+
+impl std::fmt::Display for RemoteCommandError {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      Self::Transport(message) => write!(f, "transport_error: {message}"),
+      Self::Command { code, message } => write!(f, "{code}: {message}"),
+      Self::InvalidJson(message) => write!(f, "invalid_remote_json: {message}"),
+    }
+  }
+}
+
+impl std::error::Error for RemoteCommandError {}
+
+/// Executes a typed `TreqCommandRequest` against `endpoint` over the pooled
+/// native SSH transport's exec channel and decodes the JSON result. This is
+/// the only path by which a Phase 5 mutation, read-only command, probe,
+/// clone, or agent lifecycle call reaches the wire — `request` is always
+/// built from an allow-listed enum variant, never a raw string, so no
+/// frontend-provided arbitrary command can enter the exec channel.
+pub async fn execute_remote_command<T: DeserializeOwned>(
+  pool: &crate::core::remote_ssh_transport::SshConnectionPool,
+  endpoint: &crate::core::remote_control_plane::SshEndpoint,
+  request: TreqCommandRequest,
+  limits: crate::core::remote_ssh_transport::ExecLimits,
+  cancellation: &crate::core::remote_ssh_transport::CancellationToken,
+) -> Result<T, RemoteCommandError> {
+  let args = request
+    .cli_args()
+    .map_err(|error| RemoteCommandError::Command {
+      code: "invalid_arguments".to_string(),
+      message: error,
+    })?;
+  let output =
+    crate::core::remote_ssh_transport::exec_command(pool, endpoint, &args, limits, cancellation)
+      .await
+      .map_err(|error| match error {
+        crate::core::remote_ssh_transport::SshTransportError::CommandFailed {
+          stderr,
+          stdout,
+          ..
+        } => {
+          // The CLI always emits `{"error":{"code":...,"message":...}}` on
+          // stdout for a structured failure, so prefer that over stderr: it is
+          // what lets the CLI's own error code survive transport mapping rather
+          // than collapsing to a generic string.
+          if let Ok(body) = serde_json::from_str::<CliErrorBody>(&stdout) {
+            RemoteCommandError::Command {
+              code: body.error.code,
+              message: body.error.message,
+            }
+          } else {
+            RemoteCommandError::Command {
+              code: "treq_command_failed".to_string(),
+              message: if stderr.is_empty() {
+                "Remote treq command failed".to_string()
+              } else {
+                stderr
+              },
+            }
+          }
+        }
+        other => RemoteCommandError::Transport(other.to_string()),
+      })?;
+  serde_json::from_slice::<T>(&output.stdout)
+    .map_err(|error| RemoteCommandError::InvalidJson(error.to_string()))
 }
 
 impl TransportError {
@@ -787,5 +1707,117 @@ mod tests {
     .cli_args()
     .unwrap_err();
     assert_eq!(error, "Remote file path is required");
+  }
+
+  #[test]
+  fn builds_typed_probe_clone_init_arguments() {
+    assert_eq!(
+      TreqCommandRequest::ProbeRepo {
+        repo: "/srv/project".into()
+      }
+      .cli_args()
+      .unwrap(),
+      vec![
+        "repo",
+        "probe",
+        "--repo",
+        "/srv/project",
+        "--format",
+        "json"
+      ]
+    );
+    assert_eq!(
+      TreqCommandRequest::CloneRepo {
+        repo_url: "git@example.com:x/y.git".into(),
+        destination: "/srv/project".into(),
+        idempotency_key: Some("key-1".into()),
+      }
+      .cli_args()
+      .unwrap(),
+      vec![
+        "repo",
+        "clone",
+        "--repo",
+        "/srv/project",
+        "--value",
+        "git@example.com:x/y.git",
+        "--idempotency-key",
+        "key-1",
+        "--format",
+        "json"
+      ]
+    );
+  }
+
+  #[test]
+  fn rejects_empty_idempotency_key() {
+    let error = TreqCommandRequest::InitRepo {
+      repo: "/srv/project".into(),
+      idempotency_key: Some("  ".into()),
+    }
+    .cli_args()
+    .unwrap_err();
+    assert_eq!(error, "Idempotency key must not be empty when provided");
+  }
+
+  // -- Idempotency ------------------------------------------------------------
+
+  #[test]
+  fn idempotency_key_replays_cached_result_for_a_create_style_mutation_instead_of_rerunning() {
+    let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let calls_clone = calls.clone();
+    let run = move || {
+      let n = calls_clone.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+      Ok(serde_json::json!({ "created_count": n }))
+    };
+    let key = format!("test-create-{}", uuid_like());
+    let first = with_idempotency_key("test.create", Some(&key), run.clone()).unwrap();
+    let second = with_idempotency_key("test.create", Some(&key), run).unwrap();
+    // The second call must replay the first response rather than invoking
+    // `run` again — a retried "create" mutation must not duplicate work.
+    assert_eq!(first, second);
+    assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+  }
+
+  #[test]
+  fn missing_idempotency_key_always_reruns_the_operation() {
+    let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    for _ in 0..2 {
+      let calls_clone = calls.clone();
+      with_idempotency_key("test.no-key", None, move || {
+        calls_clone.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Ok(serde_json::json!(null))
+      })
+      .unwrap();
+    }
+    assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 2);
+  }
+
+  /// `describe_commit`'s CLI dispatch takes no idempotency key at all: it is
+  /// naturally idempotent (rewriting a description is safe to repeat), so
+  /// the typed request has no field for one and every call always runs.
+  #[test]
+  fn describe_commit_request_has_no_idempotency_key_field() {
+    let args = TreqCommandRequest::DescribeCommit {
+      repo: "/srv/project".into(),
+      workspace: "1".into(),
+      commit: "abc123".into(),
+      message: "new description".into(),
+    }
+    .cli_args()
+    .unwrap();
+    assert!(!args.iter().any(|a| a == "--idempotency-key"));
+  }
+
+  fn uuid_like() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    format!(
+      "{}-{}",
+      std::process::id(),
+      SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos()
+    )
   }
 }

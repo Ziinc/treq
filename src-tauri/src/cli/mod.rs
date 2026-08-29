@@ -127,14 +127,35 @@ fn get_arg_value(matches: &Matches, name: &str) -> Option<String> {
   })
 }
 
+/// Structured error codes are threaded end-to-end: core functions prefix
+/// their error strings with one of these codes (`code: message`), and this
+/// classifier extracts a matching code even for messages that predate the
+/// convention, so a code survives the exec-channel/JSON boundary rather than
+/// collapsing to a generic string (PRD: "error codes survive transport
+/// mapping").
 fn classify_cli_error(message: &str) -> &'static str {
-  if message.contains("repository_not_found") {
-    "repository_not_found"
-  } else if message.contains("invalid_repository") {
-    "invalid_repository"
-  } else if message.contains("permission_denied") {
-    "permission_denied"
-  } else if message.contains("workspace") && message.contains("not found") {
+  const KNOWN_CODES: &[&str] = &[
+    "repository_not_found",
+    "invalid_repository",
+    "permission_denied",
+    "workspace_not_found",
+    "agent_already_running",
+    "agent_not_running",
+    "dependency_error",
+    "filesystem_error",
+    "not_implemented",
+    "invalid_arguments",
+    "ssh_connection_failed",
+    "invalid_remote_json",
+    "jj_command_failed",
+    "git_command_failed",
+  ];
+  for code in KNOWN_CODES {
+    if message.starts_with(code) || message.contains(&format!("{code}:")) {
+      return code;
+    }
+  }
+  if message.contains("workspace") && message.contains("not found") {
     "workspace_not_found"
   } else if message.contains("jj") {
     "jj_command_failed"
@@ -178,7 +199,9 @@ fn handle_repo_command(matches: &Matches) -> Result<(), String> {
         Err(error)
       }
     },
-    "status" | "branches" => handle_remote_review_command("repo", matches),
+    "status" | "branches" | "probe" | "init" | "clone" => {
+      handle_remote_review_command("repo", matches)
+    }
     other => {
       let message = format!("unknown repo action '{other}'");
       if format == OutputFormat::Json {
@@ -201,6 +224,19 @@ fn optional_usize(matches: &Matches, name: &str) -> Result<Option<usize>, String
     .transpose()
 }
 
+fn split_csv(value: Option<String>) -> Vec<String> {
+  value
+    .map(|value| {
+      value
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .collect()
+    })
+    .unwrap_or_default()
+}
+
 fn handle_remote_review_command(command: &str, matches: &Matches) -> Result<(), String> {
   use crate::core::remote::{FileRevision, TreqCommandRequest};
   let format = OutputFormat::parse(get_arg_value(matches, "format").as_deref())?;
@@ -209,13 +245,74 @@ fn handle_remote_review_command(command: &str, matches: &Matches) -> Result<(), 
   let repo = get_arg_value(matches, "repo").ok_or_else(|| "--repo is required".to_string())?;
   let workspace = get_arg_value(matches, "workspace");
   let path = get_arg_value(matches, "path");
+  let target = get_arg_value(matches, "target");
+  let value = get_arg_value(matches, "value");
+  let idempotency_key = get_arg_value(matches, "idempotency-key");
+  let require_workspace = || {
+    workspace
+      .clone()
+      .ok_or_else(|| "--workspace is required".to_string())
+  };
+  let require_value = |what: &str| {
+    value
+      .clone()
+      .ok_or_else(|| format!("--value ({what}) is required"))
+  };
+  let require_target = |what: &str| {
+    target
+      .clone()
+      .ok_or_else(|| format!("--target ({what}) is required"))
+  };
   let request = match (command, action.as_str()) {
     ("repo", "status") => TreqCommandRequest::RepositoryStatus { repo },
     ("repo", "branches") => TreqCommandRequest::ListBranches { repo },
+    ("repo", "probe") => TreqCommandRequest::ProbeRepo { repo },
+    ("repo", "init") => TreqCommandRequest::InitRepo {
+      repo,
+      idempotency_key,
+    },
+    ("repo", "clone") => TreqCommandRequest::CloneRepo {
+      repo_url: require_value("repository URL")?,
+      destination: repo,
+      idempotency_key,
+    },
     ("workspace", "list") => TreqCommandRequest::ListWorkspaces { repo },
     ("workspace", "inspect") => TreqCommandRequest::InspectWorkspace {
       repo,
-      workspace: workspace.ok_or_else(|| "--workspace is required".to_string())?,
+      workspace: require_workspace()?,
+    },
+    ("workspace", "create") => TreqCommandRequest::CreateWorkspace {
+      repo,
+      branch_name: require_value("branch name")?,
+      source_branch: target,
+      idempotency_key,
+    },
+    ("workspace", "rename") => TreqCommandRequest::RenameWorkspace {
+      repo,
+      workspace: require_workspace()?,
+      new_name: require_value("new branch name")?,
+    },
+    ("workspace", "update") => TreqCommandRequest::UpdateWorkspace {
+      repo,
+      workspace: require_workspace()?,
+      target_branch: target,
+      description: value,
+    },
+    ("workspace", "delete") => TreqCommandRequest::DeleteWorkspace {
+      repo,
+      workspace: require_workspace()?,
+    },
+    ("workspace", "move") => TreqCommandRequest::MoveWorkspaceChanges {
+      repo,
+      workspace: require_workspace()?,
+      destination: require_target("destination workspace/branch")?,
+      commits: split_csv(value),
+      idempotency_key,
+    },
+    ("workspace", "rebase") => TreqCommandRequest::RebaseWorkspace {
+      repo,
+      workspace: require_workspace()?,
+      target_branch: require_target("target branch")?,
     },
     ("changes", "list") => TreqCommandRequest::ListChanges { repo, workspace },
     ("changes", "diff") => TreqCommandRequest::DiffFile {
@@ -238,8 +335,88 @@ fn handle_remote_review_command(command: &str, matches: &Matches) -> Result<(), 
       start_line: optional_usize(matches, "start-line")?,
       end_line: optional_usize(matches, "end-line")?,
     },
+    ("file", "restore") => TreqCommandRequest::RestoreFile {
+      repo,
+      workspace,
+      path: path.ok_or_else(|| "--path is required".to_string())?,
+    },
+    ("file", "patch") => TreqCommandRequest::PatchFile {
+      repo,
+      workspace,
+      path: path.ok_or_else(|| "--path is required".to_string())?,
+      patch_base64: require_value("base64 patch content")?,
+      idempotency_key,
+    },
     ("commits", "list") => TreqCommandRequest::ListCommits { repo, workspace },
+    ("commits", "create") => TreqCommandRequest::CreateCommit {
+      repo,
+      workspace,
+      message: require_value("commit message")?,
+      idempotency_key,
+    },
+    ("commits", "describe") => TreqCommandRequest::DescribeCommit {
+      repo,
+      workspace: require_workspace()?,
+      commit: require_target("commit change id")?,
+      message: require_value("description")?,
+    },
+    ("commits", "split") => TreqCommandRequest::SplitCommit {
+      repo,
+      workspace: require_workspace()?,
+      commit: require_target("commit change id")?,
+    },
+    ("commits", "move") => TreqCommandRequest::MoveCommit {
+      repo,
+      workspace: require_workspace()?,
+      commit: require_target("commit change id")?,
+      target_workspace: require_value("target workspace id")?,
+    },
+    ("commits", "abandon") => TreqCommandRequest::AbandonCommit {
+      repo,
+      workspace: require_workspace()?,
+      commit: require_target("commit change id")?,
+    },
     ("conflicts", "list") => TreqCommandRequest::ListConflicts { repo, workspace },
+    ("conflicts", "resolve") => TreqCommandRequest::ResolveConflict {
+      repo,
+      revision: require_target("revision")?,
+      sides: split_csv(value),
+    },
+    ("git", "fetch") => TreqCommandRequest::GitFetch { repo },
+    ("git", "bookmark-track") => TreqCommandRequest::GitBookmarkTrack {
+      repo,
+      bookmark: require_value("bookmark name")?,
+      remote_name: require_target("remote name")?,
+    },
+    ("git", "push") => TreqCommandRequest::GitPush {
+      repo,
+      workspace,
+      idempotency_key,
+    },
+    ("agent-remote", "start") => TreqCommandRequest::AgentStart {
+      repo,
+      workspace: require_workspace()?,
+      agent: require_target("agent name")?,
+      prompt: require_value("prompt")?,
+      idempotency_key,
+    },
+    ("agent-remote", "input") => TreqCommandRequest::AgentInput {
+      repo,
+      workspace: require_workspace()?,
+      input: require_value("input")?,
+    },
+    ("agent-remote", "status") => TreqCommandRequest::AgentStatus {
+      repo,
+      workspace: require_workspace()?,
+    },
+    ("agent-remote", "stop") => TreqCommandRequest::AgentStop {
+      repo,
+      workspace: require_workspace()?,
+    },
+    ("agent-remote", "logs") => TreqCommandRequest::AgentLogs {
+      repo,
+      workspace: require_workspace()?,
+    },
     _ => return Err(format!("unknown {command} action '{action}'")),
   };
   match crate::core::remote::execute_local_request(request) {
@@ -275,7 +452,7 @@ pub fn handle_cli_command(subcommand: &SubcommandMatches) -> Option<i32> {
     "resolve" => workspace_handlers::handle_resolve(&subcommand.matches),
     "send" => workspace_handlers::handle_send(&subcommand.matches),
     "repo" => handle_repo_command(&subcommand.matches).is_ok(),
-    "workspace" | "changes" | "file" | "commits" | "conflicts" => {
+    "workspace" | "changes" | "file" | "commits" | "conflicts" | "git" | "agent-remote" => {
       handle_remote_review_command(&subcommand.name, &subcommand.matches).is_ok()
     }
     "help" => {
@@ -328,6 +505,8 @@ pub(super) fn is_supported_cli_command(name: &str) -> bool {
       | "file"
       | "commits"
       | "conflicts"
+      | "git"
+      | "agent-remote"
       | "help"
   )
 }

@@ -71,6 +71,12 @@ pub enum SshTransportError {
   CommandFailed {
     exit_status: Option<u32>,
     stderr: String,
+    /// Raw stdout bytes, UTF-8 lossily decoded. The Treq CLI still emits a
+    /// structured `{"error":{"code":...,"message":...}}` body on stdout even
+    /// on failure, so callers that want the CLI's own error code (per the
+    /// PRD's "error codes survive transport mapping") parse this rather than
+    /// falling back to a generic transport-level message.
+    stdout: String,
   },
   /// stdout was not valid UTF-8 / valid JSON once decoded by the caller.
   ProtocolError(String),
@@ -94,6 +100,7 @@ impl std::fmt::Display for SshTransportError {
       Self::CommandFailed {
         exit_status,
         stderr,
+        ..
       } => {
         write!(f, "remote command failed (exit={exit_status:?}): {stderr}")
       }
@@ -666,6 +673,7 @@ pub async fn exec_command(
     return Err(SshTransportError::CommandFailed {
       exit_status: output.exit_status,
       stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
+      stdout: String::from_utf8_lossy(&output.stdout).trim().to_string(),
     });
   }
   Ok(output)
@@ -983,6 +991,14 @@ mod tests {
           }
           session.exit_status_request(channel, 0)?;
         }
+        3 => {
+          // Structured-failure path: a non-zero exit whose stdout still
+          // carries the CLI's own `{"error":{code,message}}` body, the way
+          // the real `treq` binary reports a failed command.
+          let body = "{\"error\":{\"code\":\"workspace_not_found\",\"message\":\"Workspace 42 was not found\"}}";
+          session.data(channel, bytes::Bytes::from(body.as_bytes().to_vec()))?;
+          session.exit_status_request(channel, 1)?;
+        }
         _ => {
           let response = format!("{{\"echo\":\"{command}\"}}");
           session.data(channel, bytes::Bytes::from(response.into_bytes()))?;
@@ -1101,6 +1117,40 @@ mod tests {
     .unwrap();
 
     assert_eq!(pool.pooled_connection_count().await, 1);
+  }
+
+  #[tokio::test]
+  async fn structured_cli_error_survives_the_exec_channel_boundary() {
+    let (addr, host_key) = start_mock_server(3).await;
+    let client_key = test_host_key();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let key_reference = write_client_key(temp_dir.path(), &client_key);
+    let endpoint = test_endpoint(addr, &host_key, key_reference);
+
+    let pool = SshConnectionPool::new();
+    let cancellation = CancellationToken::new();
+
+    let error = crate::core::remote::execute_remote_command::<serde_json::Value>(
+      &pool,
+      &endpoint,
+      crate::core::remote::TreqCommandRequest::ListWorkspaces {
+        repo: "/srv/project".to_string(),
+      },
+      ExecLimits::default(),
+      &cancellation,
+    )
+    .await
+    .unwrap_err();
+
+    // The CLI's own `workspace_not_found` code must reach the caller intact
+    // rather than collapsing to a generic transport-failure string.
+    match error {
+      crate::core::remote::RemoteCommandError::Command { code, message } => {
+        assert_eq!(code, "workspace_not_found");
+        assert!(message.contains("42"));
+      }
+      other => panic!("expected a structured Command error, got {other:?}"),
+    }
   }
 
   #[tokio::test]
