@@ -14,7 +14,7 @@
 // mutations the PRD calls "not yet supported" so the UI can disable them
 // instead of sending a request that always fails.
 
-import { invoke } from "@tauri-apps/api/core";
+import { remoteDispatchLocal, remoteDispatchOverSsh } from "./api-extra";
 import type { SshEndpoint } from "./api-types-remote";
 
 export type TreqCommandRequest =
@@ -50,10 +50,7 @@ export type TreqCommandRequest =
  * let a user trigger a request that always fails - see "Main application
  * integration": "disabling any action not yet supported remotely."
  */
-export const REMOTE_NOT_IMPLEMENTED = new Set([
-  "SplitCommit",
-  "AgentInput",
-]);
+export const REMOTE_NOT_IMPLEMENTED = new Set(["SplitCommit", "AgentInput"]);
 
 export function isRemoteActionSupported(kind: string): boolean {
   return !REMOTE_NOT_IMPLEMENTED.has(kind);
@@ -62,14 +59,14 @@ export function isRemoteActionSupported(kind: string): boolean {
 export function dispatchLocal<T = unknown>(
   request: TreqCommandRequest,
 ): Promise<T> {
-  return invoke("remote_dispatch_local", { request });
+  return remoteDispatchLocal<T>(request);
 }
 
 export function dispatchOverSsh<T = unknown>(
   endpoint: SshEndpoint,
   request: TreqCommandRequest,
 ): Promise<T> {
-  return invoke("remote_dispatch_over_ssh", { endpoint, request });
+  return remoteDispatchOverSsh<T>(endpoint, request);
 }
 
 /** Dispatches locally or over SSH depending on whether an endpoint is given. */
@@ -77,5 +74,7 @@ export function dispatch<T = unknown>(
   endpoint: SshEndpoint | null,
   request: TreqCommandRequest,
 ): Promise<T> {
-  return endpoint ? dispatchOverSsh<T>(endpoint, request) : dispatchLocal<T>(request);
+  return endpoint
+    ? dispatchOverSsh<T>(endpoint, request)
+    : dispatchLocal<T>(request);
 }

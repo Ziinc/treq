@@ -8,16 +8,12 @@ import {
 
 describe("connectionStateFromInstanceState", () => {
   it("maps suspended/waking instance states to the waking connection state", () => {
-    expect(connectionStateFromInstanceState("suspended", true)).toBe(
-      "waking",
-    );
+    expect(connectionStateFromInstanceState("suspended", true)).toBe("waking");
     expect(connectionStateFromInstanceState("waking", true)).toBe("waking");
   });
 
   it("maps degraded/failed instance states to degraded", () => {
-    expect(connectionStateFromInstanceState("degraded", true)).toBe(
-      "degraded",
-    );
+    expect(connectionStateFromInstanceState("degraded", true)).toBe("degraded");
     expect(connectionStateFromInstanceState("failed", true)).toBe("degraded");
   });
 

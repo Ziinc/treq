@@ -111,7 +111,11 @@ export function RemoteManagedSetupPanel({
           <div className="flex flex-wrap gap-2">
             {(existingInstance.status === "suspended" ||
               existingInstance.status === "waking") && (
-              <Button size="sm" disabled={submitting} onClick={() => void onWake()}>
+              <Button
+                size="sm"
+                disabled={submitting}
+                onClick={() => void onWake()}
+              >
                 Wake
               </Button>
             )}
@@ -146,10 +150,10 @@ export function RemoteManagedSetupPanel({
           {confirmingReprovision && (
             <div className="rounded-md border border-yellow-500/40 bg-yellow-500/10 p-3 text-sm">
               <p>
-                Reprovisioning replaces this VM and increments its
-                generation. Repository preservation depends on the
-                provider&apos;s storage behavior - export anything you need
-                first. This does not migrate to a different region.
+                Reprovisioning replaces this VM and increments its generation.
+                Repository preservation depends on the provider&apos;s storage
+                behavior - export anything you need first. This does not migrate
+                to a different region.
               </p>
               <div className="mt-3 flex gap-2">
                 <label className="flex items-center gap-1">
@@ -246,9 +250,9 @@ export function RemoteManagedSetupPanel({
             <span className="text-sm font-medium">SSH identity</span>
             {localKeyIdentities.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                No local SSH key was found. Create or import one outside
-                Treq, then reopen this dialog. Treq never generates a
-                private key for you.
+                No local SSH key was found. Create or import one outside Treq,
+                then reopen this dialog. Treq never generates a private key for
+                you.
               </p>
             ) : (
               <select
@@ -277,9 +281,7 @@ export function RemoteManagedSetupPanel({
           </label>
 
           {provisioningStage && (
-            <p className="text-sm text-muted-foreground">
-              {provisioningStage}
-            </p>
+            <p className="text-sm text-muted-foreground">{provisioningStage}</p>
           )}
           {provisioningError && (
             <p className="text-sm text-red-600 dark:text-red-400">

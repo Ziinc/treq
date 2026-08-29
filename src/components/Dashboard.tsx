@@ -448,9 +448,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     }
   };
 
-  const handleRegisterUserManaged = async (
-    values: UserManagedFormValues,
-  ) => {
+  const handleRegisterUserManaged = async (values: UserManagedFormValues) => {
     setProvisioningError(undefined);
     const id = `user-managed-${Date.now()}`;
     await saveUserManagedEndpoint({
@@ -1886,7 +1884,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
           {activeSshEndpoint && !explicitEndpointRepoConnected && (
             <div className="flex flex-col gap-2 border-b px-4 py-3">
               <label className="flex flex-col gap-1 max-w-md">
-                <span className="text-sm font-medium">Remote repository path</span>
+                <span className="text-sm font-medium">
+                  Remote repository path
+                </span>
                 <input
                   className="rounded-md border border-border/60 bg-background px-2 py-1.5"
                   value={explicitEndpointRepoPath}

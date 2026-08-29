@@ -75,10 +75,7 @@ export async function saveRemoteRepository(
   record: SavedRemoteRepositoryRecord,
 ): Promise<void> {
   const existing = await listSavedRemoteRepositories();
-  const next = [
-    record,
-    ...existing.filter((repo) => repo.id !== record.id),
-  ];
+  const next = [record, ...existing.filter((repo) => repo.id !== record.id)];
   await setSetting(SAVED_REPOS_KEY, JSON.stringify(next));
 }
 

@@ -71,8 +71,7 @@ export const wakeInstance = (
 
 export const reprovisionInstance = (
   request: ReprovisionInstanceRequest,
-): Promise<OperationResponse> =>
-  invokeRemoteInstance("reprovision", request);
+): Promise<OperationResponse> => invokeRemoteInstance("reprovision", request);
 
 export const deleteInstance = (
   request: DeleteInstanceRequest,

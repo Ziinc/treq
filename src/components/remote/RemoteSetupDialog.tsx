@@ -13,7 +13,10 @@ import type {
 } from "../../lib/api-types-remote";
 import { RemoteManagedSetupPanel } from "./RemoteManagedSetupPanel";
 import { RemoteUserManagedSetupPanel } from "./RemoteUserManagedSetupPanel";
-import type { LocalKeyIdentity, UserManagedFormValues } from "./remoteSetupLabels";
+import type {
+  LocalKeyIdentity,
+  UserManagedFormValues,
+} from "./remoteSetupLabels";
 
 export type { LocalKeyIdentity, UserManagedFormValues };
 
@@ -96,8 +99,8 @@ export function RemoteSetupDialog({
               >
                 <div className="font-medium">Treq-managed VM</div>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Treq provisions and maintains a development VM for you. Pick
-                  a region and size; no server to set up.
+                  Treq provisions and maintains a development VM for you. Pick a
+                  region and size; no server to set up.
                 </p>
               </button>
               <button
@@ -120,8 +123,8 @@ export function RemoteSetupDialog({
             <DialogHeader>
               <DialogTitle>Treq-managed VM</DialogTitle>
               <DialogDescription>
-                Treq owns provisioning and lifecycle for this VM. You keep
-                full owner access over SSH.
+                Treq owns provisioning and lifecycle for this VM. You keep full
+                owner access over SSH.
               </DialogDescription>
             </DialogHeader>
             <RemoteManagedSetupPanel
@@ -146,8 +149,8 @@ export function RemoteSetupDialog({
             <DialogHeader>
               <DialogTitle>Your own VM</DialogTitle>
               <DialogDescription>
-                Enter the connection details exactly - Treq never infers
-                trust from your local SSH configuration.
+                Enter the connection details exactly - Treq never infers trust
+                from your local SSH configuration.
               </DialogDescription>
             </DialogHeader>
             <RemoteUserManagedSetupPanel

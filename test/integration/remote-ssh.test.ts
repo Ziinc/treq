@@ -25,7 +25,9 @@ describe("remote SSH integration", () => {
     );
 
     expect(
-      await screen.findByRole("dialog", { name: "Connect a remote repository" }),
+      await screen.findByRole("dialog", {
+        name: "Connect a remote repository",
+      }),
     ).toBeTruthy();
     expect(
       screen.getByRole("button", { name: /Treq-managed VM/ }),

@@ -48,9 +48,7 @@ pub fn list_local_ssh_identities() -> Result<Vec<LocalSshIdentity>, String> {
     let Ok(key) = PublicKey::from_openssh(contents.trim()) else {
       continue;
     };
-    let fingerprint = key
-      .fingerprint(russh::keys::HashAlg::Sha256)
-      .to_string();
+    let fingerprint = key.fingerprint(russh::keys::HashAlg::Sha256).to_string();
     let label = path
       .file_stem()
       .and_then(|s| s.to_str())

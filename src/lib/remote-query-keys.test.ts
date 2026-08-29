@@ -7,9 +7,7 @@ import {
 
 describe("remoteRepoIdentity", () => {
   it("returns the bare path for a local location", () => {
-    expect(remoteRepoIdentity({ type: "local", path: "/repo" })).toBe(
-      "/repo",
-    );
+    expect(remoteRepoIdentity({ type: "local", path: "/repo" })).toBe("/repo");
   });
 
   it("folds endpoint host and generation into the identity for ssh locations", () => {

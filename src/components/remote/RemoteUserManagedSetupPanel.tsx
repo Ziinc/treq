@@ -154,9 +154,9 @@ export function RemoteUserManagedSetupPanel({
               {username}@{hostname}:{port}
             </span>{" "}
             with host key fingerprint{" "}
-            <span className="font-mono">{hostKeyFingerprint}</span>. Treq
-            will reject this endpoint if the presented key ever changes,
-            unless you confirm a new fingerprint yourself.
+            <span className="font-mono">{hostKeyFingerprint}</span>. Treq will
+            reject this endpoint if the presented key ever changes, unless you
+            confirm a new fingerprint yourself.
           </p>
           <div className="mt-3 flex gap-2">
             <Button

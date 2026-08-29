@@ -1,6 +1,9 @@
 import { useEffect } from "react";
 import useSWR from "swr";
-import type { RepositoryLocation, SshEndpoint } from "../../lib/api-types-remote";
+import type {
+  RepositoryLocation,
+  SshEndpoint,
+} from "../../lib/api-types-remote";
 import { dispatch, isRemoteActionSupported } from "../../lib/remote-dispatch";
 import { remoteRepoIdentity } from "../../lib/remote-query-keys";
 
@@ -138,7 +141,9 @@ export function RemoteReviewPanel({
       </div>
 
       {isLoading && (
-        <p className="text-sm text-muted-foreground">Loading remote status...</p>
+        <p className="text-sm text-muted-foreground">
+          Loading remote status...
+        </p>
       )}
       {error && (
         <p className="text-sm text-red-600 dark:text-red-400">

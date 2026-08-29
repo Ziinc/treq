@@ -10,7 +10,11 @@ function baseProps() {
     regions: ["us_east", "us_west"] as ("us_east" | "us_west")[],
     sizePresets: ["small", "medium"] as ("small" | "medium")[],
     localKeyIdentities: [
-      { reference: "/home/me/.ssh/id_ed25519.pub", label: "id_ed25519", fingerprint: "SHA256:abc123" },
+      {
+        reference: "/home/me/.ssh/id_ed25519.pub",
+        label: "id_ed25519",
+        fingerprint: "SHA256:abc123",
+      },
     ],
     sshConfigAliasSuggestions: ["prod-box"],
     instanceStatus: null,
@@ -49,10 +53,7 @@ describe("RemoteSetupDialog", () => {
     await user.selectOptions(sizeSelect, "small");
 
     const keySelect = await screen.findByLabelText("SSH identity");
-    await user.selectOptions(
-      keySelect,
-      "/home/me/.ssh/id_ed25519.pub",
-    );
+    await user.selectOptions(keySelect, "/home/me/.ssh/id_ed25519.pub");
 
     expect(
       await screen.findByTestId("selected-key-fingerprint"),
@@ -75,11 +76,11 @@ describe("RemoteSetupDialog", () => {
       await screen.findByRole("button", { name: /Your own VM/ }),
     );
 
+    await user.type(await screen.findByLabelText("Display name"), "My box");
     await user.type(
-      await screen.findByLabelText("Display name"),
-      "My box",
+      screen.getByLabelText("Hostname or IP address"),
+      "203.0.113.4",
     );
-    await user.type(screen.getByLabelText("Hostname or IP address"), "203.0.113.4");
     await user.type(screen.getByLabelText("Username"), "dev");
     await user.type(
       screen.getByLabelText("Expected host-key fingerprint"),
@@ -93,15 +94,11 @@ describe("RemoteSetupDialog", () => {
     await user.click(screen.getByRole("button", { name: "Continue" }));
 
     expect(props.onRegisterUserManaged).not.toHaveBeenCalled();
-    const confirmation = await screen.findByTestId(
-      "host-trust-confirmation",
-    );
+    const confirmation = await screen.findByTestId("host-trust-confirmation");
     expect(confirmation).toHaveTextContent("203.0.113.4");
     expect(confirmation).toHaveTextContent("SHA256:deadbeef");
 
-    await user.click(
-      screen.getByRole("button", { name: "Trust and connect" }),
-    );
+    await user.click(screen.getByRole("button", { name: "Trust and connect" }));
     expect(props.onRegisterUserManaged).toHaveBeenCalledWith(
       expect.objectContaining({
         display_name: "My box",
