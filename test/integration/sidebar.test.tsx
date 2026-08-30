@@ -288,9 +288,7 @@ describe("Dashboard - workspace list", () => {
       expect(existsSync(workspaceDir)).toBe(false);
 
       const remaining = await getWorkspaces(repoPath);
-      expect(
-        remaining.find((w) => w.id === alphaWorkspace.id),
-      ).toBeUndefined();
+      expect(remaining.find((w) => w.id === alphaWorkspace.id)).toBeUndefined();
 
       const { execFileSync } = await import("node:child_process");
       const archived = execFileSync(
