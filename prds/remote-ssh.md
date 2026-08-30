@@ -29,24 +29,28 @@ The existing remote implementation is a useful prototype but is not a complete m
 
 1. Support one managed VM per user, initially backed by Fly Sprites.
 2. Let a user configure the VM size from a small set of Treq-defined presets.
-3. Let a user select the provisioning region when creating or reprovisioning the VM.
-4. Support multiple repositories on the same managed VM.
-5. Support explicit user-managed VM endpoints without implicitly importing arbitrary local SSH configuration.
-6. Use short-lived SSH certificates for access to Treq-managed VMs.
-7. Allow users to authenticate with their own existing SSH key when desired.
-8. Never generate or retain a Treq-managed user private key.
-9. Pin and verify SSH host keys before credentials or repository data are sent.
-10. Use a native SSH library with pooled, multiplexed connections.
-11. Route structured remote operations through allow-listed Treq CLI commands with JSON responses.
-12. Integrate remote repositories into the existing workspace, review, terminal, and agent UI.
-13. Make provisioning and lifecycle operations idempotent and observable.
-14. Keep the provider model generic enough to replace or supplement Sprites later.
-15. Offer entries from the user's local `~/.ssh/config` as a discovery aid when registering a user-managed VM, without granting any of them implicit trust.
+3. Enforce a per-user base resource allocation included in the plan: 5 GB of disk and 1 vCPU / 2 GB RAM. Purchasing additional disk or compute beyond the base allocation is out of scope for this delivery; only enforcement of the base limits is required now.
+4. Let a user select the provisioning region when creating or reprovisioning the VM.
+5. Support multiple repositories on the same managed VM.
+6. Support explicit user-managed VM endpoints without implicitly importing arbitrary local SSH configuration.
+7. Use short-lived SSH certificates for access to Treq-managed VMs.
+8. Allow users to authenticate with their own existing SSH key when desired.
+9. Never generate or retain a Treq-managed user private key.
+10. Pin and verify SSH host keys before credentials or repository data are sent.
+11. Use a native SSH library with pooled, multiplexed connections.
+12. Route structured remote operations through allow-listed Treq CLI commands with JSON responses.
+13. Integrate remote repositories into the existing workspace, review, terminal, and agent UI.
+14. Make provisioning and lifecycle operations idempotent and observable.
+15. Keep the provider model generic enough to replace or supplement Sprites later.
+16. Offer entries from the user's local `~/.ssh/config` as a discovery aid when registering a user-managed VM, without granting any of them implicit trust.
 
 ## Non-goals
 
+- Conflict resolution between a user's own multiple concurrent clients or VMs. The user is responsible for coordinating simultaneous changes across sessions they open themselves.
 - Mobile SSH and mobile remote control. These are planned in [Mobile Remote Control](./mobile.md).
 - Billing, metering, entitlements, payment failure, and plan enforcement.
+- Purchasing additional disk or compute beyond the per-user base allocation. The add-on purchase mechanism is deferred; only enforcement of the 5 GB / 1 vCPU / 2 GB RAM base limits is in scope now.
+- Backups, snapshots, and data export. Repository content is already version-controlled by JJ and Git, so a separate export mechanism is not required.
 - Region migration. Reprovisioning in another region creates a replacement VM and does not migrate data automatically.
 - Port forwarding, public preview URLs, SOCKS proxies, or SSH tunnel management.
 - Treq-managed user keypairs or escrow of user private keys.
@@ -76,6 +80,12 @@ A client must know the endpoint, user, port, expected host key, authentication m
 ### Provider details stay behind an adapter
 
 Sprites is the first provider, not the domain model. Treq models a managed compute instance and maps it to vendor APIs through an adapter.
+
+### Multiple clients are the user's own problem
+
+A user may open the same managed VM, or the same repository on it, from more than one desktop client at once. Treq does not implement locking, session exclusivity, or conflict resolution between a user's own concurrent clients. The user is responsible for coordinating simultaneous changes they make from multiple sessions, the same way they would with two local terminals open on one machine.
+
+What Treq does own is visibility: when the VM-side repository state changes for any reason other than the current client's own action, connected clients must detect the change and refresh, so no client is left showing stale workspace, change, or conflict data. Refresh replaces the client's read state; it never attempts to merge or arbitrate divergent in-flight edits.
 
 ## User modes
 
@@ -215,6 +225,16 @@ Provider responses are normalized into Treq statuses. UI and repository code nev
 - Presets map to provider-specific CPU, memory, storage, and related settings.
 - Organizations and shared instances are future work.
 
+### Resource quotas
+
+Every user's managed instance starts at a fixed base allocation included in the plan:
+
+- 5 GB of disk;
+- 1 vCPU;
+- 2 GB of RAM.
+
+These limits are enforced now, at provisioning and on an ongoing basis, regardless of how many repositories the user places on the instance. A user may not exceed the base allocation in this delivery; purchasing additional disk or compute as a plan add-on is explicitly deferred (see Non-goals) and must not be implemented yet, only the enforcement of the base limits. When enforcement blocks an operation — for example a write that would exceed the disk quota — the failure must be a distinct, structured readiness or mutation error so the UI can explain the quota rather than surfacing a generic filesystem or provider failure.
+
 ### Provisioning trigger
 
 Provision lazily when an eligible user first chooses a managed remote repository. Billing and eligibility enforcement are outside this PRD; the provisioning API accepts that authorization as already established.
@@ -292,7 +312,7 @@ Readiness verifies more than binary presence:
 - Treq, JJ, Git, and configured agents execute successfully;
 - installed dependency versions satisfy the boot manifest;
 - Treq can initialize and inspect a temporary test repository;
-- sufficient disk space and inode capacity remain;
+- sufficient disk space and inode capacity remain within the user's base disk quota;
 - the recorded generation matches the provisioned environment.
 
 Readiness results are structured, stage-specific, and safe to retry. They distinguish provider, network, trust, authentication, dependency, filesystem, and Treq failures.
@@ -319,6 +339,22 @@ Readiness results are structured, stage-specific, and safe to retry. They distin
 8. Certificate expiration ends access without editing `authorized_keys`.
 
 The SSH CA private key must be held in an appropriate server-side signing service or secret store and must never be returned to a client or written to Supabase tables. Certificate lifetime should be short enough to bound loss exposure while allowing normal reconnects.
+
+### Silent renewal while the session is active
+
+A certificate must never lapse under a user who remains authenticated. While the user's Supabase session stays valid, the desktop client silently requests a fresh certificate from the control plane as the current one nears expiry, the same way an OAuth 2 access token is refreshed ahead of expiry. This renewal is transparent: it must not interrupt open exec or PTY channels, and it must not prompt the user, so a certificate's short lifetime bounds loss exposure without becoming a recurring interruption for a legitimately logged-in user.
+
+Renewal is refused, and the certificate is allowed to lapse, only when the underlying authorization is no longer valid: the Supabase session has ended, the client's public key has been revoked, or the instance itself is no longer accessible to that user. In those cases the client does not retry renewal; it proceeds to the hard cutoff below.
+
+### Hard cutoff on revocation or expiry
+
+If a client key is revoked, or a certificate expires without a valid renewal, the client is immediately cut off from the managed VM:
+
+- open exec and PTY channels to that instance are torn down;
+- no further structured commands, shell, or agent traffic is sent over the stale credential;
+- the UI blocks further interaction with that instance behind a reauthentication prompt.
+
+The user regains access only by reauthenticating and obtaining a new certificate through the normal registration and issuance flow. Treq does not offer a soft-degraded mode for a revoked or expired credential — access is fully blocked until identity is reverified.
 
 ### Existing keys without certificates
 
@@ -447,6 +483,10 @@ For the initial desktop scope, terminal reconnect may be explicitly unsupported 
 
 When an agent exits or a mutation completes, the desktop client refreshes remote repository status, changes, commits, and conflicts.
 
+### Change propagation across concurrent clients
+
+Because a user may connect multiple desktop clients (or connect to multiple VMs) at once, remote state can change underneath a client that did not initiate the change. The remote side must give connected clients a way to learn that repository state moved — for example a lightweight watch/poll on the workspace's JJ operation log or an equivalent change marker exposed through a typed Treq CLI command — so a client can detect a foreign change and refresh rather than relying only on its own mutation responses. This is a stale-state notification mechanism, not a conflict-resolution mechanism: Treq does not merge or reconcile divergent edits made concurrently from different clients; it only ensures every client's view converges to current VM state after each detected change.
+
 ## UI requirements
 
 ### Remote setup
@@ -500,7 +540,8 @@ Record:
 - desired and observed lifecycle state;
 - region, size preset, manifest version, and generation;
 - client-key registration and revocation;
-- certificate serial, principals, issue time, and expiry;
+- certificate serial, principals, issue time, expiry, and each renewal;
+- forced cutoffs from key revocation or certificate lapse;
 - host-key registration and rotation;
 - initiating user and client device;
 - idempotency key and operation duration;
@@ -631,22 +672,26 @@ Tests create uniquely tagged resources, enforce spending and concurrency caps, c
 ## Acceptance criteria
 
 1. An authenticated user can provision exactly one managed VM with a selected region and size preset.
-2. Repeated provisioning requests with the same idempotency key do not create duplicate resources.
-3. The VM is bootstrapped to the declared dependency versions and passes expanded readiness checks.
-4. A desktop client authenticates with a user-selected key and short-lived certificate without Treq generating a private key.
-5. The client rejects an unknown or changed host key.
-6. The native SSH transport reuses a connection for multiple structured commands.
-7. A user can register a fully explicit user-owned VM endpoint.
-8. A user can explicitly choose an SSH alias for a user-owned endpoint without automatic alias discovery or trust.
-9. Multiple repositories can be opened on the user's single managed VM.
-10. Remote workspaces, changes, diffs, file context, commits, and conflicts render in the existing UI.
-11. Supported workspace, file, commit, conflict, Git, and agent mutations execute through typed Treq commands.
-12. After a network loss during an in-flight mutation, the client verifies observable repository state before retrying, rather than assuming the mutation is idempotent and resending it blindly.
-13. Shell and agent PTYs start in the selected remote workspace.
-14. Managed VMs recover from vendor auto-suspension through a visible wake and reconnect flow.
-15. Reprovisioning increments the instance generation and performs an explicit host-trust transition.
-16. Lifecycle, certificate, host-key, readiness, and provider failures can be correlated through audit records without exposing secrets or source data.
-17. End-to-end acceptance tests pass against dedicated real test-environment APIs and leave no orphan resources.
+2. The instance enforces the base 5 GB disk and 1 vCPU / 2 GB RAM allocation, and disk-quota failures surface as a distinct, structured error rather than a generic failure.
+3. Repeated provisioning requests with the same idempotency key do not create duplicate resources.
+4. The VM is bootstrapped to the declared dependency versions and passes expanded readiness checks.
+5. A desktop client authenticates with a user-selected key and short-lived certificate without Treq generating a private key.
+6. A desktop client silently renews its certificate ahead of expiry while the user's session remains valid, without interrupting open channels or prompting the user.
+7. A revoked client key or a certificate that lapses without valid renewal immediately blocks further interaction with the instance until the user reauthenticates.
+8. The client rejects an unknown or changed host key.
+9. The native SSH transport reuses a connection for multiple structured commands.
+10. A user can register a fully explicit user-owned VM endpoint.
+11. A user can explicitly choose an SSH alias for a user-owned endpoint without automatic alias discovery or trust.
+12. Multiple repositories can be opened on the user's single managed VM.
+13. Remote workspaces, changes, diffs, file context, commits, and conflicts render in the existing UI.
+14. A client detects VM-side repository changes made outside its own session (including from another of the user's own clients) and refreshes its view, without attempting to resolve conflicting concurrent edits.
+15. Supported workspace, file, commit, conflict, Git, and agent mutations execute through typed Treq commands.
+16. After a network loss during an in-flight mutation, the client verifies observable repository state before retrying, rather than assuming the mutation is idempotent and resending it blindly.
+17. Shell and agent PTYs start in the selected remote workspace.
+18. Managed VMs recover from vendor auto-suspension through a visible wake and reconnect flow.
+19. Reprovisioning increments the instance generation and performs an explicit host-trust transition.
+20. Lifecycle, certificate, host-key, readiness, and provider failures can be correlated through audit records without exposing secrets or source data.
+21. End-to-end acceptance tests pass against dedicated real test-environment APIs and leave no orphan resources.
 
 ## Open questions
 
