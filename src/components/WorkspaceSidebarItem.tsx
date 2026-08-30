@@ -1,12 +1,9 @@
 import { Draggable } from "@hello-pangea/dnd";
-import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
   AlertTriangle,
   Archive,
   Bot,
   CalendarClock,
-  Copy,
-  FolderOpen,
   GitBranch,
   Layers2,
   Link,
@@ -15,7 +12,6 @@ import {
   Terminal,
 } from "lucide-react";
 import { useState } from "react";
-import { useEditorAppsStore } from "../stores/editorAppsStore";
 import { type QueueEntryStatus, type Workspace } from "../lib/api";
 import { clearWorkspaceSchedule } from "../lib/clear-workspace-schedule";
 import type { PrInfo } from "../lib/api-types";
@@ -38,91 +34,11 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
-  ContextMenuSub,
-  ContextMenuSubContent,
-  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "./ui/context-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { useWorkspaceRowPointerHandlers } from "../hooks/useWorkspaceSidebarMultiSelect";
-
-export const PathContextMenuItems: React.FC<{
-  relativePath: string;
-  fullPath: string;
-  additionalItems?: React.ReactNode;
-}> = ({ relativePath, fullPath, additionalItems }) => {
-  const editorApps = useEditorAppsStore();
-
-  return (
-    <>
-      <ContextMenuItem
-        onClick={() => navigator.clipboard.writeText(relativePath)}
-      >
-        <Copy className="w-4 h-4 mr-2" />
-        Copy relative path
-      </ContextMenuItem>
-      <ContextMenuItem onClick={() => navigator.clipboard.writeText(fullPath)}>
-        <Copy className="w-4 h-4 mr-2" />
-        Copy full path
-      </ContextMenuItem>
-      <ContextMenuSub>
-        <ContextMenuSubTrigger>
-          <FolderOpen className="w-4 h-4 mr-2" />
-          Open in...
-        </ContextMenuSubTrigger>
-        <ContextMenuSubContent>
-          <ContextMenuItem onClick={() => revealItemInDir(fullPath)}>
-            <FolderOpen className="w-4 h-4 mr-2" />
-            Open in Finder
-          </ContextMenuItem>
-
-          {editorApps.cursor && (
-            <ContextMenuItem
-              onClick={async () => {
-                try {
-                  await openUrl(`cursor://file/${fullPath}`);
-                } catch (err) {
-                  console.error("Failed to open in Cursor:", err);
-                }
-              }}
-            >
-              Open in Cursor
-            </ContextMenuItem>
-          )}
-
-          {editorApps.vscode && (
-            <ContextMenuItem
-              onClick={async () => {
-                try {
-                  await openUrl(`vscode://file/${fullPath}`);
-                } catch (err) {
-                  console.error("Failed to open in VSCode:", err);
-                }
-              }}
-            >
-              Open in VSCode
-            </ContextMenuItem>
-          )}
-
-          {editorApps.zed && (
-            <ContextMenuItem
-              onClick={async () => {
-                try {
-                  await openUrl(`zed://file/${fullPath}`);
-                } catch (err) {
-                  console.error("Failed to open in Zed:", err);
-                }
-              }}
-            >
-              Open in Zed
-            </ContextMenuItem>
-          )}
-        </ContextMenuSubContent>
-      </ContextMenuSub>
-      {additionalItems}
-    </>
-  );
-};
+import { PathContextMenuItems } from "./WorkspacePathContextMenu";
 
 interface WorkspaceSidebarItemProps {
   node: FlattenedWorkspaceNode;
