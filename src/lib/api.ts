@@ -81,6 +81,12 @@ export const deleteWorkspace = (repoPath: string, id: number): Promise<void> =>
     id,
   });
 
+export const archiveWorkspace = (repoPath: string, id: number): Promise<void> =>
+  invoke("archive_workspace", {
+    repoPath,
+    id,
+  });
+
 export const ensureWorkspaceIndexed = (
   repoPath: string,
   workspaceId: number | null,

@@ -679,6 +679,18 @@ pub fn delete_workspace(repo_path: &str, workspace_id: &i64) -> Result<bool, Str
     repo_path,
     workspace_id,
     RemoveWorkspaceDiskMode::JjForgetThenRemoveDir,
+    WorkspaceRecordMode::Delete,
+  )
+}
+
+/// Forget the jj workspace and remove `.treq/workspaces/…`, but keep the DB row
+/// marked `archived`.
+pub fn archive_workspace(repo_path: &str, workspace_id: &i64) -> Result<bool, String> {
+  delete_workspace_impl(
+    repo_path,
+    workspace_id,
+    RemoveWorkspaceDiskMode::JjForgetThenRemoveDir,
+    WorkspaceRecordMode::Archive,
   )
 }
 
@@ -690,10 +702,17 @@ enum RemoveWorkspaceDiskMode {
   DirectoryOnly,
 }
 
+#[derive(Clone, Copy)]
+enum WorkspaceRecordMode {
+  Delete,
+  Archive,
+}
+
 fn delete_workspace_impl(
   repo_path: &str,
   workspace_id: &i64,
   disk: RemoveWorkspaceDiskMode,
+  record: WorkspaceRecordMode,
 ) -> Result<bool, String> {
   let workspace = local_db::get_workspace_by_id(repo_path, *workspace_id)
     .map_err(|e| format!("Failed to get workspace from db: {}", e))?;
@@ -729,8 +748,16 @@ fn delete_workspace_impl(
       if let Err(e) = disk_result {
         tracing::warn!("Warning: Failed to remove workspace directory: {}", e);
       }
-      local_db::delete_workspace(repo_path, *workspace_id)
-        .map_err(|e| format!("Failed to delete workspace from db: {}", e))?;
+      match record {
+        WorkspaceRecordMode::Delete => {
+          local_db::delete_workspace(repo_path, *workspace_id)
+            .map_err(|e| format!("Failed to delete workspace from db: {}", e))?;
+        }
+        WorkspaceRecordMode::Archive => {
+          local_db::archive_workspace(repo_path, *workspace_id)
+            .map_err(|e| format!("Failed to archive workspace in db: {}", e))?;
+        }
+      }
       Ok(true)
     }
     _ => Err(format!("Workspace not found in database: {}", workspace_id)),
@@ -835,7 +862,12 @@ pub fn sync_workspaces(repo_path: &str) -> Result<(), String> {
 
     if let Some(ref jj_names) = jj_registered {
       if !jj_names.contains(&ws.workspace_name) {
-        delete_workspace_impl(repo_path, &ws.id, RemoveWorkspaceDiskMode::DirectoryOnly)?;
+        delete_workspace_impl(
+          repo_path,
+          &ws.id,
+          RemoveWorkspaceDiskMode::DirectoryOnly,
+          WorkspaceRecordMode::Delete,
+        )?;
       }
     }
   }
@@ -1000,6 +1032,7 @@ pub fn workspace_status(
         not_on_remote: matches!(rs.remote_sync, RemoteSyncStatus::NotOnRemote),
         sparse_patterns: None,
         hidden_until: None,
+        archived: false,
       };
 
       let conflicted_files =
@@ -1196,6 +1229,7 @@ mod tests {
       not_on_remote: false,
       sparse_patterns: None,
       hidden_until: None,
+      archived: false,
     }
   }
 

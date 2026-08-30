@@ -70,8 +70,8 @@ interface WorkspaceSidebarProps {
     workspace: Workspace | null,
     event: React.MouseEvent,
   ) => void;
-  onBulkDelete?: () => void;
-  onDeleteWorkspace?: (workspace: Workspace) => void;
+  onBulkArchive?: () => void;
+  onArchiveWorkspace?: (workspace: Workspace) => void;
   openSettings?: (tab?: string) => void;
   navigateToDashboard?: () => void;
   onOpenCommandPalette?: () => void;
@@ -105,8 +105,8 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
   selectedWorkspaceIds,
   onWorkspaceClick,
   onWorkspaceMultiSelect,
-  onBulkDelete,
-  onDeleteWorkspace,
+  onBulkArchive,
+  onArchiveWorkspace,
   openSettings,
   onOpenCommandPalette,
   onOpenBranchSwitcher,
@@ -435,7 +435,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
                           onAddAfter={onAddAfter}
                           onStartAgent={onStartAgent}
                           onStartShell={onStartShell}
-                          onDeleteWorkspace={onDeleteWorkspace}
+                          onArchiveWorkspace={onArchiveWorkspace}
                           onRenameWorkspace={setRenameTarget}
                           onDoubleClick={handleDoubleClick}
                           queueStatus={branchQueueStatuses?.get(
@@ -459,7 +459,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
                           <SidebarMenuItem>
                             <SidebarMenuButton
                               type="button"
-                              onClick={onBulkDelete}
+                              onClick={onBulkArchive}
                               className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                             >
                               <Archive />
