@@ -328,12 +328,13 @@ export function PrDetailPanel({
                     variant="outline"
                     className="text-base"
                     disabled={closePr.isPending}
+                    aria-busy={closePr.isPending}
                     onClick={() => closePr.mutate()}
                   >
                     {closePr.isPending ? (
                       <Loader2 className="w-3 h-3 mr-1 animate-spin" />
                     ) : null}
-                    Close PR
+                    {closePr.isPending ? "Closing…" : "Close PR"}
                   </Button>
                 </>
               ) : pr.state === "CLOSED" ? (
