@@ -327,6 +327,22 @@ Readiness results are structured, stage-specific, and safe to retry. They distin
 
 The SSH CA private key must be held in an appropriate server-side signing service or secret store and must never be returned to a client or written to Supabase tables. Certificate lifetime should be short enough to bound loss exposure while allowing normal reconnects.
 
+### Silent renewal while the session is active
+
+A certificate must never lapse under a user who remains authenticated. While the user's Supabase session stays valid, the desktop client silently requests a fresh certificate from the control plane as the current one nears expiry, the same way an OAuth 2 access token is refreshed ahead of expiry. This renewal is transparent: it must not interrupt open exec or PTY channels, and it must not prompt the user, so a certificate's short lifetime bounds loss exposure without becoming a recurring interruption for a legitimately logged-in user.
+
+Renewal is refused, and the certificate is allowed to lapse, only when the underlying authorization is no longer valid: the Supabase session has ended, the client's public key has been revoked, or the instance itself is no longer accessible to that user. In those cases the client does not retry renewal; it proceeds to the hard cutoff below.
+
+### Hard cutoff on revocation or expiry
+
+If a client key is revoked, or a certificate expires without a valid renewal, the client is immediately cut off from the managed VM:
+
+- open exec and PTY channels to that instance are torn down;
+- no further structured commands, shell, or agent traffic is sent over the stale credential;
+- the UI blocks further interaction with that instance behind a reauthentication prompt.
+
+The user regains access only by reauthenticating and obtaining a new certificate through the normal registration and issuance flow. Treq does not offer a soft-degraded mode for a revoked or expired credential — access is fully blocked until identity is reverified.
+
 ### Existing keys without certificates
 
 Users may choose direct public-key authentication where supported. For managed VMs this is an explicit alternative, not a Treq-generated identity. Installation and removal are idempotent and auditable. Certificates remain the preferred managed path.
@@ -511,7 +527,8 @@ Record:
 - desired and observed lifecycle state;
 - region, size preset, manifest version, and generation;
 - client-key registration and revocation;
-- certificate serial, principals, issue time, and expiry;
+- certificate serial, principals, issue time, expiry, and each renewal;
+- forced cutoffs from key revocation or certificate lapse;
 - host-key registration and rotation;
 - initiating user and client device;
 - idempotency key and operation duration;
@@ -645,20 +662,22 @@ Tests create uniquely tagged resources, enforce spending and concurrency caps, c
 2. Repeated provisioning requests with the same idempotency key do not create duplicate resources.
 3. The VM is bootstrapped to the declared dependency versions and passes expanded readiness checks.
 4. A desktop client authenticates with a user-selected key and short-lived certificate without Treq generating a private key.
-5. The client rejects an unknown or changed host key.
-6. The native SSH transport reuses a connection for multiple structured commands.
-7. A user can register a fully explicit user-owned VM endpoint.
-8. A user can explicitly choose an SSH alias for a user-owned endpoint without automatic alias discovery or trust.
-9. Multiple repositories can be opened on the user's single managed VM.
-10. Remote workspaces, changes, diffs, file context, commits, and conflicts render in the existing UI.
-11. A client detects VM-side repository changes made outside its own session (including from another of the user's own clients) and refreshes its view, without attempting to resolve conflicting concurrent edits.
-12. Supported workspace, file, commit, conflict, Git, and agent mutations execute through typed Treq commands.
-13. After a network loss during an in-flight mutation, the client verifies observable repository state before retrying, rather than assuming the mutation is idempotent and resending it blindly.
-14. Shell and agent PTYs start in the selected remote workspace.
-15. Managed VMs recover from vendor auto-suspension through a visible wake and reconnect flow.
-16. Reprovisioning increments the instance generation and performs an explicit host-trust transition.
-17. Lifecycle, certificate, host-key, readiness, and provider failures can be correlated through audit records without exposing secrets or source data.
-18. End-to-end acceptance tests pass against dedicated real test-environment APIs and leave no orphan resources.
+5. A desktop client silently renews its certificate ahead of expiry while the user's session remains valid, without interrupting open channels or prompting the user.
+6. A revoked client key or a certificate that lapses without valid renewal immediately blocks further interaction with the instance until the user reauthenticates.
+7. The client rejects an unknown or changed host key.
+8. The native SSH transport reuses a connection for multiple structured commands.
+9. A user can register a fully explicit user-owned VM endpoint.
+10. A user can explicitly choose an SSH alias for a user-owned endpoint without automatic alias discovery or trust.
+11. Multiple repositories can be opened on the user's single managed VM.
+12. Remote workspaces, changes, diffs, file context, commits, and conflicts render in the existing UI.
+13. A client detects VM-side repository changes made outside its own session (including from another of the user's own clients) and refreshes its view, without attempting to resolve conflicting concurrent edits.
+14. Supported workspace, file, commit, conflict, Git, and agent mutations execute through typed Treq commands.
+15. After a network loss during an in-flight mutation, the client verifies observable repository state before retrying, rather than assuming the mutation is idempotent and resending it blindly.
+16. Shell and agent PTYs start in the selected remote workspace.
+17. Managed VMs recover from vendor auto-suspension through a visible wake and reconnect flow.
+18. Reprovisioning increments the instance generation and performs an explicit host-trust transition.
+19. Lifecycle, certificate, host-key, readiness, and provider failures can be correlated through audit records without exposing secrets or source data.
+20. End-to-end acceptance tests pass against dedicated real test-environment APIs and leave no orphan resources.
 
 ## Open questions
 
