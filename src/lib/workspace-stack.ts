@@ -47,3 +47,28 @@ export function sumWorkspaceLocFromLog(
     result.tentative_working_copy,
   );
 }
+
+/** Character columns for a signed LOC count (`+1234` / `-12`), including the sign. */
+export function locSignedCountCh(n: number): number {
+  return String(Math.max(0, Math.trunc(n))).length + 1;
+}
+
+/**
+ * Shared `ch` widths for a stack of LOC indicators so the bar's middle
+ * axis lines up across rows regardless of per-row digit count.
+ */
+export function stackLocColumnCh(stats: Iterable<WorkspaceDiffStats>): {
+  insertionsCh: number;
+  deletionsCh: number;
+} {
+  let maxInsertions = 0;
+  let maxDeletions = 0;
+  for (const { insertions, deletions } of stats) {
+    maxInsertions = Math.max(maxInsertions, insertions);
+    maxDeletions = Math.max(maxDeletions, deletions);
+  }
+  return {
+    insertionsCh: locSignedCountCh(maxInsertions),
+    deletionsCh: locSignedCountCh(maxDeletions),
+  };
+}
