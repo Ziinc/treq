@@ -45,6 +45,7 @@ The existing remote implementation is a useful prototype but is not a complete m
 
 ## Non-goals
 
+- Conflict resolution between a user's own multiple concurrent clients or VMs. The user is responsible for coordinating simultaneous changes across sessions they open themselves.
 - Mobile SSH and mobile remote control. These are planned in [Mobile Remote Control](./mobile.md).
 - Billing, metering, entitlements, payment failure, and plan enforcement.
 - Region migration. Reprovisioning in another region creates a replacement VM and does not migrate data automatically.
@@ -76,6 +77,12 @@ A client must know the endpoint, user, port, expected host key, authentication m
 ### Provider details stay behind an adapter
 
 Sprites is the first provider, not the domain model. Treq models a managed compute instance and maps it to vendor APIs through an adapter.
+
+### Multiple clients are the user's own problem
+
+A user may open the same managed VM, or the same repository on it, from more than one desktop client at once. Treq does not implement locking, session exclusivity, or conflict resolution between a user's own concurrent clients. The user is responsible for coordinating simultaneous changes they make from multiple sessions, the same way they would with two local terminals open on one machine.
+
+What Treq does own is visibility: when the VM-side repository state changes for any reason other than the current client's own action, connected clients must detect the change and refresh, so no client is left showing stale workspace, change, or conflict data. Refresh replaces the client's read state; it never attempts to merge or arbitrate divergent in-flight edits.
 
 ## User modes
 
@@ -447,6 +454,10 @@ For the initial desktop scope, terminal reconnect may be explicitly unsupported 
 
 When an agent exits or a mutation completes, the desktop client refreshes remote repository status, changes, commits, and conflicts.
 
+### Change propagation across concurrent clients
+
+Because a user may connect multiple desktop clients (or connect to multiple VMs) at once, remote state can change underneath a client that did not initiate the change. The remote side must give connected clients a way to learn that repository state moved — for example a lightweight watch/poll on the workspace's JJ operation log or an equivalent change marker exposed through a typed Treq CLI command — so a client can detect a foreign change and refresh rather than relying only on its own mutation responses. This is a stale-state notification mechanism, not a conflict-resolution mechanism: Treq does not merge or reconcile divergent edits made concurrently from different clients; it only ensures every client's view converges to current VM state after each detected change.
+
 ## UI requirements
 
 ### Remote setup
@@ -640,13 +651,14 @@ Tests create uniquely tagged resources, enforce spending and concurrency caps, c
 8. A user can explicitly choose an SSH alias for a user-owned endpoint without automatic alias discovery or trust.
 9. Multiple repositories can be opened on the user's single managed VM.
 10. Remote workspaces, changes, diffs, file context, commits, and conflicts render in the existing UI.
-11. Supported workspace, file, commit, conflict, Git, and agent mutations execute through typed Treq commands.
-12. After a network loss during an in-flight mutation, the client verifies observable repository state before retrying, rather than assuming the mutation is idempotent and resending it blindly.
-13. Shell and agent PTYs start in the selected remote workspace.
-14. Managed VMs recover from vendor auto-suspension through a visible wake and reconnect flow.
-15. Reprovisioning increments the instance generation and performs an explicit host-trust transition.
-16. Lifecycle, certificate, host-key, readiness, and provider failures can be correlated through audit records without exposing secrets or source data.
-17. End-to-end acceptance tests pass against dedicated real test-environment APIs and leave no orphan resources.
+11. A client detects VM-side repository changes made outside its own session (including from another of the user's own clients) and refreshes its view, without attempting to resolve conflicting concurrent edits.
+12. Supported workspace, file, commit, conflict, Git, and agent mutations execute through typed Treq commands.
+13. After a network loss during an in-flight mutation, the client verifies observable repository state before retrying, rather than assuming the mutation is idempotent and resending it blindly.
+14. Shell and agent PTYs start in the selected remote workspace.
+15. Managed VMs recover from vendor auto-suspension through a visible wake and reconnect flow.
+16. Reprovisioning increments the instance generation and performs an explicit host-trust transition.
+17. Lifecycle, certificate, host-key, readiness, and provider failures can be correlated through audit records without exposing secrets or source data.
+18. End-to-end acceptance tests pass against dedicated real test-environment APIs and leave no orphan resources.
 
 ## Open questions
 
