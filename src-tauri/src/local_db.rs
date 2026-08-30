@@ -833,8 +833,10 @@ pub fn get_workspaces(repo_path: &str) -> Result<Vec<Workspace>, String> {
 pub fn get_workspace_by_id(repo_path: &str, id: i64) -> Result<Option<Workspace>, String> {
   let conn = get_connection(repo_path)?;
   let mut stmt = conn
-        .prepare(&format!("SELECT {WORKSPACE_SELECT_COLUMNS} FROM workspaces WHERE id = ?1"))
-        .map_err(|e| format!("Failed to prepare workspace query: {}", e))?;
+    .prepare(&format!(
+      "SELECT {WORKSPACE_SELECT_COLUMNS} FROM workspaces WHERE id = ?1"
+    ))
+    .map_err(|e| format!("Failed to prepare workspace query: {}", e))?;
 
   let workspace = stmt
     .query_row([id], |row| workspace_from_row(repo_path, row))
@@ -850,8 +852,10 @@ pub fn get_workspace_by_path(
 ) -> Result<Option<Workspace>, String> {
   let conn = get_connection(repo_path)?;
   let mut stmt = conn
-        .prepare(&format!("SELECT {WORKSPACE_SELECT_COLUMNS} FROM workspaces WHERE workspace_path = ?1"))
-        .map_err(|e| format!("Failed to prepare workspace query: {}", e))?;
+    .prepare(&format!(
+      "SELECT {WORKSPACE_SELECT_COLUMNS} FROM workspaces WHERE workspace_path = ?1"
+    ))
+    .map_err(|e| format!("Failed to prepare workspace query: {}", e))?;
 
   let workspace = stmt
     .query_row([workspace_path], |row| workspace_from_row(repo_path, row))
@@ -867,8 +871,10 @@ pub fn get_workspace_by_branch(
 ) -> Result<Option<Workspace>, String> {
   let conn = get_connection(repo_path)?;
   let mut stmt = conn
-        .prepare(&format!("SELECT {WORKSPACE_SELECT_COLUMNS} FROM workspaces WHERE branch_name = ?1"))
-        .map_err(|e| format!("Failed to prepare workspace query: {}", e))?;
+    .prepare(&format!(
+      "SELECT {WORKSPACE_SELECT_COLUMNS} FROM workspaces WHERE branch_name = ?1"
+    ))
+    .map_err(|e| format!("Failed to prepare workspace query: {}", e))?;
 
   let workspace = stmt
     .query_row([branch_name], |row| workspace_from_row(repo_path, row))
@@ -937,10 +943,7 @@ pub fn delete_workspace(repo_path: &str, id: i64) -> Result<(), String> {
 pub fn archive_workspace(repo_path: &str, id: i64) -> Result<(), String> {
   let conn = get_connection(repo_path)?;
   conn
-    .execute(
-      "UPDATE workspaces SET archived = 1 WHERE id = ?1",
-      [id],
-    )
+    .execute("UPDATE workspaces SET archived = 1 WHERE id = ?1", [id])
     .map_err(|e| format!("Failed to archive workspace: {}", e))?;
   Ok(())
 }
@@ -1224,8 +1227,10 @@ pub fn sync_discovered_workspaces(
     .map(|workspace| workspace.workspace_path.as_str())
     .collect();
   let mut stmt = conn
-        .prepare(&format!("SELECT {WORKSPACE_SELECT_COLUMNS} FROM workspaces ORDER BY branch_name COLLATE NOCASE ASC"))
-        .map_err(|e| format!("Failed to prepare synced workspaces query: {}", e))?;
+    .prepare(&format!(
+      "SELECT {WORKSPACE_SELECT_COLUMNS} FROM workspaces ORDER BY branch_name COLLATE NOCASE ASC"
+    ))
+    .map_err(|e| format!("Failed to prepare synced workspaces query: {}", e))?;
 
   let workspaces = stmt
     .query_map([], |row| workspace_from_row(repo_path, row))

@@ -1,6 +1,6 @@
 mod e2e_test_helpers;
 
-use e2e_test_helpers::{JjVerifier, TestRepo};
+use e2e_test_helpers::TestRepo;
 use treq_lib::local_db::Workspace;
 
 #[test]
@@ -30,15 +30,14 @@ fn archive_workspace_removes_directory_and_keeps_db_record() {
   );
 
   let jj_workspaces_after =
-    JjVerifier::list_workspaces(&repo.repo_path).expect("Failed to list jj workspaces");
+    treq_lib::jj::list_jj_workspaces(&repo.repo_path).expect("Failed to list jj workspaces");
   assert!(
     !jj_workspaces_after.contains(&workspace_name),
     "Workspace should NOT be in jj list after archive, got: {:?}",
     jj_workspaces_after
   );
 
-  let listed =
-    treq_lib::core::list_workspaces(&repo.repo_path).expect("Failed to list workspaces");
+  let listed = treq_lib::core::list_workspaces(&repo.repo_path).expect("Failed to list workspaces");
   assert!(
     !listed.iter().any(|w| w.id == workspace.id),
     "Archived workspace should not appear in list_workspaces"
@@ -53,9 +52,8 @@ fn archive_workspace_removes_directory_and_keeps_db_record() {
   );
 
   treq_lib::core::sync_workspaces(&repo.repo_path).expect("Failed to sync workspaces");
-  let stored_after_sync =
-    treq_lib::local_db::get_workspace_by_id(&repo.repo_path, workspace.id)
-      .expect("Failed to get workspace by id after sync")
-      .expect("Archived workspace record should survive sync_workspaces");
+  let stored_after_sync = treq_lib::local_db::get_workspace_by_id(&repo.repo_path, workspace.id)
+    .expect("Failed to get workspace by id after sync")
+    .expect("Archived workspace record should survive sync_workspaces");
   assert!(stored_after_sync.archived);
 }
