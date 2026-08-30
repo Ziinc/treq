@@ -1,4 +1,6 @@
 import type {
+  AgentChat,
+  AgentChatSummary,
   JobResult,
   LogBucket,
   LogRecordView,
@@ -121,3 +123,53 @@ export const exportRunLogs = (
   destPath: string,
 ): Promise<string> =>
   invoke("export_run_logs", { repoPath, runId, jobId, destPath });
+
+export const registerAgentChat = (
+  repoPath: string,
+  sessionId: number,
+  ptySessionId: string,
+  name: string,
+  agent: string,
+  workspaceId: number | null,
+): Promise<AgentChat> =>
+  invoke("register_agent_chat", {
+    repoPath,
+    sessionId,
+    ptySessionId,
+    name,
+    agent,
+    workspaceId,
+  });
+
+export const recordAgentChatUserMessage = (
+  repoPath: string,
+  sessionId: number,
+  screenBefore: string,
+  text: string,
+): Promise<AgentChat> =>
+  invoke("record_agent_chat_user_message", {
+    repoPath,
+    sessionId,
+    screenBefore,
+    text,
+  });
+
+export const recordAgentChatScreen = (
+  repoPath: string,
+  sessionId: number,
+  screen: string,
+): Promise<AgentChat> =>
+  invoke("record_agent_chat_screen", {
+    repoPath,
+    sessionId,
+    screen,
+  });
+
+export const listAgentChats = (repoPath: string): Promise<AgentChatSummary[]> =>
+  invoke("list_agent_chats", { repoPath });
+
+export const getAgentChat = (
+  repoPath: string,
+  sessionId: number,
+): Promise<AgentChat | null> =>
+  invoke("get_agent_chat", { repoPath, sessionId });
