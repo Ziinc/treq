@@ -346,6 +346,28 @@ describe("getWorkspaceStack", () => {
     ]);
   });
 
+  it("omits siblings of the current workspace but keeps sibling descendants", () => {
+    const workspaces = [
+      makeWorkspace(1, "main", { targetBranch: "stable" }),
+      makeWorkspace(2, "feat/sibling-a", { targetBranch: "main" }),
+      makeWorkspace(3, "fix/current", { targetBranch: "main" }),
+      makeWorkspace(4, "feat/sibling-b", { targetBranch: "main" }),
+      makeWorkspace(5, "feat/child-a", { targetBranch: "fix/current" }),
+      makeWorkspace(6, "feat/child-b", { targetBranch: "fix/current" }),
+      makeWorkspace(7, "feat/grandchild", { targetBranch: "feat/child-a" }),
+    ];
+
+    const stack = getWorkspaceStack(workspaces, 3);
+
+    expect(stack!.map((entry) => entry.workspace.branch_name)).toEqual([
+      "feat/grandchild",
+      "feat/child-b",
+      "feat/child-a",
+      "fix/current",
+      "main",
+    ]);
+  });
+
   it("returns a stack entry for a workspace positioned at the tip", () => {
     const workspaces = [
       makeWorkspace(1, "chore/refactor", { targetBranch: "main" }),

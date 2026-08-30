@@ -307,6 +307,56 @@ describe("WorkspaceStackPanel", () => {
     });
   });
 
+  it("does not list sibling workspaces of the current workspace", async () => {
+    const siblingWorkspace = createMockWorkspace({
+      id: 4,
+      branch_name: "feat/unrelated-sibling",
+      workspace_name: "feat/unrelated-sibling",
+      title: "feat: unrelated sibling",
+      target_branch: "chore/refactor",
+    });
+    const childOfCurrent = createMockWorkspace({
+      id: 5,
+      branch_name: "feat/child-of-middle",
+      workspace_name: "feat/child-of-middle",
+      title: "feat: child of middle",
+      target_branch: "feat/context-prompts",
+    });
+    const siblingOfChild = createMockWorkspace({
+      id: 6,
+      branch_name: "feat/other-child-of-middle",
+      workspace_name: "feat/other-child-of-middle",
+      title: "feat: other child of middle",
+      target_branch: "feat/context-prompts",
+    });
+
+    vi.mocked(api.listWorkspaceStatuses).mockResolvedValue(
+      asStatuses([
+        rootWorkspace,
+        middleWorkspace,
+        tipWorkspace,
+        siblingWorkspace,
+        childOfCurrent,
+        siblingOfChild,
+      ]),
+    );
+    vi.mocked(api.listCommits).mockResolvedValue(makeLogResult(0, 0));
+
+    render(
+      <WorkspaceStackPanel
+        repoPath={middleWorkspace.repo_path}
+        workspace={middleWorkspace}
+        defaultBranch="main"
+      />,
+    );
+
+    await screen.findByText("Stack");
+    expect(screen.queryByText(siblingWorkspace.title!)).not.toBeInTheDocument();
+    expect(screen.getByText(childOfCurrent.title!)).toBeTruthy();
+    expect(screen.getByText(siblingOfChild.title!)).toBeTruthy();
+    expect(screen.getByText(rootWorkspace.title!)).toBeTruthy();
+  });
+
   it("schedules the entire stack from the stack card", async () => {
     const user = userEvent.setup();
     const onScheduleStack = vi.fn();
