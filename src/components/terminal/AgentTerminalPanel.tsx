@@ -27,6 +27,7 @@ import { AgentMessageQueue } from "./AgentMessageQueue";
 import { TerminalSearchOverlay } from "./TerminalSearchOverlay";
 import { TerminalSendPreviews } from "./TerminalSendPreviews";
 import type { ClaudeSessionData } from "./types";
+import { TerminalWorkspaceLabel } from "./TerminalWorkspaceLabel";
 import { useAgentAutoCommand } from "./useAgentAutoCommand";
 import {
   appendTerminalOutput,
@@ -50,6 +51,9 @@ export interface AgentTerminalPanelProps {
     Map<string, ConsolidatedTerminalHandle | null>
   >;
   width?: number | null;
+  minWidth?: number;
+  workspaceName: string;
+  onNavigateToWorkspace?: () => void;
 }
 
 export const AgentTerminalPanel = ({
@@ -66,6 +70,9 @@ export const AgentTerminalPanel = ({
   onTerminalIdle,
   terminalRefs,
   width,
+  minWidth,
+  workspaceName,
+  onNavigateToWorkspace,
 }: AgentTerminalPanelProps) => {
   const { addToast } = useToast();
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -230,6 +237,7 @@ export const AgentTerminalPanel = ({
       )}
       style={{
         width: width != null ? width : undefined,
+        minWidth,
       }}
       onMouseDown={onFocus}
     >
@@ -241,9 +249,17 @@ export const AgentTerminalPanel = ({
         )}
         onDoubleClick={onDoubleClick}
       >
-        <div className="flex items-center gap-1 text-sm font-medium text-gray-200">
-          <AgentIcon agent={sessionData.agent} className="w-4 h-4" />
+        <div className="flex items-center gap-1.5 min-w-0 text-sm font-medium text-gray-200">
+          <AgentIcon
+            agent={sessionData.agent}
+            className="w-4 h-4 flex-shrink-0"
+          />
           <span className="truncate">{sessionData.sessionName}</span>
+          <TerminalWorkspaceLabel
+            workspaceName={workspaceName}
+            onNavigate={onNavigateToWorkspace}
+            className="text-gray-300"
+          />
         </div>
         <div className="flex items-center gap-1">
           <AgentMessageQueue

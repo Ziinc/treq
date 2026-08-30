@@ -1,12 +1,5 @@
 import React from "react";
-import {
-  ChevronDown,
-  ChevronUp,
-  GitBranch,
-  Home,
-  Maximize2,
-  Minimize2,
-} from "lucide-react";
+import { ChevronDown, ChevronUp, Maximize2, Minimize2 } from "lucide-react";
 import { type ConsolidatedTerminalHandle } from "./ConsolidatedTerminal";
 import { Button } from "./ui/button";
 import { Kbd, KbdGroup } from "./ui/kbd";
@@ -20,23 +13,7 @@ import {
 import { AgentTerminalPanel } from "./terminal/AgentTerminalPanel";
 import { ResizeDivider } from "./terminal/ResizeDivider";
 import { ShellTerminalPanel } from "./terminal/ShellTerminalPanel";
-import { type ClaudeSessionData } from "./terminal/types";
-
-interface ShellTerminalData {
-  id: string;
-  workingDirectory: string;
-  remoteHost?: string;
-}
-
-interface WorkspaceGroup {
-  workspaceKey: string;
-  workspaceName: string;
-  isMainRepo: boolean;
-  terminals: Array<
-    | { type: "shell"; data: ShellTerminalData }
-    | { type: "claude"; data: ClaudeSessionData }
-  >;
-}
+import { type TerminalWithWorkspace } from "./workspace-terminal-pane/types";
 
 interface WorkspaceTerminalPaneViewProps {
   paneRef: React.RefObject<HTMLDivElement | null>;
@@ -50,10 +27,9 @@ interface WorkspaceTerminalPaneViewProps {
   setCollapsed: React.Dispatch<React.SetStateAction<boolean>>;
   setMaximized: React.Dispatch<React.SetStateAction<boolean>>;
   scrollContainerRef: React.RefObject<HTMLDivElement | null>;
-  workspaceGroups: WorkspaceGroup[];
+  terminals: TerminalWithWorkspace[];
   containerWidth: number;
   onNavigateToWorkspace?: (workspaceKey: string, isMainRepo: boolean) => void;
-  currentBranch?: string | null;
   remoteHost?: string;
   activePtySessionId: string | null;
   setActivePtySessionId: React.Dispatch<React.SetStateAction<string | null>>;
@@ -91,10 +67,9 @@ export const WorkspaceTerminalPaneView: React.FC<
   setCollapsed,
   setMaximized,
   scrollContainerRef,
-  workspaceGroups,
+  terminals,
   containerWidth,
   onNavigateToWorkspace,
-  currentBranch,
   remoteHost,
   activePtySessionId,
   setActivePtySessionId,
@@ -208,160 +183,99 @@ export const WorkspaceTerminalPaneView: React.FC<
           className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden flex"
           style={{ backgroundColor: "#1e1e1e" }}
         >
-          {workspaceGroups.map((group, groupIndex) => {
+          {terminals.map(({ terminal, workspace }, index) => {
             const minTerminalPx = containerWidth * 0.4 || 300;
-            const groupMinWidth = group.terminals.length * minTerminalPx;
-            const groupMaxWidth =
-              workspaceGroups.length > 1 && group.terminals.length === 1
-                ? containerWidth * 0.5
-                : undefined;
-            return (
-              <div
-                key={group.workspaceKey}
-                data-workspace-group={group.workspaceKey}
-                className={cn(
-                  "flex flex-col min-h-0 flex-shrink-0",
-                  groupIndex > 0 && "border-l-2 border-border",
-                )}
-                style={{
-                  minWidth: groupMinWidth,
-                  maxWidth: groupMaxWidth,
-                  flex: "1 0 auto",
-                }}
-              >
-                <div
-                  className="h-8 flex items-center gap-2 px-2 pr-14 border-b border-border bg-gray-700/100 flex-shrink-0 sticky left-0 z-10 overflow-hidden cursor-pointer hover:bg-muted/40 transition-colors"
-                  style={{
-                    width: containerWidth > 0 ? containerWidth : undefined,
-                  }}
-                  onClick={() =>
-                    onNavigateToWorkspace?.(
-                      group.workspaceKey,
-                      group.isMainRepo,
-                    )
-                  }
-                >
-                  {group.isMainRepo ? (
-                    <Home className="w-4 h-4 text-gray-200 flex-shrink-0" />
-                  ) : (
-                    <GitBranch className="w-4 h-4 text-gray-200 flex-shrink-0" />
+            const isLast = index === terminals.length - 1;
+            const next = terminals[index + 1]?.terminal;
+            const nextId = next
+              ? next.type === "shell"
+                ? next.data.id
+                : `claude-${next.data.sessionId}`
+              : null;
+            const navigate = () =>
+              onNavigateToWorkspace?.(
+                workspace.workspaceKey,
+                workspace.isMainRepo,
+              );
+
+            if (terminal.type === "shell") {
+              const terminalId = terminal.data.id;
+              return (
+                <React.Fragment key={terminalId}>
+                  <ShellTerminalPanel
+                    terminalData={terminal.data}
+                    remoteHost={terminal.data.remoteHost ?? remoteHost}
+                    collapsed={collapsed}
+                    isActive={activePtySessionId === terminalId}
+                    onFocus={() => setActivePtySessionId(terminalId)}
+                    onDoubleClick={() => onTerminalDoubleClick(terminalId)}
+                    onClose={() => handleCloseShell(terminalId)}
+                    canClose={true}
+                    onSessionError={onSessionError}
+                    onTerminalOutput={(output, fromProcess) =>
+                      onTerminalOutput?.(terminalId, output, fromProcess)
+                    }
+                    onTerminalInput={() => onTerminalInput?.(terminalId)}
+                    onTerminalIdle={() => onTerminalIdle?.(terminalId)}
+                    terminalRefs={
+                      terminalRefs as React.MutableRefObject<
+                        Map<string, ConsolidatedTerminalHandle | null>
+                      >
+                    }
+                    width={terminalWidths.get(terminalId)}
+                    minWidth={minTerminalPx}
+                    workspaceName={workspace.workspaceName}
+                    onNavigateToWorkspace={navigate}
+                  />
+                  {!isLast && nextId && (
+                    <ResizeDivider
+                      onResize={(deltaX) =>
+                        handleTerminalResize(terminalId, nextId, deltaX)
+                      }
+                    />
                   )}
-                  <span
-                    className="text-sm text-gray-200 truncate font-mono"
-                    title={
-                      group.isMainRepo
-                        ? currentBranch || "main"
-                        : group.workspaceName
-                    }
-                  >
-                    {group.isMainRepo
-                      ? currentBranch || "main"
-                      : group.workspaceName}
-                  </span>
-                </div>
-                <div className="flex min-h-0 flex-1">
-                  {group.terminals.map((terminal, index) => {
-                    const isLastInGroup = index === group.terminals.length - 1;
-                    const nextTerminal = group.terminals[index + 1];
+                </React.Fragment>
+              );
+            }
 
-                    if (terminal.type === "shell") {
-                      const terminalId = terminal.data.id;
-                      return (
-                        <React.Fragment key={terminalId}>
-                          <ShellTerminalPanel
-                            terminalData={terminal.data}
-                            remoteHost={terminal.data.remoteHost ?? remoteHost}
-                            collapsed={collapsed}
-                            isActive={activePtySessionId === terminalId}
-                            onFocus={() => setActivePtySessionId(terminalId)}
-                            onDoubleClick={() =>
-                              onTerminalDoubleClick(terminalId)
-                            }
-                            onClose={() => handleCloseShell(terminalId)}
-                            canClose={true}
-                            onSessionError={onSessionError}
-                            onTerminalOutput={(output, fromProcess) =>
-                              onTerminalOutput?.(
-                                terminalId,
-                                output,
-                                fromProcess,
-                              )
-                            }
-                            onTerminalInput={() =>
-                              onTerminalInput?.(terminalId)
-                            }
-                            onTerminalIdle={() => onTerminalIdle?.(terminalId)}
-                            terminalRefs={
-                              terminalRefs as React.MutableRefObject<
-                                Map<string, ConsolidatedTerminalHandle | null>
-                              >
-                            }
-                            width={terminalWidths.get(terminalId)}
-                          />
-                          {!isLastInGroup && nextTerminal && (
-                            <ResizeDivider
-                              onResize={(deltaX) => {
-                                const nextId =
-                                  nextTerminal.type === "shell"
-                                    ? nextTerminal.data.id
-                                    : `claude-${nextTerminal.data.sessionId}`;
-                                handleTerminalResize(
-                                  terminalId,
-                                  nextId,
-                                  deltaX,
-                                );
-                              }}
-                            />
-                          )}
-                        </React.Fragment>
-                      );
+            const terminalId = `claude-${terminal.data.sessionId}`;
+            const ptyId = terminal.data.ptySessionId;
+            return (
+              <React.Fragment key={terminalId}>
+                <AgentTerminalPanel
+                  sessionData={terminal.data}
+                  remoteHost={remoteHost}
+                  collapsed={collapsed}
+                  isActive={activePtySessionId === ptyId}
+                  onFocus={() => setActivePtySessionId(ptyId)}
+                  onDoubleClick={() => onTerminalDoubleClick(terminalId)}
+                  onClose={() =>
+                    handleCloseClaudeSession(terminal.data.sessionId)
+                  }
+                  onSessionError={onSessionError}
+                  onTerminalOutput={(output, fromProcess) =>
+                    onTerminalOutput?.(terminalId, output, fromProcess)
+                  }
+                  onTerminalInput={() => onTerminalInput?.(terminalId)}
+                  onTerminalIdle={() => onTerminalIdle?.(terminalId)}
+                  terminalRefs={
+                    terminalRefs as React.MutableRefObject<
+                      Map<string, ConsolidatedTerminalHandle | null>
+                    >
+                  }
+                  width={terminalWidths.get(terminalId)}
+                  minWidth={minTerminalPx}
+                  workspaceName={workspace.workspaceName}
+                  onNavigateToWorkspace={navigate}
+                />
+                {!isLast && nextId && (
+                  <ResizeDivider
+                    onResize={(deltaX) =>
+                      handleTerminalResize(terminalId, nextId, deltaX)
                     }
-
-                    const terminalId = `claude-${terminal.data.sessionId}`;
-                    const ptyId = terminal.data.ptySessionId;
-                    return (
-                      <React.Fragment key={terminalId}>
-                        <AgentTerminalPanel
-                          sessionData={terminal.data}
-                          remoteHost={remoteHost}
-                          collapsed={collapsed}
-                          isActive={activePtySessionId === ptyId}
-                          onFocus={() => setActivePtySessionId(ptyId)}
-                          onDoubleClick={() =>
-                            onTerminalDoubleClick(terminalId)
-                          }
-                          onClose={() =>
-                            handleCloseClaudeSession(terminal.data.sessionId)
-                          }
-                          onSessionError={onSessionError}
-                          onTerminalOutput={(output, fromProcess) =>
-                            onTerminalOutput?.(terminalId, output, fromProcess)
-                          }
-                          onTerminalInput={() => onTerminalInput?.(terminalId)}
-                          onTerminalIdle={() => onTerminalIdle?.(terminalId)}
-                          terminalRefs={
-                            terminalRefs as React.MutableRefObject<
-                              Map<string, ConsolidatedTerminalHandle | null>
-                            >
-                          }
-                          width={terminalWidths.get(terminalId)}
-                        />
-                        {!isLastInGroup && nextTerminal && (
-                          <ResizeDivider
-                            onResize={(deltaX) => {
-                              const nextId =
-                                nextTerminal.type === "shell"
-                                  ? nextTerminal.data.id
-                                  : `claude-${nextTerminal.data.sessionId}`;
-                              handleTerminalResize(terminalId, nextId, deltaX);
-                            }}
-                          />
-                        )}
-                      </React.Fragment>
-                    );
-                  })}
-                </div>
-              </div>
+                  />
+                )}
+              </React.Fragment>
             );
           })}
         </div>

@@ -48,9 +48,11 @@ export type TerminalEntry =
   | { type: "shell"; data: ShellTerminalData }
   | { type: "claude"; data: ClaudeSessionData };
 
-export interface WorkspaceGroup {
-  workspaceKey: string;
-  workspaceName: string;
-  isMainRepo: boolean;
-  terminals: TerminalEntry[];
+export interface TerminalWithWorkspace {
+  terminal: TerminalEntry;
+  workspace: {
+    workspaceKey: string;
+    workspaceName: string;
+    isMainRepo: boolean;
+  };
 }
