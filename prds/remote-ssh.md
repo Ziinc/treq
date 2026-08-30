@@ -372,7 +372,7 @@ The transport owns:
 - user-key and certificate authentication;
 - connection pooling and channel multiplexing;
 - keepalives;
-- reconnect and stale-connection recovery;
+- reconnect and stale-connection recovery, without assuming an in-flight mutation completed or is safe to blindly retry;
 - exec channels without PTYs for structured commands;
 - PTY channels for interactive shells and agents;
 - terminal resize;
@@ -407,6 +407,16 @@ Requirements:
 - mutations accept idempotency keys where retry could duplicate work;
 - no frontend-provided arbitrary command enters an exec channel;
 - probe, clone, and initialization become typed Treq commands rather than SSH shell scripts.
+
+### Retrying after network loss
+
+A network failure while a mutating command is in flight does not tell the client whether the command reached the VM, ran, or completed. The client must not assume the operation is safely idempotent and blindly resend it. Instead, on reconnect the client verifies observable repository state relevant to that mutation (for example, re-reading the affected commit, workspace, or bookmark through a typed read command) before deciding whether to retry:
+
+- if state shows the mutation already applied, the client treats it as complete and does not resend;
+- if state shows the mutation did not apply, the client may retry, using the same idempotency key so a command that actually did land exactly once on the VM-side is not reapplied a second time by a late retry racing the original;
+- if state is ambiguous, the client surfaces the ambiguity to the user rather than guessing.
+
+This applies to workspace, commit, conflict, Git, and agent-lifecycle mutations alike. It does not apply to pure read/inspect commands, which are always safe to retry.
 
 ## Remote mutation coverage
 
@@ -505,6 +515,7 @@ Record non-sensitive metrics for:
 - host-key mismatch count;
 - pooled connection reuse;
 - reconnect attempts;
+- post-reconnect state verifications before a mutation retry, and their outcome (already applied, safe to retry, ambiguous);
 - exec channel duration and exit category;
 - timeout, cancellation, and output-limit failures;
 - PTY start and exit;
@@ -630,11 +641,12 @@ Tests create uniquely tagged resources, enforce spending and concurrency caps, c
 9. Multiple repositories can be opened on the user's single managed VM.
 10. Remote workspaces, changes, diffs, file context, commits, and conflicts render in the existing UI.
 11. Supported workspace, file, commit, conflict, Git, and agent mutations execute through typed Treq commands.
-12. Shell and agent PTYs start in the selected remote workspace.
-13. Managed VMs recover from vendor auto-suspension through a visible wake and reconnect flow.
-14. Reprovisioning increments the instance generation and performs an explicit host-trust transition.
-15. Lifecycle, certificate, host-key, readiness, and provider failures can be correlated through audit records without exposing secrets or source data.
-16. End-to-end acceptance tests pass against dedicated real test-environment APIs and leave no orphan resources.
+12. After a network loss during an in-flight mutation, the client verifies observable repository state before retrying, rather than assuming the mutation is idempotent and resending it blindly.
+13. Shell and agent PTYs start in the selected remote workspace.
+14. Managed VMs recover from vendor auto-suspension through a visible wake and reconnect flow.
+15. Reprovisioning increments the instance generation and performs an explicit host-trust transition.
+16. Lifecycle, certificate, host-key, readiness, and provider failures can be correlated through audit records without exposing secrets or source data.
+17. End-to-end acceptance tests pass against dedicated real test-environment APIs and leave no orphan resources.
 
 ## Open questions
 
