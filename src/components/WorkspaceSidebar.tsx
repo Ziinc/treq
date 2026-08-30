@@ -72,6 +72,8 @@ interface WorkspaceSidebarProps {
   ) => void;
   onBulkArchive?: () => void;
   onArchiveWorkspace?: (workspace: Workspace) => void;
+  archivingWorkspaceIds?: Set<number>;
+  exitingWorkspaceIds?: Set<number>;
   openSettings?: (tab?: string) => void;
   navigateToDashboard?: () => void;
   onOpenCommandPalette?: () => void;
@@ -107,6 +109,8 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
   onWorkspaceMultiSelect,
   onBulkArchive,
   onArchiveWorkspace,
+  archivingWorkspaceIds,
+  exitingWorkspaceIds,
   openSettings,
   onOpenCommandPalette,
   onOpenBranchSwitcher,
@@ -436,6 +440,12 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
                           onStartAgent={onStartAgent}
                           onStartShell={onStartShell}
                           onArchiveWorkspace={onArchiveWorkspace}
+                          archiving={archivingWorkspaceIds?.has(
+                            node.status.current.id,
+                          )}
+                          exiting={exitingWorkspaceIds?.has(
+                            node.status.current.id,
+                          )}
                           onRenameWorkspace={setRenameTarget}
                           onDoubleClick={handleDoubleClick}
                           queueStatus={branchQueueStatuses?.get(
@@ -455,7 +465,9 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
                       ))}
                       {droppableProvided.placeholder}
                       {selectedWorkspaceIds &&
-                        selectedWorkspaceIds.size > 0 && (
+                        selectedWorkspaceIds.size > 0 &&
+                        !(archivingWorkspaceIds?.size) &&
+                        !(exitingWorkspaceIds?.size) && (
                           <SidebarMenuItem>
                             <SidebarMenuButton
                               type="button"

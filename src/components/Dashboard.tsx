@@ -246,6 +246,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [selectedWorkspaceIds, setSelectedWorkspaceIds] = useState<Set<number>>(
     new Set(),
   );
+  const [archivingWorkspaceIds, setArchivingWorkspaceIds] = useState<
+    Set<number>
+  >(new Set());
+  const [exitingWorkspaceIds, setExitingWorkspaceIds] = useState<Set<number>>(
+    new Set(),
+  );
   const lastSelectedWorkspaceIndexRef = useRef<number | null>(null);
   const [deferredAgentRequests, setDeferredAgentRequests] = useState<
     AgentDeepLinkRequest[]
@@ -819,8 +825,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
       invalidateQueries(["workspace-statuses", repoPath]);
       handleReturnToDashboard(); // Navigate to dashboard & clear selected workspace
       addToast({
-        title: "Workspace Deleted",
-        description: "Workspace has been removed successfully",
+        title: "Workspace Archived",
+        description: "Workspace has been archived successfully",
         type: "success",
       });
     },
@@ -1603,6 +1609,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
       return;
     }
 
+    if (archivingWorkspaceIds.size > 0 || exitingWorkspaceIds.size > 0) {
+      return;
+    }
+
     const workspaceIndex = visibleWorkspaces.findIndex(
       (w) => w.id === workspace.id,
     );
@@ -1647,10 +1657,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
   };
 
   const handleBulkArchive = async () => {
+    if (archivingWorkspaceIds.size > 0 || exitingWorkspaceIds.size > 0) {
+      return;
+    }
     const count = selectedWorkspaceIds.size;
     const workspacesToArchive = workspaces.filter((w) =>
       selectedWorkspaceIds.has(w.id),
     );
+    const ids = new Set(workspacesToArchive.map((w) => w.id));
+    setArchivingWorkspaceIds(ids);
     try {
       await Promise.all(
         workspacesToArchive.map((workspace) =>
@@ -1662,16 +1677,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
           getFullWorkspacePath(workspace),
         );
       }
-      void invalidateQueries(["workspaces", repoPath]);
-      invalidateQueries(["workspace-statuses", repoPath]);
-      handleReturnToDashboard();
+      setArchivingWorkspaceIds(new Set());
+      setExitingWorkspaceIds(ids);
       addToast({
         title: `${count} Workspace${count > 1 ? "s" : ""} Archived`,
-        description: `Removed ${count} workspace director${
-          count > 1 ? "ies" : "y"
-        }; records kept`,
+        description: `Successfully archived ${count} workspace${
+          count > 1 ? "s" : ""
+        }`,
         type: "success",
       });
+      await new Promise((resolve) => setTimeout(resolve, 220));
+      await invalidateQueries(["workspaces", repoPath]);
+      invalidateQueries(["workspace-statuses", repoPath]);
+      handleReturnToDashboard();
     } catch (error) {
       addToast({
         title: "Archive Failed",
@@ -1680,6 +1698,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
       });
     }
     setSelectedWorkspaceIds(new Set());
+    setArchivingWorkspaceIds(new Set());
+    setExitingWorkspaceIds(new Set());
   };
 
   const handleDelete = async (workspace: Workspace) => {
@@ -1981,6 +2001,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
         homeRepoDisplayRef={homeRepoDisplayRef}
         selectedWorkspaceId={selectedWorkspace?.id ?? null}
         selectedWorkspaceIds={selectedWorkspaceIds}
+        archivingWorkspaceIds={archivingWorkspaceIds}
+        exitingWorkspaceIds={exitingWorkspaceIds}
         onWorkspaceClick={(workspace) => handleSelectWorkspace(workspace)}
         onWorkspaceMultiSelect={handleWorkspaceMultiSelect}
         onBulkArchive={handleBulkArchive}

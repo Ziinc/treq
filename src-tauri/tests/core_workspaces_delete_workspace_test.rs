@@ -55,6 +55,56 @@ fn test_can_delete_workspace() {
 }
 
 #[test]
+fn test_archive_workspace_leaving_directory_keeps_db_record() {
+  let repo = TestRepo::new().expect("Failed to create test repo");
+
+  let workspace: Workspace = treq_lib::core::create_workspace(
+    &repo.repo_path,
+    "feat/archive-defer-dir",
+    Some("archive feature".to_string()),
+    None,
+    None,
+    None,
+    None,
+  )
+  .expect("Failed to create workspace");
+  let workspace_name = workspace.workspace_name.clone();
+  let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+  assert!(workspace_path.exists(), "workspace directory should exist");
+
+  let leftover_path =
+    treq_lib::core::archive_workspace_leaving_directory(&repo.repo_path, &workspace.id)
+      .expect("archive_workspace_leaving_directory should succeed")
+      .expect("should return the leftover directory path");
+
+  assert_eq!(leftover_path, workspace_path.to_string_lossy().to_string());
+  assert!(
+    workspace_path.exists(),
+    "directory deletion is deferred to a background job"
+  );
+
+  let jj_workspaces_after =
+    JjVerifier::list_workspaces(&repo.repo_path).expect("Failed to list jj workspaces");
+  assert!(
+    !jj_workspaces_after.contains(&workspace_name),
+    "Workspace should NOT be in jj list after archive, got: {:?}",
+    jj_workspaces_after
+  );
+
+  let listed =
+    treq_lib::local_db::get_workspaces(&repo.repo_path).expect("Failed to get workspaces");
+  assert!(
+    !listed.iter().any(|w| w.id == workspace.id),
+    "Archived workspace should not appear in get_workspaces"
+  );
+
+  let stored = treq_lib::local_db::get_workspace_by_id(&repo.repo_path, workspace.id)
+    .expect("Failed to get workspace by id")
+    .expect("Workspace record should still exist");
+  assert!(stored.archived, "Workspace record should be marked archived");
+}
+
+#[test]
 fn test_delete_workspace_retargets_children_to_default_branch() {
   let repo = TestRepo::new().expect("Failed to create test repo");
   let default_branch = repo.default_branch();

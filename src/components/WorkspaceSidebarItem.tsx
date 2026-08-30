@@ -10,6 +10,7 @@ import {
   GitBranch,
   Layers2,
   Link,
+  Loader2,
   Pencil,
   Terminal,
 } from "lucide-react";
@@ -139,6 +140,8 @@ interface WorkspaceSidebarItemProps {
   onStartAgent?: (workspace: Workspace) => void;
   onStartShell?: (workspace: Workspace) => void;
   onArchiveWorkspace?: (workspace: Workspace) => void;
+  archiving?: boolean;
+  exiting?: boolean;
   onRenameWorkspace: (workspace: Workspace) => void;
   onDoubleClick?: (workspace: Workspace, event: React.MouseEvent) => void;
   queueStatus?: QueueEntryStatus;
@@ -207,6 +210,8 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
   onStartAgent,
   onStartShell,
   onArchiveWorkspace,
+  archiving = false,
+  exiting = false,
   onRenameWorkspace,
   onDoubleClick,
   queueStatus,
@@ -229,6 +234,11 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
   const [isChangeDropTarget, setIsChangeDropTarget] = useState(false);
   const { onPointerDown, onClick } = useWorkspaceRowPointerHandlers({
     onSelect: (event) => {
+      if (archiving || exiting) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
       if (onWorkspaceMultiSelect) {
         onWorkspaceMultiSelect(workspace, event, index);
         return;
@@ -255,17 +265,27 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                       data-sidebar-index={index}
                       style={indentStyle}
                       className={cn(
-                        "group/workspace relative flex h-8 items-center tracking-wide rounded-sm transition-colors cursor-pointer py-1 pr-2",
+                        "group/workspace relative flex h-8 items-center tracking-wide rounded-sm transition-[colors,opacity,max-height,padding] duration-200 ease-out cursor-pointer py-1 pr-2 max-h-8 overflow-hidden",
                         {
-                          "bg-primary/20": isSelected,
-                          "hover:bg-muted/50": !isSelected,
+                          "bg-primary/20": isSelected && !archiving && !exiting,
+                          "hover:bg-muted/50":
+                            !isSelected && !archiving && !exiting,
                           "bg-primary/10":
                             dragSnapshot.combineTargetFor || isChangeDropTarget,
                           "opacity-50": dragSnapshot.isDragging,
-                          "opacity-60": isHidden && !dragSnapshot.isDragging,
+                          "opacity-60":
+                            isHidden &&
+                            !dragSnapshot.isDragging &&
+                            !archiving &&
+                            !exiting,
                           "text-destructive": isConflicted,
+                          "opacity-50 pointer-events-none cursor-not-allowed":
+                            archiving,
+                          "opacity-0 max-h-0 py-0 pointer-events-none": exiting,
                         },
                       )}
+                      aria-busy={archiving || exiting}
+                      aria-disabled={archiving || exiting}
                       onPointerDown={onPointerDown}
                       onClick={onClick}
                       onDoubleClick={(e) => onDoubleClick?.(workspace, e)}
@@ -297,17 +317,25 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                         });
                       }}
                     >
-                      <GitBranch
-                        data-testid={`workspace-pr-icon-${workspace.id}`}
-                        aria-label={prStatus ? prStatus.label : undefined}
-                        className={`w-3 h-3 mr-1 shrink-0 -scale-y-100 ${
-                          prStatus
-                            ? prStatus.color
-                            : isSelected
-                              ? "text-primary"
-                              : "text-muted-foreground"
-                        }`}
-                      />
+                      {archiving ? (
+                        <Loader2
+                          data-testid="workspace-archive-spinner"
+                          className="w-3 h-3 mr-1 shrink-0 animate-spin text-muted-foreground"
+                          aria-label="Archiving workspace"
+                        />
+                      ) : (
+                        <GitBranch
+                          data-testid={`workspace-pr-icon-${workspace.id}`}
+                          aria-label={prStatus ? prStatus.label : undefined}
+                          className={`w-3 h-3 mr-1 shrink-0 -scale-y-100 ${
+                            prStatus
+                              ? prStatus.color
+                              : isSelected
+                                ? "text-primary"
+                                : "text-muted-foreground"
+                          }`}
+                        />
+                      )}
                       <span
                         className={`flex-1 min-w-0 truncate font-mono ${
                           isConflicted ? "pr-7" : ""

@@ -668,25 +668,37 @@ pub fn create_workspace_with_symlinked_dirs(
 }
 
 /// Deletes a workspace from the repository.
-/// # Arguments
-/// * `repo_path` - Path to the repository root
-/// * `workspace_id` - ID of the workspace to delete
-///
-/// # Returns
-/// Returns true if successful, false if workspace not found in database.
 pub fn delete_workspace(repo_path: &str, workspace_id: &i64) -> Result<bool, String> {
-  delete_workspace_impl(
+  let leftover = forget_workspace_record(
     repo_path,
     workspace_id,
     RemoveWorkspaceDiskMode::JjForgetThenRemoveDir,
     WorkspaceRecordMode::Delete,
-  )
+  )?;
+  remove_leftover_directory(leftover);
+  Ok(true)
 }
 
 /// Forget the jj workspace and remove `.treq/workspaces/…`, but keep the DB row
 /// marked `archived`.
 pub fn archive_workspace(repo_path: &str, workspace_id: &i64) -> Result<bool, String> {
-  delete_workspace_impl(
+  let leftover = forget_workspace_record(
+    repo_path,
+    workspace_id,
+    RemoveWorkspaceDiskMode::JjForgetThenRemoveDir,
+    WorkspaceRecordMode::Archive,
+  )?;
+  remove_leftover_directory(leftover);
+  Ok(true)
+}
+
+/// Forget jj and mark the DB row archived; return the leftover directory so the
+/// Tauri command can delete it in the background.
+pub fn archive_workspace_leaving_directory(
+  repo_path: &str,
+  workspace_id: &i64,
+) -> Result<Option<String>, String> {
+  forget_workspace_record(
     repo_path,
     workspace_id,
     RemoveWorkspaceDiskMode::JjForgetThenRemoveDir,
@@ -696,9 +708,9 @@ pub fn archive_workspace(repo_path: &str, workspace_id: &i64) -> Result<bool, St
 
 #[derive(Clone, Copy)]
 enum RemoveWorkspaceDiskMode {
-  /// `jj workspace forget` (subprocess) then delete `.treq/workspaces/…`.
+  /// Forget the jj working copy, leave the directory for a later rm.
   JjForgetThenRemoveDir,
-  /// Delete `.treq/workspaces/…` only — use when jj already dropped the workspace (e.g. forgotten elsewhere).
+  /// Do not touch jj — use when jj already dropped the workspace (e.g. forgotten elsewhere).
   DirectoryOnly,
 }
 
@@ -708,12 +720,20 @@ enum WorkspaceRecordMode {
   Archive,
 }
 
-fn delete_workspace_impl(
+fn remove_leftover_directory(leftover: Option<String>) {
+  if let Some(path) = leftover {
+    if let Err(e) = jj::remove_workspace_directory_only(&path) {
+      tracing::warn!("Warning: Failed to remove workspace directory: {}", e);
+    }
+  }
+}
+
+fn forget_workspace_record(
   repo_path: &str,
   workspace_id: &i64,
   disk: RemoveWorkspaceDiskMode,
   record: WorkspaceRecordMode,
-) -> Result<bool, String> {
+) -> Result<Option<String>, String> {
   let workspace = local_db::get_workspace_by_id(repo_path, *workspace_id)
     .map_err(|e| format!("Failed to get workspace from db: {}", e))?;
 
@@ -723,6 +743,7 @@ fn delete_workspace_impl(
         .join(".treq")
         .join("workspaces")
         .join(&workspace.workspace_path);
+      let workspace_path_str = workspace_path.to_str().unwrap().to_string();
 
       // Re-target direct children to the default branch
       let children = local_db::get_workspaces_by_target_branch(repo_path, &workspace.branch_name)
@@ -736,17 +757,15 @@ fn delete_workspace_impl(
         }
       }
 
-      // Best effort only: DB cleanup must proceed even if jj/directory removal fails.
-      let disk_result = match disk {
+      // Best effort only: DB cleanup must proceed even if jj forget fails.
+      let forget_result = match disk {
         RemoveWorkspaceDiskMode::JjForgetThenRemoveDir => {
-          jj::remove_workspace(repo_path, &workspace_path.to_str().unwrap())
+          jj::forget_workspace(repo_path, &workspace_path_str)
         }
-        RemoveWorkspaceDiskMode::DirectoryOnly => {
-          jj::remove_workspace_directory_only(&workspace_path.to_str().unwrap())
-        }
+        RemoveWorkspaceDiskMode::DirectoryOnly => Ok(()),
       };
-      if let Err(e) = disk_result {
-        tracing::warn!("Warning: Failed to remove workspace directory: {}", e);
+      if let Err(e) = forget_result {
+        tracing::warn!("Warning: Failed to forget workspace: {}", e);
       }
       match record {
         WorkspaceRecordMode::Delete => {
@@ -758,7 +777,7 @@ fn delete_workspace_impl(
             .map_err(|e| format!("Failed to archive workspace in db: {}", e))?;
         }
       }
-      Ok(true)
+      Ok(Some(workspace_path_str))
     }
     _ => Err(format!("Workspace not found in database: {}", workspace_id)),
   }
@@ -862,12 +881,13 @@ pub fn sync_workspaces(repo_path: &str) -> Result<(), String> {
 
     if let Some(ref jj_names) = jj_registered {
       if !jj_names.contains(&ws.workspace_name) {
-        delete_workspace_impl(
+        let leftover = forget_workspace_record(
           repo_path,
           &ws.id,
           RemoveWorkspaceDiskMode::DirectoryOnly,
           WorkspaceRecordMode::Delete,
         )?;
+        remove_leftover_directory(leftover);
       }
     }
   }
