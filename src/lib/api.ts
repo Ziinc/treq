@@ -28,6 +28,7 @@ import type {
   RemoteRepoProbe,
   RemoteRepository,
   LocalSshIdentity,
+  DeviceKeyInfo,
 } from "./api-types";
 import type { RepoYamlConfig } from "./api-extra";
 
@@ -565,3 +566,12 @@ export const remoteOpenRepo = (
 
 export const listLocalSshIdentities = (): Promise<LocalSshIdentity[]> =>
   invoke("list_local_ssh_identities");
+
+/**
+ * Generates (on first call) or loads this device's ed25519 keypair for
+ * control-plane registration and certificate-based SSH auth. Mobile-only in
+ * practice - desktop uses the user's existing `~/.ssh` identities via
+ * `listLocalSshIdentities` instead.
+ */
+export const ensureMobileDeviceKey = (): Promise<DeviceKeyInfo> =>
+  invoke("ensure_mobile_device_key");

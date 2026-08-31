@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
-import { getSetting, getWorkspaces, type Workspace } from "../lib/api";
+import useSWR from "swr";
+import { getSetting, getWorkspaces } from "../lib/api";
+import { RemoteConnectPanel } from "./RemoteConnectPanel";
 
 /**
  * Mobile-optimized top-level layout. Runs on the same Tauri backend and IPC
@@ -7,38 +8,13 @@ import { getSetting, getWorkspaces, type Workspace } from "../lib/api";
  * touch-first shell instead of the desktop's multi-pane layout.
  */
 export function MobileShell() {
-  const [repoPath, setRepoPath] = useState<string | null>(null);
-  const [workspaces, setWorkspaces] = useState<Workspace[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    getSetting("lastRepoPath")
-      .then((path) => {
-        if (!cancelled) setRepoPath(path ?? null);
-      })
-      .catch(() => {
-        if (!cancelled) setRepoPath(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!repoPath) return;
-    let cancelled = false;
-    getWorkspaces(repoPath)
-      .then((ws) => {
-        if (!cancelled) setWorkspaces(ws);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(String(err));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [repoPath]);
+  const { data: repoPath } = useSWR("mobile-shell-last-repo-path", () =>
+    getSetting("lastRepoPath"),
+  );
+  const { data: workspaces, error } = useSWR(
+    repoPath ? ["mobile-shell-workspaces", repoPath] : null,
+    () => getWorkspaces(repoPath as string),
+  );
 
   return (
     <div className="flex h-screen flex-col overflow-y-auto">
@@ -51,7 +27,9 @@ export function MobileShell() {
             No repository selected yet.
           </p>
         )}
-        {error && <p className="text-sm text-destructive">{error}</p>}
+        {error && (
+          <p className="text-sm text-destructive">{String(error)}</p>
+        )}
         {repoPath && workspaces && (
           <ul className="flex flex-col gap-2">
             {workspaces.map((ws) => (
@@ -64,6 +42,7 @@ export function MobileShell() {
             ))}
           </ul>
         )}
+        <RemoteConnectPanel />
       </main>
     </div>
   );

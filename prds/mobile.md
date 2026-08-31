@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 1 in progress. Treq ships as a Tauri application; mobile support extends the existing Tauri build to the Android and iOS targets instead of a separate native client. The app renders a distinct, touch-first mobile layout on those targets, backed by the same Rust core and Tauri IPC commands the desktop app uses.
+Phase 2 in progress. Treq ships as a Tauri application; mobile support extends the existing Tauri build to the Android and iOS targets instead of a separate native client. The app renders a distinct, touch-first mobile layout on those targets, backed by the same Rust core and Tauri IPC commands the desktop app uses. Phase 1 (build targets, mobile shell) is done; Phase 2 (device key registration, certificate issuance, SSH connectivity) has a working prototype path, gated on real platform-keystore storage before it can ship - see Phase 2 below.
 
 ## Summary
 
@@ -116,23 +116,27 @@ Any selected mobile SSH library must be evaluated for:
 
 ## Phased plan
 
-### Phase 1: Build system and mobile shell (this delivery)
+### Phase 1: Build system and mobile shell (done)
 
 - Add Android and iOS as Tauri build targets (`tauri android init` / `tauri ios init`, npm scripts, mobile app icons).
 - Add a mobile-scoped Tauri capability file (`src-tauri/capabilities/mobile.json`).
 - Add `MobileShell`, a touch-first top-level layout, and switch to it on mobile viewports via `useIsMobile`.
 - Wire `MobileShell` to existing Tauri commands (e.g. `get_workspaces`) to prove the same IPC surface works unmodified on mobile.
 
-Follow-on connectivity work (control-plane auth, device key registration, short-lived certificates, pinned host-key verification, native SSH connect) starts once [Remote SSH Control](./remote-ssh.md) is stable, per Phase 2 below.
+### Phase 2: Security and connectivity prototype (this delivery)
 
-### Phase 2: Security and connectivity prototype
+The desktop app already has a real control-plane client (`lib/remote-control-plane.ts`), the `remote-ssh-trust` and `remote-instance` edge functions, and a russh-based native SSH transport with pinned host-key verification (`core::remote_ssh_transport`) reachable through `dispatchOverSsh`. None of that is SSH-library-prototype work mobile needs to redo - `russh` is pure Rust and compiles into the same mobile binary. What mobile Phase 2 adds is the piece desktop doesn't need: a way for a device with no `~/.ssh` to get a keypair and use it.
 
-- Authenticate to the control plane.
-- Register a mobile device public key.
-- Obtain a short-lived managed-instance certificate.
-- Verify the pinned host key.
-- Connect with a native SSH library.
-- Execute repository inspection and display structured errors.
+Done in this delivery:
+
+- Authenticate to the control plane (reuses the existing Supabase auth session - no mobile-specific work needed).
+- Generate and persist a per-device ed25519 keypair (`core::remote_device_key`, `ensure_mobile_device_key` command, `ensureMobileDeviceKey()`), since mobile has no `~/.ssh` identities to pick from.
+- Register the device public key with the control plane (`registerClientKey`, wired to the previously-unused `register_client_key` edge function action).
+- Obtain a short-lived managed-instance certificate (`issueCertificate`, wired to `issue_certificate`).
+- Verify the pinned host key and connect with the native (russh) SSH library - reused as-is from the existing transport; the certificate response's `endpoint.host_keys` feeds the same `HostKeyVerifier` desktop uses.
+- Execute repository inspection (`ProbeRepo` over `dispatchOverSsh`) and display structured errors - `RemoteConnectPanel` in `MobileShell`.
+
+Open item before this can ship as more than a prototype: the device private key is currently written to the app's local data directory with owner-only file permissions where the OS supports them (see `core::remote_device_key` doc comment). That is not yet the platform-protected storage (Android Keystore / iOS Keychain or Secure Enclave) the PRD's goals require, and Tauri has no first-party plugin for that today. Closing this gap - via a small native plugin or `tauri-plugin-stronghold` if it proves suitable for both mobile targets - is required before Phase 2 is more than a connectivity prototype.
 
 ### Phase 3: Read-only review
 
