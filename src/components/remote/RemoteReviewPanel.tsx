@@ -1,8 +1,9 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import useSWR from "swr";
 import type {
   RepositoryLocation,
   SshEndpoint,
+  WorkspaceChangeMarker,
 } from "../../lib/api-types-remote";
 import { dispatch, isRemoteActionSupported } from "../../lib/remote-dispatch";
 import { remoteRepoIdentity } from "../../lib/remote-query-keys";
@@ -47,6 +48,61 @@ function useAgentShouldRefresh({
   useEffect(() => {
     if (data?.should_refresh) onShouldRefresh();
   }, [data?.should_refresh, onShouldRefresh]);
+}
+
+/**
+ * Polls the workspace's JJ operation-log marker and refreshes remote review
+ * data whenever it changes (PRD "Change propagation across concurrent
+ * clients"): a change means the VM-side repository state moved for a
+ * reason other than this client's own last mutation - another desktop
+ * client, another SSH session, or an agent process all count. This is
+ * stale-state *detection*, not conflict resolution: on a mismatch the
+ * client only refreshes its read state, it never attempts to merge
+ * anything. The first observed marker seeds the baseline without
+ * triggering a refresh, so mounting the panel never fires a spurious one.
+ */
+interface ChangeMarkerWatch {
+  endpoint: SshEndpoint | null;
+  repoPath: string;
+  identity: string;
+  workspace: string | null | undefined;
+  onForeignChange: () => void;
+}
+
+function useRemoteChangeMarkerWatch({
+  endpoint,
+  repoPath,
+  identity,
+  workspace,
+  onForeignChange,
+}: ChangeMarkerWatch) {
+  const { data } = useSWR(
+    ["remote-change-marker", identity, workspace ?? null],
+    () =>
+      dispatch<WorkspaceChangeMarker>(endpoint, {
+        kind: "WorkspaceChangeMarker",
+        repo: repoPath,
+        workspace,
+      }),
+    { refreshInterval: 4_000, dedupingInterval: 1_500 },
+  );
+
+  const lastSeenOperationId = useRef<string | null>(null);
+
+  useEffect(() => {
+    const operationId = data?.operation_id;
+    if (!operationId) return;
+    if (lastSeenOperationId.current === null) {
+      // Seed the baseline on the first successful poll; nothing to compare
+      // against yet, so this is not itself a "foreign change".
+      lastSeenOperationId.current = operationId;
+      return;
+    }
+    if (operationId !== lastSeenOperationId.current) {
+      lastSeenOperationId.current = operationId;
+      onForeignChange();
+    }
+  }, [data?.operation_id, onForeignChange]);
 }
 
 export interface RemoteReviewPanelProps {
@@ -125,6 +181,14 @@ export function RemoteReviewPanel({
     repoPath,
     workspace,
     onShouldRefresh: refresh,
+  });
+
+  useRemoteChangeMarkerWatch({
+    endpoint,
+    repoPath,
+    identity,
+    workspace,
+    onForeignChange: refresh,
   });
 
   return (

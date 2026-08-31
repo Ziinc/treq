@@ -187,6 +187,20 @@ impl git::GitSubprocessCallback for SilentGitCallback {
   }
 }
 
+/// Returns the hex id of the workspace's current head JJ operation.
+///
+/// This is a cheap, pollable change marker: the operation log advances on
+/// every mutation to the repository (from this workspace or any other
+/// process/client touching the same repo), and loading it does not walk
+/// commits, diffs, or file contents. A client compares this value against
+/// the last one it observed to detect that VM-side repository state moved
+/// underneath it (PRD "Change propagation across concurrent clients") and
+/// decide whether to refresh, without any conflict-resolution logic here.
+pub fn jj_head_operation_id(workspace_path: &str) -> Result<String, JjError> {
+  let loaded = load_workspace_repo(workspace_path)?;
+  Ok(loaded.repo.op_id().hex())
+}
+
 fn load_workspace_repo(workspace_path: &str) -> Result<LoadedWorkspaceRepo, JjError> {
   let repo_path_opt = derive_repo_path_from_workspace(workspace_path);
   let settings_path = repo_path_opt.as_deref().unwrap_or(workspace_path);
