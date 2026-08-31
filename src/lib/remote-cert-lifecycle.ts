@@ -67,7 +67,8 @@ export function renewalDelayMs(
 ): number {
   const lifetime = expiresAt - issuedAt;
   if (lifetime <= 0) return 0;
-  const renewAt = issuedAt + lifetime * (1 - RENEWAL_REMAINING_LIFETIME_FRACTION);
+  const renewAt =
+    issuedAt + lifetime * (1 - RENEWAL_REMAINING_LIFETIME_FRACTION);
   return Math.max(0, renewAt - now);
 }
 
@@ -78,7 +79,9 @@ interface FunctionsErrorLike {
 
 function statusOf(error: unknown): number | undefined {
   const err = error as FunctionsErrorLike;
-  return typeof err?.context?.status === "number" ? err.context.status : undefined;
+  return typeof err?.context?.status === "number"
+    ? err.context.status
+    : undefined;
 }
 
 function messageOf(error: unknown): string {

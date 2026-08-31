@@ -148,9 +148,10 @@ describe("CertificateRenewalManager", () => {
   it("cuts off without retrying when renewal is refused because the key was revoked", async () => {
     vi.useFakeTimers();
     const onCutoff = vi.fn();
-    const issue = vi
-      .fn()
-      .mockRejectedValue({ context: { status: 409 }, message: "Key has been revoked" });
+    const issue = vi.fn().mockRejectedValue({
+      context: { status: 409 },
+      message: "Key has been revoked",
+    });
 
     new CertificateRenewalManager({
       instanceId: "instance-1",
