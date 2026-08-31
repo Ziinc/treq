@@ -37,6 +37,12 @@ jobs:
         run: echo skipped
 ";
 
+fn unique_remote_clone_path(parent: &Path, label: &str) -> PathBuf {
+  static CLONE_COUNTER: AtomicU64 = AtomicU64::new(0);
+  let seq = CLONE_COUNTER.fetch_add(1, Ordering::Relaxed);
+  parent.join(format!("{label}_{seq}"))
+}
+
 fn random_default_branch_name() -> String {
   static COUNTER: AtomicU64 = AtomicU64::new(0);
   let seq = COUNTER.fetch_add(1, Ordering::Relaxed);
@@ -616,7 +622,9 @@ impl TestRepo {
     message: &str,
   ) -> Result<(), String> {
     let remote_path = self.temp_dir.path().join("remote.git");
-    let clone_path = self.temp_dir.path().join("remote_clone");
+    // Use a unique path per call and let TestRepo's TempDir clean up at drop.
+    // Eager `remove_dir_all` after `git push` races git's pack/index locks (ENOTEMPTY).
+    let clone_path = unique_remote_clone_path(self.temp_dir.path(), "remote_clone");
 
     // Clone the bare remote into a temporary working copy
     Self::run_git(
@@ -664,10 +672,6 @@ impl TestRepo {
     Self::run_git(&clone_path_str, &["commit", "-m", message])?;
     Self::run_git(&clone_path_str, &["push", "origin", self.default_branch()])?;
 
-    // Clean up the clone
-    fs::remove_dir_all(&clone_path)
-      .map_err(|e| format!("Failed to clean up remote clone: {}", e))?;
-
     Ok(())
   }
 
@@ -688,13 +692,9 @@ impl TestRepo {
     message: &str,
   ) -> Result<(), String> {
     let remote_path = self.temp_dir.path().join("remote.git");
-    let clone_path = self.temp_dir.path().join("remote_clone_branch");
-
-    // Remove stale clone if it exists
-    if clone_path.exists() {
-      fs::remove_dir_all(&clone_path)
-        .map_err(|e| format!("Failed to remove stale clone: {}", e))?;
-    }
+    // Use a unique path per call and let TestRepo's TempDir clean up at drop.
+    // Eager `remove_dir_all` after `git push` races git's pack/index locks (ENOTEMPTY).
+    let clone_path = unique_remote_clone_path(self.temp_dir.path(), "remote_clone_branch");
 
     // Clone the bare remote into a temporary working copy
     Self::run_git(
@@ -745,10 +745,6 @@ impl TestRepo {
     Self::run_git(&clone_path_str, &["add", relative_path]).expect("Failed to add file");
     Self::run_git(&clone_path_str, &["commit", "-m", message]).expect("Failed to commit");
     Self::run_git(&clone_path_str, &["push", "origin", branch_name]).expect("Failed to push");
-
-    // Clean up the clone
-    fs::remove_dir_all(&clone_path)
-      .map_err(|e| format!("Failed to clean up remote clone: {}", e))?;
 
     Ok(())
   }
