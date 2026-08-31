@@ -1,6 +1,5 @@
 import { it, expect, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
-import { ask } from "@tauri-apps/plugin-dialog";
 import userEvent from "@testing-library/user-event";
 import { createTestRepo, openRepo } from "../../../test/utils";
 import { render, screen, waitFor } from "../../../test/test-utils";
@@ -9,16 +8,15 @@ import { createWorkspace } from "../../../src/lib/api";
 import { captureDocument } from "../capture";
 
 it("captures bulk archive grey-out, spinners, then toast", async () => {
-  vi.mocked(ask).mockResolvedValue(true);
   const originalInvoke = vi.mocked(invoke).getMockImplementation();
   expect(originalInvoke).toBeTruthy();
-  let releaseDeletes: (() => void) | undefined;
-  const deleteGate = new Promise<void>((resolve) => {
-    releaseDeletes = resolve;
+  let releaseArchives: (() => void) | undefined;
+  const archiveGate = new Promise<void>((resolve) => {
+    releaseArchives = resolve;
   });
   vi.mocked(invoke).mockImplementation(async (cmd, args) => {
-    if (cmd === "delete_workspace") {
-      await deleteGate;
+    if (cmd === "archive_workspace") {
+      await archiveGate;
     }
     return originalInvoke!(cmd, args);
   });
@@ -57,16 +55,17 @@ it("captures bulk archive grey-out, spinners, then toast", async () => {
     await waitFor(() => {
       expect(alpha).toHaveAttribute("aria-busy", "true");
     });
+    expect(screen.queryByText(/archive 2 workspaces/i)).not.toBeInTheDocument();
 
     await captureDocument(document, {
       name: "bulk-archive-loading-02-busy",
       expectations: [
         "Both selected workspace rows are greyed out with spinner icons instead of branch icons.",
-        "The rows look disabled and are not fully opaque.",
+        "The Archive 2 workspaces button is gone from the sidebar.",
       ],
     });
 
-    releaseDeletes!();
+    releaseArchives!();
     await screen.findByText(/2 workspaces archived/i);
     await waitFor(() => {
       expect(
@@ -83,6 +82,5 @@ it("captures bulk archive grey-out, spinners, then toast", async () => {
     });
   } finally {
     vi.mocked(invoke).mockImplementation(originalInvoke!);
-    vi.mocked(ask).mockReset();
   }
 }, 60000);

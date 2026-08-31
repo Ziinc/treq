@@ -466,8 +466,8 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
                       {droppableProvided.placeholder}
                       {selectedWorkspaceIds &&
                         selectedWorkspaceIds.size > 0 &&
-                        !(archivingWorkspaceIds?.size) &&
-                        !(exitingWorkspaceIds?.size) && (
+                        !archivingWorkspaceIds?.size &&
+                        !exitingWorkspaceIds?.size && (
                           <SidebarMenuItem>
                             <SidebarMenuButton
                               type="button"
