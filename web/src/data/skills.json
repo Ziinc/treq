@@ -1,61 +1,61 @@
 {
-  "generatedAt": "2026-08-24T06:44:56.685Z",
+  "generatedAt": "2026-08-31T12:27:40.169Z",
   "sources": [
     {
       "id": "anthropic",
       "name": "Anthropic",
       "url": "https://github.com/anthropics/skills",
       "skillCount": 19,
-      "stars": 171247
+      "stars": 172739
     },
     {
       "id": "openai",
       "name": "OpenAI",
       "url": "https://github.com/openai/skills",
       "skillCount": 44,
-      "stars": 25150
+      "stars": 25298
     },
     {
       "id": "mattpocock",
       "name": "Matt Pocock",
       "url": "https://github.com/mattpocock/skills",
-      "skillCount": 36,
-      "stars": 234309
+      "skillCount": 37,
+      "stars": 242451
     },
     {
       "id": "vercel",
       "name": "Vercel",
       "url": "https://github.com/vercel-labs/agent-browser",
       "skillCount": 1,
-      "stars": 41210
+      "stars": 41615
     },
     {
       "id": "microsoft",
       "name": "Microsoft",
       "url": "https://github.com/microsoft/azure-skills",
       "skillCount": 35,
-      "stars": 1410
+      "stars": 1434
     },
     {
       "id": "superpowers",
       "name": "Superpowers",
       "url": "https://github.com/obra/superpowers",
       "skillCount": 14,
-      "stars": 276778
+      "stars": 279893
     },
     {
       "id": "caveman",
       "name": "Caveman",
       "url": "https://github.com/JuliusBrussee/caveman",
       "skillCount": 20,
-      "stars": 100547
+      "stars": 101974
     },
     {
       "id": "prisma",
       "name": "Prisma",
       "url": "https://github.com/prisma/skills",
       "skillCount": 9,
-      "stars": 53
+      "stars": 52
     }
   ],
   "skills": [
@@ -1927,7 +1927,7 @@
     {
       "id": "caveman/cavecrew",
       "name": "cavecrew",
-      "description": "Decision guide for delegating to caveman-style subagents. Tells the main thread WHEN to spawn `cavecrew-investigator` (locate code), `cavecrew-builder` (1-2 file edit), or `cavecrew-reviewer` (diff review) instead of doing the work inline or using vanilla `Explore`. Subagent output is caveman-compressed so the tool-result injected back into main context is ~60% smaller — main context lasts longer across long sessions. Trigger: \"delegate to subagent\", \"use cavecrew\", \"spawn investigator/builder/reviewer\", \"save context\", \"compressed agent output\".",
+      "description": "When to delegate to `cavecrew-investigator` (locate code), `cavecrew-builder` (1-2 file edit) or `cavecrew-reviewer` (diff review) instead of working inline or using `Explore`. Their output is compressed, so main context lasts longer.",
       "source": "caveman",
       "category": null,
       "license": "MIT",
@@ -1945,7 +1945,7 @@
         },
         {
           "path": "SKILL.md",
-          "size": 3936,
+          "size": 3606,
           "binary": false,
           "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/cavecrew/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/cavecrew/SKILL.md"
@@ -1955,7 +1955,7 @@
     {
       "id": "caveman/caveman",
       "name": "caveman",
-      "description": "Ultra-compressed communication mode. Cuts output tokens 65% (measured) by speaking like caveman while keeping full technical accuracy. Supports intensity levels: lite, full (default), ultra, wenyan-lite, wenyan-full, wenyan-ultra. Use when user says \"caveman mode\", \"talk like caveman\", \"use caveman\", \"less tokens\", \"be brief\", or invokes /caveman. Also auto-triggers when token efficiency is requested.",
+      "description": "Ultra-compressed communication mode that cuts output tokens while keeping technical accuracy. Levels: lite, full, ultra and the wenyan variants. Use for /caveman, \"caveman mode\", \"talk like caveman\", \"be brief\" or \"less tokens\".",
       "source": "caveman",
       "category": null,
       "license": "MIT",
@@ -1973,7 +1973,7 @@
         },
         {
           "path": "SKILL.md",
-          "size": 6698,
+          "size": 6518,
           "binary": false,
           "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/caveman/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/caveman/SKILL.md"
@@ -1983,7 +1983,7 @@
     {
       "id": "caveman/caveman-commit",
       "name": "caveman-commit",
-      "description": "Ultra-compressed commit message generator. Cuts noise from commit messages while preserving intent and reasoning. Conventional Commits format. Subject ≤50 chars, body only when \"why\" isn't obvious. Use when user says \"write a commit\", \"commit message\", \"generate commit\", \"/commit\", or invokes /caveman-commit. Auto-triggers when staging changes.",
+      "description": "Write a Conventional Commits message compressed to intent only. Use for \"write a commit\", \"commit message\", /commit or /caveman-commit.",
       "source": "caveman",
       "category": null,
       "license": "MIT",
@@ -2001,7 +2001,7 @@
         },
         {
           "path": "SKILL.md",
-          "size": 2588,
+          "size": 2371,
           "binary": false,
           "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/caveman-commit/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/caveman-commit/SKILL.md"
@@ -2011,7 +2011,7 @@
     {
       "id": "caveman/caveman-compress",
       "name": "caveman-compress",
-      "description": "Compress natural language memory files (CLAUDE.md, todos, preferences) into caveman format to save input tokens. Preserves all technical substance, code, URLs, and structure. Compressed version overwrites the original file. Human-readable backup saved as FILE.original.md. Trigger: /caveman-compress FILEPATH or \"compress memory file\"",
+      "description": "Compress a memory file such as CLAUDE.md or a todo list into caveman format to save input tokens, keeping a readable backup. Trigger: /caveman-compress.",
       "source": "caveman",
       "category": null,
       "license": "MIT",
@@ -2022,7 +2022,7 @@
       "files": [
         {
           "path": "README.md",
-          "size": 5480,
+          "size": 5667,
           "binary": false,
           "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/caveman-compress/README.md",
           "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/caveman-compress/README.md"
@@ -2036,7 +2036,7 @@
         },
         {
           "path": "SKILL.md",
-          "size": 4883,
+          "size": 4697,
           "binary": false,
           "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/caveman-compress/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/caveman-compress/SKILL.md"
@@ -2071,14 +2071,14 @@
         },
         {
           "path": "scripts/compress.py",
-          "size": 20874,
+          "size": 30948,
           "binary": false,
           "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/caveman-compress/scripts/compress.py",
           "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/caveman-compress/scripts/compress.py"
         },
         {
           "path": "scripts/detect.py",
-          "size": 4779,
+          "size": 4836,
           "binary": false,
           "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/caveman-compress/scripts/detect.py",
           "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/caveman-compress/scripts/detect.py"
@@ -2095,7 +2095,7 @@
     {
       "id": "caveman/caveman-discover",
       "name": "caveman-discover",
-      "description": "Find every LLM workflow in the current repository and label it, so Caveman Cloud groups spend by what the code actually does (support-reply, nightly-digest) instead of one anonymous bucket. Use when the user pastes the Caveman discovery prompt, says \"discover workflows\", or asks to break LLM spend down by workflow. The repo should already route through the Caveman gateway (the caveman-setup skill does that part).",
+      "description": "Find and label every LLM workflow in the repository so Caveman Cloud groups spend by workflow instead of one bucket. Use for \"discover workflows\" or breaking LLM spend down by workflow.",
       "source": "caveman",
       "category": null,
       "license": "MIT",
@@ -2106,7 +2106,7 @@
       "files": [
         {
           "path": "SKILL.md",
-          "size": 5513,
+          "size": 5276,
           "binary": false,
           "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/caveman-discover/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/caveman-discover/SKILL.md"
@@ -2116,7 +2116,7 @@
     {
       "id": "caveman/caveman-evidence-review",
       "name": "caveman-evidence-review",
-      "description": "Review Caveman Cloud evidence read-only: costs, Cave Score, Cave Plan, workflows, traces, latency, errors, compression, routing, and verified savings. Use when the user asks what Caveman found, where LLM spend goes, why cost or quality changed, which workflows need attention, or asks for a trace or analytics review. Prefer Caveman MCP tools; fall back to CLI JSON.",
+      "description": "Read-only review of Caveman Cloud evidence: cost, Cave Score, workflows, traces, latency, errors, routing, savings. Use when asked what Caveman found or where LLM spend goes.",
       "source": "caveman",
       "category": null,
       "license": "MIT",
@@ -2127,7 +2127,7 @@
       "files": [
         {
           "path": "SKILL.md",
-          "size": 3930,
+          "size": 3734,
           "binary": false,
           "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/caveman-evidence-review/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/caveman-evidence-review/SKILL.md"
@@ -2137,7 +2137,7 @@
     {
       "id": "caveman/caveman-explore",
       "name": "caveman-explore",
-      "description": "Read-only repository explorer. Use PROACTIVELY for cold-start exploration, broad cross-file localization, or when a direct search has failed and you need to find where something lives. Skip it when the issue already names the exact file or symbol, or a previous turn already returned usable file:line evidence. Returns only compact path:line citations; its reads and greps never enter the main conversation.",
+      "description": "Read-only repository explorer for cold-start orientation, broad cross-file localization, or when a direct search failed. Skip it when the exact file or symbol is already named. Returns path:line citations only; its reads stay out of main context.",
       "source": "caveman",
       "category": null,
       "license": "MIT",
@@ -2148,7 +2148,7 @@
       "files": [
         {
           "path": "SKILL.md",
-          "size": 2131,
+          "size": 1970,
           "binary": false,
           "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/caveman-explore/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/caveman-explore/SKILL.md"
@@ -2172,7 +2172,7 @@
     {
       "id": "caveman/caveman-help",
       "name": "caveman-help",
-      "description": "Quick-reference card for all caveman modes, skills, and commands. One-shot display, not a persistent mode. Trigger: /caveman-help, \"caveman help\", \"what caveman commands\", \"how do I use caveman\".",
+      "description": "Quick-reference card for caveman modes, skills and commands. Trigger: /caveman-help or \"caveman help\".",
       "source": "caveman",
       "category": null,
       "license": "MIT",
@@ -2190,7 +2190,7 @@
         },
         {
           "path": "SKILL.md",
-          "size": 2300,
+          "size": 2205,
           "binary": false,
           "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/caveman-help/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/caveman-help/SKILL.md"
@@ -2200,7 +2200,7 @@
     {
       "id": "caveman/caveman-learn",
       "name": "caveman-learn",
-      "description": "Close the loop on a Caveman learn report — review the ranked token sinks, apply cost-lowering fixes (trim config, offload recurring context to cavemem) with per-edit consent, and report what those fixes returned with their attribution. Use when the user runs \"caveman learn\", asks to lower their agent's token cost, asks what caveman has saved them, wants to trim a heavy CLAUDE.md, or wants to offload context they re-paste every session into cavemem.",
+      "description": "Act on a Caveman learn report - review the ranked token sinks, apply cost-lowering fixes with per-edit consent, and report what those fixes returned. Use when asked to lower an agent's token cost, what caveman has saved, to trim a heavy CLAUDE.md, or to offload re-pasted context into cavemem.",
       "source": "caveman",
       "category": null,
       "license": "MIT",
@@ -2225,7 +2225,7 @@
         },
         {
           "path": "SKILL.md",
-          "size": 9366,
+          "size": 9205,
           "binary": false,
           "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/caveman-learn/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/caveman-learn/SKILL.md"
@@ -2256,7 +2256,7 @@
     {
       "id": "caveman/caveman-manage",
       "name": "caveman-manage",
-      "description": "Inspect Caveman Cloud's eval-gated experiment lifecycle and block unsafe execution. Use when the user asks to start, approve, cancel, promote, or roll back a Caveman experiment, or asks what action an experiment's evidence supports. Read evidence first; do not execute lifecycle mutations until server-authoritative transition and evidence gates ship.",
+      "description": "Inspect Caveman Cloud's experiment lifecycle and block unsafe execution. Use when asked to start, approve, cancel, promote or roll back a Caveman experiment.",
       "source": "caveman",
       "category": null,
       "license": "MIT",
@@ -2267,7 +2267,7 @@
       "files": [
         {
           "path": "SKILL.md",
-          "size": 4114,
+          "size": 3916,
           "binary": false,
           "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/caveman-manage/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/caveman-manage/SKILL.md"
@@ -2277,7 +2277,7 @@
     {
       "id": "caveman/caveman-optimize",
       "name": "caveman-optimize",
-      "description": "Turn Caveman's exact report-only repository observations into an operator-chosen optimization candidate with a paired baseline/candidate evaluation. Use when the user asks to inspect an optimization observation, evaluate a candidate change, or act on the current Caveman optimization report. Require a logged-in Caveman CLI connection and explicit approval; never infer money or actuation from a profile.",
+      "description": "Turn a Caveman optimization observation into an operator-chosen candidate with a paired baseline evaluation. Use when asked to inspect or evaluate a Caveman optimization report. Needs explicit approval.",
       "source": "caveman",
       "category": null,
       "license": "MIT",
@@ -2288,7 +2288,7 @@
       "files": [
         {
           "path": "SKILL.md",
-          "size": 4931,
+          "size": 4723,
           "binary": false,
           "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/caveman-optimize/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/caveman-optimize/SKILL.md"
@@ -2298,7 +2298,7 @@
     {
       "id": "caveman/caveman-review",
       "name": "caveman-review",
-      "description": "Ultra-compressed code review comments. Cuts noise from PR feedback while preserving the actionable signal. Each comment is one line: location, problem, fix. Use when user says \"review this PR\", \"code review\", \"review the diff\", \"/review\", or invokes /caveman-review. Auto-triggers when reviewing pull requests.",
+      "description": "Compressed code review - one line per finding with location, problem and fix. Use for /caveman-review, \"review this PR\", or \"review the diff\".",
       "source": "caveman",
       "category": null,
       "license": "MIT",
@@ -2316,7 +2316,7 @@
         },
         {
           "path": "SKILL.md",
-          "size": 2739,
+          "size": 2567,
           "binary": false,
           "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/caveman-review/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/caveman-review/SKILL.md"
@@ -2326,7 +2326,7 @@
     {
       "id": "caveman/caveman-setup",
       "name": "caveman-setup",
-      "description": "Wire the current repository through the Caveman Cloud gateway so every LLM request is measured — cost, tokens, latency — with zero behavior change. Use when the user pastes the Caveman setup prompt, says \"set up caveman\", or wants LLM spend observability added to an app. Requires the gateway URL and a Cave API key (the setup prompt carries both).",
+      "description": "Wire a repository through the Caveman Cloud gateway so every LLM request is measured, with no behavior change. Use for \"set up caveman\" or adding LLM spend observability.",
       "source": "caveman",
       "category": null,
       "license": "MIT",
@@ -2337,7 +2337,7 @@
       "files": [
         {
           "path": "SKILL.md",
-          "size": 10710,
+          "size": 10524,
           "binary": false,
           "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/caveman-setup/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/caveman-setup/SKILL.md"
@@ -2347,7 +2347,7 @@
     {
       "id": "caveman/caveman-stats",
       "name": "caveman-stats",
-      "description": "Show real token usage and estimated savings for the current session. Reads directly from the Claude Code session log — no AI estimation. Triggers on /caveman-stats. Output is injected by the mode-tracker hook; the model itself does not compute the numbers.",
+      "description": "Show real token usage and estimated savings for the current session, read from the session log. Trigger: /caveman-stats.",
       "source": "caveman",
       "category": null,
       "license": "MIT",
@@ -2365,7 +2365,7 @@
         },
         {
           "path": "SKILL.md",
-          "size": 1152,
+          "size": 1010,
           "binary": false,
           "githubUrl": "https://github.com/JuliusBrussee/caveman/blob/main/skills/caveman-stats/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/JuliusBrussee/caveman/main/skills/caveman-stats/SKILL.md"
@@ -3258,6 +3258,34 @@
           "binary": false,
           "githubUrl": "https://github.com/mattpocock/skills/blob/main/skills/in-progress/loop-me/agents/openai.yaml",
           "rawUrl": "https://raw.githubusercontent.com/mattpocock/skills/main/skills/in-progress/loop-me/agents/openai.yaml"
+        }
+      ]
+    },
+    {
+      "id": "mattpocock/in-progress/retro",
+      "name": "retro",
+      "description": "Conduct a retrospective on a coding session.",
+      "source": "mattpocock",
+      "category": "In Progress",
+      "license": "MIT",
+      "proprietary": false,
+      "path": "skills/in-progress/retro",
+      "url": "https://github.com/mattpocock/skills/tree/main/skills/in-progress/retro",
+      "route": "/skills/mattpocock/in-progress/retro",
+      "files": [
+        {
+          "path": "SKILL.md",
+          "size": 3388,
+          "binary": false,
+          "githubUrl": "https://github.com/mattpocock/skills/blob/main/skills/in-progress/retro/SKILL.md",
+          "rawUrl": "https://raw.githubusercontent.com/mattpocock/skills/main/skills/in-progress/retro/SKILL.md"
+        },
+        {
+          "path": "agents/openai.yaml",
+          "size": 146,
+          "binary": false,
+          "githubUrl": "https://github.com/mattpocock/skills/blob/main/skills/in-progress/retro/agents/openai.yaml",
+          "rawUrl": "https://raw.githubusercontent.com/mattpocock/skills/main/skills/in-progress/retro/agents/openai.yaml"
         }
       ]
     },
@@ -5872,14 +5900,14 @@
       "files": [
         {
           "path": "SKILL.md",
-          "size": 3629,
+          "size": 6339,
           "binary": false,
           "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-enterprise-infra-planner/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-enterprise-infra-planner/SKILL.md"
         },
         {
           "path": "references/bicep-generation.md",
-          "size": 3695,
+          "size": 5339,
           "binary": false,
           "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-enterprise-infra-planner/references/bicep-generation.md",
           "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-enterprise-infra-planner/references/bicep-generation.md"
@@ -5984,7 +6012,7 @@
         },
         {
           "path": "references/phases/1-extract-insights.md",
-          "size": 1801,
+          "size": 2653,
           "binary": false,
           "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-enterprise-infra-planner/references/phases/1-extract-insights.md",
           "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-enterprise-infra-planner/references/phases/1-extract-insights.md"
@@ -6019,7 +6047,7 @@
         },
         {
           "path": "references/phases/6-generate-iac.md",
-          "size": 675,
+          "size": 2606,
           "binary": false,
           "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-enterprise-infra-planner/references/phases/6-generate-iac.md",
           "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-enterprise-infra-planner/references/phases/6-generate-iac.md"
@@ -6030,6 +6058,13 @@
           "binary": false,
           "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-enterprise-infra-planner/references/phases/7-deploy.md",
           "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-enterprise-infra-planner/references/phases/7-deploy.md"
+        },
+        {
+          "path": "references/referenced-workload.md",
+          "size": 7504,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-enterprise-infra-planner/references/referenced-workload.md",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-enterprise-infra-planner/references/referenced-workload.md"
         },
         {
           "path": "references/resources/README.md",
@@ -6117,14 +6152,14 @@
         },
         {
           "path": "references/schema.md",
-          "size": 2715,
+          "size": 3853,
           "binary": false,
           "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-enterprise-infra-planner/references/schema.md",
           "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-enterprise-infra-planner/references/schema.md"
         },
         {
           "path": "references/terraform-generation.md",
-          "size": 2812,
+          "size": 4504,
           "binary": false,
           "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-enterprise-infra-planner/references/terraform-generation.md",
           "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-enterprise-infra-planner/references/terraform-generation.md"
@@ -6145,7 +6180,7 @@
         },
         {
           "path": "references/workflow.md",
-          "size": 2616,
+          "size": 5028,
           "binary": false,
           "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/azure-enterprise-infra-planner/references/workflow.md",
           "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/azure-enterprise-infra-planner/references/workflow.md"
@@ -8381,7 +8416,7 @@
     {
       "id": "microsoft/microsoft-foundry",
       "name": "microsoft-foundry",
-      "description": "Deploy, evaluate, fine-tune, and manage Foundry agents end-to-end with azd: hosted agent scaffold/run/deploy, prompt agent create, batch eval, continuous eval, prompt optimizer, Agent Optimizer scaffold, agent.yaml, dataset curation from traces, model fine-tuning (SFT/DPO/RFT). USE FOR: azd ai agent, azd provision/deploy, deploy agent, hosted agent, create agent, add tool to agent, invoke agent, evaluate agent, continuous eval, continuous monitoring, agent CI/CD, optimize prompt, improve prompt, optimize agent instructions, agent optimizer, deploy model, Foundry project, RBAC, role assignment, permissions, quota, capacity, region, troubleshoot agent, deployment failure, AI Services, create Foundry resource, provision, knowledge index, customize deployment, onboard, availability, fine-tune, SFT, DPO, RFT, training-data, grader, distillation, fine-tuned model, large file upload. DO NOT USE FOR: Azure Functions, App Service, general Azure deploy (use azure-deploy), general Azure prep (use azure-prepare).",
+      "description": "Build, deploy, evaluate, optimize, fine-tune, and manage Microsoft Foundry agents, models, and resources end to end with azd. USE FOR: azd ai agent, azd provision/deploy, hosted agent scaffold/develop/run/deploy, prompt agent create, create agent, update agent, add tool to agent, invoke agent, agent.yaml, evaluate agent, batch eval, continuous eval, continuous monitoring, agent CI/CD, optimize prompt, improve prompt, prompt optimizer, optimize agent instructions, Agent Optimizer scaffold, dataset curation from traces, deploy model, model fine-tuning (SFT/DPO/RFT), Foundry project, RBAC, role assignment, permissions, quota, capacity, region, troubleshoot agent, deployment failure, AI Services, create Foundry resource, knowledge index, customize deployment, onboard, availability, training-data, grader, distillation, fine-tuned model, large file upload. DO NOT USE FOR: Azure Functions, App Service, general Azure deploy (use azure-deploy), general Azure prep (use azure-prepare).",
       "source": "microsoft",
       "category": null,
       "license": "MIT",
@@ -8399,7 +8434,7 @@
         },
         {
           "path": "SKILL.md",
-          "size": 26128,
+          "size": 26102,
           "binary": false,
           "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/microsoft-foundry/SKILL.md",
           "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/microsoft-foundry/SKILL.md"
@@ -8469,7 +8504,7 @@
         },
         {
           "path": "foundry-agent/create/create-hosted.md",
-          "size": 30432,
+          "size": 30509,
           "binary": false,
           "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/microsoft-foundry/foundry-agent/create/create-hosted.md",
           "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/microsoft-foundry/foundry-agent/create/create-hosted.md"
@@ -8504,7 +8539,7 @@
         },
         {
           "path": "foundry-agent/create/references/foundry-tool-catalog.md",
-          "size": 43883,
+          "size": 43918,
           "binary": false,
           "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/microsoft-foundry/foundry-agent/create/references/foundry-tool-catalog.md",
           "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/microsoft-foundry/foundry-agent/create/references/foundry-tool-catalog.md"
@@ -8917,7 +8952,7 @@
         },
         {
           "path": "foundry-agent/toolbox/references/mcp-protocol.md",
-          "size": 3174,
+          "size": 3326,
           "binary": false,
           "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/microsoft-foundry/foundry-agent/toolbox/references/mcp-protocol.md",
           "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/microsoft-foundry/foundry-agent/toolbox/references/mcp-protocol.md"
@@ -9001,7 +9036,7 @@
         },
         {
           "path": "foundry-agent/toolbox/references/tool-mcp-managed-oauth.md",
-          "size": 6340,
+          "size": 6473,
           "binary": false,
           "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/microsoft-foundry/foundry-agent/toolbox/references/tool-mcp-managed-oauth.md",
           "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/microsoft-foundry/foundry-agent/toolbox/references/tool-mcp-managed-oauth.md"
@@ -9140,6 +9175,41 @@
           "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/microsoft-foundry/foundry-agent/troubleshoot/troubleshoot.md"
         },
         {
+          "path": "foundry-agent/validate/references/default-rules.yaml",
+          "size": 1796,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/microsoft-foundry/foundry-agent/validate/references/default-rules.yaml",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/microsoft-foundry/foundry-agent/validate/references/default-rules.yaml"
+        },
+        {
+          "path": "foundry-agent/validate/references/report-schema.json",
+          "size": 1966,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/microsoft-foundry/foundry-agent/validate/references/report-schema.json",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/microsoft-foundry/foundry-agent/validate/references/report-schema.json"
+        },
+        {
+          "path": "foundry-agent/validate/references/report-template.md",
+          "size": 937,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/microsoft-foundry/foundry-agent/validate/references/report-template.md",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/microsoft-foundry/foundry-agent/validate/references/report-template.md"
+        },
+        {
+          "path": "foundry-agent/validate/references/rules-schema.json",
+          "size": 1983,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/microsoft-foundry/foundry-agent/validate/references/rules-schema.json",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/microsoft-foundry/foundry-agent/validate/references/rules-schema.json"
+        },
+        {
+          "path": "foundry-agent/validate/validate.md",
+          "size": 4204,
+          "binary": false,
+          "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/microsoft-foundry/foundry-agent/validate/validate.md",
+          "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/microsoft-foundry/foundry-agent/validate/validate.md"
+        },
+        {
           "path": "project/connections.md",
           "size": 3203,
           "binary": false,
@@ -9204,7 +9274,7 @@
         },
         {
           "path": "rbac/rbac.md",
-          "size": 7182,
+          "size": 7269,
           "binary": false,
           "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/microsoft-foundry/rbac/rbac.md",
           "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/microsoft-foundry/rbac/rbac.md"
@@ -9295,7 +9365,7 @@
         },
         {
           "path": "resource/private-network/references/post-deployment-validation.md",
-          "size": 3733,
+          "size": 3739,
           "binary": false,
           "githubUrl": "https://github.com/microsoft/azure-skills/blob/main/skills/microsoft-foundry/resource/private-network/references/post-deployment-validation.md",
           "rawUrl": "https://raw.githubusercontent.com/microsoft/azure-skills/main/skills/microsoft-foundry/resource/private-network/references/post-deployment-validation.md"
