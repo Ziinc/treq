@@ -1212,7 +1212,10 @@ impl TreqCommandTransport for SshCliTransport {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RemoteCommandError {
   Transport(String),
-  Command { code: String, message: String },
+  Command {
+    code: String,
+    message: String,
+  },
   InvalidJson(String),
   /// The endpoint's credential is under hard cutoff (PRD "Hard cutoff on
   /// revocation or expiry") — no further structured commands may be sent
@@ -1231,7 +1234,10 @@ impl std::fmt::Display for RemoteCommandError {
       Self::Transport(message) => write!(f, "transport_error: {message}"),
       Self::Command { code, message } => write!(f, "{code}: {message}"),
       Self::InvalidJson(message) => write!(f, "invalid_remote_json: {message}"),
-      Self::CredentialCutOff { endpoint_id, reason } => {
+      Self::CredentialCutOff {
+        endpoint_id,
+        reason,
+      } => {
         write!(f, "credential_cut_off: endpoint {endpoint_id} ({reason})")
       }
     }

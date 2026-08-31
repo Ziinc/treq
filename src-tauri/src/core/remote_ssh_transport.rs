@@ -116,7 +116,10 @@ impl std::fmt::Display for SshTransportError {
       }
       Self::ProtocolError(message) => write!(f, "invalid remote command protocol: {message}"),
       Self::ChannelError(message) => write!(f, "ssh channel error: {message}"),
-      Self::CredentialCutOff { endpoint_id, reason } => write!(
+      Self::CredentialCutOff {
+        endpoint_id,
+        reason,
+      } => write!(
         f,
         "credential for endpoint {endpoint_id} is cut off ({reason}); reauthenticate to continue"
       ),
@@ -658,7 +661,11 @@ impl SshConnectionPool {
         pooled.alive.store(false, Ordering::SeqCst);
         let handle = pooled.handle.lock().await;
         let _ = handle
-          .disconnect(Disconnect::ByApplication, "credential revoked or expired", "en")
+          .disconnect(
+            Disconnect::ByApplication,
+            "credential revoked or expired",
+            "en",
+          )
           .await;
       }
     }
@@ -1867,7 +1874,9 @@ mod tests {
     assert_eq!(pool.pooled_connection_count().await, 1);
     assert_eq!(pool.cutoff_reason(&endpoint.id).await, None);
 
-    pool.force_cutoff(&endpoint.id, CutoffReason::KeyRevoked).await;
+    pool
+      .force_cutoff(&endpoint.id, CutoffReason::KeyRevoked)
+      .await;
 
     // "open exec and PTY channels to that instance are torn down": the
     // pooled connection is dropped, not merely marked dead.
@@ -1913,17 +1922,15 @@ mod tests {
     pool
       .force_cutoff(&endpoint.id, CutoffReason::CertificateExpired)
       .await;
-    assert!(
-      exec_command(
-        &pool,
-        &endpoint,
-        &["repo".to_string(), "inspect".to_string()],
-        ExecLimits::default(),
-        &cancellation,
-      )
-      .await
-      .is_err()
-    );
+    assert!(exec_command(
+      &pool,
+      &endpoint,
+      &["repo".to_string(), "inspect".to_string()],
+      ExecLimits::default(),
+      &cancellation,
+    )
+    .await
+    .is_err());
 
     // "The user regains access only by reauthenticating and obtaining a new
     // certificate": once that happens the caller clears the cutoff and

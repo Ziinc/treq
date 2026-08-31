@@ -132,10 +132,7 @@ pub async fn remote_force_cutoff(
   reason: CutoffReasonDto,
   state: State<'_, RemoteExecState>,
 ) -> Result<(), String> {
-  state
-    .0
-    .force_cutoff(&endpoint_id, reason.into())
-    .await;
+  state.0.force_cutoff(&endpoint_id, reason.into()).await;
   let _ = app.emit(
     REMOTE_CUTOFF_EVENT,
     RemoteCutoffEvent {
