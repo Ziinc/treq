@@ -270,7 +270,7 @@ pub fn run() {
   let builder = if cli_process {
     builder
   } else {
-    builder
+    let builder = builder
       .plugin(
         tauri_plugin_log::Builder::new()
           .level(tauri_plugin_log::log::LevelFilter::Info)
@@ -283,7 +283,15 @@ pub fn run() {
       )
       .plugin(tauri_plugin_opener::init())
       .plugin(tauri_plugin_dialog::init())
-      .plugin(tauri_plugin_deep_link::init())
+      .plugin(tauri_plugin_deep_link::init());
+    // Device-key storage for the mobile connectivity flow (mobile PRD,
+    // Phase 2) - both plugins are `#[cfg(mobile)]`-gated upstream and have
+    // no desktop implementation worth shipping, see `core::remote_device_key`.
+    #[cfg(mobile)]
+    let builder = builder
+      .plugin(tauri_plugin_keystore::init())
+      .plugin(tauri_plugin_biometric::init());
+    builder
   };
   builder
         .plugin(tauri_plugin_cli::init())

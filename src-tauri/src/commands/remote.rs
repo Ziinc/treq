@@ -1,7 +1,6 @@
 use crate::core::remote::{self, RemoteReadiness, RemoteRepoProbe, RemoteRepository, SshHost};
 use crate::core::remote_device_key::{self, DeviceKeyInfo};
 use crate::core::remote_local_keys::{self, LocalSshIdentity};
-use tauri::Manager;
 
 #[tauri::command]
 pub fn list_ssh_hosts() -> Result<Vec<SshHost>, String> {
@@ -51,11 +50,7 @@ pub fn remote_open_repo(host: String, path: String) -> Result<RemoteRepository, 
 /// use. Returns only public material - see `core::remote_device_key`.
 #[tauri::command]
 pub fn ensure_mobile_device_key(app: tauri::AppHandle) -> Result<DeviceKeyInfo, String> {
-  let dir = app
-    .path()
-    .app_local_data_dir()
-    .map_err(|e| format!("failed to resolve app local data dir: {e}"))?;
-  remote_device_key::ensure_device_key(&dir)
+  remote_device_key::ensure_device_key(&app)
 }
 
 #[cfg(test)]

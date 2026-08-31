@@ -14,6 +14,7 @@
     "dialog:default",
     "dialog:allow-open",
     "log:default",
-    "deep-link:default"
+    "deep-link:default",
+    "keystore:default"
   ]
 }

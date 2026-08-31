@@ -131,12 +131,17 @@ Done in this delivery:
 
 - Authenticate to the control plane (reuses the existing Supabase auth session - no mobile-specific work needed).
 - Generate and persist a per-device ed25519 keypair (`core::remote_device_key`, `ensure_mobile_device_key` command, `ensureMobileDeviceKey()`), since mobile has no `~/.ssh` identities to pick from.
+- Store that private key in the OS-native keystore/keychain rather than app-local disk, via [`tauri-plugin-keystore`](https://github.com/impierce/tauri-plugin-keystore) (Android Keystore / iOS Keychain), gated on the device having biometrics enrolled via `tauri-plugin-biometric`. Both plugins are Rust-only integrations here (`core::remote_device_key::mobile_storage`) - the private key never crosses the Tauri IPC boundary to JS.
 - Register the device public key with the control plane (`registerClientKey`, wired to the previously-unused `register_client_key` edge function action).
 - Obtain a short-lived managed-instance certificate (`issueCertificate`, wired to `issue_certificate`).
 - Verify the pinned host key and connect with the native (russh) SSH library - reused as-is from the existing transport; the certificate response's `endpoint.host_keys` feeds the same `HostKeyVerifier` desktop uses.
 - Execute repository inspection (`ProbeRepo` over `dispatchOverSsh`) and display structured errors - `RemoteConnectPanel` in `MobileShell`.
 
-Open item before this can ship as more than a prototype: the device private key is currently written to the app's local data directory with owner-only file permissions where the OS supports them (see `core::remote_device_key` doc comment). That is not yet the platform-protected storage (Android Keystore / iOS Keychain or Secure Enclave) the PRD's goals require, and Tauri has no first-party plugin for that today. Closing this gap - via a small native plugin or `tauri-plugin-stronghold` if it proves suitable for both mobile targets - is required before Phase 2 is more than a connectivity prototype.
+Open items before this can ship as more than a prototype:
+
+- `tauri-plugin-keystore` is pre-1.0 (`2.1.0-alpha.1` on crates.io) and its own desktop fallback hardcodes an unrelated identity and `unwrap()`s every error - real reasons desktop intentionally does not use it (see `core::remote_device_key` module docs) and mobile's usage should be re-audited against newer releases before shipping.
+- Neither this plugin nor the biometric gate has been exercised on a real device or emulator - this sandbox has no Android SDK/NDK or Xcode, so the mobile-only code path (`#[cfg(mobile)]`) has been reviewed and its shared helpers unit-tested, but not built or run for an actual mobile target. First real verification should happen on-device via `npm run tauri:android:dev` / `tauri:ios:dev`.
+- No UI path yet for the "biometrics not set up" error `require_biometrics` returns - `RemoteConnectPanel` currently surfaces it as the same generic connection error as everything else in the flow.
 
 ### Phase 3: Read-only review
 
