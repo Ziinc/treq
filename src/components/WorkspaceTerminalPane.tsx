@@ -3,7 +3,7 @@ import { type ConsolidatedTerminalHandle } from "./ConsolidatedTerminal";
 import { ptyClose } from "../lib/api";
 import { type ClaudeSessionData } from "./terminal/types";
 import { WorkspaceTerminalPaneView } from "./WorkspaceTerminalPaneView";
-import { buildWorkspaceGroups } from "./workspace-terminal-pane/buildWorkspaceGroups";
+import { resolveTerminalWorkspace } from "./workspace-terminal-pane/resolveTerminalWorkspace";
 import { useScrollContainerWidth } from "./workspace-terminal-pane/useScrollContainerWidth";
 import { useScrollTerminalIntoView } from "./workspace-terminal-pane/useScrollTerminalIntoView";
 import { useTerminalPaneHeightResize } from "./workspace-terminal-pane/useTerminalPaneHeightResize";
@@ -430,23 +430,34 @@ const WorkspaceTerminalPaneInner = ({
     ],
   );
 
-  const workspaceGroups = buildWorkspaceGroups(allTerminals, claudeSessions);
+  const terminals = allTerminals.map((terminal) => ({
+    terminal,
+    workspace: resolveTerminalWorkspace(terminal, {
+      claudeSessions,
+      workspaceBranchByPath,
+      currentBranch,
+    }),
+  }));
 
-  // Scroll to workspace group and focus first terminal when workingDirectory changes
+  // Scroll to a terminal in the selected workspace when workingDirectory changes
   useEffect(() => {
     if (collapsed || !scrollContainerRef.current) return;
-    const matchingGroup = workspaceGroups.find(
-      (g) => g.workspaceKey === workingDirectory,
+    const matching = terminals.find(
+      ({ workspace }) => workspace.workspaceKey === workingDirectory,
     );
-    if (!matchingGroup || matchingGroup.terminals.length === 0) return;
+    if (!matching) return;
 
-    // Scroll the group element into view
+    const terminalId =
+      matching.terminal.type === "shell"
+        ? matching.terminal.data.id
+        : `claude-${matching.terminal.data.sessionId}`;
+
     requestAnimationFrame(() => {
-      const groupEl = scrollContainerRef.current?.querySelector(
-        `[data-workspace-group="${CSS.escape(matchingGroup.workspaceKey)}"]`,
+      const el = scrollContainerRef.current?.querySelector(
+        `[data-terminal-id="${CSS.escape(terminalId)}"]`,
       );
-      if (groupEl) {
-        groupEl.scrollIntoView({
+      if (el) {
+        el.scrollIntoView({
           behavior: "smooth",
           block: "nearest",
           inline: "start",
@@ -454,12 +465,10 @@ const WorkspaceTerminalPaneInner = ({
       }
     });
 
-    // Set the first terminal in the group as active
-    const [firstTerminal] = matchingGroup.terminals;
-    if (firstTerminal.type === "shell") {
-      setActivePtySessionId(firstTerminal.data.id);
+    if (matching.terminal.type === "shell") {
+      setActivePtySessionId(matching.terminal.data.id);
     } else {
-      setActivePtySessionId(firstTerminal.data.ptySessionId);
+      setActivePtySessionId(matching.terminal.data.ptySessionId);
     }
   }, [workingDirectory]);
 
@@ -478,10 +487,9 @@ const WorkspaceTerminalPaneInner = ({
       setCollapsed={setCollapsed}
       setMaximized={setMaximized}
       scrollContainerRef={scrollContainerRef}
-      workspaceGroups={workspaceGroups}
+      terminals={terminals}
       containerWidth={containerWidth}
       onNavigateToWorkspace={onNavigateToWorkspace}
-      currentBranch={currentBranch}
       remoteHost={remoteHost}
       activePtySessionId={activePtySessionId}
       setActivePtySessionId={setActivePtySessionId}

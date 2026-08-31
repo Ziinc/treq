@@ -254,4 +254,35 @@ describe("WorkspaceTerminalPane integration", () => {
       behavior: "smooth",
     });
   });
+
+  it("puts the workspace name on each terminal header instead of grouping", async () => {
+    const { workspace } = await setupWorkspace("feat/terminal-header-label");
+
+    render(<Dashboard />);
+    await user.click(await findSidebarBranchElement(workspace.branch_name));
+    await screen.findByTestId("workspace-terminal-pane");
+
+    await user.keyboard("{Meta>}]{/Meta}");
+    const agentPanel = await waitFor(() => {
+      const el = document.querySelector('[data-terminal-id^="claude-"]');
+      expect(el).not.toBeNull();
+      return el as HTMLElement;
+    });
+
+    await user.keyboard("{Meta>}\\{/Meta}");
+    const shellPanel = await waitFor(() => {
+      const el = document.querySelector('[data-terminal-id^="shell-"]');
+      expect(el).not.toBeNull();
+      return el as HTMLElement;
+    });
+
+    expect(document.querySelector("[data-workspace-group]")).toBeNull();
+    expect(
+      within(agentPanel).getByTestId("terminal-workspace-label"),
+    ).toHaveTextContent("feat/terminal-header-label");
+    expect(
+      within(shellPanel).getByTestId("terminal-workspace-label"),
+    ).toHaveTextContent("feat/terminal-header-label");
+    expect(within(shellPanel).getByText("Shell")).toBeInTheDocument();
+  });
 });

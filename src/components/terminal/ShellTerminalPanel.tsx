@@ -14,6 +14,7 @@ import { cn } from "../../lib/utils";
 import { getTreqBinDir, ptyWrite } from "../../lib/api";
 import { type ShellTerminalData, type TerminalRefsMap } from "./types";
 import { TerminalSendPreviews } from "./TerminalSendPreviews";
+import { TerminalWorkspaceLabel } from "./TerminalWorkspaceLabel";
 
 interface ShellTerminalPanelProps {
   terminalData: ShellTerminalData;
@@ -30,6 +31,9 @@ interface ShellTerminalPanelProps {
   onTerminalIdle?: () => void;
   terminalRefs: React.MutableRefObject<TerminalRefsMap>;
   width?: number | null;
+  minWidth?: number;
+  workspaceName: string;
+  onNavigateToWorkspace?: () => void;
 }
 
 export const ShellTerminalPanel = ({
@@ -47,6 +51,9 @@ export const ShellTerminalPanel = ({
   onTerminalIdle,
   terminalRefs,
   width,
+  minWidth,
+  workspaceName,
+  onNavigateToWorkspace,
 }: ShellTerminalPanelProps) => {
   const isHidden = collapsed;
   const { data: binDir } = useSWR(
@@ -64,6 +71,7 @@ export const ShellTerminalPanel = ({
       )}
       style={{
         width: width != null ? width : undefined,
+        minWidth,
       }}
       onMouseDown={onFocus}
     >
@@ -78,6 +86,10 @@ export const ShellTerminalPanel = ({
         <div className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground min-w-0">
           <Terminal className="w-3 h-3 flex-shrink-0" />
           <span className="truncate">Shell</span>
+          <TerminalWorkspaceLabel
+            workspaceName={workspaceName}
+            onNavigate={onNavigateToWorkspace}
+          />
         </div>
         {canClose && (
           <TooltipProvider>

@@ -14,7 +14,6 @@ import {
 	openRepo,
 } from "../../../test/utils";
 import { createWorkspace, getWorkspaces } from "../../../src/lib/api";
-import { getFullWorkspacePath } from "../../../src/lib/utils";
 import { render, screen, waitFor } from "../../../test/test-utils";
 import { Dashboard } from "../../../src/components/Dashboard";
 import { captureDocument } from "../capture";
@@ -29,7 +28,6 @@ it("deleting a workspace closes its shell and agent terminals", async () => {
 	const workspaces = await getWorkspaces(repoPath);
 	const workspace = workspaces.find((w) => w.branch_name === BRANCH_NAME);
 	if (!workspace) throw new Error(`workspace ${BRANCH_NAME} not found`);
-	const workspaceKey = getFullWorkspacePath(workspace);
 
 	vi.mocked(ask).mockResolvedValue(true);
 
@@ -60,7 +58,10 @@ it("deleting a workspace closes its shell and agent terminals", async () => {
 
 	await waitFor(() => {
 		expect(
-			document.querySelector(`[data-workspace-group="${workspaceKey}"]`),
+			document.querySelector('[data-terminal-id^="claude-"]'),
+		).not.toBeNull();
+		expect(
+			document.querySelector('[data-terminal-id^="shell-"]'),
 		).not.toBeNull();
 	});
 
@@ -85,9 +86,6 @@ it("deleting a workspace closes its shell and agent terminals", async () => {
 	});
 
 	await waitFor(() => {
-		expect(
-			document.querySelector(`[data-workspace-group="${workspaceKey}"]`),
-		).toBeNull();
 		expect(
 			document.querySelector('[data-terminal-id^="claude-"]'),
 		).toBeNull();
