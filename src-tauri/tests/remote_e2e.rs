@@ -458,39 +458,54 @@ async fn delete_instance_removes_it_from_provider_inventory() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-async fn provisions_across_every_region_and_size_preset() {
+async fn provisions_across_every_region_at_the_base_allocation() {
   let cfg = require_e2e!();
   if std::env::var("TREQ_REMOTE_E2E_FULL_MATRIX").as_deref() != Ok("1") {
     eprintln!(
-      "[remote-e2e] SKIP provisions_across_every_region_and_size_preset: \
-       set TREQ_REMOTE_E2E_FULL_MATRIX=1 to run the full region x size matrix \
-       (this creates and tears down one instance per combination)."
+      "[remote-e2e] SKIP provisions_across_every_region_at_the_base_allocation: \
+       set TREQ_REMOTE_E2E_FULL_MATRIX=1 to run the full region matrix \
+       (this creates and tears down one instance per region)."
     );
     return;
   }
   let provider = SpritesProvider::new(cfg).expect("failed to build provider");
 
+  // PRD "Resource quotas": every managed instance is provisioned at the
+  // fixed base allocation (5 GB disk / 1 vCPU / 2 GB RAM) regardless of
+  // requested `size_preset` in this delivery - add-on purchase beyond the
+  // base allocation does not exist yet. `size_preset` still selects a
+  // region-independent request shape, but the vendor guest spec the
+  // adapter actually sends is always the base allocation (see
+  // `SpritesProvider::size_to_guest`), so a real-API round trip should
+  // always come back reporting the base preset regardless of what was
+  // requested.
   for region in [
     RegionCode::UsEast,
     RegionCode::UsWest,
     RegionCode::EuWest,
     RegionCode::ApSoutheast,
   ] {
-    for size in [SizePreset::Small, SizePreset::Medium, SizePreset::Large] {
+    for requested in [SizePreset::Small, SizePreset::Medium, SizePreset::Large] {
       let request = CreateInstanceRequest {
         owner_user_id: e2e_owner_user_id(),
         region,
-        size_preset: size,
+        size_preset: requested,
         manifest_version: 1,
         idempotency_key: e2e_idempotency_key(),
       };
       let instance = provider
         .create_instance(request)
         .await
-        .unwrap_or_else(|err| panic!("create_instance failed for {region:?}/{size:?}: {err:?}"));
+        .unwrap_or_else(|err| {
+          panic!("create_instance failed for {region:?}/{requested:?}: {err:?}")
+        });
       let _cleanup = InstanceCleanupGuard::new(&provider, instance.provider_resource_id.clone());
       assert_eq!(instance.region, region);
-      assert_eq!(instance.size_preset, size);
+      assert_eq!(
+        instance.size_preset,
+        treq_lib::core::remote_provider::BASE_ALLOCATION.preset,
+        "requested {requested:?} but the base allocation must always be what's actually provisioned"
+      );
     }
   }
 }

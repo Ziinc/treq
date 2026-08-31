@@ -85,13 +85,21 @@ pub struct SizePresetInfo {
 
 /// The full, ordered list of size presets offered to users. Order is the
 /// display order (smallest to largest).
+///
+/// PRD "Resource quotas": every user's managed instance starts at (and, in
+/// this delivery, is capped at) a fixed base allocation of 5 GB disk / 1
+/// vCPU / 2 GB RAM. `Small` is defined to be exactly that base allocation.
+/// `Medium` and `Large` remain listed for display/future use but are not
+/// purchasable yet (see [`BASE_ALLOCATION`] and [`is_base_allocation`]) —
+/// selecting them is rejected at provisioning time rather than silently
+/// downgraded, since add-on purchase is explicitly out of scope for now.
 pub const SIZE_PRESETS: &[SizePresetInfo] = &[
   SizePresetInfo {
     preset: SizePreset::Small,
     label: "Small",
     vcpus: 1,
     memory_gb: 2,
-    storage_gb: 20,
+    storage_gb: 5,
   },
   SizePresetInfo {
     preset: SizePreset::Medium,
@@ -108,6 +116,73 @@ pub const SIZE_PRESETS: &[SizePresetInfo] = &[
     storage_gb: 80,
   },
 ];
+
+/// The fixed per-user base resource allocation included in the plan (PRD
+/// "Resource quotas", Goal 3, acceptance criterion 2). This is the only
+/// allocation enforced/available in this delivery; purchasing additional
+/// disk or compute as a plan add-on is explicitly deferred.
+pub const BASE_ALLOCATION: SizePresetInfo = SIZE_PRESETS[0];
+
+/// Base disk quota in bytes (5 GB), the ongoing-enforcement threshold used
+/// both at provisioning and by write-triggering mutations on the instance.
+pub const BASE_DISK_QUOTA_BYTES: u64 = BASE_ALLOCATION.storage_gb as u64 * 1024 * 1024 * 1024;
+
+/// True when `preset` is within the base allocation this delivery enforces.
+/// Only `Small` (== `BASE_ALLOCATION`) qualifies; `Medium`/`Large` would
+/// require a plan add-on that does not exist yet.
+pub fn is_base_allocation(preset: SizePreset) -> bool {
+  preset == BASE_ALLOCATION.preset
+}
+
+/// Distinct, structured error for the base disk quota being met or
+/// exceeded (PRD "Resource quotas": "the failure must be a distinct,
+/// structured readiness or mutation error so the UI can explain the quota
+/// rather than surfacing a generic filesystem or provider failure"). The
+/// `Display` impl renders as `disk_quota_exceeded: ...`, matching the
+/// `<code>: <message>` convention `RemoteCommandError`/CLI error bodies use
+/// elsewhere so the code survives transport mapping intact.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DiskQuotaExceededError {
+  pub used_bytes: u64,
+  pub quota_bytes: u64,
+}
+
+impl std::fmt::Display for DiskQuotaExceededError {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(
+      f,
+      "disk_quota_exceeded: used {} bytes exceeds the base allocation quota of {} bytes",
+      self.used_bytes, self.quota_bytes
+    )
+  }
+}
+
+impl std::error::Error for DiskQuotaExceededError {}
+
+/// Checks `used_bytes` against an arbitrary `quota_bytes` ceiling. Kept
+/// separate from [`check_disk_quota`] so tests can exercise the boundary
+/// without needing to actually write [`BASE_DISK_QUOTA_BYTES`] (5 GB) worth
+/// of data to disk.
+pub fn check_disk_quota_against(
+  used_bytes: u64,
+  quota_bytes: u64,
+) -> Result<(), DiskQuotaExceededError> {
+  if used_bytes >= quota_bytes {
+    Err(DiskQuotaExceededError {
+      used_bytes,
+      quota_bytes,
+    })
+  } else {
+    Ok(())
+  }
+}
+
+/// Checks `used_bytes` against the base disk quota (5 GB). This is the
+/// ongoing-enforcement check the PRD's "Expanded readiness" list and
+/// write-triggering mutations both use.
+pub fn check_disk_quota(used_bytes: u64) -> Result<(), DiskQuotaExceededError> {
+  check_disk_quota_against(used_bytes, BASE_DISK_QUOTA_BYTES)
+}
 
 /// A selectable provisioning region. Region codes are Treq-defined identifiers
 /// that the adapter maps to provider-specific region names.
@@ -304,6 +379,39 @@ mod tests {
   fn size_presets_are_defined_smallest_first() {
     assert_eq!(SIZE_PRESETS.first().unwrap().preset, SizePreset::Small);
     assert!(SIZE_PRESETS.windows(2).all(|w| w[0].vcpus <= w[1].vcpus));
+  }
+
+  #[test]
+  fn base_allocation_matches_the_prd_fixed_quota() {
+    assert_eq!(BASE_ALLOCATION.preset, SizePreset::Small);
+    assert_eq!(BASE_ALLOCATION.vcpus, 1);
+    assert_eq!(BASE_ALLOCATION.memory_gb, 2);
+    assert_eq!(BASE_ALLOCATION.storage_gb, 5);
+    assert_eq!(BASE_DISK_QUOTA_BYTES, 5 * 1024 * 1024 * 1024);
+  }
+
+  #[test]
+  fn only_small_preset_is_within_the_base_allocation() {
+    assert!(is_base_allocation(SizePreset::Small));
+    assert!(!is_base_allocation(SizePreset::Medium));
+    assert!(!is_base_allocation(SizePreset::Large));
+  }
+
+  #[test]
+  fn disk_quota_check_passes_under_quota_and_fails_at_or_over_it() {
+    assert!(check_disk_quota_against(1, 100).is_ok());
+    assert!(check_disk_quota_against(99, 100).is_ok());
+    let err = check_disk_quota_against(100, 100).unwrap_err();
+    assert_eq!(err.used_bytes, 100);
+    assert_eq!(err.quota_bytes, 100);
+    assert!(check_disk_quota_against(101, 100).is_err());
+  }
+
+  #[test]
+  fn disk_quota_error_renders_a_distinct_structured_code() {
+    let err = check_disk_quota(BASE_DISK_QUOTA_BYTES).unwrap_err();
+    let rendered = err.to_string();
+    assert!(rendered.starts_with("disk_quota_exceeded: "));
   }
 
   #[test]
