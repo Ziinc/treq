@@ -92,3 +92,140 @@ fn test_run_workflow_runs_all_jobs() {
   assert_eq!(results.len(), 2);
   assert!(results.iter().all(|r| r.success));
 }
+
+fn workspace_log_descriptions(repo_path: &str, workspace_id: i64) -> Vec<String> {
+  treq_lib::core::list_commits(repo_path, Some(workspace_id), false, None, None)
+    .expect("list_commits failed")
+    .commits
+    .into_iter()
+    .map(|c| c.description)
+    .collect()
+}
+
+#[test]
+fn passing_check_creates_autosave_commit_for_dirty_workspace() {
+  let repo = TestRepo::new().expect("Failed to create test repo");
+  repo
+    .write_workflow("ci.yaml", PASSING_WORKFLOW)
+    .expect("Failed to write workflow");
+  treq_lib::local_db::trust_repo(&repo.repo_path).expect("Failed to trust repo");
+  let workspace = repo
+    .create_workspace_simple("feat/autosave-pass")
+    .expect("Failed to create workspace");
+  let ws_path = repo.workspace_full_path(&workspace);
+  TestRepo::write_workspace_file(&ws_path, "good.txt", "checked\n").expect("Failed to write file");
+
+  let result =
+    core::run_workflow_job_sync(&repo.repo_path, "ci.yaml", "greet", workspace.id, &ws_path)
+      .expect("Failed to run job");
+  assert!(result.success);
+
+  let descriptions = workspace_log_descriptions(&repo.repo_path, workspace.id);
+  assert!(
+    descriptions
+      .iter()
+      .any(|d| d.starts_with("treq-autosave: ci.yaml")),
+    "expected an autosave commit after a passing check, got: {descriptions:?}"
+  );
+}
+
+#[test]
+fn failing_check_does_not_create_autosave_commit() {
+  let repo = TestRepo::new().expect("Failed to create test repo");
+  repo
+    .write_workflow("ci.yaml", FAILING_WORKFLOW)
+    .expect("Failed to write workflow");
+  treq_lib::local_db::trust_repo(&repo.repo_path).expect("Failed to trust repo");
+  let workspace = repo
+    .create_workspace_simple("feat/autosave-fail")
+    .expect("Failed to create workspace");
+  let ws_path = repo.workspace_full_path(&workspace);
+  TestRepo::write_workspace_file(&ws_path, "bad.txt", "unchecked\n").expect("Failed to write file");
+
+  let result =
+    core::run_workflow_job_sync(&repo.repo_path, "ci.yaml", "check", workspace.id, &ws_path)
+      .expect("Failed to run job");
+  assert!(!result.success);
+
+  let descriptions = workspace_log_descriptions(&repo.repo_path, workspace.id);
+  assert!(
+    descriptions.iter().all(|d| !d.contains("treq-autosave:")),
+    "failing check must not autosave, got: {descriptions:?}"
+  );
+}
+
+#[test]
+fn passing_check_skips_autosave_when_working_copy_is_clean() {
+  let repo = TestRepo::new().expect("Failed to create test repo");
+  repo
+    .write_workflow("ci.yaml", PASSING_WORKFLOW)
+    .expect("Failed to write workflow");
+  treq_lib::local_db::trust_repo(&repo.repo_path).expect("Failed to trust repo");
+  let workspace = repo
+    .create_workspace_simple("feat/autosave-clean")
+    .expect("Failed to create workspace");
+  let ws_path = repo.workspace_full_path(&workspace);
+
+  let result =
+    core::run_workflow_job_sync(&repo.repo_path, "ci.yaml", "greet", workspace.id, &ws_path)
+      .expect("Failed to run job");
+  assert!(result.success);
+
+  let descriptions = workspace_log_descriptions(&repo.repo_path, workspace.id);
+  assert!(
+    descriptions.iter().all(|d| !d.contains("treq-autosave:")),
+    "clean working copy must not create an autosave, got: {descriptions:?}"
+  );
+}
+
+#[test]
+fn manual_commit_drops_autosave_commits_and_keeps_the_checked_changes() {
+  let repo = TestRepo::new().expect("Failed to create test repo");
+  repo
+    .write_workflow("ci.yaml", PASSING_WORKFLOW)
+    .expect("Failed to write workflow");
+  treq_lib::local_db::trust_repo(&repo.repo_path).expect("Failed to trust repo");
+  let workspace = repo
+    .create_workspace_simple("feat/autosave-drop")
+    .expect("Failed to create workspace");
+  let ws_path = repo.workspace_full_path(&workspace);
+  TestRepo::write_workspace_file(&ws_path, "good.txt", "first\n").expect("Failed to write file");
+
+  let first =
+    core::run_workflow_job_sync(&repo.repo_path, "ci.yaml", "greet", workspace.id, &ws_path)
+      .expect("Failed to run first job");
+  assert!(first.success);
+
+  TestRepo::write_workspace_file(&ws_path, "good.txt", "second\n").expect("Failed to write file");
+  let second =
+    core::run_workflow_job_sync(&repo.repo_path, "ci.yaml", "greet", workspace.id, &ws_path)
+      .expect("Failed to run second job");
+  assert!(second.success);
+
+  let before = workspace_log_descriptions(&repo.repo_path, workspace.id);
+  let autosave_count = before
+    .iter()
+    .filter(|d| d.contains("treq-autosave:"))
+    .count();
+  assert!(
+    autosave_count >= 1,
+    "expected at least one autosave before the manual commit, got: {before:?}"
+  );
+
+  treq_lib::core::commit_workspace(&repo.repo_path, workspace.id, "ship the good changes")
+    .expect("manual commit failed");
+
+  let after = workspace_log_descriptions(&repo.repo_path, workspace.id);
+  assert!(
+    after.iter().any(|d| d.contains("ship the good changes")),
+    "manual commit should remain, got: {after:?}"
+  );
+  assert!(
+    after.iter().all(|d| !d.contains("treq-autosave:")),
+    "autosaves must be dropped after a manual commit, got: {after:?}"
+  );
+
+  let contents = std::fs::read_to_string(std::path::Path::new(&ws_path).join("good.txt"))
+    .expect("failed to read saved file");
+  assert_eq!(contents, "second\n");
+}

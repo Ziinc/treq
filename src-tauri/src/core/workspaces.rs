@@ -3049,6 +3049,8 @@ where
 
   let result = jj::jj_commit(&workspace_root, message)
     .map_err(|e| format!("Failed to create commit: {}", e))?;
+  // Check-pass autosaves are checkpoints. Fold them away once the user commits.
+  let _ = jj::jj_drop_autosave_ancestors(&workspace_root);
   // Keep branch history free of empty commits; best-effort, never fails the commit.
   let _ = jj::jj_abandon_empty_commits(&workspace_root, &target_branch);
   if !committed_branch.is_empty() {
