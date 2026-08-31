@@ -44,7 +44,9 @@ describe("RemoteReviewPanel change-marker watch", () => {
 
   it("refreshes remote review data when the operation marker changes underneath the client", async () => {
     let marker = "op-1";
-    mockDispatch.mockImplementation((_endpoint, request) => respond(request, marker));
+    mockDispatch.mockImplementation((_endpoint, request) =>
+      respond(request, marker),
+    );
 
     render(
       <RemoteReviewPanel
