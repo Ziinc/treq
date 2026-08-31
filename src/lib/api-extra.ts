@@ -588,3 +588,32 @@ export const remoteDispatchOverSsh = <T = unknown>(
 // eslint-disable-next-line local/no-unused-exported-ts-functions, local/require-tauri-api-exports-used
 export const remoteTransportMetrics = <T = unknown>(): Promise<T> =>
   invoke("remote_transport_metrics");
+
+/**
+ * Forces the native SSH transport's hard cutoff for `endpointId` (PRD "Hard
+ * cutoff on revocation or expiry"): tears down open exec/PTY channels and
+ * refuses further commands until {@link remoteClearCutoff} is called. Called
+ * by the certificate-renewal loop in `src/lib/remote-cert-lifecycle.ts`.
+ */
+export const remoteForceCutoff = (
+  endpointId: string,
+  reason: string,
+): Promise<void> => invoke("remote_force_cutoff", { endpointId, reason });
+
+/**
+ * Clears a previously forced cutoff after the user reauthenticates and a
+ * fresh certificate is issued through the normal registration and issuance
+ * flow. Used by `src/stores/remoteCutoffStore.ts`.
+ */
+export const remoteClearCutoff = (endpointId: string): Promise<void> =>
+  invoke("remote_clear_cutoff", { endpointId });
+
+/**
+ * Returns the current cutoff reason for `endpointId`, if any - the
+ * synchronous counterpart to the `remote://cutoff` event, for a component
+ * that wants to check state on mount.
+ */
+// eslint-disable-next-line local/no-unused-exported-ts-functions, local/require-tauri-api-exports-used
+export const remoteCutoffReason = (
+  endpointId: string,
+): Promise<string | null> => invoke("remote_cutoff_reason", { endpointId });

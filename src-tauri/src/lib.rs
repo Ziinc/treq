@@ -42,6 +42,8 @@ mod e2e_test_helpers;
 mod tauri_test_bridge;
 
 #[cfg(feature = "tauri-test")]
+use crate::commands::CutoffReasonDto;
+#[cfg(feature = "tauri-test")]
 use crate::core::remote::TreqCommandRequest;
 #[cfg(feature = "tauri-test")]
 use crate::core::remote_control_plane::SshEndpoint;
@@ -839,6 +841,9 @@ pub fn run() {
             commands::remote_dispatch_local,
             commands::remote_dispatch_over_ssh,
             commands::remote_transport_metrics,
+            commands::remote_force_cutoff,
+            commands::remote_clear_cutoff,
+            commands::remote_cutoff_reason,
             commands::set_window_repo_path,
             commands::get_window_repo_path,
             commands::rebase_home_repo_branch,

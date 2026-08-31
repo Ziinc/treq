@@ -256,6 +256,12 @@ export interface RevokeClientKeyRequest {
 export interface IssueCertificateRequest {
   instance_id: string;
   key_id: string;
+  /**
+   * Set by the silent-renewal loop (`src/lib/remote-cert-lifecycle.ts`) so
+   * the control plane can label the resulting audit event as a renewal
+   * rather than first issuance. The signing logic is identical either way.
+   */
+  renewal?: boolean;
 }
 
 export interface IssueCertificateResponse {

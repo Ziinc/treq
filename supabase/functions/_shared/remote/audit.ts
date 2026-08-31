@@ -27,6 +27,17 @@ export type RemoteAuditEventType =
   | "client_key_revoked"
   | "certificate_issued"
   | "certificate_issue_failed"
+  // Silent renewal while the session is active (PRD "SSH identity and
+  // certificates" > "Silent renewal while the session is active"): the same
+  // signing path as the initial issuance, distinguished here so a renewal
+  // shows up distinctly from first issuance in the audit trail.
+  | "certificate_renewed"
+  | "certificate_renewal_failed"
+  // Hard cutoff on revocation or expiry (PRD "Hard cutoff on revocation or
+  // expiry"): the desktop client reports a forced cutoff so it is
+  // correlatable in the same audit trail as the revocation or lapse that
+  // caused it, even though the cutoff itself happens client-side.
+  | "certificate_cutoff_forced"
   | "authorized_key_installed"
   | "authorized_key_removed"
   | "ca_trust_installed"
