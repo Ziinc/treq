@@ -296,6 +296,455 @@ pub enum FileRevision {
   Parent,
 }
 
+// ---------------------------------------------------------------------------
+// Retrying after network loss (PRD "Structured command protocol" >
+// "Retrying after network loss")
+// ---------------------------------------------------------------------------
+//
+// A network failure while a mutating command is in flight does not tell the
+// client whether the command reached the VM, ran, or completed. This section
+// classifies every `TreqCommandRequest` as a mutation or a pure read, and
+// gives every mutation covered by "Remote mutation coverage" a verification
+// recipe: a typed read command plus a check of its result that decides
+// whether the mutation's effect is already observable in VM state. Pure
+// reads are always safe to retry and are never classified as mutations.
+
+impl TreqCommandRequest {
+  /// True for every workspace, commit, conflict, Git, and agent-lifecycle
+  /// mutation listed under "Remote mutation coverage"; false for every
+  /// read/inspect command, which the PRD says is "always safe to retry".
+  pub fn is_mutation(&self) -> bool {
+    match self {
+      // -- Pure reads: always safe to retry -----------------------------------
+      Self::InspectRepository { .. }
+      | Self::RepositoryStatus { .. }
+      | Self::ListBranches { .. }
+      | Self::ListWorkspaces { .. }
+      | Self::InspectWorkspace { .. }
+      | Self::ListChanges { .. }
+      | Self::DiffFile { .. }
+      | Self::ReadFile { .. }
+      | Self::ListCommits { .. }
+      | Self::ListConflicts { .. }
+      | Self::ProbeRepo { .. }
+      | Self::AgentStatus { .. }
+      | Self::AgentLogs { .. }
+      | Self::WorkspaceChangeMarker { .. } => false,
+      // -- Mutations -----------------------------------------------------------
+      Self::CloneRepo { .. }
+      | Self::InitRepo { .. }
+      | Self::CreateWorkspace { .. }
+      | Self::RenameWorkspace { .. }
+      | Self::UpdateWorkspace { .. }
+      | Self::DeleteWorkspace { .. }
+      | Self::MoveWorkspaceChanges { .. }
+      | Self::RebaseWorkspace { .. }
+      | Self::RestoreFile { .. }
+      | Self::PatchFile { .. }
+      | Self::CreateCommit { .. }
+      | Self::DescribeCommit { .. }
+      | Self::SplitCommit { .. }
+      | Self::MoveCommit { .. }
+      | Self::AbandonCommit { .. }
+      | Self::ResolveConflict { .. }
+      | Self::GitFetch { .. }
+      | Self::GitBookmarkTrack { .. }
+      | Self::GitPush { .. }
+      | Self::AgentStart { .. }
+      | Self::AgentInput { .. }
+      | Self::AgentStop { .. } => true,
+    }
+  }
+}
+
+/// The result of checking observable VM state against a mutation's expected
+/// effect after a network failure interrupted the original attempt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MutationVerificationOutcome {
+  /// State shows the mutation already applied: the client treats it as
+  /// complete and does not resend.
+  AlreadyApplied,
+  /// State shows the mutation did not apply: the client may retry, using the
+  /// same idempotency key.
+  NotApplied,
+  /// State is ambiguous: the client surfaces this to the user rather than
+  /// guessing.
+  Ambiguous,
+}
+
+/// A verification recipe for one in-flight mutation: a typed read command
+/// safe to retry, plus a function that inspects its JSON result and decides
+/// whether the mutation already landed. Built once per mutation attempt (it
+/// closes over the mutation's own arguments, e.g. the branch name a
+/// `CreateWorkspace` call was trying to create) so the check can compare
+/// "what we asked for" against "what state now shows".
+pub struct MutationVerification {
+  pub read_request: TreqCommandRequest,
+  pub check: Box<dyn Fn(&serde_json::Value) -> MutationVerificationOutcome + Send + Sync>,
+}
+
+fn json_str<'a>(value: &'a serde_json::Value, field: &str) -> Option<&'a str> {
+  value.get(field).and_then(|v| v.as_str())
+}
+
+/// Builds the verification recipe for `request`, when one exists. Every
+/// mutation under "Remote mutation coverage" that this module currently
+/// implements has one; a mutation with no meaningful state to observe (e.g.
+/// `RestoreFile`, whose "effect" is the absence of a diff a read command
+/// would need workspace-specific context to reconstruct reliably) returns
+/// `None`, and the caller treats that as always-ambiguous rather than
+/// guessing a false-positive check.
+pub fn verification_for(request: &TreqCommandRequest) -> Option<MutationVerification> {
+  match request {
+    TreqCommandRequest::CreateWorkspace {
+      repo, branch_name, ..
+    } => {
+      let branch_name = branch_name.clone();
+      Some(MutationVerification {
+        read_request: TreqCommandRequest::ListWorkspaces { repo: repo.clone() },
+        check: Box::new(move |value| {
+          let Some(items) = value.as_array() else {
+            return MutationVerificationOutcome::Ambiguous;
+          };
+          let found = items
+            .iter()
+            .any(|item| json_str(item, "branch_name") == Some(branch_name.as_str()));
+          if found {
+            MutationVerificationOutcome::AlreadyApplied
+          } else {
+            MutationVerificationOutcome::NotApplied
+          }
+        }),
+      })
+    }
+    TreqCommandRequest::DeleteWorkspace { repo, workspace } => {
+      let workspace = workspace.clone();
+      Some(MutationVerification {
+        read_request: TreqCommandRequest::ListWorkspaces { repo: repo.clone() },
+        check: Box::new(move |value| {
+          let Some(items) = value.as_array() else {
+            return MutationVerificationOutcome::Ambiguous;
+          };
+          let still_present = items.iter().any(|item| {
+            json_str(item, "id")
+              .map(|id| id == workspace)
+              .unwrap_or(false)
+          });
+          if still_present {
+            MutationVerificationOutcome::NotApplied
+          } else {
+            MutationVerificationOutcome::AlreadyApplied
+          }
+        }),
+      })
+    }
+    TreqCommandRequest::RenameWorkspace {
+      repo,
+      workspace,
+      new_name,
+    } => {
+      let workspace = workspace.clone();
+      let new_name = new_name.clone();
+      Some(MutationVerification {
+        read_request: TreqCommandRequest::InspectWorkspace {
+          repo: repo.clone(),
+          workspace,
+        },
+        check: Box::new(move |value| {
+          match json_str(value, "title").or_else(|| json_str(value, "workspace_name")) {
+            Some(current) if current == new_name => MutationVerificationOutcome::AlreadyApplied,
+            Some(_) => MutationVerificationOutcome::NotApplied,
+            None => MutationVerificationOutcome::Ambiguous,
+          }
+        }),
+      })
+    }
+    TreqCommandRequest::CreateCommit {
+      repo,
+      workspace,
+      message,
+      ..
+    } => {
+      let message = message.clone();
+      Some(MutationVerification {
+        read_request: TreqCommandRequest::ListCommits {
+          repo: repo.clone(),
+          workspace: workspace.clone(),
+        },
+        check: Box::new(move |value| {
+          let Some(items) = value.get("commits").and_then(|v| v.as_array()) else {
+            return MutationVerificationOutcome::Ambiguous;
+          };
+          let found = items
+            .iter()
+            .any(|item| json_str(item, "description") == Some(message.as_str()));
+          if found {
+            MutationVerificationOutcome::AlreadyApplied
+          } else {
+            MutationVerificationOutcome::NotApplied
+          }
+        }),
+      })
+    }
+    TreqCommandRequest::AbandonCommit {
+      repo,
+      workspace,
+      commit,
+    } => {
+      let commit = commit.clone();
+      Some(MutationVerification {
+        read_request: TreqCommandRequest::ListCommits {
+          repo: repo.clone(),
+          workspace: Some(workspace.clone()),
+        },
+        check: Box::new(move |value| {
+          let Some(items) = value.get("commits").and_then(|v| v.as_array()) else {
+            return MutationVerificationOutcome::Ambiguous;
+          };
+          let still_present = items.iter().any(|item| {
+            json_str(item, "commit_id") == Some(commit.as_str())
+              || json_str(item, "change_id") == Some(commit.as_str())
+          });
+          if still_present {
+            MutationVerificationOutcome::NotApplied
+          } else {
+            MutationVerificationOutcome::AlreadyApplied
+          }
+        }),
+      })
+    }
+    TreqCommandRequest::ResolveConflict { repo, revision, .. } => {
+      let revision = revision.clone();
+      Some(MutationVerification {
+        read_request: TreqCommandRequest::ListConflicts {
+          repo: repo.clone(),
+          workspace: None,
+        },
+        check: Box::new(move |value| {
+          let Some(items) = value.as_array() else {
+            return MutationVerificationOutcome::Ambiguous;
+          };
+          let still_conflicted = items.iter().any(|item| {
+            item.as_str() == Some(revision.as_str())
+              || json_str(item, "path") == Some(revision.as_str())
+          });
+          if still_conflicted {
+            MutationVerificationOutcome::NotApplied
+          } else {
+            MutationVerificationOutcome::AlreadyApplied
+          }
+        }),
+      })
+    }
+    TreqCommandRequest::GitBookmarkTrack { repo, bookmark, .. } => {
+      let bookmark = bookmark.clone();
+      Some(MutationVerification {
+        read_request: TreqCommandRequest::ListBranches { repo: repo.clone() },
+        check: Box::new(move |value| {
+          let Some(items) = value.as_array() else {
+            return MutationVerificationOutcome::Ambiguous;
+          };
+          let tracked = items.iter().any(|item| {
+            json_str(item, "name") == Some(bookmark.as_str())
+              && item.get("tracked").and_then(|v| v.as_bool()) == Some(true)
+          });
+          if tracked {
+            MutationVerificationOutcome::AlreadyApplied
+          } else {
+            MutationVerificationOutcome::NotApplied
+          }
+        }),
+      })
+    }
+    TreqCommandRequest::AgentStart {
+      repo, workspace, ..
+    } => Some(MutationVerification {
+      read_request: TreqCommandRequest::AgentStatus {
+        repo: repo.clone(),
+        workspace: workspace.clone(),
+      },
+      check: Box::new(
+        move |value| match value.get("running").and_then(|v| v.as_bool()) {
+          Some(true) => MutationVerificationOutcome::AlreadyApplied,
+          Some(false) => MutationVerificationOutcome::NotApplied,
+          None => MutationVerificationOutcome::Ambiguous,
+        },
+      ),
+    }),
+    TreqCommandRequest::AgentStop {
+      repo, workspace, ..
+    } => Some(MutationVerification {
+      read_request: TreqCommandRequest::AgentStatus {
+        repo: repo.clone(),
+        workspace: workspace.clone(),
+      },
+      check: Box::new(
+        move |value| match value.get("running").and_then(|v| v.as_bool()) {
+          Some(false) => MutationVerificationOutcome::AlreadyApplied,
+          Some(true) => MutationVerificationOutcome::NotApplied,
+          None => MutationVerificationOutcome::Ambiguous,
+        },
+      ),
+    }),
+    // No reliable, cheap state check exists yet for these mutations over the
+    // typed read surface (e.g. a file restore's "effect" is the absence of a
+    // diff, which needs the same file/workspace context the mutation itself
+    // used and is easy to get subtly wrong). Rather than guess and risk a
+    // false "already applied"/"not applied" call, these fall back to
+    // `MutationVerificationOutcome::Ambiguous` in `retry_after_reconnect`.
+    _ => None,
+  }
+}
+
+/// Outcome of running a mutation with verify-before-retry semantics after a
+/// network failure. Carries enough for a Phase 6 UI to render each case from
+/// the PRD: treat-as-complete, retry-with-idempotency-key, or
+/// surface-ambiguity-to-user.
+#[derive(Debug, Clone, PartialEq)]
+pub enum MutationRetryOutcome<T> {
+  /// The mutation exec channel completed normally (no network failure, or a
+  /// retry that itself completed). Carries the fresh response.
+  Applied(T),
+  /// A network failure interrupted the exec channel, but the post-reconnect
+  /// verification read showed the mutation's effect was already observable
+  /// in VM state. The client does not resend.
+  AlreadyApplied,
+  /// A network failure interrupted the exec channel, and the post-reconnect
+  /// verification read could not determine whether the mutation applied
+  /// (the read itself failed, returned an unexpected shape, or this
+  /// mutation has no verification recipe). The client must surface this to
+  /// the user rather than guess.
+  Ambiguous { reason: String },
+}
+
+/// Reported once per verify-before-retry decision so a caller can feed it
+/// into telemetry (PRD "Client and transport telemetry": "post-reconnect
+/// state verifications before a mutation retry, and their outcome").
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PostReconnectVerification {
+  AlreadyApplied,
+  Retried,
+  Ambiguous,
+}
+
+/// Runs `request` over `pool`/`endpoint` with the PRD's verify-before-retry
+/// behavior: a network failure while the mutation was in flight (as opposed
+/// to a structured error the CLI itself returned) never triggers a blind
+/// resend. Instead, once the connection is usable again, an appropriate
+/// typed read command checks whether the mutation's effect is already
+/// observable, and only a "not applied" verdict retries — with the same
+/// idempotency key the original request carried, so a command that actually
+/// landed once on the VM is not reapplied by a late retry racing the
+/// original.
+///
+/// `on_verification` is called at most once, exactly when a network failure
+/// forced a verification read, with the decision that resulted — this is the
+/// hook a caller uses to emit the PRD's "post-reconnect state verifications
+/// ... and their outcome" telemetry.
+pub async fn retry_after_reconnect<T, F>(
+  pool: &crate::core::remote_ssh_transport::SshConnectionPool,
+  endpoint: &crate::core::remote_control_plane::SshEndpoint,
+  request: TreqCommandRequest,
+  limits: crate::core::remote_ssh_transport::ExecLimits,
+  cancellation: &crate::core::remote_ssh_transport::CancellationToken,
+  mut on_verification: F,
+) -> Result<MutationRetryOutcome<T>, RemoteCommandError>
+where
+  T: DeserializeOwned,
+  F: FnMut(PostReconnectVerification),
+{
+  debug_assert!(
+    request.is_mutation(),
+    "retry_after_reconnect is only meaningful for mutations; reads are always safe to retry directly"
+  );
+
+  match execute_remote_command::<T>(
+    pool,
+    endpoint,
+    clone_request(&request),
+    limits,
+    cancellation,
+  )
+  .await
+  {
+    Ok(value) => Ok(MutationRetryOutcome::Applied(value)),
+    // The CLI reached the VM and returned a structured application-level
+    // error (e.g. `workspace_not_found`). That is not the "did it land?"
+    // uncertainty this function exists for — the CLI told us plainly it did
+    // not run — so it is surfaced as-is rather than triggering verification.
+    Err(error @ RemoteCommandError::Command { .. }) => Err(error),
+    Err(error @ RemoteCommandError::InvalidJson(_)) => Err(error),
+    // The command was refused locally before ever reaching the network
+    // (PRD "Hard cutoff on revocation or expiry"): there is no "did it
+    // land?" uncertainty to verify, since it certainly did not run.
+    Err(error @ RemoteCommandError::CredentialCutOff { .. }) => Err(error),
+    // A transport-layer failure: the client cannot tell whether the command
+    // reached the VM, ran, or completed. Verify observable state before
+    // deciding anything.
+    Err(RemoteCommandError::Transport(transport_message)) => {
+      let Some(verification) = verification_for(&request) else {
+        on_verification(PostReconnectVerification::Ambiguous);
+        return Ok(MutationRetryOutcome::Ambiguous {
+          reason: format!(
+            "network failure during mutation ({transport_message}), and no state check is available to confirm whether it applied"
+          ),
+        });
+      };
+
+      let read_result = execute_remote_command::<serde_json::Value>(
+        pool,
+        endpoint,
+        verification.read_request,
+        limits,
+        cancellation,
+      )
+      .await;
+
+      let observed = match read_result {
+        Ok(value) => (verification.check)(&value),
+        // The verification read itself could not be completed (e.g. still
+        // reconnecting) — this is exactly the "state is ambiguous" case, not
+        // a reason to guess.
+        Err(_) => MutationVerificationOutcome::Ambiguous,
+      };
+
+      match observed {
+        MutationVerificationOutcome::AlreadyApplied => {
+          on_verification(PostReconnectVerification::AlreadyApplied);
+          Ok(MutationRetryOutcome::AlreadyApplied)
+        }
+        MutationVerificationOutcome::NotApplied => {
+          on_verification(PostReconnectVerification::Retried);
+          // Retried with the exact same request, including its idempotency
+          // key field (if any) — so a command that actually did land exactly
+          // once on the VM side is not reapplied a second time by this retry
+          // racing the original.
+          let retried =
+            execute_remote_command::<T>(pool, endpoint, request, limits, cancellation).await?;
+          Ok(MutationRetryOutcome::Applied(retried))
+        }
+        MutationVerificationOutcome::Ambiguous => {
+          on_verification(PostReconnectVerification::Ambiguous);
+          Ok(MutationRetryOutcome::Ambiguous {
+            reason: format!(
+              "network failure during mutation ({transport_message}), and post-reconnect state was ambiguous"
+            ),
+          })
+        }
+      }
+    }
+  }
+}
+
+/// `TreqCommandRequest` does not derive `Clone` reuse would require adding it
+/// repo-wide; this narrow helper only needs to survive a single retry path,
+/// so it round-trips through JSON rather than widening the enum's derive
+/// list for one caller.
+fn clone_request(request: &TreqCommandRequest) -> TreqCommandRequest {
+  serde_json::from_value(serde_json::to_value(request).expect("TreqCommandRequest serializes"))
+    .expect("TreqCommandRequest round-trips through its own JSON shape")
+}
+
 /// Allow-listed argument fields shared by every Phase 5 typed command. Only
 /// commands built from a [`TreqCommandRequest`] variant can populate these —
 /// no frontend-provided raw string is ever assembled into this shape, which
@@ -2116,5 +2565,196 @@ mod tests {
         .unwrap()
         .as_nanos()
     )
+  }
+
+  // -- Retrying after network loss: classification and verification -----------
+
+  #[test]
+  fn reads_are_never_classified_as_mutations() {
+    let reads = [
+      TreqCommandRequest::InspectRepository { repo: "/r".into() },
+      TreqCommandRequest::RepositoryStatus { repo: "/r".into() },
+      TreqCommandRequest::ListBranches { repo: "/r".into() },
+      TreqCommandRequest::ListWorkspaces { repo: "/r".into() },
+      TreqCommandRequest::ListChanges {
+        repo: "/r".into(),
+        workspace: None,
+      },
+      TreqCommandRequest::ListCommits {
+        repo: "/r".into(),
+        workspace: None,
+      },
+      TreqCommandRequest::ListConflicts {
+        repo: "/r".into(),
+        workspace: None,
+      },
+      TreqCommandRequest::ProbeRepo { repo: "/r".into() },
+      TreqCommandRequest::AgentStatus {
+        repo: "/r".into(),
+        workspace: "1".into(),
+      },
+    ];
+    for request in reads {
+      assert!(
+        !request.is_mutation(),
+        "expected a read-only request to not be classified as a mutation: {request:?}"
+      );
+    }
+  }
+
+  #[test]
+  fn workspace_commit_conflict_git_and_agent_mutations_are_all_classified_as_mutations() {
+    let mutations = [
+      TreqCommandRequest::CreateWorkspace {
+        repo: "/r".into(),
+        branch_name: "b".into(),
+        source_branch: None,
+        idempotency_key: None,
+      },
+      TreqCommandRequest::DeleteWorkspace {
+        repo: "/r".into(),
+        workspace: "1".into(),
+      },
+      TreqCommandRequest::RebaseWorkspace {
+        repo: "/r".into(),
+        workspace: "1".into(),
+        target_branch: "main".into(),
+      },
+      TreqCommandRequest::CreateCommit {
+        repo: "/r".into(),
+        workspace: None,
+        message: "m".into(),
+        idempotency_key: None,
+      },
+      TreqCommandRequest::AbandonCommit {
+        repo: "/r".into(),
+        workspace: "1".into(),
+        commit: "c".into(),
+      },
+      TreqCommandRequest::ResolveConflict {
+        repo: "/r".into(),
+        revision: "c".into(),
+        sides: vec![],
+      },
+      TreqCommandRequest::GitFetch { repo: "/r".into() },
+      TreqCommandRequest::GitPush {
+        repo: "/r".into(),
+        workspace: None,
+        idempotency_key: None,
+      },
+      TreqCommandRequest::AgentStart {
+        repo: "/r".into(),
+        workspace: "1".into(),
+        agent: "claude".into(),
+        prompt: "p".into(),
+        idempotency_key: None,
+      },
+      TreqCommandRequest::AgentStop {
+        repo: "/r".into(),
+        workspace: "1".into(),
+      },
+    ];
+    for request in mutations {
+      assert!(
+        request.is_mutation(),
+        "expected a mutating request to be classified as a mutation: {request:?}"
+      );
+    }
+  }
+
+  #[test]
+  fn create_workspace_verification_detects_already_applied_and_not_applied() {
+    let verification = verification_for(&TreqCommandRequest::CreateWorkspace {
+      repo: "/r".into(),
+      branch_name: "feature-x".into(),
+      source_branch: None,
+      idempotency_key: Some("key".into()),
+    })
+    .expect("CreateWorkspace has a verification recipe");
+    assert!(matches!(
+      verification.read_request,
+      TreqCommandRequest::ListWorkspaces { .. }
+    ));
+
+    let applied = serde_json::json!([{ "id": 1, "branch_name": "feature-x" }]);
+    assert_eq!(
+      (verification.check)(&applied),
+      MutationVerificationOutcome::AlreadyApplied
+    );
+
+    let not_applied = serde_json::json!([{ "id": 1, "branch_name": "some-other-branch" }]);
+    assert_eq!(
+      (verification.check)(&not_applied),
+      MutationVerificationOutcome::NotApplied
+    );
+
+    let unexpected_shape = serde_json::json!({ "not": "an array" });
+    assert_eq!(
+      (verification.check)(&unexpected_shape),
+      MutationVerificationOutcome::Ambiguous
+    );
+  }
+
+  #[test]
+  fn delete_workspace_verification_treats_absence_as_applied() {
+    let verification = verification_for(&TreqCommandRequest::DeleteWorkspace {
+      repo: "/r".into(),
+      workspace: "42".into(),
+    })
+    .expect("DeleteWorkspace has a verification recipe");
+
+    let still_present = serde_json::json!([{ "id": "42" }]);
+    assert_eq!(
+      (verification.check)(&still_present),
+      MutationVerificationOutcome::NotApplied
+    );
+
+    let gone = serde_json::json!([{ "id": "7" }]);
+    assert_eq!(
+      (verification.check)(&gone),
+      MutationVerificationOutcome::AlreadyApplied
+    );
+  }
+
+  #[test]
+  fn agent_start_verification_reads_the_running_flag() {
+    let verification = verification_for(&TreqCommandRequest::AgentStart {
+      repo: "/r".into(),
+      workspace: "1".into(),
+      agent: "claude".into(),
+      prompt: "p".into(),
+      idempotency_key: None,
+    })
+    .expect("AgentStart has a verification recipe");
+    assert!(matches!(
+      verification.read_request,
+      TreqCommandRequest::AgentStatus { .. }
+    ));
+
+    assert_eq!(
+      (verification.check)(&serde_json::json!({ "running": true })),
+      MutationVerificationOutcome::AlreadyApplied
+    );
+    assert_eq!(
+      (verification.check)(&serde_json::json!({ "running": false })),
+      MutationVerificationOutcome::NotApplied
+    );
+    assert_eq!(
+      (verification.check)(&serde_json::json!({})),
+      MutationVerificationOutcome::Ambiguous
+    );
+  }
+
+  #[test]
+  fn restore_file_has_no_verification_recipe() {
+    // Documented carve-out: rather than guess at a false-positive check, a
+    // mutation with no reliable observable-state read falls back to
+    // `MutationVerificationOutcome::Ambiguous` in `retry_after_reconnect`.
+    let request = TreqCommandRequest::RestoreFile {
+      repo: "/r".into(),
+      workspace: None,
+      path: "a.txt".into(),
+    };
+    assert!(verification_for(&request).is_none());
   }
 }

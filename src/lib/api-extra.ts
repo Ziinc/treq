@@ -580,6 +580,21 @@ export const remoteDispatchOverSsh = <T = unknown>(
 ): Promise<T> => invoke("remote_dispatch_over_ssh", { endpoint, request });
 
 /**
+ * Runs a *mutating* `TreqCommandRequest` over the SSH exec channel with
+ * verify-before-retry semantics (PRD "Retrying after network loss"): a
+ * network failure while the command was in flight never triggers a blind
+ * resend. The result is a discriminated union (see `MutationDispatchResult`
+ * in `remote-dispatch.ts`) so the caller can render "already applied",
+ * "applied" (first try or a verified retry), or "ambiguous - ask the user"
+ * distinctly instead of guessing from a thrown error.
+ */
+export const remoteDispatchMutationOverSsh = <T = unknown>(
+  endpoint: unknown,
+  request: unknown,
+): Promise<T> =>
+  invoke("remote_dispatch_mutation_over_ssh", { endpoint, request });
+
+/**
  * Snapshot of this session's SSH transport telemetry (PRD Phase 7 "Client
  * and transport telemetry"). Kept as the typed frontend counterpart of the
  * registered Tauri command; a diagnostics panel to display it is future

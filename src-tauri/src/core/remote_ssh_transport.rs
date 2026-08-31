@@ -268,6 +268,13 @@ pub struct SshTransportMetrics {
   /// expected version; this module does not itself know the CLI's version
   /// contract, so it only exposes the counter.
   pub remote_version_mismatch_count: AtomicU64,
+  /// "post-reconnect state verifications before a mutation retry, and their
+  /// outcome (already applied, safe to retry, ambiguous)" - one counter per
+  /// outcome, incremented by `crate::core::remote::retry_after_reconnect`
+  /// exactly when a network failure forced a verification read.
+  pub post_reconnect_already_applied_count: AtomicU64,
+  pub post_reconnect_retried_count: AtomicU64,
+  pub post_reconnect_ambiguous_count: AtomicU64,
 }
 
 impl SshTransportMetrics {
@@ -306,7 +313,32 @@ impl SshTransportMetrics {
       pty_start_count: self.pty_start_count.load(Ordering::Relaxed),
       pty_exit_count: self.pty_exit_count.load(Ordering::Relaxed),
       remote_version_mismatch_count: self.remote_version_mismatch_count.load(Ordering::Relaxed),
+      post_reconnect_already_applied_count: self
+        .post_reconnect_already_applied_count
+        .load(Ordering::Relaxed),
+      post_reconnect_retried_count: self.post_reconnect_retried_count.load(Ordering::Relaxed),
+      post_reconnect_ambiguous_count: self.post_reconnect_ambiguous_count.load(Ordering::Relaxed),
     }
+  }
+
+  /// Records one verify-before-retry decision (PRD: "post-reconnect state
+  /// verifications before a mutation retry, and their outcome"). Called by
+  /// `crate::core::remote::retry_after_reconnect`'s `on_verification` hook.
+  pub fn record_post_reconnect_verification(
+    &self,
+    outcome: crate::core::remote::PostReconnectVerification,
+  ) {
+    let counter = match outcome {
+      crate::core::remote::PostReconnectVerification::AlreadyApplied => {
+        &self.post_reconnect_already_applied_count
+      }
+      crate::core::remote::PostReconnectVerification::Retried => &self.post_reconnect_retried_count,
+      crate::core::remote::PostReconnectVerification::Ambiguous => {
+        &self.post_reconnect_ambiguous_count
+      }
+    };
+    counter.fetch_add(1, Ordering::Relaxed);
+    tracing::info!(outcome = ?outcome, "post-reconnect mutation verification");
   }
 }
 
@@ -330,6 +362,9 @@ pub struct SshTransportMetricsSnapshot {
   pub pty_start_count: u64,
   pub pty_exit_count: u64,
   pub remote_version_mismatch_count: u64,
+  pub post_reconnect_already_applied_count: u64,
+  pub post_reconnect_retried_count: u64,
+  pub post_reconnect_ambiguous_count: u64,
 }
 
 // ---------------------------------------------------------------------------
@@ -983,7 +1018,15 @@ pub async fn exec_command(
   };
 
   match &outcome {
-    Err(SshTransportError::ChannelError(_)) => pool.mark_dead(endpoint).await,
+    // A deadline blows past the connection's usability the same way a raw
+    // I/O error does: the client cannot tell whether the still-open channel
+    // will ever produce the rest of the response, so the next command must
+    // not gamble on multiplexing a fresh channel onto it. Reconnecting is
+    // exactly the reconnect-before-verify step the PRD's "Retrying after
+    // network loss" section describes.
+    Err(SshTransportError::ChannelError(_) | SshTransportError::DeadlineExceeded) => {
+      pool.mark_dead(endpoint).await
+    }
     _ => {}
   }
 
@@ -1265,6 +1308,7 @@ mod tests {
   struct MockServer {
     host_key_algo: &'static str,
     reply: Arc<AtomicUsize>, // 0 = normal echo, 1 = slow (for deadline test), 2 = huge output
+    call_count: Arc<AtomicUsize>,
   }
 
   impl server::Server for MockServer {
@@ -1272,12 +1316,18 @@ mod tests {
     fn new_client(&mut self, _: Option<std::net::SocketAddr>) -> MockHandler {
       MockHandler {
         mode: self.reply.clone(),
+        call_count: self.call_count.clone(),
       }
     }
   }
 
   struct MockHandler {
     mode: Arc<AtomicUsize>,
+    /// Shared across every exec on the pooled connection (mode 4/5 only): a
+    /// real client reuses one authenticated connection for the mutation, the
+    /// verification read, and any retry, so this must live at the
+    /// connection level, not be reset per-channel.
+    call_count: Arc<AtomicUsize>,
   }
 
   impl server::Handler for MockHandler {
@@ -1333,6 +1383,48 @@ mod tests {
           session.data(channel, bytes::Bytes::from(body.as_bytes().to_vec()))?;
           session.exit_status_request(channel, 1)?;
         }
+        4 | 5 => {
+          // Verify-before-retry path: the *first* exec against this server
+          // (the mutation itself, e.g. `workspace create`) sleeps past the
+          // client's deadline so the client observes a genuine
+          // transport-layer failure - never able to tell whether the
+          // mutation reached the VM. `exec_command` treats a deadline the
+          // same as a channel I/O error and marks the pooled connection
+          // dead, so every later exec (the verification read, and in mode 5
+          // the retried mutation) arrives on a *fresh* connection - a new
+          // `MockHandler`, but sharing this `MockServer`'s `call_count` - and
+          // answers immediately, modeling reconnecting after a real network
+          // failure rather than multiplexing a new channel onto the same
+          // still-hung connection.
+          //
+          // Mode 4: verification read reports the mutation's effect is
+          // already observable (`AlreadyApplied`).
+          // Mode 5: verification read reports it is not yet observable
+          // (`NotApplied`), and a subsequent retry of the same mutation
+          // succeeds normally.
+          let call_index = self.call_count.fetch_add(1, Ordering::SeqCst);
+          if call_index == 0 {
+            tokio::time::sleep(Duration::from_secs(5)).await;
+            session.data(channel, bytes::Bytes::from_static(b"{}"))?;
+            session.exit_status_request(channel, 0)?;
+          } else if command.contains("workspace") && command.contains("list") {
+            let body = if self.mode.load(Ordering::SeqCst) == 4 {
+              // AlreadyApplied: the branch this test's mutation asked to
+              // create is already present in the read-back state.
+              "[{\"id\":1,\"branch_name\":\"feature-retry-test\"}]"
+            } else {
+              // NotApplied: it is not present yet.
+              "[]"
+            };
+            session.data(channel, bytes::Bytes::from(body.as_bytes().to_vec()))?;
+            session.exit_status_request(channel, 0)?;
+          } else {
+            // The retried mutation itself (mode 5 only) - succeeds.
+            let body = "{\"id\":1,\"branch_name\":\"feature-retry-test\"}";
+            session.data(channel, bytes::Bytes::from(body.as_bytes().to_vec()))?;
+            session.exit_status_request(channel, 0)?;
+          }
+        }
         _ => {
           let response = format!("{{\"echo\":\"{command}\"}}");
           session.data(channel, bytes::Bytes::from(response.into_bytes()))?;
@@ -1357,6 +1449,7 @@ mod tests {
     let mut server = MockServer {
       host_key_algo: "ssh-ed25519",
       reply: Arc::new(AtomicUsize::new(mode)),
+      call_count: Arc::new(AtomicUsize::new(0)),
     };
     let _ = server.host_key_algo;
 
@@ -1948,5 +2041,189 @@ mod tests {
     .await
     .unwrap();
     assert!(output.success());
+  }
+
+  // -- Retrying after network loss (PRD "Structured command protocol" >
+  // "Retrying after network loss") ---------------------------------------
+
+  #[tokio::test]
+  async fn retry_after_reconnect_treats_mutation_as_complete_when_state_already_shows_it_applied() {
+    // Mode 4: the mutation's own exec sleeps past the deadline (a genuine
+    // transport failure - the client cannot tell whether it landed), and the
+    // verification read that follows reports the branch already exists.
+    let (addr, host_key) = start_mock_server(4).await;
+    let client_key = test_host_key();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let key_reference = write_client_key(temp_dir.path(), &client_key);
+    let endpoint = test_endpoint(addr, &host_key, key_reference);
+
+    let pool = SshConnectionPool::new();
+    let cancellation = CancellationToken::new();
+    let limits = ExecLimits {
+      deadline: Duration::from_millis(200),
+      ..ExecLimits::default()
+    };
+
+    let mut verifications = Vec::new();
+    let outcome = crate::core::remote::retry_after_reconnect::<serde_json::Value, _>(
+      &pool,
+      &endpoint,
+      crate::core::remote::TreqCommandRequest::CreateWorkspace {
+        repo: "/srv/project".to_string(),
+        branch_name: "feature-retry-test".to_string(),
+        source_branch: None,
+        idempotency_key: Some("retry-key-1".to_string()),
+      },
+      limits,
+      &cancellation,
+      |v| verifications.push(v),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(
+      outcome,
+      crate::core::remote::MutationRetryOutcome::AlreadyApplied
+    );
+    assert_eq!(
+      verifications,
+      vec![crate::core::remote::PostReconnectVerification::AlreadyApplied]
+    );
+  }
+
+  #[tokio::test]
+  async fn retry_after_reconnect_retries_with_the_same_idempotency_key_when_state_shows_not_applied(
+  ) {
+    // Mode 5: same deadline-triggering first exec, but the verification read
+    // reports the branch is absent, so the mutation must be retried - and
+    // the retry (the mock's third exec) succeeds.
+    let (addr, host_key) = start_mock_server(5).await;
+    let client_key = test_host_key();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let key_reference = write_client_key(temp_dir.path(), &client_key);
+    let endpoint = test_endpoint(addr, &host_key, key_reference);
+
+    let pool = SshConnectionPool::new();
+    let cancellation = CancellationToken::new();
+    let limits = ExecLimits {
+      deadline: Duration::from_millis(200),
+      ..ExecLimits::default()
+    };
+
+    let mut verifications = Vec::new();
+    let outcome = crate::core::remote::retry_after_reconnect::<serde_json::Value, _>(
+      &pool,
+      &endpoint,
+      crate::core::remote::TreqCommandRequest::CreateWorkspace {
+        repo: "/srv/project".to_string(),
+        branch_name: "feature-retry-test".to_string(),
+        source_branch: None,
+        idempotency_key: Some("retry-key-2".to_string()),
+      },
+      limits,
+      &cancellation,
+      |v| verifications.push(v),
+    )
+    .await
+    .unwrap();
+
+    match outcome {
+      crate::core::remote::MutationRetryOutcome::Applied(value) => {
+        assert_eq!(value["branch_name"], "feature-retry-test");
+      }
+      other => panic!("expected Applied after a not-applied verdict, got {other:?}"),
+    }
+    assert_eq!(
+      verifications,
+      vec![crate::core::remote::PostReconnectVerification::Retried]
+    );
+  }
+
+  #[tokio::test]
+  async fn retry_after_reconnect_surfaces_ambiguity_when_no_verification_recipe_exists() {
+    // `RestoreFile` has no `verification_for` recipe (see its module doc):
+    // even a genuine transport failure must surface as ambiguous rather than
+    // silently guessing complete or not.
+    let (addr, host_key) = start_mock_server(1).await;
+    let client_key = test_host_key();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let key_reference = write_client_key(temp_dir.path(), &client_key);
+    let endpoint = test_endpoint(addr, &host_key, key_reference);
+
+    let pool = SshConnectionPool::new();
+    let cancellation = CancellationToken::new();
+    let limits = ExecLimits {
+      deadline: Duration::from_millis(200),
+      ..ExecLimits::default()
+    };
+
+    let mut verifications = Vec::new();
+    let outcome = crate::core::remote::retry_after_reconnect::<serde_json::Value, _>(
+      &pool,
+      &endpoint,
+      crate::core::remote::TreqCommandRequest::RestoreFile {
+        repo: "/srv/project".to_string(),
+        workspace: None,
+        path: "src/lib.rs".to_string(),
+      },
+      limits,
+      &cancellation,
+      |v| verifications.push(v),
+    )
+    .await
+    .unwrap();
+
+    match outcome {
+      crate::core::remote::MutationRetryOutcome::Ambiguous { reason } => {
+        assert!(reason.contains("no state check is available"));
+      }
+      other => panic!("expected Ambiguous, got {other:?}"),
+    }
+    assert_eq!(
+      verifications,
+      vec![crate::core::remote::PostReconnectVerification::Ambiguous]
+    );
+  }
+
+  #[tokio::test]
+  async fn retry_after_reconnect_never_verifies_a_structured_application_level_error() {
+    // Mode 3: the CLI reaches the VM and returns a structured
+    // `workspace_not_found` error. That is not "did it land?" uncertainty -
+    // the CLI plainly said it did not run - so no verification read should
+    // ever be issued, and the structured error must pass straight through.
+    let (addr, host_key) = start_mock_server(3).await;
+    let client_key = test_host_key();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let key_reference = write_client_key(temp_dir.path(), &client_key);
+    let endpoint = test_endpoint(addr, &host_key, key_reference);
+
+    let pool = SshConnectionPool::new();
+    let cancellation = CancellationToken::new();
+
+    let mut verifications = Vec::new();
+    let error = crate::core::remote::retry_after_reconnect::<serde_json::Value, _>(
+      &pool,
+      &endpoint,
+      crate::core::remote::TreqCommandRequest::CreateWorkspace {
+        repo: "/srv/project".to_string(),
+        branch_name: "feature-retry-test".to_string(),
+        source_branch: None,
+        idempotency_key: Some("retry-key-3".to_string()),
+      },
+      ExecLimits::default(),
+      &cancellation,
+      |v| verifications.push(v),
+    )
+    .await
+    .unwrap_err();
+
+    match error {
+      crate::core::remote::RemoteCommandError::Command { code, .. } => {
+        assert_eq!(code, "workspace_not_found");
+      }
+      other => panic!("expected a structured Command error, got {other:?}"),
+    }
+    // No verification read was ever issued.
+    assert!(verifications.is_empty());
   }
 }
