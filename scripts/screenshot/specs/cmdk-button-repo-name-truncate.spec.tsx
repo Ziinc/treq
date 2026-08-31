@@ -24,7 +24,7 @@ it("truncates a long repo name inside the command-palette trigger", async () => 
 
   await captureDocument(document, {
     name: "cmdk-button-repo-name-truncate-01-header",
-    clipSelector: '[data-testid="command-palette-trigger"]',
+    clipSelector: '[data-sidebar="header"]',
     expectations: [
       "The command-palette button stays within the sidebar header width.",
       "The long repo name is ellipsized and does not overflow the button.",

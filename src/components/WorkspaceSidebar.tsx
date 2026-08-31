@@ -313,7 +313,10 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
               className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden px-3 py-1.5 rounded-lg border border-border bg-muted/50 hover:bg-muted text-muted-foreground transition-colors"
             >
               <Search className="w-4 h-4 shrink-0" />
-              <span className="min-w-0 flex-1 truncate text-left" title={repoName}>
+              <span
+                className="min-w-0 flex-1 truncate text-left"
+                title={repoName}
+              >
                 {repoName}
               </span>
               <KbdGroup className="shrink-0">
