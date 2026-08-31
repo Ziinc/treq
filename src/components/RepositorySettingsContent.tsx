@@ -77,7 +77,8 @@ export const RepositorySettingsContent = ({
   // .treq/config.yaml, when it sets a field, is synced into these same repo
   // settings on the backend — so `settings` above already reflects it. This
   // is only used to know which fields to disable and explain via the card.
-  const { config: yamlConfig } = useRepoYamlConfig(repoPath);
+  const { config: yamlConfig, loading: yamlConfigLoading } =
+    useRepoYamlConfig(repoPath);
   const branchNamePatternManaged = yamlConfig?.branch_name_pattern != null;
   const includedFilesManaged = yamlConfig?.included_copy_files != null;
   const defaultModelManaged = yamlConfig?.default_model != null;
@@ -144,7 +145,7 @@ export const RepositorySettingsContent = ({
 
   useImperativeHandle(ref, () => ({ save: handleSave }));
 
-  if (loading) {
+  if (loading || yamlConfigLoading) {
     return (
       <div className="py-8 text-center text-muted-foreground">
         Loading settings...
