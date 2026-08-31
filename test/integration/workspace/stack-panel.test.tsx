@@ -79,6 +79,38 @@ describe("ShowWorkspace - stack panel", () => {
     expect(within(rootPanel).getByText("feat/beta")).toBeTruthy();
   });
 
+  it("does not list sibling workspaces of the current workspace on the stack card", async () => {
+    await createWorkspace(repoPath, "feat/alpha");
+    await createWorkspace(repoPath, "feat/beta");
+    await createWorkspace(repoPath, "feat/gamma");
+    const workspaces = await getWorkspaces(repoPath);
+    const beta = workspaces.find((ws) => ws.branch_name === "feat/beta");
+    const gamma = workspaces.find((ws) => ws.branch_name === "feat/gamma");
+    if (!beta || !gamma) {
+      throw new Error("Expected feat/beta and feat/gamma workspaces");
+    }
+    await setWorkspaceTargetBranch(
+      repoPath,
+      getFullWorkspacePath(beta),
+      beta.id,
+      "feat/alpha",
+    );
+    await setWorkspaceTargetBranch(
+      repoPath,
+      getFullWorkspacePath(gamma),
+      gamma.id,
+      "feat/alpha",
+    );
+
+    render(<Dashboard />);
+    await user.click(await findSidebarBranchElement("feat/beta"));
+
+    const panel = await screen.findByTestId("workspace-stack-panel");
+    expect(within(panel).getByText("feat/alpha")).toBeTruthy();
+    expect(within(panel).getByText("feat/beta")).toBeTruthy();
+    expect(within(panel).queryByText("feat/gamma")).not.toBeInTheDocument();
+  });
+
   it("shows the stack panel when viewing the first workspace of a stack", async () => {
     await stackBetaOntoAlpha();
     render(<Dashboard />);

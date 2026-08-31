@@ -535,13 +535,49 @@ export interface StackedWorkspaceEntry {
 }
 
 /**
- * Build the ordered stack (tip-first, root-last) that `currentWorkspaceId`
- * belongs to, for rendering a stacked-PR-style UI.
+ * Walk `target_branch` toward the stack root and collect workspace ancestors
+ * (parent first, root last). Stops at an external/missing target. Does not
+ * include siblings of the starting workspace or of any ancestor.
+ */
+function getAncestorWorkspaces(
+  workspaces: Workspace[],
+  branchName: string,
+): Workspace[] {
+  const workspaceByBranch = new Map<string, Workspace>();
+  for (const ws of workspaces) {
+    workspaceByBranch.set(ws.branch_name, ws);
+  }
+
+  const ancestors: Workspace[] = [];
+  const visited = new Set<string>([branchName]);
+  let current = branchName;
+
+  while (true) {
+    const ws = workspaceByBranch.get(current);
+    if (!ws?.target_branch) break;
+    const parent = workspaceByBranch.get(ws.target_branch);
+    if (!parent) break;
+    if (visited.has(parent.branch_name)) break;
+    visited.add(parent.branch_name);
+    ancestors.push(parent);
+    current = parent.branch_name;
+  }
+
+  return ancestors;
+}
+
+/**
+ * Build the ordered stack (tip-first, root-last) for the Code tab stack card.
+ *
+ * Includes the current workspace, its ancestor chain (the target and
+ * workspaces between here and the stack root), and all descendants of the
+ * current workspace — including sibling forks among those descendants.
+ * Siblings of the current workspace itself are omitted.
  *
  * Returns null when the workspace isn't part of a multi-workspace stack —
  * i.e. it is alone (no workspace ancestors or descendants), or the id
- * isn't found. A stack root with descendants still returns the full stack
- * so the Code tab stack card stays visible on the first workspace.
+ * isn't found. A stack root with descendants still returns the descendant
+ * tree so the Code tab stack card stays visible on the first workspace.
  */
 export function getWorkspaceStack(
   workspaces: Workspace[],
@@ -550,9 +586,12 @@ export function getWorkspaceStack(
   const current = workspaces.find((ws) => ws.id === currentWorkspaceId);
   if (!current) return null;
 
-  const chain = getEntireStack(workspaces, current.branch_name);
+  const descendants = getDescendants(workspaces, current.branch_name);
+  const ancestors = getAncestorWorkspaces(workspaces, current.branch_name);
   // A single workspace targeting main/external isn't a stack worth showing.
-  if (chain.length <= 1) return null;
+  if (descendants.length === 0 && ancestors.length === 0) return null;
+
+  const chain = [...ancestors].reverse().concat(current, descendants);
 
   return [...chain].reverse().map((workspace) => ({
     workspace,
