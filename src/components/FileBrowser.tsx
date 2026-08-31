@@ -151,12 +151,12 @@ interface FileBrowserProps {
 /** Placeholder hunkId for FileBrowser comments — there's no jj diff hunk to anchor to. */
 const FILE_BROWSER_COMMENT_HUNK_ID = "browser";
 
-// Filter out .git and .treq files/directories (but keep .github, .gitignore, etc.)
+// Hidden files can contain useful project configuration, but hidden directories
+// are implementation details that should not appear in the code tree.
 function filterHiddenEntries(entries: DirectoryEntry[]): DirectoryEntry[] {
-  return entries.filter((entry) => {
-    const { name } = entry;
-    return name !== ".git" && name !== ".treq";
-  });
+  return entries.filter(
+    (entry) => !entry.is_directory || !entry.name.startsWith("."),
+  );
 }
 
 // Virtualization constants

@@ -95,6 +95,25 @@ describe("Dashboard - FileBrowser integration", () => {
     await screen.findByRole("button", { name: /back/i });
   });
 
+  it("hides hidden directories from the directory tree", async () => {
+    await setupWorkspace("feat/filebrowser-hidden-directories-test", {
+      "app.ts": "export const app = true;\n",
+      ".secret/config.json": "{}\n",
+      ".env": "VISIBLE_FILE=true\n",
+    });
+
+    const fileBrowser = await openWorkspaceCodeBrowser(
+      user,
+      "feat/filebrowser-hidden-directories-test",
+      "app.ts",
+    );
+
+    expect(fileBrowser.queryByText(".jj")).toBeNull();
+    expect(fileBrowser.queryByText(".git")).toBeNull();
+    expect(fileBrowser.queryByText(".secret")).toBeNull();
+    expect(fileBrowser.getByText(".env")).toBeTruthy();
+  });
+
   it("reloads the open file and directory tree after a scoped filesystem refresh", async () => {
     const { workspace, workspacePath } = await setupWorkspace(
       "feat/filebrowser-refresh-test",
