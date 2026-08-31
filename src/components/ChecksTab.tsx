@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { invalidateQueries } from "../lib/swr-cache";
 import {
+  AlertTriangle,
   CheckCircle2,
   CircleDot,
   FileText,
@@ -12,15 +13,19 @@ import {
 } from "lucide-react";
 import { Button } from "./ui/button";
 import {
+  getWorkspaceSetupStatus,
   isRepoTrusted,
   listWorkflowRuns,
   listWorkflows,
+  rerunWorkspaceSetupScript,
   runWorkflow,
   runWorkflowJob,
   trustRepo,
 } from "../lib/api";
 import type { JobResult, RunSummary, WorkflowInfo } from "../lib/api-types";
 import { LogsBrowser } from "./LogsBrowser";
+
+const SETUP_RUN_JOB_ID = "setup";
 
 interface Props {
   repoPath: string;
@@ -95,6 +100,30 @@ export function ChecksTab({
     ["workflows", repoPath],
     () => listWorkflows(repoPath),
   );
+
+  const { data: setupStatus, mutate: refetchSetupStatus } = useSWR(
+    ["workspace-setup-status", repoPath, workspaceId],
+    () => getWorkspaceSetupStatus(repoPath, workspaceId),
+    {
+      refreshInterval: (data) =>
+        data?.status === "pending" || data?.status === "running" ? 1500 : 0,
+    },
+  );
+  const setupBlocking =
+    !!setupStatus?.configured &&
+    (setupStatus.status === "pending" || setupStatus.status === "running");
+  const setupFailed = setupStatus?.configured && setupStatus.status === "failed";
+  const [rerunningSetup, setRerunningSetup] = useState(false);
+
+  async function handleRerunSetup() {
+    setRerunningSetup(true);
+    try {
+      await rerunWorkspaceSetupScript(repoPath, workspaceId, workspacePath);
+    } finally {
+      setRerunningSetup(false);
+      void refetchSetupStatus();
+    }
+  }
 
   const jobKey = (filename: string, jobId: string) => `${filename}:${jobId}`;
 
@@ -205,13 +234,70 @@ export function ChecksTab({
         </div>
       )}
 
+      {setupBlocking && (
+        <div
+          data-testid="setup-script-pending-banner"
+          className="flex items-center justify-between rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm dark:border-blue-900 dark:bg-blue-950"
+        >
+          <div className="flex items-center gap-2 text-blue-800 dark:text-blue-200">
+            <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+            <span>Running workspace setup script before checks can run…</span>
+          </div>
+        </div>
+      )}
+
+      {setupFailed && (
+        <div
+          data-testid="setup-script-failed-banner"
+          className="flex items-center justify-between rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm"
+        >
+          <div className="flex items-center gap-2 text-destructive">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            <span>
+              Workspace setup script failed. Checks can still run, but the
+              workspace may not be fully set up.
+            </span>
+          </div>
+          <div className="flex items-center gap-2 ml-4 shrink-0">
+            {setupStatus?.run_id !== null && setupStatus?.run_id !== undefined && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() =>
+                  setLogTarget({
+                    runId: setupStatus.run_id as number,
+                    jobId: SETUP_RUN_JOB_ID,
+                  })
+                }
+              >
+                <FileText className="h-3 w-3 mr-1" />
+                Logs
+              </Button>
+            )}
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={rerunningSetup}
+              onClick={handleRerunSetup}
+            >
+              {rerunningSetup ? (
+                <Loader2 className="h-3 w-3 animate-spin mr-1" />
+              ) : (
+                <Play className="h-3 w-3 mr-1" />
+              )}
+              Rerun Setup
+            </Button>
+          </div>
+        </div>
+      )}
+
       {workflows.map((wf) => (
         <WorkflowCard
           key={wf.filename}
           workflow={wf}
           repoPath={repoPath}
           workspaceId={workspaceId}
-          isTrusted={!!isTrusted}
+          isTrusted={!!isTrusted && !setupBlocking}
           isRunningWorkflow={runningWorkflows.has(wf.filename)}
           runningJobs={runningJobs}
           jobResults={jobResults}

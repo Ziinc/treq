@@ -1,5 +1,5 @@
 use crate::core::checks_logs::{LogBucket, LogQuery, LogRecordView, SqlResult};
-use crate::core::{JobResult, RunSummary, WorkflowInfo};
+use crate::core::{JobResult, RunSummary, SetupScriptStatus, WorkflowInfo};
 
 #[tauri::command]
 pub async fn list_workflows(repo_path: String) -> Result<Vec<WorkflowInfo>, String> {
@@ -147,6 +147,36 @@ pub async fn run_logs_sql(
 ) -> Result<SqlResult, String> {
   tauri::async_runtime::spawn_blocking(move || {
     crate::core::checks_logs::run_logs_sql(&repo_path, &sql, max_rows.unwrap_or(500))
+  })
+  .await
+  .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn get_workspace_setup_status(
+  repo_path: String,
+  workspace_id: i64,
+) -> Result<SetupScriptStatus, String> {
+  tauri::async_runtime::spawn_blocking(move || {
+    crate::core::get_setup_script_status_sync(&repo_path, workspace_id)
+  })
+  .await
+  .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub async fn rerun_workspace_setup_script(
+  repo_path: String,
+  workspace_id: i64,
+  workspace_path: String,
+) -> Result<JobResult, String> {
+  tauri::async_runtime::spawn_blocking(move || {
+    let config = crate::repo_config::parse_config(&repo_path)?;
+    let script = config
+      .setup_script
+      .filter(|s| !s.trim().is_empty())
+      .ok_or_else(|| "No setup_script configured in .treq/config.yaml".to_string())?;
+    crate::core::run_setup_script_sync(&repo_path, workspace_id, &workspace_path, &script)
   })
   .await
   .map_err(|e| e.to_string())?

@@ -186,7 +186,15 @@ pub fn run_workflow_job_sync(
   workspace_path: &str,
 ) -> Result<JobResult, String> {
   let run_id = crate::local_db::create_workflow_run(repo_path, workspace_id, filename)?;
-  let result = run_job_in_run(repo_path, filename, job_id, workspace_path, run_id, 0);
+  let result = run_job_in_run(
+    repo_path,
+    filename,
+    job_id,
+    workspace_id,
+    workspace_path,
+    run_id,
+    0,
+  );
   let status = match &result {
     Ok(r) if r.success => "passed",
     Ok(_) => "failed",
@@ -201,6 +209,7 @@ fn run_job_in_run(
   repo_path: &str,
   filename: &str,
   job_id: &str,
+  workspace_id: i64,
   workspace_path: &str,
   run_id: i64,
   position: i64,
@@ -208,6 +217,8 @@ fn run_job_in_run(
   if !crate::local_db::is_repo_trusted(repo_path) {
     return Err("repository_not_trusted: Trust this repository before running checks".to_string());
   }
+
+  ensure_setup_script_complete(repo_path, workspace_id)?;
 
   validate_filename(filename)?;
 
@@ -246,19 +257,36 @@ fn run_job_in_run(
     repo_path.to_string()
   };
 
+  let started_at = Utc::now().to_rfc3339();
+  let result = execute_job_steps(repo_path, job_id, &job_def.steps, &base_dir, run_id)?;
+  let log_path = job_log_relative_path(run_id, job_id);
+
+  store_job_result(repo_path, run_id, position, &started_at, &log_path, &result)?;
+
+  Ok(result)
+}
+
+/// Runs a job's steps sequentially against an already-created run, streaming
+/// output into that run's job log. Shared by workflow jobs and the
+/// post-workspace-create setup script, which is just a single-step job.
+fn execute_job_steps(
+  repo_path: &str,
+  job_id: &str,
+  steps: &[StepDef],
+  base_dir: &str,
+  run_id: i64,
+) -> Result<JobResult, String> {
   let extended_path = crate::binary_paths::get_extended_path();
   let mut step_results = Vec::new();
 
-  let started_at = Utc::now().to_rfc3339();
   let writer = LogWriter::create(repo_path, run_id, job_id)?;
-  let log_path = job_log_relative_path(run_id, job_id);
 
-  for (step_index, step) in job_def.steps.iter().enumerate() {
+  for (step_index, step) in steps.iter().enumerate() {
     let cwd = if let Some(wd) = &step.working_directory {
       validate_working_directory(wd)?;
-      Path::new(&base_dir).join(wd).to_string_lossy().to_string()
+      Path::new(base_dir).join(wd).to_string_lossy().to_string()
     } else {
-      base_dir.clone()
+      base_dir.to_string()
     };
 
     let mut cmd = Command::new("sh");
@@ -381,15 +409,11 @@ fn run_job_in_run(
   writer.flush()?;
 
   let overall_success = step_results.iter().all(|s| s.success);
-  let result = JobResult {
+  Ok(JobResult {
     job_id: job_id.to_string(),
     steps: step_results,
     success: overall_success,
-  };
-
-  store_job_result(repo_path, run_id, position, &started_at, &log_path, &result)?;
-
-  Ok(result)
+  })
 }
 
 /// Lets the two pipe types share one reader thread body.
@@ -435,7 +459,15 @@ pub fn run_workflow_sync(
           let wp = wp.clone();
           let tx = result_tx.clone();
           std::thread::spawn(move || {
-            let r = run_job_in_run(&rp, &fn_, &job_id, &wp, run_id, position as i64);
+            let r = run_job_in_run(
+              &rp,
+              &fn_,
+              &job_id,
+              workspace_id,
+              &wp,
+              run_id,
+              position as i64,
+            );
             tx.send(r).ok();
           });
           in_flight += 1;
@@ -503,6 +535,120 @@ fn store_job_result(
     Some(log_path),
   )?;
   Ok(())
+}
+
+// ── Post-workspace-create setup script ──────────────────────────────────────
+
+/// Synthetic workflow filename used to store the setup script's runs in the
+/// same `workflow_runs`/`workflow_job_results` tables as regular checks, so
+/// it gets run history and browsable logs for free.
+const SETUP_SCRIPT_FILENAME: &str = "__setup__";
+const SETUP_SCRIPT_JOB_ID: &str = "setup";
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SetupScriptStatus {
+  /// Whether `.treq/config.yaml` declares a `setup_script`.
+  pub configured: bool,
+  /// "not_configured" | "pending" | "running" | "passed" | "failed"
+  pub status: String,
+  pub run_id: Option<i64>,
+}
+
+/// Blocks running checks in a workspace until its setup script has finished
+/// (successfully or not) — checks should never run against a workspace whose
+/// setup hasn't executed. No-op when no setup script is configured.
+fn ensure_setup_script_complete(repo_path: &str, workspace_id: i64) -> Result<(), String> {
+  let config = crate::repo_config::parse_config(repo_path)?;
+  let Some(script) = config.setup_script else {
+    return Ok(());
+  };
+  if script.trim().is_empty() {
+    return Ok(());
+  }
+
+  let runs =
+    crate::local_db::list_workflow_runs(repo_path, workspace_id, SETUP_SCRIPT_FILENAME, 1)?;
+  match runs.first() {
+    Some(run) if run.status != "running" => Ok(()),
+    Some(_) => Err(
+      "setup_script_pending: The workspace setup script is still running".to_string(),
+    ),
+    None => Err(
+      "setup_script_pending: The workspace setup script has not run yet".to_string(),
+    ),
+  }
+}
+
+/// Runs the repo's configured setup script for a freshly created workspace.
+/// Stored as a one-job run under `SETUP_SCRIPT_FILENAME` so it shows up in the
+/// same run-history / log-viewer machinery as regular workflow checks.
+pub fn run_setup_script_sync(
+  repo_path: &str,
+  workspace_id: i64,
+  workspace_path: &str,
+  script: &str,
+) -> Result<JobResult, String> {
+  let run_id = crate::local_db::create_workflow_run(repo_path, workspace_id, SETUP_SCRIPT_FILENAME)?;
+
+  let base_dir = if Path::new(workspace_path).is_dir() {
+    workspace_path.to_string()
+  } else {
+    repo_path.to_string()
+  };
+  let step = StepDef {
+    name: "Setup".to_string(),
+    run: script.to_string(),
+    working_directory: None,
+    env: None,
+  };
+
+  let started_at = Utc::now().to_rfc3339();
+  let result = execute_job_steps(
+    repo_path,
+    SETUP_SCRIPT_JOB_ID,
+    std::slice::from_ref(&step),
+    &base_dir,
+    run_id,
+  );
+
+  let status = match &result {
+    Ok(r) if r.success => "passed",
+    _ => "failed",
+  };
+  crate::local_db::finish_workflow_run(repo_path, run_id, status)?;
+
+  let result = result?;
+  let log_path = job_log_relative_path(run_id, SETUP_SCRIPT_JOB_ID);
+  store_job_result(repo_path, run_id, 0, &started_at, &log_path, &result)?;
+
+  Ok(result)
+}
+
+pub fn get_setup_script_status_sync(
+  repo_path: &str,
+  workspace_id: i64,
+) -> Result<SetupScriptStatus, String> {
+  let config = crate::repo_config::parse_config(repo_path)?;
+  if config.setup_script.filter(|s| !s.trim().is_empty()).is_none() {
+    return Ok(SetupScriptStatus {
+      configured: false,
+      status: "not_configured".to_string(),
+      run_id: None,
+    });
+  }
+
+  let runs =
+    crate::local_db::list_workflow_runs(repo_path, workspace_id, SETUP_SCRIPT_FILENAME, 1)?;
+  let (status, run_id) = match runs.first() {
+    Some(run) => (run.status.clone(), Some(run.id)),
+    None => ("pending".to_string(), None),
+  };
+
+  Ok(SetupScriptStatus {
+    configured: true,
+    status,
+    run_id,
+  })
 }
 
 // ── Run history and logs ─────────────────────────────────────────────────────
@@ -847,5 +993,115 @@ mod tests {
     assert!(validate_working_directory("../../etc").is_err());
     assert!(validate_working_directory("sub/dir").is_ok());
     assert!(validate_working_directory("frontend").is_ok());
+  }
+
+  // ── Post-workspace-create setup script ────────────────────────────────────
+
+  fn write_config(dir: &TempDir, yaml: &str) -> String {
+    let treq_dir = dir.path().join(".treq");
+    fs::create_dir_all(&treq_dir).unwrap();
+    fs::write(treq_dir.join("config.yaml"), yaml).unwrap();
+    dir.path().to_string_lossy().to_string()
+  }
+
+  #[test]
+  fn test_setup_status_not_configured_when_no_setup_script() {
+    let dir = TempDir::new().unwrap();
+    let repo = dir.path().to_string_lossy().to_string();
+    crate::local_db::init_local_db(&repo).unwrap();
+
+    let status = get_setup_script_status_sync(&repo, 0).unwrap();
+    assert!(!status.configured);
+    assert_eq!(status.status, "not_configured");
+  }
+
+  #[test]
+  fn test_setup_status_pending_before_first_run() {
+    let dir = TempDir::new().unwrap();
+    let repo = write_config(&dir, "setup_script: \"echo hi\"\n");
+    crate::local_db::init_local_db(&repo).unwrap();
+
+    let status = get_setup_script_status_sync(&repo, 0).unwrap();
+    assert!(status.configured);
+    assert_eq!(status.status, "pending");
+  }
+
+  #[test]
+  fn test_checks_blocked_until_setup_script_runs() {
+    let dir = TempDir::new().unwrap();
+    write_config(&dir, "setup_script: \"echo hi\"\n");
+    let content =
+      make_workflow("  greet:\n    steps:\n      - name: Say hi\n        run: echo hi\n");
+    let repo = setup_trusted_repo(&dir, "ci.yaml", &content);
+
+    let err = run_workflow_job_sync(&repo, "ci.yaml", "greet", 0, &repo).unwrap_err();
+    assert!(err.contains("setup_script_pending"));
+  }
+
+  #[test]
+  fn test_checks_unblocked_after_setup_script_runs() {
+    let dir = TempDir::new().unwrap();
+    write_config(&dir, "setup_script: \"echo setting up\"\n");
+    let content =
+      make_workflow("  greet:\n    steps:\n      - name: Say hi\n        run: echo hi\n");
+    let repo = setup_trusted_repo(&dir, "ci.yaml", &content);
+
+    run_setup_script_sync(&repo, 0, &repo, "echo setting up").unwrap();
+
+    let status = get_setup_script_status_sync(&repo, 0).unwrap();
+    assert_eq!(status.status, "passed");
+
+    let result = run_workflow_job_sync(&repo, "ci.yaml", "greet", 0, &repo).unwrap();
+    assert!(result.success);
+  }
+
+  #[test]
+  fn test_checks_unblocked_even_if_setup_script_failed() {
+    let dir = TempDir::new().unwrap();
+    write_config(&dir, "setup_script: \"exit 1\"\n");
+    let content =
+      make_workflow("  greet:\n    steps:\n      - name: Say hi\n        run: echo hi\n");
+    let repo = setup_trusted_repo(&dir, "ci.yaml", &content);
+
+    run_setup_script_sync(&repo, 0, &repo, "exit 1").unwrap();
+
+    let status = get_setup_script_status_sync(&repo, 0).unwrap();
+    assert_eq!(status.status, "failed");
+
+    // Setup having *run* (even unsuccessfully) is enough to unblock checks.
+    let result = run_workflow_job_sync(&repo, "ci.yaml", "greet", 0, &repo).unwrap();
+    assert!(result.success);
+  }
+
+  #[test]
+  fn test_setup_script_only_blocks_matching_workspace() {
+    let dir = TempDir::new().unwrap();
+    write_config(&dir, "setup_script: \"echo hi\"\n");
+    let content =
+      make_workflow("  greet:\n    steps:\n      - name: Say hi\n        run: echo hi\n");
+    let repo = setup_trusted_repo(&dir, "ci.yaml", &content);
+
+    run_setup_script_sync(&repo, 1, &repo, "echo hi").unwrap();
+
+    // Workspace 1's setup ran; workspace 0's has not.
+    let err = run_workflow_job_sync(&repo, "ci.yaml", "greet", 0, &repo).unwrap_err();
+    assert!(err.contains("setup_script_pending"));
+    let result = run_workflow_job_sync(&repo, "ci.yaml", "greet", 1, &repo).unwrap();
+    assert!(result.success);
+  }
+
+  #[test]
+  fn test_run_setup_script_captures_logs() {
+    let dir = TempDir::new().unwrap();
+    let repo = write_config(&dir, "setup_script: \"echo setup-output\"\n");
+    crate::local_db::init_local_db(&repo).unwrap();
+
+    run_setup_script_sync(&repo, 0, &repo, "echo setup-output").unwrap();
+
+    let runs = list_workflow_runs_sync(&repo, 0, SETUP_SCRIPT_FILENAME, 10).unwrap();
+    assert_eq!(runs.len(), 1);
+    let logs =
+      get_run_logs_sync(&repo, runs[0].id, SETUP_SCRIPT_JOB_ID, &Default::default()).unwrap();
+    assert_eq!(logs[0].body, "setup-output");
   }
 }

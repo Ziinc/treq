@@ -9,6 +9,39 @@ use tauri::State;
 // Track which workspaces have been indexed this session
 static INDEXED_WORKSPACES: OnceLock<Mutex<HashSet<String>>> = OnceLock::new();
 
+/// Fires the repo's `.treq/config.yaml` `setup_script` (if any) for a newly
+/// created workspace, in the background so workspace creation itself isn't
+/// slowed down. Checks are blocked for the workspace until this finishes —
+/// see `core::checks::ensure_setup_script_complete`.
+fn spawn_setup_script_if_configured(workspace: &Workspace) {
+  let config = match crate::repo_config::parse_config(&workspace.repo_path) {
+    Ok(c) => c,
+    Err(e) => {
+      log::warn!("Failed to read .treq/config.yaml for setup_script: {}", e);
+      return;
+    }
+  };
+  let Some(script) = config.setup_script.filter(|s| !s.trim().is_empty()) else {
+    return;
+  };
+
+  let repo_path = workspace.repo_path.clone();
+  let workspace_id = workspace.id;
+  let workspace_path = crate::auto_rebase::get_full_workspace_path(workspace);
+  std::thread::spawn(move || {
+    if let Err(e) =
+      crate::core::run_setup_script_sync(&repo_path, workspace_id, &workspace_path, &script)
+    {
+      log::warn!(
+        "Setup script failed for workspace {} in {}: {}",
+        workspace_id,
+        repo_path,
+        e
+      );
+    }
+  });
+}
+
 #[tauri::command]
 pub async fn get_repo_current_branch(repo_path: String) -> Result<crate::core::RepoBranch, String> {
   tauri::async_runtime::spawn_blocking(move || crate::core::get_repo_current_branch(&repo_path))
@@ -109,6 +142,8 @@ pub async fn create_workspace(
     // Initialize rebase flag to trigger rebase on first view
     local_db::update_workspace_last_rebased_commit(&repo_path_for_task, workspace.id, "")?;
 
+    spawn_setup_script_if_configured(&workspace);
+
     Ok(workspace.id)
   })
   .await
@@ -148,6 +183,9 @@ pub async fn open_or_create_workspace_from_pr(
       title.as_deref(),
       description.as_deref(),
     )?;
+    if created {
+      spawn_setup_script_if_configured(&workspace);
+    }
     Ok(OpenOrCreateWorkspaceFromPrResult {
       workspace_id: workspace.id,
       created,

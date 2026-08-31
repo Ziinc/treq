@@ -8,6 +8,9 @@ pub struct RepoConfig {
   pub default_agent: Option<String>,
   pub target_branch: Option<String>,
   pub included_copy_files: Option<Vec<String>>,
+  /// Shell command run once in a new workspace right after it's created.
+  /// Checks (`.treq/workflows`) are blocked for that workspace until it finishes.
+  pub setup_script: Option<String>,
 }
 
 pub fn config_path(repo_path: &str) -> PathBuf {
@@ -109,7 +112,8 @@ mod tests {
              target_branch: \"main\"\n\
              included_copy_files:\n\
                - \"src/main.rs\"\n\
-               - \"Cargo.toml\"\n",
+               - \"Cargo.toml\"\n\
+             setup_script: \"npm install\"\n",
     )
     .unwrap();
 
@@ -121,6 +125,27 @@ mod tests {
     assert_eq!(
       config.included_copy_files,
       Some(vec!["src/main.rs".to_string(), "Cargo.toml".to_string()])
+    );
+    assert_eq!(config.setup_script.as_deref(), Some("npm install"));
+  }
+
+  #[test]
+  fn test_parse_config_reads_setup_script() {
+    let temp_dir = TempDir::new().unwrap();
+    let repo_path = temp_dir.path().to_str().unwrap();
+
+    let treq_dir = temp_dir.path().join(".treq");
+    fs::create_dir_all(&treq_dir).unwrap();
+    fs::write(
+      treq_dir.join("config.yaml"),
+      "setup_script: \"npm ci && npm run build\"\n",
+    )
+    .unwrap();
+
+    let config = parse_config(repo_path).expect("should parse");
+    assert_eq!(
+      config.setup_script.as_deref(),
+      Some("npm ci && npm run build")
     );
   }
 
@@ -157,6 +182,7 @@ mod tests {
       default_agent: Some("claude".to_string()),
       target_branch: Some("main".to_string()),
       included_copy_files: Some(vec!["a.env".to_string(), "b.env".to_string()]),
+      setup_script: None,
     };
 
     sync_to_settings(&db, "/repo/a", &config).expect("sync should succeed");
