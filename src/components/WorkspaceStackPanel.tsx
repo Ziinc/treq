@@ -12,6 +12,7 @@ import { listCommits, listWorkspaceStatuses, type Workspace } from "../lib/api";
 import { WEB_URL } from "../lib/supabase";
 import { cn, formatFullTimestamp, formatRelativeTime } from "../lib/utils";
 import {
+  stackLocColumnCh,
   sumWorkspaceDiffStats,
   type WorkspaceDiffStats,
 } from "../lib/workspace-stack";
@@ -97,6 +98,9 @@ export const WorkspaceStackPanel = ({
       Math.max(stats.insertions, stats.deletions),
     ),
   );
+  const { insertionsCh, deletionsCh } = stackLocColumnCh(
+    diffStatsByWorkspaceId.values(),
+  );
 
   if (!stack) return null;
 
@@ -173,6 +177,8 @@ export const WorkspaceStackPanel = ({
                 }
               }
               maxChange={maxChange}
+              insertionsCh={insertionsCh}
+              deletionsCh={deletionsCh}
               onSelect={onSelectWorkspace}
             />
           ))}
@@ -198,10 +204,19 @@ interface StackItemProps {
   entry: StackedWorkspaceEntry;
   diffStats: WorkspaceDiffStats;
   maxChange: number;
+  insertionsCh: number;
+  deletionsCh: number;
   onSelect?: (workspace: Workspace) => void;
 }
 
-function StackItem({ entry, diffStats, maxChange, onSelect }: StackItemProps) {
+function StackItem({
+  entry,
+  diffStats,
+  maxChange,
+  insertionsCh,
+  deletionsCh,
+  onSelect,
+}: StackItemProps) {
   const { workspace, isCurrent } = entry;
   const hasStats = diffStats.insertions > 0 || diffStats.deletions > 0;
   const title = getWorkspaceDisplayTitle(workspace);
@@ -250,6 +265,8 @@ function StackItem({ entry, diffStats, maxChange, onSelect }: StackItemProps) {
                 className="ml-auto"
                 diffStats={diffStats}
                 maxChange={maxChange}
+                insertionsCh={insertionsCh}
+                deletionsCh={deletionsCh}
               />
             )}
           </div>

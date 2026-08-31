@@ -357,6 +357,33 @@ describe("WorkspaceStackPanel", () => {
     expect(screen.getByText(rootWorkspace.title!)).toBeTruthy();
   });
 
+  it("uses shared LOC number-column widths so bar midlines align across the stack", async () => {
+    vi.mocked(api.listWorkspaceStatuses).mockResolvedValue(
+      asStatuses([rootWorkspace, middleWorkspace, tipWorkspace]),
+    );
+    vi.mocked(api.listCommits).mockImplementation(
+      async (_repoPath, workspaceId) => {
+        if (workspaceId === tipWorkspace.id) return makeLogResult(253, 18277);
+        if (workspaceId === middleWorkspace.id) return makeLogResult(61, 61);
+        return makeLogResult(18724, 477);
+      },
+    );
+
+    render(
+      <WorkspaceStackPanel
+        repoPath={middleWorkspace.repo_path}
+        workspace={middleWorkspace}
+        defaultBranch="main"
+      />,
+    );
+
+    const indicators = await screen.findAllByTestId("workspace-loc-indicator");
+    expect(indicators).toHaveLength(3);
+    const columns = indicators.map((el) => el.style.gridTemplateColumns);
+    expect(new Set(columns).size).toBe(1);
+    expect(columns[0]).toBe("6ch auto 6ch");
+  });
+
   it("schedules the entire stack from the stack card", async () => {
     const user = userEvent.setup();
     const onScheduleStack = vi.fn();

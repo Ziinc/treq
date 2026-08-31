@@ -132,7 +132,7 @@ it("captures the stack panel and navigation to a sibling workspace", async () =>
 		expectations: [
 			`In the Code tab's main column, a bordered "Stack" panel reading "1 of 2" appears below the task/prompt input box and above the "Go to file" search row and file list.`,
 			`The stack panel lists two items, top-to-bottom: "${CHILD_BRANCH}" and "${PARENT_BRANCH}", with the target branch below them at the bottom of the list.`,
-			`Each item shows a small diff bar with a green "+N" number on its left, a thin vertical axis line in the middle, and a red "-N" number on its right; "${CHILD_BRANCH}" reads "+10" / "-6" with both a green segment left of the axis and a red segment right of it, while "${PARENT_BRANCH}" reads "+2" / "-0" with only a short green segment and no red segment.`,
+			`Each item shows a small diff bar with a green "+N" on its left and a red "-N" on its right; "${CHILD_BRANCH}" reads "+10" / "-6" and "${PARENT_BRANCH}" reads "+2". The thin vertical axis in the middle of each bar lines up vertically across the two rows despite the different digit counts.`,
 		],
 	});
 

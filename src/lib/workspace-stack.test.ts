@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { JjLogCommit } from "./api-types";
 import {
+  locSignedCountCh,
+  stackLocColumnCh,
   sumWorkspaceDiffStats,
   sumWorkspaceLocFromLog,
 } from "./workspace-stack";
@@ -94,5 +96,26 @@ describe("sumWorkspaceLocFromLog", () => {
         commits: [makeCommit({ insertions: 1, deletions: 0 })],
       }),
     ).toEqual({ insertions: 1, deletions: 0 });
+  });
+});
+
+describe("locSignedCountCh", () => {
+  it("includes the sign plus digit count", () => {
+    expect(locSignedCountCh(0)).toBe(2);
+    expect(locSignedCountCh(9)).toBe(2);
+    expect(locSignedCountCh(10)).toBe(3);
+    expect(locSignedCountCh(18724)).toBe(6);
+  });
+});
+
+describe("stackLocColumnCh", () => {
+  it("sizes columns to the widest insertion and deletion in the set", () => {
+    expect(
+      stackLocColumnCh([
+        { insertions: 253, deletions: 18277 },
+        { insertions: 61, deletions: 61 },
+        { insertions: 18724, deletions: 477 },
+      ]),
+    ).toEqual({ insertionsCh: 6, deletionsCh: 6 });
   });
 });
