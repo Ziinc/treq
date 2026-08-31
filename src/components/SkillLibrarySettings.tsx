@@ -1,4 +1,4 @@
-import { BookOpen, Loader2 } from "lucide-react";
+import { BookOpen, Loader2, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import useSWR from "swr";
 import {
@@ -11,9 +11,24 @@ import {
   type SkillInstallScope,
 } from "../lib/api";
 import { Button } from "./ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "./ui/dialog";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { useToast } from "./ui/toast";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "./ui/tooltip";
+
+type ScopeFilter = "all" | SkillInstallScope;
 
 interface SkillLibrarySettingsProps {
   repoPath: string;
@@ -27,12 +42,21 @@ function skillMatches(skill: SkillCatalogSkill, query: string): boolean {
   return haystack.includes(query.trim().toLowerCase());
 }
 
+function skillMatchesScope(
+  skill: SkillCatalogSkill,
+  filter: ScopeFilter,
+): boolean {
+  if (filter === "all") return true;
+  return skill.installed?.scope === filter;
+}
+
 export function SkillLibrarySettings({
   repoPath,
   catalogUrl,
 }: SkillLibrarySettingsProps) {
   const { addToast } = useToast();
   const [query, setQuery] = useState("");
+  const [scopeFilter, setScopeFilter] = useState<ScopeFilter>("all");
   const [pendingId, setPendingId] = useState<string | null>(null);
   const { data, error, isLoading, mutate } = useSWR(
     ["skill-catalog", repoPath, catalogUrl ?? ""],
@@ -45,8 +69,11 @@ export function SkillLibrarySettings({
 
   const skills = useMemo(() => {
     const list = data?.skills ?? [];
-    return list.filter((skill) => skillMatches(skill, query));
-  }, [data?.skills, query]);
+    return list.filter(
+      (skill) =>
+        skillMatches(skill, query) && skillMatchesScope(skill, scopeFilter),
+    );
+  }, [data?.skills, query, scopeFilter]);
 
   async function runAction(skillId: string, action: () => Promise<unknown>) {
     setPendingId(skillId);
@@ -78,15 +105,33 @@ export function SkillLibrarySettings({
         </p>
       </div>
 
-      <div>
-        <Label htmlFor="skill-library-search">Search skills</Label>
-        <Input
-          id="skill-library-search"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search by name or description"
-          className="mt-2"
-        />
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="min-w-[12rem] flex-1">
+          <Label htmlFor="skill-library-search">Search skills</Label>
+          <Input
+            id="skill-library-search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search by name or description"
+            className="mt-2"
+          />
+        </div>
+        <div>
+          <Label htmlFor="skill-library-scope-filter">Install level</Label>
+          <select
+            id="skill-library-scope-filter"
+            aria-label="Filter by install level"
+            className="mt-2 block w-full min-w-[10rem] px-2 py-1.5 border rounded-md bg-background text-sm"
+            value={scopeFilter}
+            onChange={(event) =>
+              setScopeFilter(event.target.value as ScopeFilter)
+            }
+          >
+            <option value="all">All</option>
+            <option value="application">Application</option>
+            <option value="repository">Repository</option>
+          </select>
+        </div>
       </div>
 
       {isLoading && (
@@ -146,8 +191,37 @@ function SkillRow({
   onScope: (scope: SkillInstallScope) => void;
 }) {
   const { installed } = skill;
+  const [installOpen, setInstallOpen] = useState(false);
+
+  function chooseScope(scope: SkillInstallScope) {
+    setInstallOpen(false);
+    onInstall(scope);
+  }
+
   return (
-    <li className="border rounded-md p-3 space-y-2">
+    <li className="relative border rounded-md p-3 pr-12 space-y-2">
+      {installed && (
+        <div className="absolute top-2 right-2">
+          <TooltipProvider delayDuration={200}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon-xs"
+                  className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  disabled={busy}
+                  onClick={onUninstall}
+                  aria-label={`Uninstall ${skill.name}`}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Uninstall</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+      )}
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -167,7 +241,7 @@ function SkillRow({
             href={skill.url}
             target="_blank"
             rel="noreferrer"
-            className="text-muted-foreground hover:text-foreground"
+            className="text-muted-foreground hover:text-foreground mr-6"
             aria-label={`Open ${skill.name} source`}
           >
             <BookOpen className="h-4 w-4" />
@@ -179,7 +253,7 @@ function SkillRow({
           Proprietary skills cannot be installed from the registry.
         </p>
       ) : installed ? (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center justify-end gap-2">
           <Label htmlFor={`scope-${skill.id}`} className="text-sm">
             Install level
           </Label>
@@ -196,36 +270,68 @@ function SkillRow({
             <option value="application">Application</option>
             <option value="repository">Repository</option>
           </select>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={busy}
-            onClick={onUninstall}
-          >
-            Uninstall
-          </Button>
         </div>
       ) : (
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            size="sm"
-            disabled={busy}
-            onClick={() => onInstall("application")}
-          >
-            Install for application
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={busy}
-            onClick={() => onInstall("repository")}
-          >
-            Install for repository
-          </Button>
-        </div>
+        <>
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              size="sm"
+              disabled={busy}
+              onClick={() => setInstallOpen(true)}
+            >
+              Install…
+            </Button>
+          </div>
+          <Dialog open={installOpen} onOpenChange={setInstallOpen}>
+            <DialogContent className="max-w-xl">
+              <DialogHeader>
+                <DialogTitle>Install {skill.name}</DialogTitle>
+                <DialogDescription>
+                  Choose whether this skill is stored for every repository on
+                  this machine, or only for the current repository.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-3 text-sm py-2">
+                <p>
+                  <span className="font-medium">Repository</span> writes the
+                  skill under <code className="text-xs">.treq/skills/</code> in
+                  this repository. Only this repository uses it.
+                </p>
+                <p>
+                  <span className="font-medium">Application</span> writes the
+                  skill into Treq application data. Every repository on this
+                  machine can use it.
+                </p>
+              </div>
+              <div className="flex flex-nowrap justify-end gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setInstallOpen(false)}
+                  disabled={busy}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => chooseScope("application")}
+                >
+                  Install for application
+                </Button>
+                <Button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => chooseScope("repository")}
+                >
+                  Install for repository
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </>
       )}
     </li>
   );

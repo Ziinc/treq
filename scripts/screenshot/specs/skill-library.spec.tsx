@@ -78,40 +78,38 @@ it("captures skill library browse and install", async () => {
   await captureDocument(document, {
     name: "skill-library-01-browse",
     expectations: [
-      "The Settings page Skills tab is selected in the left settings list.",
-      "The skill library shows 0 installed and a demo skill with Install for application and Install for repository buttons.",
+      "The Skills tab is selected and the demo skill shows a single Install… button.",
+      "Search sits next to an Install level filter with All selected.",
+    ],
+  });
+
+  await user.click(await screen.findByRole("button", { name: /^install/i }));
+  expect(await screen.findByRole("dialog")).toBeTruthy();
+
+  await captureDocument(document, {
+    name: "skill-library-02-install-dialog",
+    expectations: [
+      "An Install demo dialog explains repository and application install levels.",
+      "Install for repository is the filled primary button; Install for application is outline.",
     ],
   });
 
   await user.click(
-    await screen.findByRole("button", { name: /install for application/i }),
+    await screen.findByRole("button", { name: /install for repository/i }),
   );
   expect(await screen.findByLabelText(/install level for demo/i)).toHaveValue(
-    "application",
+    "repository",
   );
   expect(await screen.findByText("1 installed")).toBeTruthy();
 
   await captureDocument(document, {
-    name: "skill-library-02-installed",
+    name: "skill-library-03-installed",
     expectations: [
-      "The installed count reads 1 installed.",
-      "The demo skill shows Install level set to Application and an Uninstall button.",
+      "The demo card shows Install level set to Repository, aligned to the right.",
+      "A trash icon uninstall control sits in the upper right of the card.",
     ],
   });
 
-  await user.selectOptions(
-    await screen.findByLabelText(/install level for demo/i),
-    "repository",
-  );
-  expect(await screen.findByLabelText(/install level for demo/i)).toHaveValue(
-    "repository",
-  );
-
-  await captureDocument(document, {
-    name: "skill-library-03-repo-level",
-    expectations: [
-      "The demo skill Install level select shows Repository.",
-      "The Uninstall button is still visible next to the install level control.",
-    ],
-  });
+  await user.hover(await screen.findByRole("button", { name: /uninstall demo/i }));
+  expect(await screen.findByRole("tooltip", { name: /uninstall/i })).toBeTruthy();
 }, 60000);

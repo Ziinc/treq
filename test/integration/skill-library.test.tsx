@@ -8,6 +8,7 @@ import { createTestRepo, openRepo } from "../utils";
 import { render, screen } from "../test-utils";
 import { Dashboard } from "../../src/components/Dashboard";
 import userEvent from "@testing-library/user-event";
+import { uninstallSkill } from "../../src/lib/api-extra";
 
 function skillChecksum(files: { path: string; content: Buffer }[]): string {
   const hash = crypto.createHash("sha256");
@@ -61,21 +62,29 @@ function writeCatalog() {
 describe("skill library", () => {
   let user: ReturnType<typeof userEvent.setup>;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     const { repoPath } = createTestRepo(false);
     openRepo(repoPath);
     writeCatalog();
+    await uninstallSkill("test/demo", repoPath).catch(() => undefined);
     user = userEvent.setup();
   });
 
-  it("browses the registry and installs a skill for the application", async () => {
+  async function openSkillsTab() {
     render(<Dashboard />);
-
     await user.click(await screen.findByLabelText("Settings"));
     await user.click(await screen.findByRole("tab", { name: /skills/i }));
-
     expect(await screen.findByTestId("skill-library-settings")).toBeTruthy();
+  }
+
+  it("installs from a dialog that offers repository as the primary action", async () => {
+    await openSkillsTab();
     expect(await screen.findByText("demo skill")).toBeTruthy();
+
+    await user.click(await screen.findByRole("button", { name: /^install/i }));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog).toHaveTextContent(/repository/i);
+    expect(dialog).toHaveTextContent(/application/i);
 
     await user.click(
       await screen.findByRole("button", { name: /install for application/i }),
@@ -84,5 +93,31 @@ describe("skill library", () => {
     expect(await screen.findByLabelText(/install level for demo/i)).toHaveValue(
       "application",
     );
-  });
+    expect(
+      await screen.findByRole("button", { name: /uninstall demo/i }),
+    ).toBeTruthy();
+  }, 30000);
+
+  it("filters the catalog by install level", async () => {
+    await openSkillsTab();
+    await user.click(await screen.findByRole("button", { name: /^install/i }));
+    await user.click(
+      await screen.findByRole("button", { name: /install for repository/i }),
+    );
+    expect(await screen.findByLabelText(/install level for demo/i)).toHaveValue(
+      "repository",
+    );
+
+    await user.selectOptions(
+      await screen.findByLabelText(/filter by install level/i),
+      "application",
+    );
+    expect(screen.queryByText("demo skill")).toBeNull();
+
+    await user.selectOptions(
+      await screen.findByLabelText(/filter by install level/i),
+      "repository",
+    );
+    expect(await screen.findByText("demo skill")).toBeTruthy();
+  }, 30000);
 });
