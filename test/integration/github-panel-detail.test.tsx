@@ -10,6 +10,7 @@ const api = vi.hoisted(() => ({
   ghCreateIssueComment: vi.fn(),
   ghViewPr: vi.fn(),
   ghSetPrDraft: vi.fn(),
+  ghClosePr: vi.fn(),
   getWorkspaces: vi.fn(),
   openOrCreateWorkspaceFromPr: vi.fn(),
 }));
@@ -22,10 +23,34 @@ vi.mock("../../src/lib/api", async (importOriginal) => {
     ghCreateIssueComment: api.ghCreateIssueComment,
     ghViewPr: api.ghViewPr,
     ghSetPrDraft: api.ghSetPrDraft,
+    ghClosePr: api.ghClosePr,
     getWorkspaces: api.getWorkspaces,
     openOrCreateWorkspaceFromPr: api.openOrCreateWorkspaceFromPr,
   };
 });
+
+function makeDetailPr(overrides: {
+  is_draft?: boolean;
+  state?: string;
+  title?: string;
+}) {
+  return {
+    number: 42,
+    title: overrides.title ?? "Feature PR",
+    state: overrides.state ?? "OPEN",
+    url: "https://github.com/acme/treq/pull/42",
+    body: "Body",
+    author: { login: "alice" },
+    labels: [],
+    head_ref_name: "feat",
+    base_ref_name: "main",
+    merge_state_status: "CLEAN",
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+    comments: null,
+    is_draft: overrides.is_draft ?? false,
+  };
+}
 
 describe("IssueDetailPanel markdown", () => {
   let user: ReturnType<typeof userEvent.setup>;
@@ -91,29 +116,6 @@ describe("IssueDetailPanel markdown", () => {
 });
 
 describe("PrDetailPanel draft toggle", () => {
-  function makeDetailPr(overrides: {
-    is_draft?: boolean;
-    state?: string;
-    title?: string;
-  }) {
-    return {
-      number: 42,
-      title: overrides.title ?? "Feature PR",
-      state: overrides.state ?? "OPEN",
-      url: "https://github.com/acme/treq/pull/42",
-      body: "Body",
-      author: { login: "alice" },
-      labels: [],
-      head_ref_name: "feat",
-      base_ref_name: "main",
-      merge_state_status: "CLEAN",
-      created_at: "2026-01-01T00:00:00Z",
-      updated_at: "2026-01-01T00:00:00Z",
-      comments: null,
-      is_draft: overrides.is_draft ?? false,
-    };
-  }
-
   let user: ReturnType<typeof userEvent.setup>;
 
   beforeEach(() => {
@@ -173,5 +175,46 @@ describe("PrDetailPanel draft toggle", () => {
     expect(
       screen.getByRole("button", { name: /ready for review/i }),
     ).toBeVisible();
+  });
+});
+
+describe("PrDetailPanel close PR", () => {
+  let user: ReturnType<typeof userEvent.setup>;
+
+  beforeEach(() => {
+    user = userEvent.setup();
+    api.getWorkspaces.mockResolvedValue([]);
+    api.ghClosePr.mockReset();
+  });
+
+  it("shows a loading state on the Close PR button while the request is in flight", async () => {
+    let resolveClose: () => void = () => {};
+    api.ghViewPr.mockResolvedValue(makeDetailPr({ is_draft: false }));
+    api.ghClosePr.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveClose = resolve;
+        }),
+    );
+
+    render(
+      <PrDetailPanel
+        repoPath="/tmp/repo"
+        repoFullName="acme/treq"
+        prNumber={42}
+        onClose={() => {}}
+      />,
+    );
+
+    await user.click(await screen.findByRole("button", { name: /close pr/i }));
+
+    const closing = await screen.findByRole("button", { name: /closing/i });
+    expect(closing).toBeDisabled();
+    expect(closing).toHaveAttribute("aria-busy", "true");
+
+    resolveClose();
+    await waitFor(() => {
+      expect(api.ghClosePr).toHaveBeenCalledWith("acme/treq", 42);
+    });
   });
 });
