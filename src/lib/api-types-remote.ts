@@ -120,7 +120,7 @@ export function isQuotaExceededError(
   value: unknown,
 ): value is QuotaExceededError {
   if (typeof value !== "object" || value === null) return false;
-  const code = (value as { code?: unknown }).code;
+  const { code } = value as { code?: unknown };
   return (
     code === "size_preset_exceeds_base_allocation" ||
     code === "disk_quota_exceeded"
