@@ -20,6 +20,12 @@ vi.mock("../../lib/remote-dispatch", async () => {
 
 const mockDispatch = vi.mocked(remoteDispatch.dispatch);
 
+function isRepositoryStatusCall(
+  call: Parameters<typeof remoteDispatch.dispatch>,
+) {
+  return call[1].kind === "RepositoryStatus";
+}
+
 function respond(request: remoteDispatch.TreqCommandRequest, marker: string) {
   switch (request.kind) {
     case "WorkspaceChangeMarker":
@@ -61,11 +67,7 @@ describe("RemoteReviewPanel change-marker watch", () => {
     // it as a foreign change (no refresh signal is observable from mount
     // alone - the important assertion is the *second* fetch below).
     await waitFor(() => {
-      expect(
-        mockDispatch.mock.calls.some(
-          ([, req]) => req.kind === "RepositoryStatus",
-        ),
-      ).toBe(true);
+      expect(mockDispatch.mock.calls.some(isRepositoryStatusCall)).toBe(true);
     });
     const callsAfterMount = mockDispatch.mock.calls.length;
 
@@ -80,7 +82,7 @@ describe("RemoteReviewPanel change-marker watch", () => {
 
     await waitFor(() => {
       const statusCallsAfterChange = mockDispatch.mock.calls.filter(
-        ([, req]) => req.kind === "RepositoryStatus",
+        isRepositoryStatusCall,
       ).length;
       // A fresh RepositoryStatus dispatch after the marker changed is the
       // observable signal that the panel refreshed its read state.
