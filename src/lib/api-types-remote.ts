@@ -116,10 +116,15 @@ export interface QuotaExceededError {
   base_allocation?: typeof BASE_ALLOCATION;
 }
 
-export function isQuotaExceededError(value: unknown): value is QuotaExceededError {
+export function isQuotaExceededError(
+  value: unknown,
+): value is QuotaExceededError {
   if (typeof value !== "object" || value === null) return false;
   const code = (value as { code?: unknown }).code;
-  return code === "size_preset_exceeds_base_allocation" || code === "disk_quota_exceeded";
+  return (
+    code === "size_preset_exceeds_base_allocation" ||
+    code === "disk_quota_exceeded"
+  );
 }
 
 export interface SizePresetInfo {
