@@ -126,6 +126,9 @@ export function ChecksTab({
         return next;
       });
       invalidateRuns(wf.filename);
+      invalidateQueries(["workspace-commits", repoPath, workspaceId]);
+      invalidateQueries(["commit-diff-viewer-commits", repoPath]);
+      invalidateQueries(["linear-commits", repoPath]);
     }
   }
 
@@ -150,6 +153,9 @@ export function ChecksTab({
         return next;
       });
       invalidateRuns(wf.filename);
+      invalidateQueries(["workspace-commits", repoPath, workspaceId]);
+      invalidateQueries(["commit-diff-viewer-commits", repoPath]);
+      invalidateQueries(["linear-commits", repoPath]);
     }
   }
 
