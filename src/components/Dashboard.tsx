@@ -27,6 +27,7 @@ import {
   checkSshHost,
   createSession,
   deleteWorkspace,
+  archiveWorkspace,
   getRepoCurrentBranch,
   getRepoDefaultBranch,
   getRepoSetting,
@@ -832,6 +833,32 @@ export const Dashboard: React.FC<DashboardProps> = ({
     },
   });
 
+  const archiveWorkspaceMutation = useMutation({
+    mutationFn: async (workspace: Workspace) => {
+      await archiveWorkspace(workspace.repo_path, workspace.id);
+    },
+    onSuccess: (_data, workspace) => {
+      terminalPaneRef.current?.closeTerminalsForWorkspace(
+        getFullWorkspacePath(workspace),
+      );
+      void invalidateQueries(["workspaces", repoPath]);
+      invalidateQueries(["workspace-statuses", repoPath]);
+      handleReturnToDashboard();
+      addToast({
+        title: "Workspace Archived",
+        description: "Workspace directory removed; record kept",
+        type: "success",
+      });
+    },
+    onError: (error) => {
+      addToast({
+        title: "Archive Failed",
+        description: error instanceof Error ? error.message : String(error),
+        type: "error",
+      });
+    },
+  });
+
   const openRepositoryAtPath = (selected: string) =>
     openRepositoryAtPathShared(selected, {
       addToast,
@@ -1619,50 +1646,40 @@ export const Dashboard: React.FC<DashboardProps> = ({
     }
   };
 
-  const handleBulkDelete = async () => {
+  const handleBulkArchive = async () => {
     const count = selectedWorkspaceIds.size;
-    const confirmed = await ask(
-      `Delete ${count} workspace${count > 1 ? "s" : ""}?`,
-      { title: "Delete Workspaces", kind: "warning" },
+    const workspacesToArchive = workspaces.filter((w) =>
+      selectedWorkspaceIds.has(w.id),
     );
-    if (confirmed) {
-      const workspacesToDelete = workspaces.filter((w) =>
-        selectedWorkspaceIds.has(w.id),
+    try {
+      await Promise.all(
+        workspacesToArchive.map((workspace) =>
+          archiveWorkspace(workspace.repo_path, workspace.id),
+        ),
       );
-      try {
-        // Delete all workspaces without triggering individual onSuccess callbacks
-        await Promise.all(
-          workspacesToDelete.map((workspace) =>
-            deleteWorkspace(workspace.repo_path, workspace.id),
-          ),
+      for (const workspace of workspacesToArchive) {
+        terminalPaneRef.current?.closeTerminalsForWorkspace(
+          getFullWorkspacePath(workspace),
         );
-        // Close any terminals tied to the deleted workspaces so they don't
-        // linger as orphaned processes.
-        for (const workspace of workspacesToDelete) {
-          terminalPaneRef.current?.closeTerminalsForWorkspace(
-            getFullWorkspacePath(workspace),
-          );
-        }
-        // Show single toast and refresh after all deletions
-        void invalidateQueries(["workspaces", repoPath]);
-        invalidateQueries(["workspace-statuses", repoPath]);
-        handleReturnToDashboard();
-        addToast({
-          title: `${count} Workspace${count > 1 ? "s" : ""} Deleted`,
-          description: `Successfully removed ${count} workspace${
-            count > 1 ? "s" : ""
-          }`,
-          type: "success",
-        });
-      } catch (error) {
-        addToast({
-          title: "Delete Failed",
-          description: error instanceof Error ? error.message : String(error),
-          type: "error",
-        });
       }
-      setSelectedWorkspaceIds(new Set());
+      void invalidateQueries(["workspaces", repoPath]);
+      invalidateQueries(["workspace-statuses", repoPath]);
+      handleReturnToDashboard();
+      addToast({
+        title: `${count} Workspace${count > 1 ? "s" : ""} Archived`,
+        description: `Removed ${count} workspace director${
+          count > 1 ? "ies" : "y"
+        }; records kept`,
+        type: "success",
+      });
+    } catch (error) {
+      addToast({
+        title: "Archive Failed",
+        description: error instanceof Error ? error.message : String(error),
+        type: "error",
+      });
     }
+    setSelectedWorkspaceIds(new Set());
   };
 
   const handleDelete = async (workspace: Workspace) => {
@@ -1673,6 +1690,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
     if (confirmed) {
       deleteWorkspaceMutation.mutate(workspace);
     }
+  };
+
+  const handleArchive = (workspace: Workspace) => {
+    archiveWorkspaceMutation.mutate(workspace);
   };
 
   // Handle branch change after switching
@@ -1962,8 +1983,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
         selectedWorkspaceIds={selectedWorkspaceIds}
         onWorkspaceClick={(workspace) => handleSelectWorkspace(workspace)}
         onWorkspaceMultiSelect={handleWorkspaceMultiSelect}
-        onBulkDelete={handleBulkDelete}
-        onDeleteWorkspace={handleDelete}
+        onBulkArchive={handleBulkArchive}
+        onArchiveWorkspace={handleArchive}
         openSettings={openSettings}
         navigateToDashboard={handleReturnToDashboard}
         onOpenCommandPalette={() => setShowCommandPalette(true)}

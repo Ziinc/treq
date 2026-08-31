@@ -182,6 +182,25 @@ pub async fn delete_workspace(repo_path: String, id: i64) -> Result<(), String> 
   result
 }
 
+/// Archive a workspace: remove the directory, keep the DB record.
+#[tauri::command]
+pub async fn archive_workspace(repo_path: String, id: i64) -> Result<(), String> {
+  let started_at = Instant::now();
+  let repo_path_for_task = repo_path.clone();
+  let result = tauri::async_runtime::spawn_blocking(move || {
+    crate::core::archive_workspace(&repo_path_for_task, &id).map(|_| ())
+  })
+  .await
+  .map_err(|e| format!("Failed to join archive_workspace task: {}", e))?;
+  log::debug!(
+    "archive_workspace(repo_path={}, id={}) completed in {:?}",
+    repo_path,
+    id,
+    started_at.elapsed()
+  );
+  result
+}
+
 /// Push workspace to remote and update not_on_remote flag
 #[tauri::command]
 pub async fn push_workspace_to_remote(
@@ -751,5 +770,48 @@ mod tests {
       0,
       "Workspace should be removed from database even if directory was missing"
     );
+  }
+
+  #[test]
+  fn test_archive_workspace_keeps_db_entry() {
+    use crate::local_db;
+
+    let temp_dir = TempDir::new().unwrap();
+    let repo_path = temp_dir.path().to_str().unwrap();
+    let workspaces_dir = temp_dir.path().join(".treq").join("workspaces");
+    let workspace_dir = workspaces_dir.join("test_workspace");
+    fs::create_dir_all(&workspace_dir).unwrap();
+
+    local_db::add_workspace(
+      repo_path,
+      "test".to_string(),
+      "test_workspace".to_string(),
+      "test-branch".to_string(),
+      None,
+      None,
+      None,
+    )
+    .unwrap();
+
+    let workspaces = local_db::get_workspaces(repo_path).unwrap();
+    assert_eq!(workspaces.len(), 1);
+    let workspace_id = workspaces[0].id;
+
+    let result =
+      tauri::async_runtime::block_on(archive_workspace(repo_path.to_string(), workspace_id));
+    assert!(
+      result.is_ok(),
+      "archive_workspace should succeed: {:?}",
+      result
+    );
+
+    assert!(
+      local_db::get_workspaces(repo_path).unwrap().is_empty(),
+      "Archived workspace should be hidden from get_workspaces"
+    );
+    let stored = local_db::get_workspace_by_id(repo_path, workspace_id)
+      .unwrap()
+      .expect("record should remain");
+    assert!(stored.archived);
   }
 }

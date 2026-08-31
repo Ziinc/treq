@@ -200,6 +200,7 @@ mod tests {
       not_on_remote: false,
       sparse_patterns: None,
       hidden_until: None,
+      archived: false,
     }
   }
 

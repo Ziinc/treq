@@ -138,7 +138,7 @@ interface WorkspaceSidebarItemProps {
   onAddAfter?: (workspace: Workspace) => void;
   onStartAgent?: (workspace: Workspace) => void;
   onStartShell?: (workspace: Workspace) => void;
-  onDeleteWorkspace?: (workspace: Workspace) => void;
+  onArchiveWorkspace?: (workspace: Workspace) => void;
   onRenameWorkspace: (workspace: Workspace) => void;
   onDoubleClick?: (workspace: Workspace, event: React.MouseEvent) => void;
   queueStatus?: QueueEntryStatus;
@@ -206,7 +206,7 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
   onAddAfter,
   onStartAgent,
   onStartShell,
-  onDeleteWorkspace,
+  onArchiveWorkspace,
   onRenameWorkspace,
   onDoubleClick,
   queueStatus,
@@ -483,7 +483,7 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                       <ContextMenuSeparator />
                       <ContextMenuItem
                         className="text-destructive focus:text-destructive"
-                        onClick={() => onDeleteWorkspace?.(workspace)}
+                        onClick={() => onArchiveWorkspace?.(workspace)}
                       >
                         <Archive className="w-4 h-4 mr-2" />
                         Archive Workspace

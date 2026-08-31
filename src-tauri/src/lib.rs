@@ -722,6 +722,7 @@ pub fn run() {
             commands::create_workspace,
             commands::open_or_create_workspace_from_pr,
             commands::delete_workspace,
+            commands::archive_workspace,
             commands::get_repo_default_branch,
             commands::push_workspace_to_remote,
             commands::pull_workspace_from_remote,
