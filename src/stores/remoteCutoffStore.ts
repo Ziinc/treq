@@ -13,9 +13,9 @@
 // read `useRemoteCutoffStore((s) => s.cutoffs[endpointId])` to decide
 // whether to show a blocking reauth prompt for that endpoint.
 
-import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { create } from "zustand";
+import { remoteClearCutoff } from "../lib/api-extra";
 import type { CutoffReason } from "../lib/remote-cert-lifecycle";
 
 export const REMOTE_CUTOFF_EVENT = "remote://cutoff";
@@ -69,7 +69,7 @@ export const useRemoteCutoffStore = create<RemoteCutoffState>((set, get) => ({
     }));
   },
   clearCutoff: async (endpointId) => {
-    await invoke("remote_clear_cutoff", { endpointId });
+    await remoteClearCutoff(endpointId);
     set((state) => {
       const next = { ...state.cutoffs };
       delete next[endpointId];

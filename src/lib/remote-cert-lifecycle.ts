@@ -16,9 +16,9 @@
 // cutoff via the `remote_force_cutoff` Tauri command.
 
 import type { IssueCertificateResponse } from "./api-types-remote";
+import { remoteForceCutoff } from "./api-extra";
 import { issueCertificate, reportCutoff } from "./remote-control-plane";
 import { supabase } from "./supabase";
-import { invoke } from "@tauri-apps/api/core";
 
 /**
  * Renew once at most this fraction of the certificate's total lifetime
@@ -276,10 +276,7 @@ export function startManagedCertificateRenewal(
       }),
     onRenewed: (renewed) => onRenewed?.(renewed),
     onCutoff: (reason) => {
-      void invoke("remote_force_cutoff", {
-        endpointId: lease.endpointId,
-        reason,
-      });
+      void remoteForceCutoff(lease.endpointId, reason);
       void reportCutoff({
         instance_id: lease.instanceId,
         endpoint_id: lease.endpointId,
