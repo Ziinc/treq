@@ -146,6 +146,7 @@ pub fn list_directory(path: String) -> Result<Vec<DirectoryEntry>, String> {
           modified_at: modified_at_rfc3339(&entry_path.to_string_lossy()),
           submodule_pin: None,
           submodule_synced: None,
+          status: None,
         });
       }
     }
@@ -159,6 +160,16 @@ pub fn list_directory(path: String) -> Result<Vec<DirectoryEntry>, String> {
   });
 
   Ok(files)
+}
+
+#[tauri::command]
+pub fn list_workspace_files(
+  repo_path: String,
+  workspace_id: Option<i64>,
+  dir: String,
+  target_branch: Option<String>,
+) -> Result<Vec<DirectoryEntry>, String> {
+  crate::core::list_workspace_files(&repo_path, workspace_id, &dir, target_branch.as_deref())
 }
 
 #[tauri::command]

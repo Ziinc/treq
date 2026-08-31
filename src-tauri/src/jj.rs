@@ -5307,6 +5307,81 @@ fn get_conflicted_files_from_branch_diff(
   Ok(conflicts)
 }
 
+/// List files changed by already-committed ancestors of the working-copy commit,
+/// relative to `target_branch` — i.e. files in the stack that are *not* part of
+/// the mutable working-copy change itself. Returns an empty list when the
+/// working-copy commit has no parent (nothing has been committed yet).
+pub fn jj_get_committed_files(
+  workspace_path: &str,
+  target_branch: Option<&str>,
+) -> Result<Vec<String>, JjError> {
+  let effective_target = match target_branch {
+    Some(branch) => branch.to_string(),
+    None => get_default_branch(&workspace_repo_path(workspace_path))?,
+  };
+
+  let mut loaded = load_workspace_repo(workspace_path)?;
+  import_colocated_git_state(&mut loaded, workspace_path)?;
+
+  let wc_commit_id = loaded
+    .repo
+    .view()
+    .get_wc_commit_id(loaded.workspace.workspace_name())
+    .cloned()
+    .ok_or_else(|| JjError::IoError("No working-copy commit found".to_string()))?;
+  let wc_commit = loaded
+    .repo
+    .store()
+    .get_commit(&wc_commit_id)
+    .map_err(|e| JjError::IoError(format!("Failed to load wc commit: {}", e)))?;
+
+  let Some(parent_id) = wc_commit.parent_ids().first().cloned() else {
+    return Ok(Vec::new());
+  };
+  let parent_commit = loaded
+    .repo
+    .store()
+    .get_commit(&parent_id)
+    .map_err(|e| JjError::IoError(format!("Failed to load parent commit: {}", e)))?;
+
+  let target_sym = format_revset_symbol(&effective_target);
+  let merge_base_revset = format!("latest(::{target_sym} & ::{})", parent_id.hex());
+  let merge_base_commit = {
+    let revset = evaluate_revset(&loaded, &merge_base_revset)
+      .map_err(|e| JjError::IoError(format!("Failed to find merge base: {}", e)))?;
+    match revset
+      .iter()
+      .commits(loaded.repo.store())
+      .next()
+      .transpose()
+      .map_err(|e| JjError::IoError(format!("Failed to load merge base commit: {}", e)))?
+    {
+      Some(commit) => commit,
+      // No common ancestor (e.g. target branch doesn't exist yet) — nothing
+      // to report as "already committed" relative to it.
+      None => return Ok(Vec::new()),
+    }
+  };
+
+  let diff_matcher = repo_root_matcher();
+  let committed: Vec<String> = block_on(
+    merge_base_commit
+      .tree()
+      .diff_stream(&parent_commit.tree(), &diff_matcher)
+      .collect::<Vec<_>>(),
+  )
+  .into_iter()
+  .filter_map(|entry| {
+    entry
+      .values
+      .ok()
+      .map(|_| entry.path.as_internal_file_string().to_string())
+  })
+  .collect();
+
+  Ok(committed)
+}
+
 /// Paths with unresolved conflicts inside a single tree (jj-lib MergedTree::conflicts).
 fn collect_conflict_paths_from_tree(tree: &MergedTree) -> Vec<String> {
   tree

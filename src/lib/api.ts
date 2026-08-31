@@ -167,6 +167,19 @@ export const lsWorkspace = (
 ): Promise<DirectoryEntry[]> =>
   invoke("ls_workspace", { repoPath, workspaceId });
 
+export const listWorkspaceFiles = (
+  repoPath: string,
+  workspaceId: number | null,
+  dir: string,
+  targetBranch?: string | null,
+): Promise<DirectoryEntry[]> =>
+  invoke("list_workspace_files", {
+    repoPath,
+    workspaceId,
+    dir,
+    targetBranch: targetBranch ?? null,
+  });
+
 export const listGitignoredPathSuggestions = (
   repoPath: string,
 ): Promise<string[]> =>

@@ -28,6 +28,11 @@ pub struct WorkspaceEntry {
   /// Repo-level preference: populate this submodule in every workspace. Default off.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub submodule_synced: Option<bool>,
+  /// File status for highlighting in the Code tab file list: "conflict",
+  /// "workingCopy", or "committed". Absent means untouched. Only populated by
+  /// `core::files::list_workspace_files`; plain directory listings leave it unset.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub status: Option<String>,
 }
 
 /// Defines how a workspace is merged into its target branch.

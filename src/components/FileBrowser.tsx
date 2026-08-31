@@ -28,6 +28,7 @@ import {
   getWorkspaceFileHunks,
   listDirectoriesBatch,
   listDirectory,
+  listWorkspaceFiles,
   readFile,
 } from "../lib/api";
 import {
@@ -1011,18 +1012,35 @@ const TreeNode = ({
             <span
               className={cn(
                 "font-medium truncate font-mono text-sm",
-                getFileStatusTextColor(
-                  getDirectoryChangeStatus(entry.path)?.workspaceStatus,
-                ),
+                entry.status
+                  ? jjStatusTextColor(entry.status)
+                  : getFileStatusTextColor(
+                      getDirectoryChangeStatus(entry.path)?.workspaceStatus,
+                    ),
               )}
             >
               {entry.name}
             </span>
-            {hasChanges && (
-              <span
-                className="w-2 h-2 rounded-full flex-shrink-0 bg-yellow-500 ml-auto"
-                title="Contains modified files"
-              />
+            {entry.status ? (
+              (() => {
+                const pip = jjStatusPip(entry.status);
+                return pip ? (
+                  <span
+                    className={cn(
+                      "w-2 h-2 rounded-full flex-shrink-0 ml-auto",
+                      pip.bg,
+                    )}
+                    title={pip.title}
+                  />
+                ) : null;
+              })()
+            ) : (
+              hasChanges && (
+                <span
+                  className="w-2 h-2 rounded-full flex-shrink-0 bg-yellow-500 ml-auto"
+                  title="Contains modified files"
+                />
+              )
             )}
           </button>
           {renderNested && isExpanded && children.length > 0 && (
@@ -1056,8 +1074,10 @@ const TreeNode = ({
     ? entry.path.slice(basePath.length + 1)
     : entry.path;
   const fileStatus = changedFiles.get(relativePath);
-  const status = fileStatus?.workspaceStatus;
+  const legacyStatus = fileStatus?.workspaceStatus;
+  const jjStatus = entry.status ?? undefined;
   const reviewCommentCount = commentCounts.get(relativePath) ?? 0;
+  const pip = jjStatusPip(jjStatus);
   return (
     <FileTreeContextMenu
       key={entry.path}
@@ -1079,7 +1099,9 @@ const TreeNode = ({
         <span
           className={cn(
             "truncate font-mono text-sm",
-            getFileStatusTextColor(status),
+            jjStatus
+              ? jjStatusTextColor(jjStatus)
+              : getFileStatusTextColor(legacyStatus),
           )}
         >
           {entry.name}
@@ -1093,27 +1115,66 @@ const TreeNode = ({
             {reviewCommentCount}
           </span>
         )}
-        {status && (
+        {pip ? (
           <span
-            className={cn(
-              "w-2 h-2 rounded-full flex-shrink-0 ml-auto",
-              getStatusBgColor(status),
-            )}
-            title={
-              status === "M"
-                ? "Modified"
-                : status === "A"
-                  ? "Added"
-                  : status === "D"
-                    ? "Deleted"
-                    : "Changed"
-            }
+            className={cn("w-2 h-2 rounded-full flex-shrink-0 ml-auto", pip.bg)}
+            title={pip.title}
           />
+        ) : (
+          legacyStatus && (
+            <span
+              className={cn(
+                "w-2 h-2 rounded-full flex-shrink-0 ml-auto",
+                getStatusBgColor(legacyStatus),
+              )}
+              title={
+                legacyStatus === "M"
+                  ? "Modified"
+                  : legacyStatus === "A"
+                    ? "Added"
+                    : legacyStatus === "D"
+                      ? "Deleted"
+                      : "Changed"
+              }
+            />
+          )
         )}
       </button>
     </FileTreeContextMenu>
   );
 };
+
+// Highlighting for jj-derived file status (core::files::list_workspace_files):
+// conflicted files are red, committed-but-not-working-copy files are blue,
+// and working-copy changes are yellow. Untouched files/dirs get no pip and
+// are dimmed via getFileStatusTextColor's default (no match -> unstyled).
+function jjStatusPip(
+  status: string | undefined,
+): { bg: string; title: string } | null {
+  switch (status) {
+    case "conflict":
+      return { bg: "bg-red-500", title: "Conflicted" };
+    case "committed":
+      return { bg: "bg-blue-500", title: "Committed" };
+    case "workingCopy":
+      return { bg: "bg-yellow-500", title: "Working copy change" };
+    default:
+      return null;
+  }
+}
+
+function jjStatusTextColor(status: string): string {
+  switch (status) {
+    case "conflict":
+      return "text-red-500";
+    case "committed":
+      return "text-blue-500";
+    case "workingCopy":
+      return "text-yellow-500";
+    default:
+      return "text-muted-foreground/50";
+  }
+}
 
 const EMPTY_DIRECTORY_ENTRIES: DirectoryEntry[] = [];
 
@@ -1217,12 +1278,20 @@ export const FileBrowser = ({
       ensureWorkspaceIndexed(repoPath!, workspace?.id ?? null, workspacePath),
   );
 
+  // Fetch directory entries, enriched with a jj file status (conflict, working
+  // copy change, committed) when we know which repo/workspace we're browsing.
+  const listDirEntries = async (dirPath: string): Promise<DirectoryEntry[]> =>
+    repoPath
+      ? await listWorkspaceFiles(repoPath, workspace?.id ?? null, dirPath)
+      : await listDirectory(dirPath);
+
   const {
     data: loadedRootEntries,
     isLoading: isLoadingDir,
     mutate: mutateRootEntries,
-  } = useSWR(basePath ? ["list-directory", basePath] : null, async () =>
-    filterHiddenEntries(await listDirectory(basePath)),
+  } = useSWR(
+    basePath ? ["list-directory", basePath, repoPath, workspace?.id] : null,
+    async () => filterHiddenEntries(await listDirEntries(basePath)),
   );
   const rootEntries = loadedRootEntries ?? EMPTY_DIRECTORY_ENTRIES;
 
@@ -1588,7 +1657,7 @@ export const FileBrowser = ({
 
     try {
       const entries: DirectoryEntry[] = force
-        ? await listDirectory(path)
+        ? await listDirEntries(path)
         : await directoryLoaderRef.current!.load(path);
 
       const filtered = filterHiddenEntries(entries);
@@ -1646,8 +1715,10 @@ export const FileBrowser = ({
 
   // Handle initial directory expansion from external navigation
   const { data: expandedDirEntries } = useSWR(
-    initialExpandedDir ? ["list-directory", initialExpandedDir] : null,
-    async () => filterHiddenEntries(await listDirectory(initialExpandedDir!)),
+    initialExpandedDir
+      ? ["list-directory", initialExpandedDir, repoPath, workspace?.id]
+      : null,
+    async () => filterHiddenEntries(await listDirEntries(initialExpandedDir!)),
   );
 
   useEffect(() => {

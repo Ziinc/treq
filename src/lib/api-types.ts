@@ -268,6 +268,8 @@ export interface DirectoryEntry {
   modified_at?: string | null;
   submodule_pin?: string | null;
   submodule_synced?: boolean | null;
+  /** "conflict" | "workingCopy" | "committed", populated only by listWorkspaceFiles. */
+  status?: string | null;
 }
 
 export interface CachedDirectoryEntry {

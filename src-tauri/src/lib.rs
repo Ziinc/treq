@@ -793,6 +793,7 @@ pub fn run() {
             commands::get_file_modified_at,
             commands::list_directory,
             commands::list_directories_batch,
+            commands::list_workspace_files,
             commands::list_send_artifacts,
             commands::ls_workspace,
             commands::list_gitignored_path_suggestions,

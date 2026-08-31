@@ -478,6 +478,7 @@ pub fn merge_submodules_into_entries(
       modified_at,
       submodule_pin: Some(submodule.pin),
       submodule_synced: Some(sync.get(&submodule.path).copied().unwrap_or(false)),
+      status: None,
     };
     if let Some(index) = entries
       .iter()
