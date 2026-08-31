@@ -101,7 +101,10 @@ fn test_archive_workspace_leaving_directory_keeps_db_record() {
   let stored = treq_lib::local_db::get_workspace_by_id(&repo.repo_path, workspace.id)
     .expect("Failed to get workspace by id")
     .expect("Workspace record should still exist");
-  assert!(stored.archived, "Workspace record should be marked archived");
+  assert!(
+    stored.archived,
+    "Workspace record should be marked archived"
+  );
 }
 
 #[test]
