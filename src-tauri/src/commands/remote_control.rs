@@ -18,10 +18,11 @@
 use crate::core::remote::{RemoteCommandError, TreqCommandRequest};
 use crate::core::remote_control_plane::SshEndpoint;
 use crate::core::remote_ssh_transport::{
-  CancellationToken, ExecLimits, SshConnectionPool, SshTransportMetricsSnapshot,
+  CancellationToken, CutoffReason, ExecLimits, SshConnectionPool, SshTransportMetricsSnapshot,
 };
+use serde::Serialize;
 use std::sync::Arc;
-use tauri::State;
+use tauri::{Emitter, State};
 
 /// Shared connection pool for Phase 5 typed SSH exec commands, so repeated
 /// calls from the UI reuse one multiplexed connection per endpoint instead
@@ -70,6 +71,103 @@ pub async fn remote_dispatch_over_ssh(
 
 fn remote_command_error_to_string(error: RemoteCommandError) -> String {
   error.to_string()
+}
+
+/// Serializable mirror of [`CutoffReason`] for the Tauri IPC boundary and
+/// the `remote://cutoff` event payload (PRD "Hard cutoff on revocation or
+/// expiry": "the UI blocks further interaction with that instance behind a
+/// reauthentication prompt").
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CutoffReasonDto {
+  SessionEnded,
+  KeyRevoked,
+  InstanceInaccessible,
+  CertificateExpired,
+}
+
+impl From<CutoffReason> for CutoffReasonDto {
+  fn from(reason: CutoffReason) -> Self {
+    match reason {
+      CutoffReason::SessionEnded => Self::SessionEnded,
+      CutoffReason::KeyRevoked => Self::KeyRevoked,
+      CutoffReason::InstanceInaccessible => Self::InstanceInaccessible,
+      CutoffReason::CertificateExpired => Self::CertificateExpired,
+    }
+  }
+}
+
+impl From<CutoffReasonDto> for CutoffReason {
+  fn from(reason: CutoffReasonDto) -> Self {
+    match reason {
+      CutoffReasonDto::SessionEnded => Self::SessionEnded,
+      CutoffReasonDto::KeyRevoked => Self::KeyRevoked,
+      CutoffReasonDto::InstanceInaccessible => Self::InstanceInaccessible,
+      CutoffReasonDto::CertificateExpired => Self::CertificateExpired,
+    }
+  }
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RemoteCutoffEvent {
+  pub endpoint_id: String,
+  pub reason: CutoffReasonDto,
+}
+
+/// Tauri event name emitted whenever an endpoint is forced into hard cutoff,
+/// so the frontend can block interaction with that instance behind a
+/// reauthentication prompt without polling.
+pub const REMOTE_CUTOFF_EVENT: &str = "remote://cutoff";
+
+/// Forces `endpoint_id` into the hard-cutoff state: tears down any open
+/// exec/PTY channels for it and refuses further commands until
+/// [`remote_clear_cutoff`] is called after reauthentication. Called by the
+/// frontend's certificate-renewal loop when renewal is refused because the
+/// Supabase session ended, the client key was revoked, or the instance is no
+/// longer accessible — or when a certificate simply lapses unrenewed.
+#[tauri::command]
+pub async fn remote_force_cutoff(
+  app: tauri::AppHandle,
+  endpoint_id: String,
+  reason: CutoffReasonDto,
+  state: State<'_, RemoteExecState>,
+) -> Result<(), String> {
+  state
+    .0
+    .force_cutoff(&endpoint_id, reason.into())
+    .await;
+  let _ = app.emit(
+    REMOTE_CUTOFF_EVENT,
+    RemoteCutoffEvent {
+      endpoint_id,
+      reason,
+    },
+  );
+  Ok(())
+}
+
+/// Clears a previously forced cutoff after the user reauthenticates and a
+/// fresh certificate is issued through the normal registration and issuance
+/// flow (PRD "The user regains access only by reauthenticating and obtaining
+/// a new certificate").
+#[tauri::command]
+pub async fn remote_clear_cutoff(
+  endpoint_id: String,
+  state: State<'_, RemoteExecState>,
+) -> Result<(), String> {
+  state.0.clear_cutoff(&endpoint_id).await;
+  Ok(())
+}
+
+/// Returns the current cutoff reason for `endpoint_id`, if any, so the UI can
+/// synchronously check state (e.g. on mount) instead of relying solely on the
+/// `remote://cutoff` event.
+#[tauri::command]
+pub async fn remote_cutoff_reason(
+  endpoint_id: String,
+  state: State<'_, RemoteExecState>,
+) -> Result<Option<CutoffReasonDto>, String> {
+  Ok(state.0.cutoff_reason(&endpoint_id).await.map(Into::into))
 }
 
 /// Returns a snapshot of this session's SSH transport telemetry (PRD Phase 7

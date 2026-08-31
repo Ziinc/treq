@@ -148,6 +148,8 @@ Deno.serve(async (req) => {
         return await handleAuthorizedKeyChange(supabase, user.id, body, "remove", correlationId);
       case "keyscan_endpoint":
         return await handleKeyscanEndpoint(supabase, user.id, body, correlationId);
+      case "report_cutoff":
+        return await handleReportCutoff(supabase, user.id, body, correlationId);
       default:
         return json({ error: `Unknown action '${action}'` }, 400, correlationId);
     }
@@ -308,6 +310,12 @@ async function handleIssueCertificate(
   const elapsed = startTimer();
   const instanceId = requireString(body, "instance_id");
   const keyId = requireString(body, "key_id");
+  // The desktop client's silent-renewal loop (PRD "Silent renewal while the
+  // session is active") calls this same action again ahead of expiry rather
+  // than a separate endpoint - it sets `renewal: true` purely so the audit
+  // trail records a renewal distinctly from first issuance ("certificate
+  // serial, principals, issue time, and expiry... each renewal").
+  const isRenewal = body.renewal === true;
 
   const instance = await requireReadyOwnedInstance(supabase, ownerUserId, instanceId);
   const key = await requireActiveOwnedKey(supabase, ownerUserId, keyId);
@@ -363,7 +371,7 @@ async function handleIssueCertificate(
       ownerUserId,
       instanceId: instance.id,
       endpointId: endpointRow.id,
-      eventType: "certificate_issue_failed",
+      eventType: isRenewal ? "certificate_renewal_failed" : "certificate_issue_failed",
       detail: { error: (err as Error).message },
       correlationId,
       durationMs: elapsed(),
@@ -375,7 +383,7 @@ async function handleIssueCertificate(
     ownerUserId,
     instanceId: instance.id,
     endpointId: endpointRow.id,
-    eventType: "certificate_issued",
+    eventType: isRenewal ? "certificate_renewed" : "certificate_issued",
     detail: {
       serial: issued.serial,
       principals: [endpointRow.username, instance.id],
@@ -532,4 +540,35 @@ async function handleKeyscanEndpoint(
     });
     throw err;
   }
+}
+
+// Records that the desktop client forced a hard cutoff for an endpoint (PRD
+// "Hard cutoff on revocation or expiry"). The cutoff itself already
+// happened client-side (open channels torn down, further commands refused)
+// before this call is made - this is purely so "forced cutoffs from key
+// revocation or certificate lapse" are correlatable in the same audit trail
+// as the revocation or lapse that caused them. Best-effort: the client does
+// not block its own cutoff on this call succeeding, so failures here are
+// swallowed by the caller rather than surfaced to the user.
+async function handleReportCutoff(
+  supabase: SupabaseClient,
+  ownerUserId: string,
+  // deno-lint-ignore no-explicit-any
+  body: Record<string, any>,
+  correlationId: string,
+): Promise<Response> {
+  const reason = requireString(body, "reason");
+  const instanceId = typeof body.instance_id === "string" ? body.instance_id : null;
+  const endpointId = typeof body.endpoint_id === "string" ? body.endpoint_id : null;
+
+  await recordAuditEvent(supabase, {
+    ownerUserId,
+    instanceId,
+    endpointId,
+    eventType: "certificate_cutoff_forced",
+    detail: { reason },
+    correlationId,
+    severity: "warning",
+  });
+  return json({ status: "recorded" }, 200, correlationId);
 }

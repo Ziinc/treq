@@ -1214,6 +1214,15 @@ pub enum RemoteCommandError {
   Transport(String),
   Command { code: String, message: String },
   InvalidJson(String),
+  /// The endpoint's credential is under hard cutoff (PRD "Hard cutoff on
+  /// revocation or expiry") — no further structured commands may be sent
+  /// until the user reauthenticates. Kept distinct from `Transport` so a
+  /// caller (the Tauri command layer, the UI) can drive a reauth prompt
+  /// instead of a generic transport-error toast.
+  CredentialCutOff {
+    endpoint_id: String,
+    reason: String,
+  },
 }
 
 impl std::fmt::Display for RemoteCommandError {
@@ -1222,6 +1231,9 @@ impl std::fmt::Display for RemoteCommandError {
       Self::Transport(message) => write!(f, "transport_error: {message}"),
       Self::Command { code, message } => write!(f, "{code}: {message}"),
       Self::InvalidJson(message) => write!(f, "invalid_remote_json: {message}"),
+      Self::CredentialCutOff { endpoint_id, reason } => {
+        write!(f, "credential_cut_off: endpoint {endpoint_id} ({reason})")
+      }
     }
   }
 }
@@ -1251,6 +1263,13 @@ pub async fn execute_remote_command<T: DeserializeOwned>(
     crate::core::remote_ssh_transport::exec_command(pool, endpoint, &args, limits, cancellation)
       .await
       .map_err(|error| match error {
+        crate::core::remote_ssh_transport::SshTransportError::CredentialCutOff {
+          endpoint_id,
+          reason,
+        } => RemoteCommandError::CredentialCutOff {
+          endpoint_id,
+          reason: reason.to_string(),
+        },
         crate::core::remote_ssh_transport::SshTransportError::CommandFailed {
           stderr,
           stdout,

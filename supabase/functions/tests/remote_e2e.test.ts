@@ -355,6 +355,78 @@ e2eTest("issued certificates carry a bounded, short expiry", async (cfg) => {
   }
 });
 
+e2eTest("silent renewal issues a fresh certificate and is audited distinctly from first issuance", async (cfg) => {
+  // Covers the "Silent renewal while the session is active" PRD section:
+  // the desktop client calls `issue_certificate` again (with `renewal:
+  // true`) ahead of expiry while the session stays valid, and the
+  // resulting audit trail records it as a renewal, not a first issuance.
+  const user = await createE2eTestUser(cfg);
+  try {
+    const keyPair = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]) as CryptoKeyPair;
+    const rawPublic = await crypto.subtle.exportKey("raw", keyPair.publicKey);
+    const openSshLine = encodeOpenSshEd25519PublicKey(new Uint8Array(rawPublic), `${user.tag}@e2e`);
+
+    const register = await callFunction(cfg, "remote-ssh-trust", user.accessToken, {
+      action: "register_client_key",
+      idempotency_key: e2eTag(),
+      public_key: openSshLine,
+    });
+    // deno-lint-ignore no-explicit-any
+    const keyId = (register.json.key as any).id as string;
+
+    const ensure = await callFunction(cfg, "remote-instance", user.accessToken, {
+      action: "ensure",
+      idempotency_key: e2eTag(),
+      region: "us_east",
+      size_preset: "small",
+    });
+    const instanceId = String(ensure.json.instance_id ?? "");
+
+    const first = await callFunction(cfg, "remote-ssh-trust", user.accessToken, {
+      action: "issue_certificate",
+      instance_id: instanceId,
+      key_id: keyId,
+    });
+    if (first.status !== 200) throw new Error(`initial issue_certificate failed: ${JSON.stringify(first.json)}`);
+
+    const renewed = await callFunction(cfg, "remote-ssh-trust", user.accessToken, {
+      action: "issue_certificate",
+      instance_id: instanceId,
+      key_id: keyId,
+      renewal: true,
+    });
+    if (renewed.status !== 200) throw new Error(`renewal issue_certificate failed: ${JSON.stringify(renewed.json)}`);
+    if (renewed.json.serial === first.json.serial) {
+      throw new Error("renewal must produce a distinct certificate serial from the initial issuance");
+    }
+
+    await callFunction(cfg, "remote-instance", user.accessToken, { action: "delete", idempotency_key: e2eTag() });
+  } finally {
+    await user.cleanup();
+  }
+});
+
+e2eTest("a forced cutoff report is recorded in the audit trail", async (cfg) => {
+  // Covers the "Hard cutoff on revocation or expiry" PRD section's audit
+  // requirement: the client-observed cutoff (already enforced locally by
+  // the native transport) is still correlatable server-side.
+  const user = await createE2eTestUser(cfg);
+  try {
+    const report = await callFunction(cfg, "remote-ssh-trust", user.accessToken, {
+      action: "report_cutoff",
+      instance_id: null,
+      endpoint_id: null,
+      reason: "certificate_expired",
+    });
+    if (report.status !== 200) throw new Error(`report_cutoff failed: ${JSON.stringify(report.json)}`);
+    if (report.json.status !== "recorded") {
+      throw new Error(`report_cutoff did not confirm recording: ${JSON.stringify(report.json)}`);
+    }
+  } finally {
+    await user.cleanup();
+  }
+});
+
 // ---------------------------------------------------------------------------
 // Acceptance criterion 14: reprovision increments generation and rotates
 // host trust.

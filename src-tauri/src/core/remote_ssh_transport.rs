@@ -83,6 +83,16 @@ pub enum SshTransportError {
   /// Underlying channel or session I/O failure, e.g. after a stale
   /// connection is detected mid-operation.
   ChannelError(String),
+  /// The credential for this endpoint has been forced into the hard-cutoff
+  /// state (PRD "Hard cutoff on revocation or expiry"): the client key was
+  /// revoked, the certificate lapsed without a valid renewal, or the
+  /// Supabase session ended. No further structured commands, shell, or
+  /// agent traffic may be sent until the user reauthenticates and a fresh
+  /// certificate is issued through [`SshConnectionPool::clear_cutoff`].
+  CredentialCutOff {
+    endpoint_id: String,
+    reason: CutoffReason,
+  },
 }
 
 impl std::fmt::Display for SshTransportError {
@@ -106,6 +116,34 @@ impl std::fmt::Display for SshTransportError {
       }
       Self::ProtocolError(message) => write!(f, "invalid remote command protocol: {message}"),
       Self::ChannelError(message) => write!(f, "ssh channel error: {message}"),
+      Self::CredentialCutOff { endpoint_id, reason } => write!(
+        f,
+        "credential for endpoint {endpoint_id} is cut off ({reason}); reauthenticate to continue"
+      ),
+    }
+  }
+}
+
+/// Why a credential was forced into the hard-cutoff state (PRD "Hard cutoff
+/// on revocation or expiry"). Mirrors the renewal-refusal conditions from
+/// "Silent renewal while the session is active": the Supabase session ended,
+/// the client's public key was revoked, the instance is no longer accessible
+/// to the user, or the certificate simply expired without a valid renewal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CutoffReason {
+  SessionEnded,
+  KeyRevoked,
+  InstanceInaccessible,
+  CertificateExpired,
+}
+
+impl std::fmt::Display for CutoffReason {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      Self::SessionEnded => write!(f, "session ended"),
+      Self::KeyRevoked => write!(f, "client key revoked"),
+      Self::InstanceInaccessible => write!(f, "instance no longer accessible"),
+      Self::CertificateExpired => write!(f, "certificate expired without renewal"),
     }
   }
 }
@@ -572,6 +610,10 @@ pub struct SshConnectionPool {
   keepalive_interval: Duration,
   idle_timeout: Duration,
   pub metrics: Arc<SshTransportMetrics>,
+  /// Endpoint IDs currently under hard cutoff (PRD "Hard cutoff on
+  /// revocation or expiry"), keyed by `SshEndpoint::id`. Checked before
+  /// opening or reusing any connection for that endpoint.
+  cutoffs: AsyncMutex<HashMap<String, CutoffReason>>,
 }
 
 impl Default for SshConnectionPool {
@@ -587,7 +629,53 @@ impl SshConnectionPool {
       keepalive_interval: Duration::from_secs(30),
       idle_timeout: Duration::from_secs(600),
       metrics: Arc::new(SshTransportMetrics::default()),
+      cutoffs: AsyncMutex::new(HashMap::new()),
     }
+  }
+
+  /// Forces the endpoint into the hard-cutoff state and tears down any open
+  /// exec/PTY channels for it (PRD "Hard cutoff on revocation or expiry": "open
+  /// exec and PTY channels to that instance are torn down"). Disconnecting the
+  /// underlying SSH session closes every channel multiplexed on it. Idempotent:
+  /// calling this again for an endpoint already cut off just refreshes the
+  /// reason and re-checks for (newly) open connections.
+  pub async fn force_cutoff(&self, endpoint_id: &str, reason: CutoffReason) {
+    {
+      let mut cutoffs = self.cutoffs.lock().await;
+      cutoffs.insert(endpoint_id.to_string(), reason);
+    }
+    let stale: Vec<PoolKey> = {
+      let connections = self.connections.lock().await;
+      connections
+        .keys()
+        .filter(|key| key.endpoint_id == endpoint_id)
+        .cloned()
+        .collect()
+    };
+    for key in stale {
+      let removed = { self.connections.lock().await.remove(&key) };
+      if let Some(pooled) = removed {
+        pooled.alive.store(false, Ordering::SeqCst);
+        let handle = pooled.handle.lock().await;
+        let _ = handle
+          .disconnect(Disconnect::ByApplication, "credential revoked or expired", "en")
+          .await;
+      }
+    }
+    tracing::warn!(endpoint_id = %endpoint_id, reason = %reason, "ssh endpoint credential cut off");
+  }
+
+  /// Clears a previously forced cutoff, e.g. after the user reauthenticates
+  /// and a fresh certificate is issued through the normal registration and
+  /// issuance flow. Does not itself reconnect; the next call reconnects with
+  /// the (now fresh) endpoint credential.
+  pub async fn clear_cutoff(&self, endpoint_id: &str) {
+    self.cutoffs.lock().await.remove(endpoint_id);
+  }
+
+  /// Returns why `endpoint_id` is currently cut off, if it is.
+  pub async fn cutoff_reason(&self, endpoint_id: &str) -> Option<CutoffReason> {
+    self.cutoffs.lock().await.get(endpoint_id).copied()
   }
 
   /// Snapshot of this pool's transport telemetry (PRD "Client and transport
@@ -606,6 +694,12 @@ impl SshConnectionPool {
     &self,
     endpoint: &SshEndpoint,
   ) -> Result<Arc<AsyncMutex<Handle<TreqSshClientHandler>>>, SshTransportError> {
+    if let Some(reason) = self.cutoff_reason(&endpoint.id).await {
+      return Err(SshTransportError::CredentialCutOff {
+        endpoint_id: endpoint.id.clone(),
+        reason,
+      });
+    }
     let key = PoolKey::for_endpoint(endpoint);
     let mut is_reconnect = false;
     {
@@ -1744,5 +1838,108 @@ mod tests {
     assert!(output.success());
     assert_eq!(pool.pooled_connection_count().await, 1);
     assert_eq!(pool.metrics_snapshot().reconnect_attempts, 1);
+  }
+
+  // -- Hard cutoff on revocation or expiry -----------------------------------
+
+  #[tokio::test]
+  async fn force_cutoff_tears_down_the_open_connection_and_refuses_new_ones() {
+    let (addr, host_key) = start_mock_server(0).await;
+    let client_key = test_host_key();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let key_reference = write_client_key(temp_dir.path(), &client_key);
+    let endpoint = test_endpoint(addr, &host_key, key_reference);
+
+    let pool = SshConnectionPool::new();
+    let cancellation = CancellationToken::new();
+
+    // Establish an open connection first, mirroring an in-flight session at
+    // the moment revocation happens.
+    exec_command(
+      &pool,
+      &endpoint,
+      &["repo".to_string(), "inspect".to_string()],
+      ExecLimits::default(),
+      &cancellation,
+    )
+    .await
+    .unwrap();
+    assert_eq!(pool.pooled_connection_count().await, 1);
+    assert_eq!(pool.cutoff_reason(&endpoint.id).await, None);
+
+    pool.force_cutoff(&endpoint.id, CutoffReason::KeyRevoked).await;
+
+    // "open exec and PTY channels to that instance are torn down": the
+    // pooled connection is dropped, not merely marked dead.
+    assert_eq!(pool.pooled_connection_count().await, 0);
+    assert_eq!(
+      pool.cutoff_reason(&endpoint.id).await,
+      Some(CutoffReason::KeyRevoked)
+    );
+
+    // "no further structured commands... are sent over the stale
+    // credential": a fresh attempt against the same (still up) server must
+    // be refused locally rather than reaching the network.
+    let result = exec_command(
+      &pool,
+      &endpoint,
+      &["repo".to_string(), "status".to_string()],
+      ExecLimits::default(),
+      &cancellation,
+    )
+    .await;
+    assert_eq!(
+      result,
+      Err(SshTransportError::CredentialCutOff {
+        endpoint_id: endpoint.id.clone(),
+        reason: CutoffReason::KeyRevoked,
+      })
+    );
+    // No connection was created for the refused attempt.
+    assert_eq!(pool.pooled_connection_count().await, 0);
+  }
+
+  #[tokio::test]
+  async fn clear_cutoff_restores_normal_access() {
+    let (addr, host_key) = start_mock_server(0).await;
+    let client_key = test_host_key();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let key_reference = write_client_key(temp_dir.path(), &client_key);
+    let endpoint = test_endpoint(addr, &host_key, key_reference);
+
+    let pool = SshConnectionPool::new();
+    let cancellation = CancellationToken::new();
+
+    pool
+      .force_cutoff(&endpoint.id, CutoffReason::CertificateExpired)
+      .await;
+    assert!(
+      exec_command(
+        &pool,
+        &endpoint,
+        &["repo".to_string(), "inspect".to_string()],
+        ExecLimits::default(),
+        &cancellation,
+      )
+      .await
+      .is_err()
+    );
+
+    // "The user regains access only by reauthenticating and obtaining a new
+    // certificate": once that happens the caller clears the cutoff and
+    // normal command dispatch resumes.
+    pool.clear_cutoff(&endpoint.id).await;
+    assert_eq!(pool.cutoff_reason(&endpoint.id).await, None);
+
+    let output = exec_command(
+      &pool,
+      &endpoint,
+      &["repo".to_string(), "inspect".to_string()],
+      ExecLimits::default(),
+      &cancellation,
+    )
+    .await
+    .unwrap();
+    assert!(output.success());
   }
 }

@@ -11,6 +11,8 @@ import { supabase } from "./supabase";
 import type {
   DeleteInstanceRequest,
   InstanceStatusResponse,
+  IssueCertificateRequest,
+  IssueCertificateResponse,
   ListRegionsResponse,
   ListSizePresetsResponse,
   OperationResponse,
@@ -90,6 +92,26 @@ export const revokeClientKey = (
   request: RevokeClientKeyRequest,
 ): Promise<OperationResponse> =>
   invokeRemoteTrust("revoke_client_key", request);
+
+// Issues (or, called again for the same instance/key, silently renews) a
+// short-lived certificate. See `src/lib/remote-cert-lifecycle.ts`, which
+// calls this on a timer while the Supabase session stays valid so a
+// certificate never lapses under a legitimately logged-in user (PRD "Silent
+// renewal while the session is active").
+export const issueCertificate = (
+  request: IssueCertificateRequest,
+): Promise<IssueCertificateResponse> =>
+  invokeRemoteTrust("issue_certificate", request);
+
+// Best-effort audit report for a client-side hard cutoff (PRD "Hard cutoff
+// on revocation or expiry"). The cutoff itself already happened locally
+// (see `src/lib/remote-cert-lifecycle.ts`); this only makes the forced
+// cutoff correlatable in the server-side audit trail.
+export const reportCutoff = (request: {
+  instance_id: string | null;
+  endpoint_id: string | null;
+  reason: string;
+}): Promise<{ status: string }> => invokeRemoteTrust("report_cutoff", request);
 
 // User-managed endpoints and their repositories are not control-plane
 // resources: the PRD's user-managed mode does not require control-plane

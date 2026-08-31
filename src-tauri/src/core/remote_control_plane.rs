@@ -143,6 +143,12 @@ pub struct RevokeClientKeyRequest {
 pub struct IssueCertificateRequest {
   pub instance_id: String,
   pub key_id: String,
+  /// Set by the desktop client's silent-renewal loop so the control plane
+  /// labels the resulting audit event as a renewal rather than first
+  /// issuance (PRD "Silent renewal while the session is active"). The
+  /// signing logic on the server is identical either way.
+  #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+  pub renewal: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
