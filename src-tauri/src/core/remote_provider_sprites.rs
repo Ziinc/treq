@@ -169,23 +169,28 @@ impl SpritesProvider {
     }
   }
 
-  fn size_to_guest(preset: SizePreset) -> MachineGuestConfig {
-    match preset {
-      SizePreset::Small => MachineGuestConfig {
-        cpu_kind: "shared".to_string(),
-        cpus: 1,
-        memory_mb: 2048,
-      },
-      SizePreset::Medium => MachineGuestConfig {
-        cpu_kind: "shared".to_string(),
-        cpus: 2,
-        memory_mb: 4096,
-      },
-      SizePreset::Large => MachineGuestConfig {
-        cpu_kind: "shared".to_string(),
-        cpus: 4,
-        memory_mb: 8192,
-      },
+  // PRD "Resource quotas": every user's managed instance is enforced at the
+  // fixed base allocation (5 GB disk / 1 vCPU / 2 GB RAM) at provisioning
+  // time, regardless of `preset` - purchasing more as a plan add-on is
+  // explicitly out of scope for this delivery. This stays unconditional
+  // (rather than branching on `preset`) so the vendor request can never
+  // exceed the quota even if a caller upstream forgets to reject a
+  // non-base preset first.
+  fn size_to_guest(_preset: SizePreset) -> MachineGuestConfig {
+    MachineGuestConfig {
+      cpu_kind: "shared".to_string(),
+      cpus: crate::core::remote_provider::BASE_ALLOCATION.vcpus,
+      memory_mb: crate::core::remote_provider::BASE_ALLOCATION.memory_gb * 1024,
+    }
+  }
+
+  /// Disk allocation requested alongside the guest spec, capped at the base
+  /// disk quota (PRD "Resource quotas"). Mirrors
+  /// `_shared/remote/sprites-adapter.ts::baseVolumeSizeGb`.
+  fn base_volume() -> MachineMount {
+    MachineMount {
+      path: "/home/treq".to_string(),
+      size_gb: crate::core::remote_provider::BASE_ALLOCATION.storage_gb,
     }
   }
 
@@ -329,8 +334,18 @@ struct MachineGuestConfig {
 struct MachineConfigRequest {
   image: String,
   guest: MachineGuestConfig,
+  mounts: Vec<MachineMount>,
   env: std::collections::HashMap<String, String>,
   init: MachineInit,
+}
+
+/// Persistent volume attachment, sized to the base disk quota (PRD
+/// "Resource quotas"). Fly Machines expresses disk as a separate `mounts`
+/// attachment rather than part of `guest`.
+#[derive(Debug, Clone, Serialize)]
+struct MachineMount {
+  path: String,
+  size_gb: u32,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -385,6 +400,7 @@ impl ManagedComputeProvider for SpritesProvider {
       config: MachineConfigRequest {
         image: SPRITES_BASE_IMAGE.to_string(),
         guest: Self::size_to_guest(request.size_preset),
+        mounts: vec![Self::base_volume()],
         env: Self::boot_manifest_env(request.manifest_version),
         init: MachineInit {
           exec: crate::core::remote_bootstrap::bootstrap_command(request.manifest_version),
@@ -478,6 +494,7 @@ impl ManagedComputeProvider for SpritesProvider {
     let body = MachineConfigRequest {
       image: SPRITES_BASE_IMAGE.to_string(),
       guest: Self::size_to_guest(request.size_preset),
+      mounts: vec![Self::base_volume()],
       env: Self::boot_manifest_env(request.manifest_version),
       init: MachineInit {
         exec: crate::core::remote_bootstrap::bootstrap_command(request.manifest_version),
@@ -586,6 +603,56 @@ mod tests {
     assert_eq!(result.region, RegionCode::UsEast);
     assert_eq!(result.size_preset, SizePreset::Small);
     assert_eq!(result.address.as_deref(), Some("fdaa:0:1::1"));
+  }
+
+  #[tokio::test]
+  async fn create_instance_always_requests_the_base_allocation_regardless_of_preset() {
+    // PRD "Resource quotas": provisioning must request exactly the base
+    // allocation (5 GB disk / 1 vCPU / 2 GB RAM) from the vendor no matter
+    // which preset was selected, since add-on purchase does not exist yet.
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+      .and(path("/apps/treq-remote/machines"))
+      .respond_with(ResponseTemplate::new(200).set_body_json(machine_json("m-quota", "started")))
+      .mount(&server)
+      .await;
+
+    let provider = SpritesProvider::new(test_config(server.uri())).unwrap();
+    for (i, preset) in [SizePreset::Small, SizePreset::Medium, SizePreset::Large]
+      .into_iter()
+      .enumerate()
+    {
+      provider
+        .create_instance(CreateInstanceRequest {
+          owner_user_id: format!("user-{i}"),
+          region: RegionCode::UsEast,
+          size_preset: preset,
+          manifest_version: 1,
+          idempotency_key: format!("key-quota-{i}"),
+        })
+        .await
+        .unwrap();
+    }
+
+    let requests = server.received_requests().await.unwrap();
+    assert_eq!(requests.len(), 3);
+    for request in requests {
+      let body: serde_json::Value = serde_json::from_slice(&request.body).unwrap();
+      let guest = &body["config"]["guest"];
+      assert_eq!(
+        guest["cpus"],
+        json!(crate::core::remote_provider::BASE_ALLOCATION.vcpus)
+      );
+      assert_eq!(
+        guest["memory_mb"],
+        json!(crate::core::remote_provider::BASE_ALLOCATION.memory_gb * 1024)
+      );
+      let mounts = body["config"]["mounts"].as_array().unwrap();
+      assert_eq!(
+        mounts[0]["size_gb"],
+        json!(crate::core::remote_provider::BASE_ALLOCATION.storage_gb)
+      );
+    }
   }
 
   #[tokio::test]

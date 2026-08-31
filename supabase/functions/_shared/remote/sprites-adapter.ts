@@ -5,7 +5,7 @@
 // strings and vendor SDK types must never leave this module.
 
 import type { RegionCode, SizePreset } from "./catalog.ts";
-import { REGION_TO_FLY_SLUG } from "./catalog.ts";
+import { BASE_ALLOCATION, REGION_TO_FLY_SLUG } from "./catalog.ts";
 import { bootstrapCommand } from "./boot-manifest.ts";
 
 export type ManagedInstanceState =
@@ -80,15 +80,28 @@ export interface ManagedComputeProvider {
   execOnMachine(providerId: string, command: string[], timeoutSeconds?: number): Promise<MachineExecResult>;
 }
 
-function sizeToGuest(preset: SizePreset) {
-  switch (preset) {
-    case "small":
-      return { cpu_kind: "shared", cpus: 1, memory_mb: 2048 };
-    case "medium":
-      return { cpu_kind: "shared", cpus: 2, memory_mb: 4096 };
-    case "large":
-      return { cpu_kind: "shared", cpus: 4, memory_mb: 8192 };
-  }
+// PRD "Resource quotas": every user's managed instance is enforced at the
+// fixed base allocation (5 GB disk / 1 vCPU / 2 GB RAM) at provisioning
+// time, regardless of `preset` - purchasing more as a plan add-on is
+// explicitly out of scope for this delivery, so the vendor request never
+// asks for more than the base allocation. `remote-instance/index.ts`
+// rejects a non-base `size_preset` before this is ever called, but this
+// stays unconditional so the guest spec sent to the vendor can never exceed
+// the quota even if a caller is added later that skips that guard.
+function sizeToGuest(_preset: SizePreset) {
+  return {
+    cpu_kind: "shared",
+    cpus: BASE_ALLOCATION.vcpu,
+    memory_mb: BASE_ALLOCATION.ramGb * 1024,
+  };
+}
+
+// Disk allocation requested alongside the guest spec: a persistent volume
+// sized to exactly the base disk quota. Kept in its own helper (rather than
+// folded into `sizeToGuest`) because Fly Machines expresses disk as a
+// separate `volumes` attachment, not part of `guest`.
+function baseVolumeSizeGb(): number {
+  return BASE_ALLOCATION.diskGb;
 }
 
 function guestToSize(memoryMb: number): SizePreset {
@@ -230,6 +243,9 @@ export class SpritesProvider implements ManagedComputeProvider {
       config: {
         image: SPRITES_BASE_IMAGE,
         guest: sizeToGuest(params.sizePreset),
+        // Disk allocation is capped at the base quota (PRD "Resource
+        // quotas"); see `baseVolumeSizeGb`.
+        mounts: [{ path: "/home/treq", size_gb: baseVolumeSizeGb() }],
         env: { TREQ_BOOT_MANIFEST_VERSION: String(params.manifestVersion) },
         init: { exec: bootstrapCommand(params.manifestVersion) },
       },
@@ -289,6 +305,7 @@ export class SpritesProvider implements ManagedComputeProvider {
     const body = {
       image: SPRITES_BASE_IMAGE,
       guest: sizeToGuest(params.sizePreset),
+      mounts: [{ path: "/home/treq", size_gb: baseVolumeSizeGb() }],
       env: { TREQ_BOOT_MANIFEST_VERSION: String(params.manifestVersion) },
       init: { exec: bootstrapCommand(params.manifestVersion) },
     };

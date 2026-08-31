@@ -8,7 +8,7 @@
 // than invoking the provider again.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { RegionCode, SizePreset } from "./catalog.ts";
+import { BASE_ALLOCATION, type RegionCode, type SizePreset } from "./catalog.ts";
 
 export type OperationType =
   | "provision"
@@ -48,6 +48,11 @@ export interface InstanceRow {
   endpoint_id: string | null;
   image_manifest_version: number;
   ready_at: string | null;
+  // Enforced base resource allocation (PRD "Resource quotas"). Fixed values
+  // in this delivery; not yet purchasable/adjustable.
+  disk_quota_gb: number;
+  vcpu_quota: number;
+  ram_quota_gb: number;
 }
 
 // Looks up an existing operation for this idempotency key. When found, the
@@ -155,6 +160,11 @@ export async function createProvisioningInstance(
       status: "provisioning",
       generation: 0,
       image_manifest_version: params.manifestVersion,
+      // Every instance is created at the fixed base allocation (PRD
+      // "Resource quotas"); there is no add-on path yet to request more.
+      disk_quota_gb: BASE_ALLOCATION.diskGb,
+      vcpu_quota: BASE_ALLOCATION.vcpu,
+      ram_quota_gb: BASE_ALLOCATION.ramGb,
     })
     .select()
     .single();

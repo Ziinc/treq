@@ -20,7 +20,16 @@
 // secrets and never returned to the client.
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { isRegionCode, isSizePreset, REGION_CODES, SIZE_PRESETS, type RegionCode, type SizePreset } from "../_shared/remote/catalog.ts";
+import {
+  BASE_ALLOCATION,
+  isBaseAllocationPreset,
+  isRegionCode,
+  isSizePreset,
+  REGION_CODES,
+  SIZE_PRESETS,
+  type RegionCode,
+  type SizePreset,
+} from "../_shared/remote/catalog.ts";
 import { CURRENT_MANIFEST_VERSION } from "../_shared/remote/boot-manifest.ts";
 import {
   ProviderError,
@@ -143,6 +152,9 @@ Deno.serve(async (req) => {
         return json({ error: `Unknown action '${action}'` }, 400, correlationId);
     }
   } catch (err) {
+    if (err instanceof QuotaExceededError) {
+      return json({ error: err.message, code: err.code, base_allocation: BASE_ALLOCATION }, 422, correlationId);
+    }
     if (err instanceof ProviderError) {
       return json({ error: err.message, provider_error: err.kind }, providerErrorStatus(err), correlationId);
     }
@@ -296,6 +308,7 @@ async function handleEnsure(
 
   const region: RegionCode = isRegionCode(body.region) ? body.region : "us_east";
   const sizePreset: SizePreset = isSizePreset(body.size_preset) ? body.size_preset : "small";
+  assertWithinBaseAllocation(sizePreset);
 
   const existingOp = await findExistingOperation(supabase, ownerUserId, idempotencyKey);
   if (existingOp) {
@@ -498,6 +511,7 @@ async function handleReprovision(
 
   const region: RegionCode = isRegionCode(body.region) ? body.region : instance.region;
   const sizePreset: SizePreset = isSizePreset(body.size_preset) ? body.size_preset : instance.size_preset;
+  assertWithinBaseAllocation(sizePreset);
   // Region migration is not supported (PRD non-goal): a region change is a
   // brand-new resource at the vendor, not an in-place update, so surface it
   // as a validation error here rather than silently reprovisioning in place.
@@ -700,6 +714,30 @@ async function requireOwnedInstance(
 class ValidationErrorWithStatus extends Error {
   constructor(message: string, public readonly status: number) {
     super(message);
+  }
+}
+
+// PRD "Resource quotas": "purchasing additional disk or compute as a plan
+// add-on is explicitly deferred ... and must not be implemented yet, only
+// the enforcement of the base limits." A `size_preset` above the base
+// allocation must fail as a distinct, structured error - never silently
+// downgraded to the base allocation and never surfaced as a generic
+// provider/validation failure - so the UI can explain that add-ons aren't
+// available yet rather than guessing why provisioning was rejected.
+class QuotaExceededError extends Error {
+  readonly code = "size_preset_exceeds_base_allocation";
+  constructor(public readonly requestedPreset: SizePreset) {
+    super(
+      `size_preset '${requestedPreset}' exceeds the base allocation (${BASE_ALLOCATION.vcpu} vCPU / ${BASE_ALLOCATION.ramGb} GB RAM / ${BASE_ALLOCATION.diskGb} GB disk). Purchasing additional resources is not yet available.`,
+    );
+  }
+}
+
+// Enforced both at initial provisioning and at reprovisioning ("These
+// limits are enforced now, at provisioning and on an ongoing basis").
+function assertWithinBaseAllocation(sizePreset: SizePreset): void {
+  if (!isBaseAllocationPreset(sizePreset)) {
+    throw new QuotaExceededError(sizePreset);
   }
 }
 

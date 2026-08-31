@@ -13,6 +13,13 @@ export interface RemoteReadinessCheck {
   name: string;
   available: boolean;
   detail: string;
+  /**
+   * Distinct structured error code for this check, when it failed for a
+   * reason more specific than a generic unavailability (PRD "Resource
+   * quotas"). `"disk_quota_exceeded"` marks the base-disk-quota readiness
+   * check failing; absent for ordinary checks.
+   */
+  code?: string | null;
 }
 
 export interface RemoteReadiness {
@@ -82,6 +89,44 @@ export type ManagedInstanceState =
 
 export type SizePreset = "small" | "medium" | "large";
 
+// PRD "Resource quotas" / Goal 3: the fixed per-user base allocation
+// enforced at provisioning and on an ongoing basis in this delivery.
+// Purchasing more as a plan add-on is explicitly deferred, so `small` is
+// the only currently-selectable preset. Mirrors
+// `core::remote_provider::BASE_ALLOCATION` in src-tauri.
+export const BASE_ALLOCATION = {
+  preset: "small" as SizePreset,
+  vcpus: 1,
+  memory_gb: 2,
+  storage_gb: 5,
+} as const;
+
+/**
+ * Structured error a mutation may return when it is blocked by the base
+ * resource allocation (PRD: "the failure must be a distinct, structured
+ * readiness or mutation error so the UI can explain the quota rather than
+ * surfacing a generic filesystem or provider failure"). The provisioning
+ * path uses `"size_preset_exceeds_base_allocation"`; the ongoing
+ * disk-quota check surfaced through readiness/mutations uses
+ * `"disk_quota_exceeded"`.
+ */
+export interface QuotaExceededError {
+  error: string;
+  code: "size_preset_exceeds_base_allocation" | "disk_quota_exceeded";
+  base_allocation?: typeof BASE_ALLOCATION;
+}
+
+export function isQuotaExceededError(
+  value: unknown,
+): value is QuotaExceededError {
+  if (typeof value !== "object" || value === null) return false;
+  const { code } = value as { code?: unknown };
+  return (
+    code === "size_preset_exceeds_base_allocation" ||
+    code === "disk_quota_exceeded"
+  );
+}
+
 export interface SizePresetInfo {
   preset: SizePreset;
   label: string;
@@ -125,6 +170,11 @@ export interface ManagedInstanceRecord {
   image_manifest_version: number;
   created_at: string;
   ready_at: string | null;
+  // Enforced base resource allocation (PRD "Resource quotas"). Fixed values
+  // in this delivery; not yet purchasable/adjustable.
+  disk_quota_gb: number;
+  vcpu_quota: number;
+  ram_quota_gb: number;
 }
 
 export interface TrustedHostKey {

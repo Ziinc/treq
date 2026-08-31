@@ -17,6 +17,15 @@ pub struct RemoteReadinessCheck {
   pub name: String,
   pub available: bool,
   pub detail: String,
+  /// Distinct structured error code for this check, when it failed for a
+  /// reason more specific than "unavailable" (PRD "Resource quotas": quota
+  /// failures "must be a distinct, structured readiness or mutation error
+  /// so the UI can explain the quota rather than surfacing a generic
+  /// filesystem or provider failure"). `None` for ordinary binary-presence
+  /// checks; `Some("disk_quota_exceeded")` when the base disk quota check
+  /// fails.
+  #[serde(skip_serializing_if = "Option::is_none", default)]
+  pub code: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1024,12 +1033,67 @@ fn probe_repo_path(repo_path: &str) -> Result<RemoteRepoProbe, String> {
   })
 }
 
+/// Recursively sums file sizes under `root` (best effort: unreadable entries
+/// are skipped rather than failing the whole walk) as the "disk used"
+/// figure for base-disk-quota enforcement. This walks the repository root
+/// rather than statvfs-ing the whole volume, since the quota is scoped to
+/// what the user's repositories occupy, not the base image itself.
+fn directory_usage_bytes(root: &Path) -> u64 {
+  let mut total = 0u64;
+  let mut stack = vec![root.to_path_buf()];
+  while let Some(dir) = stack.pop() {
+    let Ok(entries) = fs::read_dir(&dir) else {
+      continue;
+    };
+    for entry in entries.flatten() {
+      let Ok(metadata) = entry.metadata() else {
+        continue;
+      };
+      if metadata.is_dir() {
+        stack.push(entry.path());
+      } else {
+        total += metadata.len();
+      }
+    }
+  }
+  total
+}
+
+/// Enforces the base disk quota (PRD "Resource quotas") before a
+/// write-triggering mutation (repo init, clone, patch apply) proceeds.
+/// Returns the distinct `disk_quota_exceeded: ...` structured error the PRD
+/// requires instead of letting the write fail as a generic filesystem
+/// error. `root` is the directory whose usage counts against the quota —
+/// callers pass the repository root (or its parent, before it exists) so
+/// the check reflects what the write is about to add to.
+fn enforce_disk_quota(root: &Path) -> Result<(), String> {
+  enforce_disk_quota_against(root, crate::core::remote_provider::BASE_DISK_QUOTA_BYTES)
+}
+
+/// Same as [`enforce_disk_quota`] but against an arbitrary `quota_bytes`
+/// ceiling, so tests can exercise the failure path without writing 5 GB of
+/// fixture data to disk.
+fn enforce_disk_quota_against(root: &Path, quota_bytes: u64) -> Result<(), String> {
+  let scan_root = if root.exists() {
+    root.to_path_buf()
+  } else {
+    root
+      .parent()
+      .map(Path::to_path_buf)
+      .unwrap_or_else(|| root.to_path_buf())
+  };
+  let used_bytes = directory_usage_bytes(&scan_root);
+  crate::core::remote_provider::check_disk_quota_against(used_bytes, quota_bytes)
+    .map_err(|err| err.to_string())
+}
+
 fn init_repo_path(repo_path: &str) -> Result<RepositoryInspection, String> {
   let trimmed = repo_path.trim();
   if trimmed.is_empty() {
     return Err("Remote path is required".to_string());
   }
   let path = Path::new(trimmed);
+  enforce_disk_quota(path)?;
   fs::create_dir_all(path)
     .map_err(|e| format!("filesystem_error: Failed to create {trimmed}: {e}"))?;
   if !path.join(".jj").is_dir() && !path.join(".git").exists() {
@@ -1053,6 +1117,7 @@ fn clone_repo_local(repo_url: &str, destination: &str) -> Result<RepositoryInspe
     return Err("Repository URL is required".to_string());
   }
   validate_remote_path(destination)?;
+  enforce_disk_quota(Path::new(destination))?;
   let output = Command::new("git")
     .args(["clone", repo_url, destination])
     .output()
@@ -1077,6 +1142,7 @@ fn apply_remote_patch(
 ) -> Result<String, String> {
   use std::io::Write;
   let workspace_path = resolve_workspace_path(repo, workspace)?;
+  enforce_disk_quota(Path::new(&workspace_path))?;
   let decoded = decode_base64(patch_base64.trim())
     .map_err(|e| format!("invalid_arguments: patch is not valid base64: {e}"))?;
   let mut child = Command::new("git")
@@ -1391,7 +1457,11 @@ pub fn list_configured_hosts_from_paths(paths: Vec<PathBuf>) -> Result<Vec<SshHo
 
 pub fn check_readiness(host: &str) -> Result<RemoteReadiness, String> {
   validate_host_alias(host)?;
-  let script = "set -u; for c in treq jj git; do command -v $c >/dev/null 2>&1 && echo $c:ok || echo $c:missing; done; for c in claude codex cursor-agent cursor; do command -v $c >/dev/null 2>&1 && echo agent:$c:ok; done";
+  // The trailing `df` term reports how many 1K blocks are in use on the
+  // instance's home volume, which feeds the "sufficient disk space ...
+  // remain within the user's base disk quota" expanded-readiness check
+  // (PRD "Boot manifest and readiness").
+  let script = "set -u; for c in treq jj git; do command -v $c >/dev/null 2>&1 && echo $c:ok || echo $c:missing; done; for c in claude codex cursor-agent cursor; do command -v $c >/dev/null 2>&1 && echo agent:$c:ok; done; df -Pk /home/treq 2>/dev/null | awk 'NR==2{print \"disk_used_kb:\"$3}'";
   let output = ssh_output(host, script)?;
   let stdout = String::from_utf8_lossy(&output.stdout);
   let mut checks = Vec::new();
@@ -1402,17 +1472,25 @@ pub fn check_readiness(host: &str) -> Result<RemoteReadiness, String> {
         name: (*name).to_string(),
         available: true,
         detail: "available".to_string(),
+        code: None,
       }),
       [name, "missing"] => checks.push(RemoteReadinessCheck {
         name: (*name).to_string(),
         available: false,
         detail: "missing from PATH".to_string(),
+        code: None,
       }),
       ["agent", name, "ok"] => checks.push(RemoteReadinessCheck {
         name: format!("agent:{name}"),
         available: true,
         detail: "available".to_string(),
+        code: None,
       }),
+      ["disk_used_kb", used_kb] => {
+        if let Ok(used_kb) = used_kb.parse::<u64>() {
+          checks.push(disk_quota_readiness_check(used_kb * 1024));
+        }
+      }
       _ => {}
     }
   }
@@ -1421,6 +1499,30 @@ pub fn check_readiness(host: &str) -> Result<RemoteReadiness, String> {
     connected: output.status.success(),
     checks,
   })
+}
+
+/// Builds the "disk_quota" expanded-readiness check for `used_bytes` against
+/// the base disk quota (PRD "Resource quotas" / "Expanded readiness").
+/// Failing this check is a distinct, structured readiness failure (`code:
+/// Some("disk_quota_exceeded")`), not a generic filesystem failure.
+fn disk_quota_readiness_check(used_bytes: u64) -> RemoteReadinessCheck {
+  match crate::core::remote_provider::check_disk_quota(used_bytes) {
+    Ok(()) => RemoteReadinessCheck {
+      name: "disk_quota".to_string(),
+      available: true,
+      detail: format!(
+        "{used_bytes} of {} bytes base disk quota used",
+        crate::core::remote_provider::BASE_DISK_QUOTA_BYTES
+      ),
+      code: None,
+    },
+    Err(err) => RemoteReadinessCheck {
+      name: "disk_quota".to_string(),
+      available: false,
+      detail: err.to_string(),
+      code: Some("disk_quota_exceeded".to_string()),
+    },
+  }
 }
 
 pub fn probe_repo(host: &str, path: &str) -> Result<RemoteRepoProbe, String> {
@@ -1623,6 +1725,57 @@ mod tests {
   fn clone_repo_rejects_empty_url_before_ssh() {
     let error = clone_repo("devbox", "", "/srv/project").unwrap_err();
     assert_eq!(error, "Repository URL is required");
+  }
+
+  #[test]
+  fn directory_usage_sums_nested_file_sizes() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("a.txt"), vec![0u8; 10]).unwrap();
+    let nested = dir.path().join("nested");
+    std::fs::create_dir(&nested).unwrap();
+    std::fs::write(nested.join("b.txt"), vec![0u8; 5]).unwrap();
+    assert_eq!(directory_usage_bytes(dir.path()), 15);
+  }
+
+  #[test]
+  fn enforce_disk_quota_passes_under_the_limit() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("a.txt"), vec![0u8; 10]).unwrap();
+    assert!(enforce_disk_quota_against(dir.path(), 100).is_ok());
+  }
+
+  #[test]
+  fn enforce_disk_quota_returns_distinct_structured_error_over_the_limit() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("a.txt"), vec![0u8; 10]).unwrap();
+    let error = enforce_disk_quota_against(dir.path(), 5).unwrap_err();
+    assert!(
+      error.starts_with("disk_quota_exceeded: "),
+      "expected a distinct disk_quota_exceeded error, got: {error}"
+    );
+  }
+
+  #[test]
+  fn enforce_disk_quota_falls_back_to_parent_for_a_not_yet_created_path() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("existing.bin"), vec![0u8; 10]).unwrap();
+    let not_yet_created = dir.path().join("new-repo");
+    // The target path doesn't exist yet (this is `init_repo_path`'s case),
+    // so usage is measured from its parent instead of failing the walk.
+    let error = enforce_disk_quota_against(&not_yet_created, 5).unwrap_err();
+    assert!(error.starts_with("disk_quota_exceeded: "));
+    assert!(enforce_disk_quota_against(&not_yet_created, 100).is_ok());
+  }
+
+  #[test]
+  fn disk_quota_readiness_check_reports_a_distinct_code_when_over_quota() {
+    let over = disk_quota_readiness_check(crate::core::remote_provider::BASE_DISK_QUOTA_BYTES);
+    assert!(!over.available);
+    assert_eq!(over.code.as_deref(), Some("disk_quota_exceeded"));
+
+    let under = disk_quota_readiness_check(1);
+    assert!(under.available);
+    assert_eq!(under.code, None);
   }
 
   #[test]
