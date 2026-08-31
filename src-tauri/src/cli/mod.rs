@@ -377,6 +377,7 @@ fn handle_remote_review_command(command: &str, matches: &Matches) -> Result<(), 
       commit: require_target("commit change id")?,
     },
     ("conflicts", "list") => TreqCommandRequest::ListConflicts { repo, workspace },
+    ("workspace", "marker") => TreqCommandRequest::WorkspaceChangeMarker { repo, workspace },
     ("conflicts", "resolve") => TreqCommandRequest::ResolveConflict {
       repo,
       revision: require_target("revision")?,

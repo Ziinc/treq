@@ -36,6 +36,18 @@ export interface RemoteRepoProbe {
   needs_clone: boolean;
 }
 
+/**
+ * Cheap, pollable change marker for a workspace's JJ operation log (PRD
+ * "Change propagation across concurrent clients"). A client stores the
+ * last `operation_id` it observed for a workspace and compares it against
+ * the latest value; a mismatch means VM-side repository state moved for a
+ * reason other than the client's own in-flight mutation, and the client
+ * should refresh rather than merge or reconcile anything.
+ */
+export interface WorkspaceChangeMarker {
+  operation_id: string;
+}
+
 export type RepositoryLocation =
   | { type: "local"; path: string }
   | { type: "ssh"; host: string; path: string };

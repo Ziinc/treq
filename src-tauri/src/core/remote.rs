@@ -78,6 +78,19 @@ pub struct RemoteRepository {
   pub inspection: RepositoryInspection,
 }
 
+/// Cheap, pollable change marker for a workspace's JJ operation log (PRD
+/// "Change propagation across concurrent clients"). A client stores the
+/// last `operation_id` it observed and compares it against the latest
+/// value; a mismatch means repository state moved on the VM for a reason
+/// other than the client's own in-flight mutation, and the client should
+/// refresh status/changes/commits/conflicts rather than merge or reconcile
+/// anything. This is stale-state notification only, never conflict
+/// resolution.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WorkspaceChangeMarker {
+  pub operation_id: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CliErrorBody {
   pub error: CliErrorDetail,
@@ -130,6 +143,14 @@ pub enum TreqCommandRequest {
     workspace: Option<String>,
   },
   ListConflicts {
+    repo: String,
+    workspace: Option<String>,
+  },
+  /// Returns the workspace's current JJ operation id as a lightweight,
+  /// pollable change marker so a client can detect that another client (or
+  /// process) moved VM-side repository state and refresh. See
+  /// [`WorkspaceChangeMarker`].
+  WorkspaceChangeMarker {
     repo: String,
     workspace: Option<String>,
   },
@@ -483,6 +504,10 @@ impl TreqCommandRequest {
         fields.workspace = workspace.as_deref();
         ("conflicts", "list", repo)
       }
+      Self::WorkspaceChangeMarker { repo, workspace } => {
+        fields.workspace = workspace.as_deref();
+        ("workspace", "marker", repo)
+      }
       Self::ResolveConflict {
         repo,
         revision,
@@ -773,6 +798,14 @@ pub fn execute_local_request(request: TreqCommandRequest) -> Result<serde_json::
       let files = crate::jj::get_conflicted_files(&workspace_path, None)
         .map_err(|error| format!("jj_command_failed: {error}"))?;
       serde_json::to_value(files).map_err(|error| error.to_string())
+    }
+    TreqCommandRequest::WorkspaceChangeMarker { repo, workspace } => {
+      let id = workspace_id(workspace.as_ref())?;
+      let workspace_path = resolve_workspace_path(&repo, id)?;
+      json(Ok::<_, String>(WorkspaceChangeMarker {
+        operation_id: crate::jj::jj_head_operation_id(&workspace_path)
+          .map_err(|error| format!("jj_command_failed: {error}"))?,
+      }))
     }
     TreqCommandRequest::ProbeRepo { repo } => json(probe_repo_path(&repo)),
     TreqCommandRequest::InitRepo {
@@ -1985,6 +2018,92 @@ mod tests {
     .cli_args()
     .unwrap();
     assert!(!args.iter().any(|a| a == "--idempotency-key"));
+  }
+
+  // -- Change propagation across concurrent clients ---------------------------
+
+  #[test]
+  fn builds_typed_change_marker_arguments() {
+    assert_eq!(
+      TreqCommandRequest::WorkspaceChangeMarker {
+        repo: "/srv/project".into(),
+        workspace: Some("feature-auth".into()),
+      }
+      .cli_args()
+      .unwrap(),
+      vec![
+        "workspace",
+        "marker",
+        "--repo",
+        "/srv/project",
+        "--workspace",
+        "feature-auth",
+        "--format",
+        "json"
+      ]
+    );
+    // Marker is also valid for the repo root (no workspace scope).
+    assert_eq!(
+      TreqCommandRequest::WorkspaceChangeMarker {
+        repo: "/srv/project".into(),
+        workspace: None,
+      }
+      .cli_args()
+      .unwrap(),
+      vec![
+        "workspace",
+        "marker",
+        "--repo",
+        "/srv/project",
+        "--format",
+        "json"
+      ]
+    );
+  }
+
+  #[test]
+  fn change_marker_reflects_new_operations_and_local_dispatch_matches_direct_jj_call() {
+    let repo_dir = tempfile::tempdir().unwrap();
+    let repo_path = repo_dir.path().to_str().unwrap().to_string();
+    crate::core::remote::execute_local_request(TreqCommandRequest::InitRepo {
+      repo: repo_path.clone(),
+      idempotency_key: None,
+    })
+    .unwrap();
+
+    let before = execute_local_request(TreqCommandRequest::WorkspaceChangeMarker {
+      repo: repo_path.clone(),
+      workspace: None,
+    })
+    .unwrap();
+    let before: WorkspaceChangeMarker = serde_json::from_value(before).unwrap();
+    assert_eq!(
+      before.operation_id,
+      crate::jj::jj_head_operation_id(&repo_path).unwrap()
+    );
+
+    // A mutation (a new commit) must advance the operation log, so the
+    // marker a second client polls for changes even though it never
+    // initiated the mutation itself.
+    execute_local_request(TreqCommandRequest::CreateCommit {
+      repo: repo_path.clone(),
+      workspace: None,
+      message: "test commit".into(),
+      idempotency_key: None,
+    })
+    .unwrap();
+
+    let after = execute_local_request(TreqCommandRequest::WorkspaceChangeMarker {
+      repo: repo_path.clone(),
+      workspace: None,
+    })
+    .unwrap();
+    let after: WorkspaceChangeMarker = serde_json::from_value(after).unwrap();
+
+    assert_ne!(
+      before.operation_id, after.operation_id,
+      "operation id must change after a mutation so a foreign client can detect it"
+    );
   }
 
   fn uuid_like() -> String {

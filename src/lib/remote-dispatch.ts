@@ -32,6 +32,11 @@ export type TreqCommandRequest =
     }
   | { kind: "ListCommits"; repo: string; workspace?: string | null }
   | { kind: "ListConflicts"; repo: string; workspace?: string | null }
+  | {
+      kind: "WorkspaceChangeMarker";
+      repo: string;
+      workspace?: string | null;
+    }
   | { kind: "GitFetch"; repo: string; idempotency_key?: string | null }
   | {
       kind: "AgentStart";
