@@ -11,7 +11,7 @@ import {
 import { Button } from "../ui/button";
 import { Kbd, KbdGroup } from "../ui/kbd";
 import { cn } from "../../lib/utils";
-import { getTreqBinDir } from "../../lib/api";
+import { getTreqBinDir, ptyWrite } from "../../lib/api";
 import { type ShellTerminalData, type TerminalRefsMap } from "./types";
 import { TerminalSendPreviews } from "./TerminalSendPreviews";
 
@@ -112,6 +112,9 @@ export const ShellTerminalPanel = ({
         <TerminalSendPreviews
           ptySessionId={terminalData.id}
           isActive={!!isActive}
+          onInsertIntoTerminal={(text) => {
+            ptyWrite(terminalData.id, text).catch(console.error);
+          }}
         />
         <ConsolidatedTerminal
           ref={(el) => {

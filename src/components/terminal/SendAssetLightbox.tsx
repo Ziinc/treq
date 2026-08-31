@@ -18,7 +18,7 @@ import {
   hasUnsentSendAssetReview,
   renderHighlightedImageBlob,
 } from "../../lib/sendAssetReview";
-import { copyTextToClipboard } from "../../lib/utils";
+import { copySendAssetToClipboard } from "../../lib/send-asset-drag";
 import { useToast } from "../ui/toast";
 import { type CarouselApi } from "../ui/carousel";
 import { Button } from "../ui/button";
@@ -197,31 +197,13 @@ export function SendAssetLightbox({
   const copyCurrentAsset = async () => {
     if (!current) return;
     try {
-      if (current.mediaType === "text") {
-        const content =
-          textByPath[current.path] ?? (await readFile(current.path));
-        await copyTextToClipboard(content);
-      } else {
-        const response = await fetch(treqSendFileSrc(current.path));
-        const blob = await response.blob();
-        const type = blob.type || "image/png";
-        if (
-          typeof ClipboardItem !== "undefined" &&
-          navigator.clipboard?.write
-        ) {
-          await navigator.clipboard.write([
-            new ClipboardItem({ [type]: blob }),
-          ]);
-        } else {
-          await copyTextToClipboard(current.path);
-        }
-      }
+      await copySendAssetToClipboard({
+        path: current.path,
+        title: current.title,
+      });
       addToast({
         title: "Copied",
-        description:
-          current.mediaType === "text"
-            ? "Asset text copied to clipboard"
-            : "Asset copied to clipboard",
+        description: "Asset path copied to clipboard",
         type: "success",
       });
     } catch (error) {

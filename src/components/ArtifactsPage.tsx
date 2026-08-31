@@ -1,6 +1,6 @@
 import useSWR from "swr";
 import { FileText, Images } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { listSendArtifacts } from "../lib/api";
 import {
   mergeSendAssets,
@@ -11,6 +11,7 @@ import {
 import { useTreqSendStore } from "../stores/treqSendStore";
 import { SendAssetLightbox } from "./terminal/SendAssetLightbox";
 import { Button } from "./ui/button";
+import { setSendAssetDragData } from "../lib/send-asset-drag";
 
 interface ArtifactsPageProps {
   repoPath: string;
@@ -93,13 +94,38 @@ function ArtifactThumbnail({
   asset: TreqSendAsset;
   onOpen: () => void;
 }) {
+  const skipClickAfterDragRef = useRef(false);
   return (
     <button
       type="button"
       data-testid={`artifact-thumb-${asset.id}`}
       aria-label={`Preview ${asset.title}`}
-      onClick={onOpen}
-      className="group flex flex-col overflow-hidden rounded-lg border border-border bg-muted/40 text-left hover:border-primary/50 hover:bg-muted/70 transition-colors"
+      draggable
+      onDragStart={(event) => {
+        skipClickAfterDragRef.current = true;
+        setSendAssetDragData(event.dataTransfer, {
+          path: asset.path,
+          title: asset.title,
+        });
+      }}
+      onDragEnd={() => {
+        window.setTimeout(() => {
+          skipClickAfterDragRef.current = false;
+        }, 0);
+      }}
+      onClick={() => {
+        if (skipClickAfterDragRef.current) return;
+        onOpen();
+      }}
+      onCopy={(event) => {
+        if (!event.clipboardData) return;
+        event.preventDefault();
+        setSendAssetDragData(event.clipboardData, {
+          path: asset.path,
+          title: asset.title,
+        });
+      }}
+      className="group flex flex-col overflow-hidden rounded-lg border border-border bg-muted/40 text-left hover:border-primary/50 hover:bg-muted/70 transition-colors cursor-grab active:cursor-grabbing"
     >
       <div className="aspect-[4/3] bg-[#1e1e1e] flex items-center justify-center overflow-hidden">
         {asset.mediaType === "image" ? (

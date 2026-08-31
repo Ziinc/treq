@@ -432,6 +432,9 @@ export const AgentTerminalPanel = ({
                 ptySessionId={sessionData.ptySessionId}
                 isActive={!!isActive}
                 onSendReview={handleEnqueueMessage}
+                onInsertIntoTerminal={(text) => {
+                  ptyWrite(sessionData.ptySessionId, text).catch(console.error);
+                }}
               />
               <ConsolidatedTerminal
                 key={`${sessionData.ptySessionId}-${terminalInstanceKey}`}

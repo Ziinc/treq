@@ -3,7 +3,7 @@ import type { ReactElement } from "react";
 import userEvent from "@testing-library/user-event";
 import { listen } from "@tauri-apps/api/event";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { TerminalSendPreviews } from "./TerminalSendPreviews";
 import { ToastProvider } from "../ui/toast";
 import { AppStoreEffects } from "../../stores/AppStoreEffects";
@@ -12,6 +12,8 @@ import { TREQ_SEND_EVENT } from "../../lib/treqSend";
 import * as api from "../../lib/api";
 import * as treqSend from "../../lib/treqSend";
 import * as utils from "../../lib/utils";
+import * as sendAssetDrag from "../../lib/send-asset-drag";
+import { SEND_ASSET_MIME } from "../../lib/send-asset-drag";
 import * as sendAssetReview from "../../lib/sendAssetReview";
 
 vi.spyOn(api, "readFile").mockResolvedValue("hello from send");
@@ -19,15 +21,20 @@ vi.spyOn(treqSend, "treqSendFileSrc").mockImplementation(
   (path: string) => `asset://localhost${path}`,
 );
 vi.spyOn(utils, "copyTextToClipboard").mockResolvedValue(undefined);
+vi.spyOn(sendAssetDrag, "copySendAssetToClipboard").mockResolvedValue(
+  undefined,
+);
 
 function SendHarness({
   ptySessionId,
   isActive = true,
   onSendReview,
+  onInsertIntoTerminal,
 }: {
   ptySessionId: string;
   isActive?: boolean;
   onSendReview?: (prompt: string) => void;
+  onInsertIntoTerminal?: (text: string) => void;
 }) {
   const ingestPayload = useTreqSendStore((s) => s.ingestPayload);
   return (
@@ -68,6 +75,7 @@ function SendHarness({
         ptySessionId={ptySessionId}
         isActive={isActive}
         onSendReview={onSendReview}
+        onInsertIntoTerminal={onInsertIntoTerminal}
       />
     </div>
   );
@@ -90,6 +98,9 @@ describe("TerminalSendPreviews", () => {
       (path: string) => `asset://localhost${path}`,
     );
     vi.mocked(utils.copyTextToClipboard).mockResolvedValue(undefined);
+    vi.spyOn(sendAssetDrag, "copySendAssetToClipboard").mockResolvedValue(
+      undefined,
+    );
   });
 
   it("shows attachment thumbnails and opens a lightbox text preview on click", async () => {
@@ -186,7 +197,10 @@ describe("TerminalSendPreviews", () => {
 
     await user.click(screen.getByTestId("treq-send-copy"));
     await waitFor(() => {
-      expect(utils.copyTextToClipboard).toHaveBeenCalledWith("hello from send");
+      expect(sendAssetDrag.copySendAssetToClipboard).toHaveBeenCalledWith({
+        path: "/tmp/repo/.treq/send/note.txt",
+        title: "note.txt",
+      });
     });
 
     await user.click(screen.getByTestId("treq-send-reveal"));
@@ -440,5 +454,79 @@ describe("TerminalSendPreviews", () => {
     expect(onSendReview).toHaveBeenCalledWith(
       expect.stringContaining("Highlights:"),
     );
+  });
+
+  it("drags a thumbnail with the quoted asset path and inserts it on drop", async () => {
+    const user = userEvent.setup();
+    const onInsertIntoTerminal = vi.fn();
+    renderSend(
+      <SendHarness
+        ptySessionId="session-1"
+        onInsertIntoTerminal={onInsertIntoTerminal}
+      />,
+    );
+    await user.click(screen.getByRole("button", { name: "Inject text" }));
+    const thumb = await screen.findByTestId("terminal-send-preview-send-1");
+    expect(thumb.getAttribute("draggable")).toBe("true");
+
+    const store = new Map<string, string>();
+    const types: string[] = [];
+    const dataTransfer = {
+      dropEffect: "none",
+      effectAllowed: "all",
+      files: [] as unknown as FileList,
+      items: [] as unknown as DataTransferItemList,
+      types,
+      clearData: () => store.clear(),
+      getData: (format: string) => store.get(format) ?? "",
+      setData: (format: string, data: string) => {
+        store.set(format, data);
+        if (!types.includes(format)) types.push(format);
+      },
+      setDragImage: () => {},
+    } as DataTransfer;
+
+    fireEvent.dragStart(thumb, { dataTransfer });
+    expect(dataTransfer.getData(SEND_ASSET_MIME)).toContain(
+      "/tmp/repo/.treq/send/note.txt",
+    );
+    expect(dataTransfer.getData("text/plain")).toBe(
+      "'/tmp/repo/.treq/send/note.txt'",
+    );
+
+    fireEvent.drop(screen.getByTestId("terminal-send-previews-drop"), {
+      dataTransfer,
+    });
+    expect(onInsertIntoTerminal).toHaveBeenCalledWith(
+      "'/tmp/repo/.treq/send/note.txt'",
+    );
+  });
+
+  it("copies the quoted asset path when the thumbnail is hovered and the user copies", async () => {
+    const user = userEvent.setup();
+    renderSend(<SendHarness ptySessionId="session-1" />);
+    await user.click(screen.getByRole("button", { name: "Inject text" }));
+    const thumb = await screen.findByTestId("terminal-send-preview-send-1");
+    const attachment = thumb.closest('[data-slot="attachment"]') as HTMLElement;
+    await user.hover(attachment);
+    await user.keyboard("{Meta>}c{/Meta}");
+    expect(sendAssetDrag.copySendAssetToClipboard).toHaveBeenCalledWith({
+      path: "/tmp/repo/.treq/send/note.txt",
+      title: "note.txt",
+    });
+
+    const clipboardData = {
+      dropEffect: "none",
+      effectAllowed: "all",
+      files: [] as unknown as FileList,
+      items: [] as unknown as DataTransferItemList,
+      types: [] as string[],
+      clearData: () => {},
+      getData: () => "",
+      setData: vi.fn(),
+      setDragImage: () => {},
+    } as unknown as DataTransfer;
+    fireEvent.copy(attachment, { clipboardData });
+    expect(clipboardData.setData).toHaveBeenCalled();
   });
 });
