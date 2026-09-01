@@ -112,7 +112,8 @@ export function ChecksTab({
   const setupBlocking =
     !!setupStatus?.configured &&
     (setupStatus.status === "pending" || setupStatus.status === "running");
-  const setupFailed = setupStatus?.configured && setupStatus.status === "failed";
+  const setupFailed =
+    setupStatus?.configured && setupStatus.status === "failed";
   const [rerunningSetup, setRerunningSetup] = useState(false);
 
   async function handleRerunSetup() {
@@ -259,21 +260,22 @@ export function ChecksTab({
             </span>
           </div>
           <div className="flex items-center gap-2 ml-4 shrink-0">
-            {setupStatus?.run_id !== null && setupStatus?.run_id !== undefined && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() =>
-                  setLogTarget({
-                    runId: setupStatus.run_id as number,
-                    jobId: SETUP_RUN_JOB_ID,
-                  })
-                }
-              >
-                <FileText className="h-3 w-3 mr-1" />
-                Logs
-              </Button>
-            )}
+            {setupStatus?.run_id !== null &&
+              setupStatus?.run_id !== undefined && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() =>
+                    setLogTarget({
+                      runId: setupStatus.run_id as number,
+                      jobId: SETUP_RUN_JOB_ID,
+                    })
+                  }
+                >
+                  <FileText className="h-3 w-3 mr-1" />
+                  Logs
+                </Button>
+              )}
             <Button
               size="sm"
               variant="outline"
