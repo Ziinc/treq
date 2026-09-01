@@ -54,31 +54,60 @@ const tauriTest = require("../src-tauri/target") as {
 let pendingInvokes = 0;
 let onAllSettled: (() => void) | null = null;
 
-export function waitForPendingInvokes(timeoutMs = 5_000): Promise<void> {
-  if (pendingInvokes === 0) return Promise.resolve();
+export function waitForPendingInvokes(
+  timeoutMs = 5_000,
+  quietMs = 75,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  let quietSince = pendingInvokes === 0 ? Date.now() : 0;
+
   return new Promise((resolve) => {
-    const timer = setTimeout(() => {
+    const finish = () => {
       onAllSettled = null;
       resolve();
-    }, timeoutMs);
-    onAllSettled = () => {
-      clearTimeout(timer);
-      resolve();
     };
+
+    const check = () => {
+      if (pendingInvokes === 0) {
+        if (!quietSince) quietSince = Date.now();
+        if (Date.now() - quietSince >= quietMs) {
+          finish();
+          return;
+        }
+      } else {
+        quietSince = 0;
+      }
+      if (Date.now() >= deadline) {
+        finish();
+        return;
+      }
+      setTimeout(check, 10);
+    };
+
+    onAllSettled = () => {
+      quietSince = Date.now();
+    };
+    check();
   });
 }
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn((cmd: string, args?: Record<string, unknown>) => {
     pendingInvokes++;
-    return tauriTest.invoke(cmd, args ?? {}).finally(() => {
+    const promise = tauriTest.invoke(cmd, args ?? {}).finally(() => {
       pendingInvokes--;
       if (pendingInvokes === 0 && onAllSettled) {
-        const settled = onAllSettled;
-        onAllSettled = null;
-        settled();
+        onAllSettled();
       }
     });
+    // SWR / effects can drop the promise after unmount. A late open of a
+    // deleted fixture-copy local.db must not fail the file as unhandled.
+    void promise.catch((error) => {
+      const message = String((error as { message?: string })?.message ?? error);
+      if (message.includes("unable to open database file")) return;
+      throw error;
+    });
+    return promise;
   }),
   // The real Rust dispatch behind this harness represents the shipped app's
   // production code path (unlike the screenshot harness, which flips this to
