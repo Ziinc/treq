@@ -40,7 +40,10 @@ pub(crate) fn commit_lock_for_repo(repo_path: &str) -> Arc<Mutex<()>> {
 pub fn commit_repo(repo_path: &str, message: &str) -> Result<String, String> {
   let lock = commit_lock_for_repo(repo_path);
   let _guard = lock.lock().unwrap();
-  jj::jj_commit(repo_path, message).map_err(|e| format!("Failed to create commit: {}", e))
+  let result =
+    jj::jj_commit(repo_path, message).map_err(|e| format!("Failed to create commit: {}", e))?;
+  let _ = jj::jj_drop_autosave_ancestors(repo_path);
+  Ok(result)
 }
 
 /// Returns the current checkout branch information for the home repo.

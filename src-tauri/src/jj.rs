@@ -605,6 +605,31 @@ fn is_empty_commit(repo: &Arc<ReadonlyRepo>, commit: &jj_lib::commit::Commit) ->
   parent_tree.tree_ids() == commit.tree().tree_ids()
 }
 
+pub const AUTOSAVE_DESCRIPTION_PREFIX: &str = "treq-autosave:";
+
+pub fn is_autosave_description(description: &str) -> bool {
+  description
+    .lines()
+    .next()
+    .unwrap_or("")
+    .trim()
+    .starts_with(AUTOSAVE_DESCRIPTION_PREFIX)
+}
+
+pub fn autosave_commit_message(paths: &[String]) -> String {
+  let mut paths: Vec<&str> = paths.iter().map(String::as_str).collect();
+  paths.sort_unstable();
+  match paths.as_slice() {
+    [] => AUTOSAVE_DESCRIPTION_PREFIX.to_string(),
+    [one] => format!("{AUTOSAVE_DESCRIPTION_PREFIX} {one}"),
+    [first, second] => format!("{AUTOSAVE_DESCRIPTION_PREFIX} {first}, {second}"),
+    [first, second, rest @ ..] => format!(
+      "{AUTOSAVE_DESCRIPTION_PREFIX} {first}, {second}, … N{} more",
+      rest.len()
+    ),
+  }
+}
+
 fn commit_description_first_line(commit: &jj_lib::commit::Commit) -> String {
   commit
     .description()
@@ -6988,6 +7013,93 @@ pub fn jj_abandon_empty_commits(
   abandon_commits_matching_revset(workspace_path, &revset_expr)
 }
 
+/// After a manual commit, drop consecutive autosave ancestors of `@-`.
+///
+/// Reparents the new commit onto the last non-autosave ancestor, keeping the
+/// new commit's tree, then abandons the autosave commits. Does nothing when
+/// `@-` itself is still an autosave (no manual commit yet).
+pub fn jj_drop_autosave_ancestors(workspace_path: &str) -> Result<Vec<String>, JjError> {
+  if !Path::new(workspace_path).exists() {
+    return Ok(Vec::new());
+  }
+
+  let loaded = load_workspace_repo(workspace_path)?;
+  let workspace_name = loaded.workspace.workspace_name().to_owned();
+  let Some(wc_id) = loaded
+    .repo
+    .view()
+    .get_wc_commit_id(&workspace_name)
+    .cloned()
+  else {
+    return Ok(Vec::new());
+  };
+  let wc_commit = loaded
+    .repo
+    .store()
+    .get_commit(&wc_id)
+    .map_err(|e| JjError::IoError(format!("Failed to load working-copy commit: {e}")))?;
+  let wc_parents = block_on(wc_commit.parents())
+    .map_err(|e| JjError::IoError(format!("Failed to load working-copy parents: {e}")))?;
+  let Some(tip) = wc_parents.into_iter().next() else {
+    return Ok(Vec::new());
+  };
+  if is_autosave_description(tip.description()) {
+    return Ok(Vec::new());
+  }
+
+  let mut autosaves = Vec::new();
+  let mut current = tip.clone();
+  loop {
+    let parents = block_on(current.parents())
+      .map_err(|e| JjError::IoError(format!("Failed to load commit parents: {e}")))?;
+    if parents.len() != 1 {
+      break;
+    }
+    let parent = parents.into_iter().next().expect("checked length 1");
+    if !is_autosave_description(parent.description()) {
+      break;
+    }
+    autosaves.push(parent.clone());
+    current = parent;
+  }
+  if autosaves.is_empty() {
+    return Ok(Vec::new());
+  }
+
+  let oldest = autosaves.last().expect("non-empty autosaves");
+  let oldest_parents = block_on(oldest.parents())
+    .map_err(|e| JjError::IoError(format!("Failed to load autosave parents: {e}")))?;
+  if oldest_parents.len() != 1 {
+    return Ok(Vec::new());
+  }
+  let base = oldest_parents.into_iter().next().expect("checked length 1");
+
+  let dropped_ids: Vec<String> = autosaves
+    .iter()
+    .map(|commit| HexPrefix::from_id(commit.change_id()).reverse_hex()[..12].to_string())
+    .collect();
+
+  let mut tx = loaded.repo.start_transaction();
+  let mut builder = tx.repo_mut().rewrite_commit(&tip).detach();
+  builder.set_parents(vec![base.id().clone()]);
+  block_on(builder.write(tx.repo_mut()))
+    .map_err(|e| JjError::IoError(format!("Failed to reparent manual commit: {e}")))?;
+  for autosave in &autosaves {
+    tx.repo_mut().record_abandoned_commit(autosave);
+  }
+  block_on(tx.repo_mut().rebase_descendants())
+    .map_err(|e| JjError::IoError(format!("Failed to rebase after dropping autosaves: {e}")))?;
+  let _ = git::export_refs(tx.repo_mut());
+  block_on(tx.commit("drop autosave commits"))
+    .map_err(|e| JjError::IoError(format!("Failed to commit autosave drop: {e}")))?;
+
+  let repo_path =
+    derive_repo_path_from_workspace(workspace_path).unwrap_or_else(|| workspace_path.to_string());
+  let _ = reconcile_all_workspaces_after_rewrite(&repo_path, None);
+
+  Ok(dropped_ids)
+}
+
 fn too_large_revision_diff() -> JjRevisionDiff {
   JjRevisionDiff {
     committed_files: Vec::new(),
@@ -8178,6 +8290,45 @@ mod tests {
       t.join().unwrap();
     }
     assert_eq!(MAX.load(Ordering::SeqCst), 1);
+  }
+
+  #[test]
+  fn is_autosave_description_matches_first_line_prefix() {
+    assert!(is_autosave_description("treq-autosave: good.txt"));
+    assert!(is_autosave_description(
+      "treq-autosave: a.txt, b.txt, … N1 more\nmore"
+    ));
+    assert!(!is_autosave_description("ship the good changes"));
+    assert!(!is_autosave_description(""));
+  }
+
+  #[test]
+  fn autosave_commit_message_lists_up_to_two_files() {
+    assert_eq!(
+      autosave_commit_message(&["good.txt".to_string()]),
+      "treq-autosave: good.txt"
+    );
+    assert_eq!(
+      autosave_commit_message(&["b.txt".to_string(), "a.txt".to_string()]),
+      "treq-autosave: a.txt, b.txt"
+    );
+  }
+
+  #[test]
+  fn autosave_commit_message_ellipsizes_after_two_files() {
+    let paths: Vec<String> = (1..=57).map(|i| format!("f{i:02}.txt")).collect();
+    assert_eq!(
+      autosave_commit_message(&paths),
+      "treq-autosave: f01.txt, f02.txt, … N55 more"
+    );
+    assert_eq!(
+      autosave_commit_message(&[
+        "c.txt".to_string(),
+        "a.txt".to_string(),
+        "b.txt".to_string()
+      ]),
+      "treq-autosave: a.txt, b.txt, … N1 more"
+    );
   }
 
   fn init_git_repo(temp: &TempDir) {
