@@ -1012,11 +1012,10 @@ const TreeNode = ({
             <span
               className={cn(
                 "font-medium truncate font-mono text-sm",
-                entry.status
-                  ? jjStatusTextColor(entry.status)
-                  : getFileStatusTextColor(
-                      getDirectoryChangeStatus(entry.path)?.workspaceStatus,
-                    ),
+                !entry.status &&
+                  getFileStatusTextColor(
+                    getDirectoryChangeStatus(entry.path)?.workspaceStatus,
+                  ),
               )}
             >
               {entry.name}
@@ -1097,9 +1096,7 @@ const TreeNode = ({
         <span
           className={cn(
             "truncate font-mono text-sm",
-            jjStatus
-              ? jjStatusTextColor(jjStatus)
-              : getFileStatusTextColor(legacyStatus),
+            !jjStatus && getFileStatusTextColor(legacyStatus),
           )}
         >
           {entry.name}
@@ -1158,19 +1155,6 @@ function jjStatusPip(
       return { bg: "bg-yellow-500", title: "Working copy change" };
     default:
       return null;
-  }
-}
-
-function jjStatusTextColor(status: string): string {
-  switch (status) {
-    case "conflict":
-      return "text-red-500";
-    case "committed":
-      return "text-blue-500";
-    case "workingCopy":
-      return "text-yellow-500";
-    default:
-      return "text-muted-foreground/50";
   }
 }
 

@@ -196,12 +196,6 @@ const JJ_STATUS_PIP_CLASSES: Record<string, string> = {
   workingCopy: "bg-yellow-500",
 };
 
-const JJ_STATUS_TEXT_CLASSES: Record<string, string> = {
-  conflict: "text-red-500",
-  committed: "text-blue-500",
-  workingCopy: "text-yellow-500",
-};
-
 const JjStatusPip = ({ status }: { status?: string | null }) => {
   const pipClass = status ? JJ_STATUS_PIP_CLASSES[status] : undefined;
   return pipClass ? (
@@ -1517,10 +1511,9 @@ export const ShowWorkspace = ({
                             <span
                               className={cn(
                                 "flex-1 font-mono truncate",
-                                entry.status
-                                  ? JJ_STATUS_TEXT_CLASSES[entry.status]
-                                  : canCollapseUntouched &&
-                                      "text-muted-foreground/50",
+                                !entry.status &&
+                                  canCollapseUntouched &&
+                                  "text-muted-foreground/50",
                               )}
                               style={{ fontSize: `${fontSize}px` }}
                             >

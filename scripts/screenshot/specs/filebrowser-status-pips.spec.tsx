@@ -1,10 +1,11 @@
 /**
  * Captures the Code tab's (workspace Overview) top-level file list
  * highlighting jj file status via core::ls_workspace /
- * core::files::annotate_entry_statuses: a red pip + red name for an
- * unresolved conflict, a blue pip for a file changed by an already-committed
+ * core::files::annotate_entry_statuses: a red pip for an unresolved
+ * conflict, a blue pip for a file changed by an already-committed
  * (not-yet-rebased) ancestor commit, a yellow pip for an uncommitted
- * working-copy change, and untouched files collapsed behind a toggle.
+ * working-copy change, and untouched files collapsed behind a toggle. File
+ * names themselves stay unstyled — only the pip carries the status color.
  */
 
 import * as React from "react";
@@ -80,11 +81,7 @@ it("captures conflict/committed/working-copy status pips in the Code tab file li
 
   await waitFor(() => {
     const readmeRow = screen.getByRole("button", { name: /README\.md/ });
-    const readmePip = readmeRow.querySelector(".bg-red-500");
-    expect(readmePip).toBeTruthy();
-    expect(readmeRow.querySelector("span")?.className).toContain(
-      "text-red-500",
-    );
+    expect(readmeRow.querySelector(".bg-red-500")).toBeTruthy();
 
     const committedRow = screen.getByRole("button", {
       name: /committed\.txt/,
@@ -98,7 +95,7 @@ it("captures conflict/committed/working-copy status pips in the Code tab file li
   await captureDocument(document, {
     name: "filebrowser-status-pips-01-tree",
     expectations: [
-      "README.md's row shows a red pip and red file name, signalling an unresolved conflict.",
+      "README.md's row shows a red pip (its file name stays default-colored, not red), signalling an unresolved conflict.",
       "committed.txt's row shows a blue pip, signalling a change already committed but not yet rebased onto the target branch.",
       "dirty.txt's row shows a yellow pip, signalling an uncommitted working-copy change.",
     ],
