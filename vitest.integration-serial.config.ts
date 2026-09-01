@@ -1,0 +1,23 @@
+import { defineConfig } from "vitest/config";
+import { integrationBaseTest, integrationPlugins } from "./vitest.integration.base";
+
+/**
+ * Integration tests that mutate/poll the jj "Changes" file list (staging,
+ * discard, review, commit refresh, ...). These contend heavily for
+ * spawn_blocking / jj-lib: running them concurrently with other NAPI forks
+ * starves that pool and the Changes list never resolves in time, so they
+ * stay serial. See vitest.integration-parallel.config.ts for the rest.
+ */
+export default defineConfig({
+  plugins: integrationPlugins,
+  test: {
+    ...integrationBaseTest,
+    name: "integration-serial",
+    include: [
+      "test/integration/review/**/*.test.{ts,tsx}",
+      "test/integration/workspace/**/*.test.{ts,tsx}",
+    ],
+    fileParallelism: false,
+    maxWorkers: 1,
+  },
+});

@@ -43,7 +43,7 @@
     "test:ui": "vitest --ui",
     "build:napi": "cargo build --manifest-path src-tauri/Cargo.toml --lib --features tauri-test",
     "test:unit": "vitest run --config vitest.unit.config.ts --silent=passed-only",
-    "test:integration:run": "DEBUG_PRINT_LIMIT=10 vitest run --config vitest.integration.config.ts --maxWorkers=1 --fileParallelism=false --silent=passed-only",
+    "test:integration:run": "DEBUG_PRINT_LIMIT=10 vitest run --config vitest.integration.config.ts --silent=passed-only",
     "test:integration": "npm run build:napi --silent && npm run test:integration:run",
     "test": "npm run test:unit && npm run test:integration",
     "screenshot:css": "node scripts/screenshot/build-css.mjs",
