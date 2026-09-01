@@ -4,11 +4,11 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import crypto from "crypto";
-import { createTestRepo, openRepo } from "../utils";
-import { render, screen } from "../test-utils";
+import { createTestRepo, openRepo, resolveWorkspacePath } from "../utils";
+import { render, screen, waitFor, within } from "../test-utils";
 import { Dashboard } from "../../src/components/Dashboard";
 import userEvent from "@testing-library/user-event";
-import { uninstallSkill } from "../../src/lib/api-extra";
+import { getWorkspaces, uninstallSkill } from "../../src/lib/api";
 
 function skillChecksum(files: { path: string; content: Buffer }[]): string {
   const hash = crypto.createHash("sha256");
@@ -119,5 +119,45 @@ describe("skill library", () => {
       "repository",
     );
     expect(await screen.findByText("demo skill")).toBeTruthy();
+  }, 30000);
+
+  it("materializes installed library skills when stacking a workspace", async () => {
+    const BRANCH_NAME = "feat/skill-materialize";
+    await openSkillsTab();
+    await user.click(await screen.findByRole("button", { name: /^install/i }));
+    await user.click(
+      await screen.findByRole("button", { name: /install for repository/i }),
+    );
+    await user.click(await screen.findByRole("button", { name: /^close$/i }));
+
+    await screen.findByTestId("show-workspace-header");
+    await user.click(await screen.findByRole("button", { name: "Stack" }));
+    const dialog = await screen.findByTestId("modal");
+    await user.type(within(dialog).getByLabelText("Branch Name"), BRANCH_NAME);
+    await user.click(
+      within(dialog).getByRole("button", { name: "Create Workspace" }),
+    );
+    await waitFor(() => {
+      expect(screen.queryByTestId("modal")).not.toBeInTheDocument();
+    });
+
+    const repoPath = new URL(window.location.href).searchParams.get("repo");
+    if (!repoPath) throw new Error("repo path missing from URL");
+    const workspace = (await getWorkspaces(repoPath)).find(
+      (candidate) => candidate.branch_name === BRANCH_NAME,
+    );
+    if (!workspace) {
+      throw new Error(`Expected ${BRANCH_NAME} workspace to exist`);
+    }
+    const workspacePath = resolveWorkspacePath(
+      repoPath,
+      workspace.workspace_path,
+    );
+    expect(
+      fs.existsSync(path.join(workspacePath, ".agents/skills/demo/SKILL.md")),
+    ).toBe(true);
+    expect(
+      fs.existsSync(path.join(workspacePath, ".claude/skills/demo/SKILL.md")),
+    ).toBe(true);
   }, 30000);
 });
