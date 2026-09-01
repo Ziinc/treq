@@ -43,7 +43,7 @@ vi.mock("../lib/api", async () => {
     ...actual,
     getSetting: vi.fn().mockResolvedValue(null),
     getRepoSetting: vi.fn().mockResolvedValue(null),
-    lsWorkspace: vi.fn().mockResolvedValue([]),
+    lsWorkspaceWithStatus: vi.fn().mockResolvedValue([]),
     getWorkspaceReadme: vi.fn().mockResolvedValue(null),
     jjGetDefaultBranch: vi.fn().mockResolvedValue("main"),
     listConflictedFiles: vi.fn().mockResolvedValue([]),

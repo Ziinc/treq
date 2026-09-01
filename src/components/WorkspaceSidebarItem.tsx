@@ -1,20 +1,17 @@
 import { Draggable } from "@hello-pangea/dnd";
-import { openUrl, revealItemInDir } from "@tauri-apps/plugin-opener";
 import {
   AlertTriangle,
   Archive,
   Bot,
   CalendarClock,
-  Copy,
-  FolderOpen,
   GitBranch,
   Layers2,
   Link,
+  Loader2,
   Pencil,
   Terminal,
 } from "lucide-react";
 import { useState } from "react";
-import { useEditorAppsStore } from "../stores/editorAppsStore";
 import { type QueueEntryStatus, type Workspace } from "../lib/api";
 import { clearWorkspaceSchedule } from "../lib/clear-workspace-schedule";
 import type { PrInfo } from "../lib/api-types";
@@ -29,6 +26,7 @@ import {
   isChangeFilesDrag,
   type ChangeFilesMoveRequest,
 } from "../lib/change-file-drag";
+import { usePreviewFeature } from "../stores/featurePreviewStore";
 import { Button } from "./ui/button";
 import { SidebarMenuItem } from "./ui/sidebar";
 import { useToast } from "./ui/toast";
@@ -37,91 +35,11 @@ import {
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuSeparator,
-  ContextMenuSub,
-  ContextMenuSubContent,
-  ContextMenuSubTrigger,
   ContextMenuTrigger,
 } from "./ui/context-menu";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { useWorkspaceRowPointerHandlers } from "../hooks/useWorkspaceSidebarMultiSelect";
-
-export const PathContextMenuItems: React.FC<{
-  relativePath: string;
-  fullPath: string;
-  additionalItems?: React.ReactNode;
-}> = ({ relativePath, fullPath, additionalItems }) => {
-  const editorApps = useEditorAppsStore();
-
-  return (
-    <>
-      <ContextMenuItem
-        onClick={() => navigator.clipboard.writeText(relativePath)}
-      >
-        <Copy className="w-4 h-4 mr-2" />
-        Copy relative path
-      </ContextMenuItem>
-      <ContextMenuItem onClick={() => navigator.clipboard.writeText(fullPath)}>
-        <Copy className="w-4 h-4 mr-2" />
-        Copy full path
-      </ContextMenuItem>
-      <ContextMenuSub>
-        <ContextMenuSubTrigger>
-          <FolderOpen className="w-4 h-4 mr-2" />
-          Open in...
-        </ContextMenuSubTrigger>
-        <ContextMenuSubContent>
-          <ContextMenuItem onClick={() => revealItemInDir(fullPath)}>
-            <FolderOpen className="w-4 h-4 mr-2" />
-            Open in Finder
-          </ContextMenuItem>
-
-          {editorApps.cursor && (
-            <ContextMenuItem
-              onClick={async () => {
-                try {
-                  await openUrl(`cursor://file/${fullPath}`);
-                } catch (err) {
-                  console.error("Failed to open in Cursor:", err);
-                }
-              }}
-            >
-              Open in Cursor
-            </ContextMenuItem>
-          )}
-
-          {editorApps.vscode && (
-            <ContextMenuItem
-              onClick={async () => {
-                try {
-                  await openUrl(`vscode://file/${fullPath}`);
-                } catch (err) {
-                  console.error("Failed to open in VSCode:", err);
-                }
-              }}
-            >
-              Open in VSCode
-            </ContextMenuItem>
-          )}
-
-          {editorApps.zed && (
-            <ContextMenuItem
-              onClick={async () => {
-                try {
-                  await openUrl(`zed://file/${fullPath}`);
-                } catch (err) {
-                  console.error("Failed to open in Zed:", err);
-                }
-              }}
-            >
-              Open in Zed
-            </ContextMenuItem>
-          )}
-        </ContextMenuSubContent>
-      </ContextMenuSub>
-      {additionalItems}
-    </>
-  );
-};
+import { PathContextMenuItems } from "./WorkspacePathContextMenu";
 
 interface WorkspaceSidebarItemProps {
   node: FlattenedWorkspaceNode;
@@ -139,6 +57,8 @@ interface WorkspaceSidebarItemProps {
   onStartAgent?: (workspace: Workspace) => void;
   onStartShell?: (workspace: Workspace) => void;
   onArchiveWorkspace?: (workspace: Workspace) => void;
+  archiving?: boolean;
+  exiting?: boolean;
   onRenameWorkspace: (workspace: Workspace) => void;
   onDoubleClick?: (workspace: Workspace, event: React.MouseEvent) => void;
   queueStatus?: QueueEntryStatus;
@@ -207,6 +127,8 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
   onStartAgent,
   onStartShell,
   onArchiveWorkspace,
+  archiving = false,
+  exiting = false,
   onRenameWorkspace,
   onDoubleClick,
   queueStatus,
@@ -216,6 +138,7 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
 }) => {
   const workspace = node.status.current;
   const { addToast } = useToast();
+  const workspaceScheduling = usePreviewFeature("workspaceScheduling");
   const isSelected =
     selectedWorkspaceIds?.has(workspace.id) ||
     selectedWorkspaceId === workspace.id;
@@ -229,6 +152,11 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
   const [isChangeDropTarget, setIsChangeDropTarget] = useState(false);
   const { onPointerDown, onClick } = useWorkspaceRowPointerHandlers({
     onSelect: (event) => {
+      if (archiving || exiting) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
       if (onWorkspaceMultiSelect) {
         onWorkspaceMultiSelect(workspace, event, index);
         return;
@@ -255,17 +183,27 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                       data-sidebar-index={index}
                       style={indentStyle}
                       className={cn(
-                        "group/workspace relative flex h-8 items-center tracking-wide rounded-sm transition-colors cursor-pointer py-1 pr-2",
+                        "group/workspace relative flex h-8 items-center tracking-wide rounded-sm transition-[colors,opacity,max-height,padding] duration-200 ease-out cursor-pointer py-1 pr-2 max-h-8 overflow-hidden",
                         {
-                          "bg-primary/20": isSelected,
-                          "hover:bg-muted/50": !isSelected,
+                          "bg-primary/20": isSelected && !archiving && !exiting,
+                          "hover:bg-muted/50":
+                            !isSelected && !archiving && !exiting,
                           "bg-primary/10":
                             dragSnapshot.combineTargetFor || isChangeDropTarget,
                           "opacity-50": dragSnapshot.isDragging,
-                          "opacity-60": isHidden && !dragSnapshot.isDragging,
+                          "opacity-60":
+                            isHidden &&
+                            !dragSnapshot.isDragging &&
+                            !archiving &&
+                            !exiting,
                           "text-destructive": isConflicted,
+                          "opacity-50 pointer-events-none cursor-not-allowed":
+                            archiving,
+                          "opacity-0 max-h-0 py-0 pointer-events-none": exiting,
                         },
                       )}
+                      aria-busy={archiving || exiting}
+                      aria-disabled={archiving || exiting}
                       onPointerDown={onPointerDown}
                       onClick={onClick}
                       onDoubleClick={(e) => onDoubleClick?.(workspace, e)}
@@ -297,17 +235,25 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                         });
                       }}
                     >
-                      <GitBranch
-                        data-testid={`workspace-pr-icon-${workspace.id}`}
-                        aria-label={prStatus ? prStatus.label : undefined}
-                        className={`w-3 h-3 mr-1 shrink-0 -scale-y-100 ${
-                          prStatus
-                            ? prStatus.color
-                            : isSelected
-                              ? "text-primary"
-                              : "text-muted-foreground"
-                        }`}
-                      />
+                      {archiving ? (
+                        <Loader2
+                          data-testid="workspace-archive-spinner"
+                          className="w-3 h-3 mr-1 shrink-0 animate-spin text-muted-foreground"
+                          aria-label="Archiving workspace"
+                        />
+                      ) : (
+                        <GitBranch
+                          data-testid={`workspace-pr-icon-${workspace.id}`}
+                          aria-label={prStatus ? prStatus.label : undefined}
+                          className={`w-3 h-3 mr-1 shrink-0 -scale-y-100 ${
+                            prStatus
+                              ? prStatus.color
+                              : isSelected
+                                ? "text-primary"
+                                : "text-muted-foreground"
+                          }`}
+                        />
+                      )}
                       <span
                         className={`flex-1 min-w-0 truncate font-mono ${
                           isConflicted ? "pr-7" : ""
@@ -319,7 +265,7 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                       >
                         {workspaceTitle}
                       </span>
-                      {isHidden && (
+                      {workspaceScheduling && isHidden && (
                         <CalendarClock
                           className="w-3 h-3 text-muted-foreground shrink-0 mr-1"
                           aria-label="Scheduled hidden"
@@ -448,25 +394,27 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                   <Pencil className="w-4 h-4 mr-2" />
                   Rename Workspace
                 </ContextMenuItem>
-                {repoPath && isWorkspaceHidden(workspace) && (
-                  <ContextMenuItem
-                    data-testid="remove-schedule-menu-item"
-                    onClick={() => {
-                      void clearWorkspaceSchedule(repoPath, [
-                        workspace.id,
-                      ]).then(() => {
-                        addToast({
-                          title: "Workspace unscheduled",
-                          description: "Shown in the sidebar again.",
-                          type: "success",
+                {workspaceScheduling &&
+                  repoPath &&
+                  isWorkspaceHidden(workspace) && (
+                    <ContextMenuItem
+                      data-testid="remove-schedule-menu-item"
+                      onClick={() => {
+                        void clearWorkspaceSchedule(repoPath, [
+                          workspace.id,
+                        ]).then(() => {
+                          addToast({
+                            title: "Workspace unscheduled",
+                            description: "Shown in the sidebar again.",
+                            type: "success",
+                          });
                         });
-                      });
-                    }}
-                  >
-                    <CalendarClock className="w-4 h-4 mr-2" />
-                    Remove schedule
-                  </ContextMenuItem>
-                )}
+                      }}
+                    >
+                      <CalendarClock className="w-4 h-4 mr-2" />
+                      Remove schedule
+                    </ContextMenuItem>
+                  )}
                 <ContextMenuSeparator />
                 <PathContextMenuItems
                   relativePath={

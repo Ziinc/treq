@@ -193,6 +193,9 @@ pub fn run_workflow_job_sync(
     Err(_) => "failed",
   };
   crate::local_db::finish_workflow_run(repo_path, run_id, status)?;
+  if matches!(&result, Ok(r) if r.success) {
+    maybe_autosave_on_pass(repo_path, workspace_path);
+  }
   result
 }
 
@@ -478,7 +481,28 @@ pub fn run_workflow_sync(
 
   // Restore workflow job order; completion order is nondeterministic.
   results.sort_by(|a, b| a.job_id.cmp(&b.job_id));
+  if status == "passed" {
+    maybe_autosave_on_pass(repo_path, workspace_path);
+  }
   Ok(results)
+}
+
+/// Snapshot a passing check into an autosave commit when the working copy is dirty.
+fn maybe_autosave_on_pass(repo_path: &str, workspace_path: &str) {
+  if !Path::new(workspace_path).is_dir() {
+    return;
+  }
+  let lock = crate::core::repo::commit_lock_for_repo(repo_path);
+  let _guard = lock.lock().unwrap();
+  let Ok(changes) = crate::jj::jj_get_changed_files(workspace_path) else {
+    return;
+  };
+  if changes.is_empty() {
+    return;
+  }
+  let paths: Vec<String> = changes.into_iter().map(|change| change.path).collect();
+  let message = crate::jj::autosave_commit_message(&paths);
+  let _ = crate::jj::jj_commit(workspace_path, &message);
 }
 
 fn store_job_result(

@@ -1,5 +1,9 @@
 import { defaultAuthState, useAuthStore } from "./authStore";
 import {
+  defaultFeaturePreviewState,
+  useFeaturePreviewStore,
+} from "./featurePreviewStore";
+import {
   defaultDiffSettingsState,
   useDiffSettingsStore,
 } from "./diffSettingsStore";
@@ -25,6 +29,9 @@ import {
 } from "./zoomSettingsStore";
 
 export function resetAllStores() {
+  useFeaturePreviewStore.setState({
+    flags: { ...defaultFeaturePreviewState.flags },
+  });
   useThemeStore.setState({ ...defaultThemeState });
   useDiffSettingsStore.setState({ ...defaultDiffSettingsState });
   useTerminalSettingsStore.setState({ ...defaultTerminalSettingsState });

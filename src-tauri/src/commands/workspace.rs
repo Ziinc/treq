@@ -182,23 +182,31 @@ pub async fn delete_workspace(repo_path: String, id: i64) -> Result<(), String> 
   result
 }
 
-/// Archive a workspace: remove the directory, keep the DB record.
+/// Archive a workspace: forget jj and keep the DB record. Directory removal
+/// runs in the background so the UI can drop the row immediately.
 #[tauri::command]
 pub async fn archive_workspace(repo_path: String, id: i64) -> Result<(), String> {
   let started_at = Instant::now();
   let repo_path_for_task = repo_path.clone();
-  let result = tauri::async_runtime::spawn_blocking(move || {
-    crate::core::archive_workspace(&repo_path_for_task, &id).map(|_| ())
+  let leftover = tauri::async_runtime::spawn_blocking(move || {
+    crate::core::archive_workspace_leaving_directory(&repo_path_for_task, &id)
   })
   .await
-  .map_err(|e| format!("Failed to join archive_workspace task: {}", e))?;
+  .map_err(|e| format!("Failed to join archive_workspace task: {}", e))??;
+  if let Some(path) = leftover {
+    tauri::async_runtime::spawn_blocking(move || {
+      if let Err(e) = crate::jj::remove_workspace_directory_only(&path) {
+        tracing::warn!("Background workspace directory removal failed: {}", e);
+      }
+    });
+  }
   log::debug!(
-    "archive_workspace(repo_path={}, id={}) completed in {:?}",
+    "archive_workspace(repo_path={}, id={}) archived in {:?}",
     repo_path,
     id,
     started_at.elapsed()
   );
-  result
+  Ok(())
 }
 
 /// Push workspace to remote and update not_on_remote flag
@@ -371,10 +379,15 @@ pub async fn update_workspace(
 
 #[tauri::command]
 pub async fn schedule_workspaces(
+  state: State<'_, AppState>,
   repo_path: String,
   workspace_ids: Vec<i64>,
   hidden_until: Option<String>,
 ) -> Result<Vec<Workspace>, String> {
+  crate::commands::feature_preview::require(
+    &state,
+    crate::core::feature_preview::PreviewFeature::WorkspaceScheduling,
+  )?;
   tauri::async_runtime::spawn_blocking(move || {
     crate::core::schedule_workspaces(&repo_path, &workspace_ids, hidden_until.as_deref())
   })

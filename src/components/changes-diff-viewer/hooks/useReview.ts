@@ -223,31 +223,31 @@ export function useReview({
   const handleMarkFileViewed = async (filePath: string) => {
     const fileData = allFileHunks.get(filePath);
     const contentHash = fileData?.hunks ? computeHunksHash(fileData.hunks) : "";
+    const now = new Date().toISOString();
+    setViewedFiles((prev) =>
+      new Map(prev).set(filePath, { contentHash, viewedAt: now }),
+    );
+    setCollapsedFiles((prev) => new Set(prev).add(filePath));
     try {
       await markFileViewed(workspacePath, filePath, contentHash);
-      const now = new Date().toISOString();
-      setViewedFiles((prev) =>
-        new Map(prev).set(filePath, { contentHash, viewedAt: now }),
-      );
-      setCollapsedFiles((prev) => new Set(prev).add(filePath));
     } catch {
       void 0; // mark-viewed best-effort
     }
   };
 
   const handleUnmarkFileViewed = async (filePath: string) => {
+    setViewedFiles((prev) => {
+      const next = new Map(prev);
+      next.delete(filePath);
+      return next;
+    });
+    setCollapsedFiles((prev) => {
+      const next = new Set(prev);
+      next.delete(filePath);
+      return next;
+    });
     try {
       await unmarkFileViewed(workspacePath, filePath);
-      setViewedFiles((prev) => {
-        const next = new Map(prev);
-        next.delete(filePath);
-        return next;
-      });
-      setCollapsedFiles((prev) => {
-        const next = new Set(prev);
-        next.delete(filePath);
-        return next;
-      });
     } catch {
       void 0; // unmark-viewed best-effort
     }

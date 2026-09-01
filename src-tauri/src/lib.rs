@@ -48,6 +48,8 @@ use crate::core::remote::TreqCommandRequest;
 #[cfg(feature = "tauri-test")]
 use crate::core::remote_control_plane::SshEndpoint;
 #[cfg(feature = "tauri-test")]
+use crate::core::skills::SkillInstallScope;
+#[cfg(feature = "tauri-test")]
 use commands::RemoteExecState;
 
 #[cfg(feature = "tauri-test")]
@@ -270,7 +272,7 @@ pub fn run() {
   let builder = if cli_process {
     builder
   } else {
-    builder
+    let builder = builder
       .plugin(
         tauri_plugin_log::Builder::new()
           .level(tauri_plugin_log::log::LevelFilter::Info)
@@ -283,7 +285,15 @@ pub fn run() {
       )
       .plugin(tauri_plugin_opener::init())
       .plugin(tauri_plugin_dialog::init())
-      .plugin(tauri_plugin_deep_link::init())
+      .plugin(tauri_plugin_deep_link::init());
+    // Device-key storage for the mobile connectivity flow (mobile PRD,
+    // Phase 2) - both plugins are `#[cfg(mobile)]`-gated upstream and have
+    // no desktop implementation worth shipping, see `core::remote_device_key`.
+    #[cfg(mobile)]
+    let builder = builder
+      .plugin(tauri_plugin_keystore::init())
+      .plugin(tauri_plugin_biometric::init());
+    builder
   };
   builder
         .plugin(tauri_plugin_cli::init())
@@ -748,6 +758,11 @@ pub fn run() {
             commands::set_setting,
             commands::get_repo_setting,
             commands::set_repo_setting,
+            commands::list_skill_catalog,
+            commands::list_installed_skills,
+            commands::install_skill,
+            commands::uninstall_skill,
+            commands::set_skill_install_scope,
             commands::check_for_app_update,
             commands::install_app_update,
             commands::get_workspace_file_hunks,
@@ -794,7 +809,7 @@ pub fn run() {
             commands::list_directory,
             commands::list_directories_batch,
             commands::list_send_artifacts,
-            commands::ls_workspace,
+            commands::ls_workspace_with_status,
             commands::list_gitignored_path_suggestions,
             commands::get_workspace_readme,
             commands::list_directory_cached,
@@ -838,8 +853,10 @@ pub fn run() {
             commands::remote_probe_repo,
             commands::remote_clone_repo,
             commands::remote_open_repo,
+            commands::ensure_mobile_device_key,
             commands::remote_dispatch_local,
             commands::remote_dispatch_over_ssh,
+            commands::remote_dispatch_mutation_over_ssh,
             commands::remote_transport_metrics,
             commands::remote_force_cutoff,
             commands::remote_clear_cutoff,

@@ -276,6 +276,8 @@ export function useFileActions({
         invalidateQueries(["workspace-status", repoPath, workspaceId ?? null]),
         invalidateQueries(["workspace-statuses", repoPath]),
         invalidateQueries(["workspace-commits", repoPath, workspaceId ?? null]),
+        invalidateQueries(["commit-diff-viewer-commits", repoPath]),
+        invalidateQueries(["linear-commits", repoPath]),
         invalidateReviewChangeCount(repoPath, workspaceId),
       ]);
       // Force-apply so an in-progress review refreshes instead of parking

@@ -66,6 +66,9 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "time", "io-util", "net", "sync"] }
 russh = "0.63.1"
 bytes = "1"
+getrandom = "0.4"
+tauri-plugin-keystore = "2.1.0-alpha.1"
+tauri-plugin-biometric = "2"
 
 [dev-dependencies]
 mockall = "0.14.0"

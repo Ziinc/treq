@@ -1,5 +1,5 @@
 import { DragDropContext, Droppable, type DropResult } from "@hello-pangea/dnd";
-import { Archive, CalendarClock, Github, Search } from "lucide-react";
+import { Archive, Github, Search } from "lucide-react";
 import { useState } from "react";
 import useSWR from "swr";
 import {
@@ -30,7 +30,9 @@ import {
   getEntireStack,
 } from "../lib/workspace-tree";
 import { isWorkspaceHidden } from "../lib/workspace-utils";
+import { usePreviewFeature } from "../stores/featurePreviewStore";
 import { HomeRepoSidebarRow } from "./HomeRepoSidebarRow";
+import { HiddenWorkspacesToggle } from "./HiddenWorkspacesToggle";
 import { RenameWorkspaceDialog } from "./RenameWorkspaceDialog";
 import { TerminalSessionsSidebar } from "./TerminalSessionsSidebar";
 import type { TerminalSessionSummary } from "./terminal/types";
@@ -40,7 +42,6 @@ import {
   SidebarContent,
   SidebarFooter,
   SidebarGroup,
-  SidebarGroupAction,
   SidebarGroupContent,
   SidebarGroupLabel,
   SidebarHeader,
@@ -50,12 +51,7 @@ import {
   SidebarMenuSkeleton,
   SidebarSeparator,
 } from "./ui/sidebar";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "./ui/tooltip";
+import { TooltipProvider } from "./ui/tooltip";
 import { WorkspaceSidebarHeaderActions } from "./WorkspaceSidebarHeaderActions";
 import { WorkspaceSidebarItem } from "./WorkspaceSidebarItem";
 import { WorkspaceSidebarResizeHandle } from "./WorkspaceSidebarResizeHandle";
@@ -72,6 +68,8 @@ interface WorkspaceSidebarProps {
   ) => void;
   onBulkArchive?: () => void;
   onArchiveWorkspace?: (workspace: Workspace) => void;
+  archivingWorkspaceIds?: Set<number>;
+  exitingWorkspaceIds?: Set<number>;
   openSettings?: (tab?: string) => void;
   navigateToDashboard?: () => void;
   onOpenCommandPalette?: () => void;
@@ -107,6 +105,8 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
   onWorkspaceMultiSelect,
   onBulkArchive,
   onArchiveWorkspace,
+  archivingWorkspaceIds,
+  exitingWorkspaceIds,
   openSettings,
   onOpenCommandPalette,
   onOpenBranchSwitcher,
@@ -130,6 +130,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
   onCreateShellTerminal,
   onDropChangeFiles,
 }) => {
+  const workspaceScheduling = usePreviewFeature("workspaceScheduling");
   const { data: workspaces = [], isLoading: workspacesPending } = useSWR(
     repoPath ? ["workspaces", repoPath] : null,
     () => getWorkspaces(repoPath || ""),
@@ -198,12 +199,12 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
   const [showHidden, setShowHidden] = useState(false);
 
   const visibleStatuses = (() => {
-    if (showHidden) return statuses;
+    if (!workspaceScheduling || showHidden) return statuses;
     return statuses.filter((status) => !isWorkspaceHidden(status.current));
   })();
-  const hiddenCount = statuses.filter((status) =>
-    isWorkspaceHidden(status.current),
-  ).length;
+  const hiddenCount = workspaceScheduling
+    ? statuses.filter((status) => isWorkspaceHidden(status.current)).length
+    : 0;
 
   const flattenedNodes = (() => {
     const isMergedBranch = (branchName: string) =>
@@ -305,14 +306,20 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
         data-testid="workspace-sidebar"
       >
         <SidebarHeader>
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <button
               type="button"
+              data-testid="command-palette-trigger"
               onClick={onOpenCommandPalette}
-              className="flex items-center gap-2 flex-1 px-3 py-1.5 rounded-lg border border-border bg-muted/50 hover:bg-muted text-muted-foreground transition-colors"
+              className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden px-3 py-1.5 rounded-lg border border-border bg-muted/50 hover:bg-muted text-muted-foreground transition-colors"
             >
               <Search className="w-4 h-4 shrink-0" />
-              <span className="flex-1 text-left truncate">{repoName}</span>
+              <span
+                className="min-w-0 flex-1 truncate text-left"
+                title={repoName}
+              >
+                {repoName}
+              </span>
               <KbdGroup className="shrink-0">
                 <Kbd>⌘ + K</Kbd>
               </KbdGroup>
@@ -370,43 +377,13 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
             <SidebarGroupLabel className="uppercase tracking-widest">
               Workspaces
             </SidebarGroupLabel>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <SidebarGroupAction
-                  type="button"
-                  data-testid="show-hidden-workspaces-toggle"
-                  aria-pressed={showHidden}
-                  aria-label={
-                    showHidden
-                      ? "Hide scheduled workspaces"
-                      : hiddenCount > 0
-                        ? `Show ${hiddenCount} hidden workspace${hiddenCount === 1 ? "" : "s"}`
-                        : "Show hidden workspaces"
-                  }
-                  onClick={() => setShowHidden((value) => !value)}
-                  className={
-                    showHidden ? "bg-primary/20 text-primary" : undefined
-                  }
-                >
-                  <CalendarClock />
-                  {hiddenCount > 0 && (
-                    <span
-                      data-testid="hidden-workspace-count"
-                      className="absolute -top-1 -right-1 min-w-3.5 h-3.5 px-0.5 rounded-full bg-foreground/70 text-background text-[9px] leading-none font-semibold flex items-center justify-center"
-                    >
-                      {hiddenCount}
-                    </span>
-                  )}
-                </SidebarGroupAction>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">
-                {showHidden
-                  ? "Hide scheduled workspaces"
-                  : hiddenCount > 0
-                    ? `Show ${hiddenCount} hidden workspace${hiddenCount === 1 ? "" : "s"}`
-                    : "Show hidden workspaces"}
-              </TooltipContent>
-            </Tooltip>
+            {workspaceScheduling && (
+              <HiddenWorkspacesToggle
+                showHidden={showHidden}
+                hiddenCount={hiddenCount}
+                onToggle={() => setShowHidden((value) => !value)}
+              />
+            )}
             <SidebarGroupContent>
               <DragDropContext onDragEnd={handleDragEnd}>
                 <Droppable droppableId="sidebar-root" isCombineEnabled>
@@ -436,6 +413,12 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
                           onStartAgent={onStartAgent}
                           onStartShell={onStartShell}
                           onArchiveWorkspace={onArchiveWorkspace}
+                          archiving={archivingWorkspaceIds?.has(
+                            node.status.current.id,
+                          )}
+                          exiting={exitingWorkspaceIds?.has(
+                            node.status.current.id,
+                          )}
                           onRenameWorkspace={setRenameTarget}
                           onDoubleClick={handleDoubleClick}
                           queueStatus={branchQueueStatuses?.get(
@@ -455,7 +438,9 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
                       ))}
                       {droppableProvided.placeholder}
                       {selectedWorkspaceIds &&
-                        selectedWorkspaceIds.size > 0 && (
+                        selectedWorkspaceIds.size > 0 &&
+                        !archivingWorkspaceIds?.size &&
+                        !exitingWorkspaceIds?.size && (
                           <SidebarMenuItem>
                             <SidebarMenuButton
                               type="button"

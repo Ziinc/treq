@@ -9,6 +9,16 @@ export interface LocalSshIdentity {
   algorithm: string;
 }
 
+/**
+ * A device-generated ed25519 keypair used to register this mobile device
+ * with the control plane (see `core::remote_device_key`). Only public
+ * material ever crosses the Tauri IPC boundary.
+ */
+export interface DeviceKeyInfo {
+  public_key: string;
+  fingerprint_sha256: string;
+}
+
 export interface RemoteReadinessCheck {
   name: string;
   available: boolean;
@@ -258,6 +268,28 @@ export interface RegisterClientKeyRequest {
   public_key: string;
   comment: string | null;
   idempotency_key: string;
+}
+
+export interface ClientKeyResponse {
+  id: string;
+  algorithm: string;
+  fingerprint_sha256: string;
+  comment: string | null;
+  created_at: string;
+  revoked_at: string | null;
+}
+
+/**
+ * `key` is set when this call registered (or matched) a single key; `keys`
+ * is set instead when the call replayed an already-completed idempotent
+ * registration. Callers that just need "the key I registered" should use
+ * `registerClientKey` in `remote-control-plane.ts`, which normalizes this.
+ */
+export interface RegisterClientKeyResponse {
+  operation_id: string;
+  status: OperationStatus;
+  key?: ClientKeyResponse;
+  keys?: ClientKeyResponse[];
 }
 
 export interface RevokeClientKeyRequest {

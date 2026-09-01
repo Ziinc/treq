@@ -1,5 +1,13 @@
-import { FolderGit2, GitBranch, Plug, Settings, User } from "lucide-react";
-import { useRef, useState } from "react";
+import {
+  BookOpen,
+  FlaskConical,
+  FolderGit2,
+  GitBranch,
+  Plug,
+  Settings,
+  User,
+} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import { useAutoUpdate } from "../hooks/useAutoUpdate";
 import { useThemeStore } from "../stores/themeStore";
@@ -14,6 +22,9 @@ import { getSetting, setSetting } from "../lib/api";
 import { AccountSettings } from "./AccountSettings";
 import { GitHubIntegrationSettings } from "./GitHubIntegrationSettings";
 import { RepoYamlConfigCard } from "./RepoYamlConfigCard";
+import { FeaturePreviewSettings } from "./FeaturePreviewSettings";
+import { SkillLibrarySettings } from "./SkillLibrarySettings";
+import { usePreviewFeature } from "../stores/featurePreviewStore";
 import {
   RepositorySettingsContent,
   type RepositorySettingsContentHandle,
@@ -25,7 +36,13 @@ import { Slider } from "./ui/slider";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { useToast } from "./ui/toast";
 
-type TabValue = "application" | "repository" | "account" | "integrations";
+type TabValue =
+  | "application"
+  | "repository"
+  | "account"
+  | "integrations"
+  | "skills"
+  | "preview";
 
 interface SettingsPageProps {
   repoPath: string;
@@ -54,6 +71,13 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const setFontSize = useTerminalSettingsStore((s) => s.setFontSize);
   const zoom = useZoomSettingsStore((s) => s.zoom);
   const setZoom = useZoomSettingsStore((s) => s.setZoom);
+  const skillsInstallation = usePreviewFeature("skillsInstallation");
+
+  useEffect(() => {
+    if (!skillsInstallation && currentTab === "skills") {
+      setCurrentTab("preview");
+    }
+  }, [skillsInstallation, currentTab]);
   const { addToast } = useToast();
   const { checkForUpdate } = useAutoUpdate({
     autoCheck: false,
@@ -160,6 +184,16 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 <TabsTrigger value="integrations">
                   <Plug className="w-4 h-4" />
                   Integrations
+                </TabsTrigger>
+                {skillsInstallation && (
+                  <TabsTrigger value="skills">
+                    <BookOpen className="w-4 h-4" />
+                    Skills
+                  </TabsTrigger>
+                )}
+                <TabsTrigger value="preview">
+                  <FlaskConical className="w-4 h-4" />
+                  Feature Preview
                 </TabsTrigger>
               </TabsList>
 
@@ -379,6 +413,16 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 </TabsContent>
                 <TabsContent value="integrations">
                   <GitHubIntegrationSettings repoPath={repoPath} />
+                </TabsContent>
+                {skillsInstallation && (
+                  <TabsContent value="skills">
+                    {currentTab === "skills" && (
+                      <SkillLibrarySettings repoPath={repoPath} />
+                    )}
+                  </TabsContent>
+                )}
+                <TabsContent value="preview">
+                  <FeaturePreviewSettings />
                 </TabsContent>
               </div>
             </Tabs>

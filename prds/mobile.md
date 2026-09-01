@@ -2,15 +2,23 @@
 
 ## Status
 
-Planned; out of scope for the initial Remote SSH Control delivery.
+Phases 3 and 4 in progress. Treq ships as a Tauri application; mobile support extends the existing Tauri build to the Android and iOS targets instead of a separate native client. The app renders a distinct, touch-first mobile layout on those targets, backed by the same Rust core and Tauri IPC commands the desktop app uses. Phase 1 (build targets, mobile shell) is done; Phase 2 (device key registration, certificate issuance, SSH connectivity) has a working prototype path, gated on real platform-keystore storage before it can ship - see Phase 2 below. Phase 3 (read-only review) and Phase 4 (agent control) now have mobile UI wired to the typed `TreqCommandRequest` dispatch surface that already existed for the desktop remote-review work - see Phase 3/4 below for what's covered and what still needs on-device verification.
 
 ## Summary
 
-Treq plans to support mobile review and control of repositories hosted on user-managed or Treq-managed VMs through native SSH. The desktop Remote SSH Control architecture must preserve the identities, typed command protocol, host trust, certificate, and session concepts required by a future mobile client, but this PRD does not authorize mobile implementation work yet.
+Treq mobile is the same Tauri application (same Rust core, same `src-tauri` commands, same `lib/api.ts` surface) compiled for Android and iOS via `tauri android` / `tauri ios`. Mobile does not get a reduced command set: any capability exposed to the desktop `Dashboard` is reachable from the mobile client too. What differs is presentation — a single-column, touch-first shell (`MobileShell`) replaces the desktop's multi-pane `Dashboard` when the app detects a mobile viewport, the same way `useIsMobile` already switches other components.
+
+Remote review of VM-hosted repositories over SSH (see [Remote SSH Control](./remote-ssh.md)) remains a separate, larger capability that mobile will consume once it lands, but it is not a precondition for shipping a mobile build: a mobile build can review and operate on repositories reachable the same way the desktop app reaches them today.
 
 ## Dependencies
 
-Mobile work begins only after the requirements in [Remote SSH Control](./remote-ssh.md) are stable:
+Phase 1 (this PRD) only requires:
+
+- Android and iOS build tooling for the existing Tauri app (Android SDK/NDK, Xcode, `tauri android init` / `tauri ios init`).
+- A mobile-scoped Tauri capability set (`src-tauri/capabilities/mobile.json`) distinct from the desktop capability set (no multi-window, no CLI plugin).
+- A mobile-specific top-level layout in the React app.
+
+Later phases that add remote-VM review and control depend on the requirements in [Remote SSH Control](./remote-ssh.md) being stable:
 
 - provider-neutral endpoint and repository identities;
 - strict host-key verification;
@@ -24,17 +32,19 @@ Mobile work begins only after the requirements in [Remote SSH Control](./remote-
 
 ## Goals
 
-- Connect to an explicitly configured endpoint using a native mobile SSH library.
-- Keep private keys in platform-protected device storage.
-- Verify pinned server host keys.
-- Use short-lived certificates for managed instances.
-- Review workspaces, changes, diffs, file context, commits, and conflicts.
+- Build and ship Treq for Android and iOS from the existing Tauri codebase, no fork.
+- Detect a mobile viewport/platform and render `MobileShell` instead of the desktop `Dashboard`.
+- Expose the same Tauri commands (`lib/api.ts`) to the mobile layout that the desktop layout uses.
+- Scope mobile permissions with a dedicated Tauri capability file, dropping desktop-only capabilities (multi-window, CLI plugin) that don't apply on mobile.
+- Once Remote SSH Control is stable, connect to an explicitly configured endpoint using a native mobile SSH library, keep private keys in platform-protected device storage, verify pinned server host keys, and use short-lived certificates for managed instances.
+- Review workspaces, changes, diffs, file context, commits, and conflicts from a touch-first layout.
 - Start, inspect, attach to, and stop remote coding agents.
 - Perform a deliberately limited set of safe, confirmed mutations.
 - Recover cleanly from app suspension and network changes.
 
 ## Non-goals for initial mobile work
 
+- A separate mobile codebase or a rewrite in a different framework.
 - Provisioning implementation owned by the mobile app; provisioning remains a control-plane API.
 - Port forwarding.
 - Filesystem mounting.
@@ -46,18 +56,22 @@ Mobile work begins only after the requirements in [Remote SSH Control](./remote-
 ## Planned architecture
 
 ```text
-Mobile Treq
-  ├─ Supabase authentication and control-plane API
-  ├─ platform key storage
-  └─ native SSH client
+Treq (single Tauri app, shared Rust core + React frontend)
+  ├─ desktop targets (macOS/Windows/Linux)
+  │    └─ Dashboard layout (multi-pane)
+  └─ mobile targets (Android/iOS, via `tauri android` / `tauri ios`)
+       └─ MobileShell layout (single-column, touch-first)
+                 ↓ (same src-tauri commands on every target)
+  ├─ local repository access (jj/git on-device or synced workspace)
+  └─ once Remote SSH Control lands: native SSH client
        ├─ structured exec channels
        └─ interactive PTY channels
                  ↓
-User-managed or Treq-managed VM
-  ├─ SSH server
-  ├─ Treq CLI
-  ├─ optional local agent supervisor
-  └─ repositories and agents
+       User-managed or Treq-managed VM
+         ├─ SSH server
+         ├─ Treq CLI
+         ├─ optional local agent supervisor
+         └─ repositories and agents
 ```
 
 ## Mobile-specific concerns
@@ -102,33 +116,65 @@ Any selected mobile SSH library must be evaluated for:
 
 ## Phased plan
 
-### Phase 1: Security and connectivity prototype
+### Phase 1: Build system and mobile shell (done)
 
-- Authenticate to the control plane.
-- Register a mobile device public key.
-- Obtain a short-lived managed-instance certificate.
-- Verify the pinned host key.
-- Connect with a native SSH library.
-- Execute repository inspection and display structured errors.
+- Add Android and iOS as Tauri build targets (`tauri android init` / `tauri ios init`, npm scripts, mobile app icons).
+- Add a mobile-scoped Tauri capability file (`src-tauri/capabilities/mobile.json`).
+- Add `MobileShell`, a touch-first top-level layout, and switch to it on mobile viewports via `useIsMobile`.
+- Wire `MobileShell` to existing Tauri commands (e.g. `get_workspaces`) to prove the same IPC surface works unmodified on mobile.
 
-### Phase 2: Read-only review
+### Phase 2: Security and connectivity prototype (this delivery)
 
-- Instance and repository selection.
-- Workspace list and status.
-- Changed files and structured diffs.
-- Working-copy and parent file context.
-- Commit and conflict views.
-- Manual refresh and stale-state presentation.
+The desktop app already has a real control-plane client (`lib/remote-control-plane.ts`), the `remote-ssh-trust` and `remote-instance` edge functions, and a russh-based native SSH transport with pinned host-key verification (`core::remote_ssh_transport`) reachable through `dispatchOverSsh`. None of that is SSH-library-prototype work mobile needs to redo - `russh` is pure Rust and compiles into the same mobile binary. What mobile Phase 2 adds is the piece desktop doesn't need: a way for a device with no `~/.ssh` to get a keypair and use it.
 
-### Phase 3: Agent control
+Done in this delivery:
 
-- Start an agent in a selected workspace.
-- Send input and respond to permission requests.
-- Read status and bounded logs.
-- Reattach after app suspension.
-- Stop a running agent.
+- Authenticate to the control plane (reuses the existing Supabase auth session - no mobile-specific work needed).
+- Generate and persist a per-device ed25519 keypair (`core::remote_device_key`, `ensure_mobile_device_key` command, `ensureMobileDeviceKey()`), since mobile has no `~/.ssh` identities to pick from.
+- Store that private key in the OS-native keystore/keychain rather than app-local disk, via [`tauri-plugin-keystore`](https://github.com/impierce/tauri-plugin-keystore) (Android Keystore / iOS Keychain), gated on the device having biometrics enrolled via `tauri-plugin-biometric`. Both plugins are Rust-only integrations here (`core::remote_device_key::mobile_storage`) - the private key never crosses the Tauri IPC boundary to JS.
+- Register the device public key with the control plane (`registerClientKey`, wired to the previously-unused `register_client_key` edge function action).
+- Obtain a short-lived managed-instance certificate (`issueCertificate`, wired to `issue_certificate`).
+- Verify the pinned host key and connect with the native (russh) SSH library - reused as-is from the existing transport; the certificate response's `endpoint.host_keys` feeds the same `HostKeyVerifier` desktop uses.
+- Execute repository inspection (`ProbeRepo` over `dispatchOverSsh`) and display structured errors - `RemoteConnectPanel` in `MobileShell`.
 
-### Phase 4: Controlled mutations
+Open items before this can ship as more than a prototype:
+
+- `tauri-plugin-keystore` is pre-1.0 (`2.1.0-alpha.1` on crates.io) and its own desktop fallback hardcodes an unrelated identity and `unwrap()`s every error - real reasons desktop intentionally does not use it (see `core::remote_device_key` module docs) and mobile's usage should be re-audited against newer releases before shipping.
+- Neither this plugin nor the biometric gate has been exercised on a real device or emulator - this sandbox has no Android SDK/NDK or Xcode, so the mobile-only code path (`#[cfg(mobile)]`) has been reviewed and its shared helpers unit-tested, but not built or run for an actual mobile target. First real verification should happen on-device via `npm run tauri:android:dev` / `tauri:ios:dev`.
+- No UI path yet for the "biometrics not set up" error `require_biometrics` returns - `RemoteConnectPanel` currently surfaces it as the same generic connection error as everything else in the flow.
+
+### Phase 3: Read-only review (this delivery)
+
+Done in this delivery, built on `remote_dispatch_over_ssh` / `TreqCommandRequest`, which already implemented every read variant needed here (`ListWorkspaces`, `InspectWorkspace`, `ListChanges`, `DiffFile`, `ReadFile`, `ListCommits`, `ListConflicts`, `WorkspaceChangeMarker`) but had no UI calling them:
+
+- Instance and repository selection (`RemoteConnectPanel`, unchanged from Phase 2, now persists the last repository path so reconnecting doesn't require retyping it).
+- Workspace list and status (`RemoteRepoScreen`'s `WorkspaceListScreen`/`WorkspaceDetailScreen`).
+- Changed files and structured diffs (`DiffScreen`, via `DiffFile`).
+- Working-copy file context (`ReadFile` with `revision: "WorkingCopy"`, shown inline on the diff screen). Parent-revision context uses the same `ReadFile` request with `revision: "Parent"` and is wired the same way but not surfaced as a separate screen yet.
+- Commit and conflict views (`CommitsScreen`, `ConflictsScreen`).
+- Manual refresh per screen, plus a polled `WorkspaceChangeMarker` on the workspace detail screen so a stale op id is visible without a full data refetch.
+
+Open items before this can ship as more than a prototype:
+
+- No TypeScript types exist yet for the `TreqCommandRequest` JSON responses beyond what happens to match the existing local `api-types.ts` shapes (workspace/status/changes/diff/commit responses do line up with local desktop types today because both paths call the same Rust core functions - `ReadFile`'s `JjFileLines`, `ListCommits`' `JjLogCommit`, etc. - but that's convergence, not a contract; a future response shape change on either path could silently drift).
+- Not exercised against a real managed instance or device - this sandbox has no way to provision one, so the mobile-only screens have been reviewed and type/lint-checked but not run against live SSH-dispatched data. First real verification should happen the same way Phase 2 flagged: on-device via `npm run tauri:android:dev` / `tauri:ios:dev` against an actual instance.
+- No parent-file-context screen (only working-copy content is shown inline); no dedicated commit-diff or per-commit conflict detail view beyond the flat lists.
+
+### Phase 4: Agent control (this delivery)
+
+Done in this delivery, using the existing `AgentStart`/`AgentStatus`/`AgentStop`/`AgentLogs` `TreqCommandRequest` variants and the VM-local `core::agent_supervisor` they already dispatch to:
+
+- Start an agent in a selected workspace (`RemoteAgentScreen`, `AgentStart` routed through `dispatchMutationOverSsh` for verify-before-retry semantics).
+- Read status and bounded logs (`AgentStatus`/`AgentLogs`, polled every 4s while an agent is running).
+- Stop a running agent (`AgentStop`).
+- Reattach after app suspension: there is no distinct reattach request in the protocol - polling `AgentStatus`/`AgentLogs` again for the same `workspace` key after reconnecting is the reattach path, backed by `agent_supervisor`'s on-disk record surviving process/connection restarts.
+
+Explicitly not done, and not silently stubbed:
+
+- Sending input to a running agent. `core::agent_supervisor::send_agent_input` returns `not_implemented` today (the supervisor does not keep a child process's stdin open across separate CLI/exec invocations) - this is a real backend limitation, not missing UI, so the agent screen states this plainly instead of offering an input box that would always fail.
+- Structured permission-request handling. Neither `AgentStatusResult` nor the log output distinguishes "waiting on a permission prompt" from ordinary running/log state in the current protocol, so there is no permission-response UI yet; adding it needs a small protocol addition (a status field or event) before it can be built as more than a generic text box.
+
+### Phase 5: Controlled mutations
 
 - Workspace creation and rebase.
 - Patch application.
@@ -136,7 +182,7 @@ Any selected mobile SSH library must be evaluated for:
 - Conflict resolution.
 - Bookmark push with explicit confirmation.
 
-### Phase 5: Mobile test infrastructure
+### Phase 6: Mobile test infrastructure
 
 - Real control-plane test project.
 - Real provider test instances.

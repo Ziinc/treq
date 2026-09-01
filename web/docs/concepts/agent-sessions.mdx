@@ -28,6 +28,10 @@ Treq resolves the default agent from the repository settings first, then the app
 
 The selected mode sets the permission mode Treq passes when it starts the agent.
 
+## Skill library
+
+Treq can install skills from the public registry. Open **Settings › Skills**, then install a skill at application level or repository level. Treq verifies the download against the catalog checksum when the catalog provides one. New workspaces receive copies under `.agents/skills/` and `.claude/skills/`. See [Installing Skills from the Library](/docs/how-to/installing-skills).
+
 ## Workspace Isolation
 
 Treq starts the agent process with the workspace as its working directory. The generated system prompt tells the agent to edit files only in that directory.

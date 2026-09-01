@@ -10,6 +10,10 @@ import { useAutoUpdate } from "../hooks/useAutoUpdate";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
 import { useMutation } from "../hooks/useMutation";
 import { useTwoFingerSwipe } from "../hooks/useTwoFingerSwipe";
+import {
+  useFeaturePreviewStore,
+  usePreviewFeature,
+} from "../stores/featurePreviewStore";
 import { useWorkspaceHierarchy } from "../hooks/useWorkspaceHierarchy";
 import {
   type AgentDeepLinkRequest,
@@ -202,6 +206,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [changeMovePending, setChangeMovePending] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode);
   const [location, navigate] = useLocation();
+  const remoteSshEnabled = usePreviewFeature("remoteSsh");
   const previousViewModeRef = useRef<ViewMode>(
     initialViewMode === "settings" ? "show-workspace" : initialViewMode,
   );
@@ -244,6 +249,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
     null,
   );
   const [selectedWorkspaceIds, setSelectedWorkspaceIds] = useState<Set<number>>(
+    new Set(),
+  );
+  const [archivingWorkspaceIds, setArchivingWorkspaceIds] = useState<
+    Set<number>
+  >(new Set());
+  const [exitingWorkspaceIds, setExitingWorkspaceIds] = useState<Set<number>>(
     new Set(),
   );
   const lastSelectedWorkspaceIndexRef = useRef<number | null>(null);
@@ -322,6 +333,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   };
 
   const handleOpenRemoteSetup = async () => {
+    if (!useFeaturePreviewStore.getState().flags.remoteSsh) return;
     setProvisioningError(undefined);
     try {
       const [hosts, identities, regions, sizes, status] = await Promise.all([
@@ -819,8 +831,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
       invalidateQueries(["workspace-statuses", repoPath]);
       handleReturnToDashboard(); // Navigate to dashboard & clear selected workspace
       addToast({
-        title: "Workspace Deleted",
-        description: "Workspace has been removed successfully",
+        title: "Workspace Archived",
+        description: "Workspace has been archived successfully",
         type: "success",
       });
     },
@@ -894,6 +906,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   // Restore the last-opened remote SSH repository (if any) when no local repo is active.
   useEffect(() => {
+    if (!remoteSshEnabled) {
+      setActiveRemoteRepo(null);
+      return;
+    }
     void getSetting("last_opened_remote_repo").then((saved) => {
       if (!saved || repoPath) return;
       try {
@@ -902,7 +918,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         void setSetting("last_opened_remote_repo", "");
       }
     });
-  }, [repoPath]);
+  }, [repoPath, remoteSshEnabled]);
 
   const rememberRemoteHost = async (host: string) => {
     const raw = await getSetting("remote_ssh_recent_hosts").catch(() => null);
@@ -1023,6 +1039,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       }),
       // Menu open via SSH
       listen("menu-open-ssh", () => {
+        if (!useFeaturePreviewStore.getState().flags.remoteSsh) return;
         void handleOpenRemoteSetup();
       }),
       // Menu factory reset
@@ -1603,6 +1620,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
       return;
     }
 
+    if (archivingWorkspaceIds.size > 0 || exitingWorkspaceIds.size > 0) {
+      return;
+    }
+
     const workspaceIndex = visibleWorkspaces.findIndex(
       (w) => w.id === workspace.id,
     );
@@ -1647,10 +1668,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
   };
 
   const handleBulkArchive = async () => {
+    if (archivingWorkspaceIds.size > 0 || exitingWorkspaceIds.size > 0) {
+      return;
+    }
     const count = selectedWorkspaceIds.size;
     const workspacesToArchive = workspaces.filter((w) =>
       selectedWorkspaceIds.has(w.id),
     );
+    const ids = new Set(workspacesToArchive.map((w) => w.id));
+    setArchivingWorkspaceIds(ids);
     try {
       await Promise.all(
         workspacesToArchive.map((workspace) =>
@@ -1662,16 +1688,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
           getFullWorkspacePath(workspace),
         );
       }
-      void invalidateQueries(["workspaces", repoPath]);
-      invalidateQueries(["workspace-statuses", repoPath]);
-      handleReturnToDashboard();
+      setArchivingWorkspaceIds(new Set());
+      setExitingWorkspaceIds(ids);
       addToast({
         title: `${count} Workspace${count > 1 ? "s" : ""} Archived`,
-        description: `Removed ${count} workspace director${
-          count > 1 ? "ies" : "y"
-        }; records kept`,
+        description: `Successfully archived ${count} workspace${
+          count > 1 ? "s" : ""
+        }`,
         type: "success",
       });
+      await new Promise((resolve) => setTimeout(resolve, 220));
+      await invalidateQueries(["workspaces", repoPath]);
+      invalidateQueries(["workspace-statuses", repoPath]);
+      handleReturnToDashboard();
     } catch (error) {
       addToast({
         title: "Archive Failed",
@@ -1680,6 +1709,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
       });
     }
     setSelectedWorkspaceIds(new Set());
+    setArchivingWorkspaceIds(new Set());
+    setExitingWorkspaceIds(new Set());
   };
 
   const handleDelete = async (workspace: Workspace) => {
@@ -1863,7 +1894,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
     />
   );
 
-  if (!repoPath && (activeRemoteRepo || activeSshEndpoint)) {
+  if (
+    remoteSshEnabled &&
+    !repoPath &&
+    (activeRemoteRepo || activeSshEndpoint)
+  ) {
     const connectionState = activeSshEndpoint
       ? connectionStateFromInstanceState(
           instanceStatus?.instance?.status,
@@ -1966,7 +2001,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     <>
       <Onboarding
         onOpenRepo={handleOpenRepository}
-        onOpenRemoteSsh={handleOpenRemoteSetup}
+        onOpenRemoteSsh={remoteSshEnabled ? handleOpenRemoteSetup : undefined}
       />
       {remoteSetupDialog}
       {remoteSshDialog}
@@ -1981,6 +2016,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
         homeRepoDisplayRef={homeRepoDisplayRef}
         selectedWorkspaceId={selectedWorkspace?.id ?? null}
         selectedWorkspaceIds={selectedWorkspaceIds}
+        archivingWorkspaceIds={archivingWorkspaceIds}
+        exitingWorkspaceIds={exitingWorkspaceIds}
         onWorkspaceClick={(workspace) => handleSelectWorkspace(workspace)}
         onWorkspaceMultiSelect={handleWorkspaceMultiSelect}
         onBulkArchive={handleBulkArchive}

@@ -1,7 +1,6 @@
 import type {
   BranchStatus,
   BookmarkConflictResolutionResult,
-  DirectoryEntry,
   EditorAppsResponse,
   GitRemoteInfo,
   PrCiStatus,
@@ -28,8 +27,9 @@ import type {
   RemoteRepoProbe,
   RemoteRepository,
   LocalSshIdentity,
+  DeviceKeyInfo,
 } from "./api-types";
-import type { RepoYamlConfig } from "./api-extra";
+import type { InstalledSkill, RepoYamlConfig } from "./api-extra";
 
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -160,12 +160,6 @@ export const getWorkspaceChangedFiles = (
   enqueueJjExclusive(() =>
     invoke("get_workspace_changed_files", { repoPath, workspaceId }),
   );
-
-export const lsWorkspace = (
-  repoPath: string,
-  workspaceId: number | null,
-): Promise<DirectoryEntry[]> =>
-  invoke("ls_workspace", { repoPath, workspaceId });
 
 export const listGitignoredPathSuggestions = (
   repoPath: string,
@@ -565,3 +559,17 @@ export const remoteOpenRepo = (
 
 export const listLocalSshIdentities = (): Promise<LocalSshIdentity[]> =>
   invoke("list_local_ssh_identities");
+
+/**
+ * Generates (on first call) or loads this device's ed25519 keypair for
+ * control-plane registration and certificate-based SSH auth. Mobile-only in
+ * practice - desktop uses the user's existing `~/.ssh` identities via
+ * `listLocalSshIdentities` instead.
+ */
+export const ensureMobileDeviceKey = (): Promise<DeviceKeyInfo> =>
+  invoke("ensure_mobile_device_key");
+
+export const listInstalledSkills = (
+  repoPath?: string | null,
+): Promise<InstalledSkill[]> =>
+  invoke("list_installed_skills", { repoPath: repoPath ?? null });

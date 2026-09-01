@@ -156,6 +156,12 @@ export const listDirectoriesBatch = (
 ): Promise<DirectoryBatchResult[]> =>
   invoke("list_directories_batch", { paths });
 
+export const lsWorkspaceWithStatus = (
+  repoPath: string,
+  workspaceId: number | null,
+): Promise<DirectoryEntry[]> =>
+  invoke("ls_workspace_with_status", { repoPath, workspaceId });
+
 // Kept as the typed frontend counterpart of the registered Tauri command.
 // eslint-disable-next-line local/no-unused-exported-ts-functions, local/require-tauri-api-exports-used
 export const listDirectoryCached = (
@@ -591,6 +597,21 @@ export const remoteDispatchOverSsh = <T = unknown>(
 ): Promise<T> => invoke("remote_dispatch_over_ssh", { endpoint, request });
 
 /**
+ * Runs a *mutating* `TreqCommandRequest` over the SSH exec channel with
+ * verify-before-retry semantics (PRD "Retrying after network loss"): a
+ * network failure while the command was in flight never triggers a blind
+ * resend. The result is a discriminated union (see `MutationDispatchResult`
+ * in `remote-dispatch.ts`) so the caller can render "already applied",
+ * "applied" (first try or a verified retry), or "ambiguous - ask the user"
+ * distinctly instead of guessing from a thrown error.
+ */
+export const remoteDispatchMutationOverSsh = <T = unknown>(
+  endpoint: unknown,
+  request: unknown,
+): Promise<T> =>
+  invoke("remote_dispatch_mutation_over_ssh", { endpoint, request });
+
+/**
  * Snapshot of this session's SSH transport telemetry (PRD Phase 7 "Client
  * and transport telemetry"). Kept as the typed frontend counterpart of the
  * registered Tauri command; a diagnostics panel to display it is future
@@ -628,3 +649,82 @@ export const remoteClearCutoff = (endpointId: string): Promise<void> =>
 export const remoteCutoffReason = (
   endpointId: string,
 ): Promise<string | null> => invoke("remote_cutoff_reason", { endpointId });
+
+export type SkillInstallScope = "application" | "repository";
+
+export interface InstalledSkill {
+  id: string;
+  name: string;
+  checksum: string;
+  scope: SkillInstallScope;
+}
+
+export interface SkillCatalogFile {
+  path: string;
+  size: number;
+  binary: boolean;
+  githubUrl?: string | null;
+  rawUrl?: string | null;
+}
+
+export interface SkillCatalogSkill {
+  id: string;
+  name: string;
+  description?: string | null;
+  source: string;
+  category?: string | null;
+  license?: string | null;
+  proprietary: boolean;
+  url?: string | null;
+  checksum?: string | null;
+  files: SkillCatalogFile[];
+  installed?: InstalledSkill | null;
+}
+
+export interface SkillCatalogView {
+  generatedAt?: string | null;
+  sources: unknown[];
+  skills: SkillCatalogSkill[];
+}
+
+export const listSkillCatalog = (
+  repoPath?: string | null,
+  catalogUrl?: string | null,
+): Promise<SkillCatalogView> =>
+  invoke("list_skill_catalog", {
+    repoPath: repoPath ?? null,
+    catalogUrl: catalogUrl ?? null,
+  });
+
+export const installSkill = (
+  skillId: string,
+  scope: SkillInstallScope,
+  repoPath?: string | null,
+  catalogUrl?: string | null,
+): Promise<InstalledSkill> =>
+  invoke("install_skill", {
+    skillId,
+    scope,
+    repoPath: repoPath ?? null,
+    catalogUrl: catalogUrl ?? null,
+  });
+
+export const uninstallSkill = (
+  skillId: string,
+  repoPath?: string | null,
+): Promise<void> =>
+  invoke("uninstall_skill", {
+    skillId,
+    repoPath: repoPath ?? null,
+  });
+
+export const setSkillInstallScope = (
+  skillId: string,
+  scope: SkillInstallScope,
+  repoPath?: string | null,
+): Promise<InstalledSkill> =>
+  invoke("set_skill_install_scope", {
+    skillId,
+    scope,
+    repoPath: repoPath ?? null,
+  });

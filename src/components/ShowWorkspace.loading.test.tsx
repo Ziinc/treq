@@ -14,7 +14,9 @@ vi.mock("../lib/api", async () => {
       remote_sync: { type: "Synced" },
     }),
     listCommits: vi.fn().mockResolvedValue({ commits: [] }),
-    lsWorkspace: vi.fn().mockImplementation(() => new Promise(() => {})),
+    lsWorkspaceWithStatus: vi
+      .fn()
+      .mockImplementation(() => new Promise(() => {})),
     getWorkspaceReadme: vi.fn().mockImplementation(() => new Promise(() => {})),
   };
 });

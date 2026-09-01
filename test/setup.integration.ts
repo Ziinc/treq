@@ -20,11 +20,11 @@ import { configure } from "@testing-library/dom";
 // Shared DOM polyfills, browser API stubs, Tauri plugin mocks, and hook mocks
 import "./setup.common";
 
-// tauri-test invoke runs on spawn_blocking; the default 5s async util timeout
-// flakes under CI load when waiting for Changes file lists. Kept in line with
-// the global 15s test timeout (vitest.integration.config.ts) so a stuck
-// waitFor fails fast instead of silently eating the whole test budget.
-configure({ asyncUtilTimeout: 15_000 });
+// tauri-test invoke runs on spawn_blocking. Kept just under the global 5s
+// test timeout (vitest.integration.config.ts) so a stuck waitFor reports a
+// clear timeout error instead of racing the outer test timeout and showing
+// up as a plain, harder-to-diagnose assertion failure.
+configure({ asyncUtilTimeout: 4_000 });
 
 // Keep integration tests deterministic: avoid background auto-rebase races
 // during commit creation in Rust core.
@@ -54,31 +54,56 @@ const tauriTest = require("../src-tauri/target") as {
 let pendingInvokes = 0;
 let onAllSettled: (() => void) | null = null;
 
-export function waitForPendingInvokes(timeoutMs = 5_000): Promise<void> {
-  if (pendingInvokes === 0) return Promise.resolve();
+export function waitForPendingInvokes(
+  timeoutMs = 4_000,
+  quietMs = 75,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  let quietSince = pendingInvokes === 0 ? Date.now() : 0;
+
   return new Promise((resolve) => {
-    const timer = setTimeout(() => {
+    const finish = () => {
       onAllSettled = null;
       resolve();
-    }, timeoutMs);
-    onAllSettled = () => {
-      clearTimeout(timer);
-      resolve();
     };
+
+    const check = () => {
+      if (pendingInvokes === 0) {
+        if (!quietSince) quietSince = Date.now();
+        if (Date.now() - quietSince >= quietMs) {
+          finish();
+          return;
+        }
+      } else {
+        quietSince = 0;
+      }
+      if (Date.now() >= deadline) {
+        finish();
+        return;
+      }
+      setTimeout(check, 10);
+    };
+
+    onAllSettled = () => {
+      quietSince = Date.now();
+    };
+    check();
   });
 }
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn((cmd: string, args?: Record<string, unknown>) => {
     pendingInvokes++;
-    return tauriTest.invoke(cmd, args ?? {}).finally(() => {
+    const promise = tauriTest.invoke(cmd, args ?? {}).finally(() => {
       pendingInvokes--;
       if (pendingInvokes === 0 && onAllSettled) {
-        const settled = onAllSettled;
-        onAllSettled = null;
-        settled();
+        onAllSettled();
       }
     });
+    // Attach a no-op handler so a dropped SWR/effect promise is not an
+    // unhandled rejection. Callers that await this same promise still reject.
+    void promise.catch(() => {});
+    return promise;
   }),
   // The real Rust dispatch behind this harness represents the shipped app's
   // production code path (unlike the screenshot harness, which flips this to

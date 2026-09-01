@@ -7,7 +7,10 @@
     "pro": true,
     "stripePayments": false,
     "emailSignup": false,
-    "mergeQueue": true
+    "mergeQueue": true,
+    "skillsInstallation": false,
+    "workspaceScheduling": false,
+    "remoteSsh": false
   },
   "env": {
     "dev": {
@@ -32,12 +35,18 @@
     "verify:frontend-dist": "node -e \"const fs=require('node:fs');const path='src/dist';if(!fs.existsSync(path)){console.error('Missing frontend build output at '+path);process.exit(1)}\"",
     "preview": "vite preview",
     "tauri": "tauri",
+    "tauri:android:init": "tauri android init",
+    "tauri:android:dev": "tauri android dev",
+    "tauri:android:build": "tauri android build",
+    "tauri:ios:init": "tauri ios init",
+    "tauri:ios:dev": "tauri ios dev",
+    "tauri:ios:build": "tauri ios build",
     "clean": "cd src-tauri && cargo clean",
     "test:run": "npm run test:unit && npm run test:integration",
     "test:ui": "vitest --ui",
     "build:napi": "cargo build --manifest-path src-tauri/Cargo.toml --lib --features tauri-test",
     "test:unit": "vitest run --config vitest.unit.config.ts --silent=passed-only",
-    "test:integration:run": "DEBUG_PRINT_LIMIT=10 vitest run --config vitest.integration.config.ts --maxWorkers=1 --fileParallelism=false --silent=passed-only",
+    "test:integration:run": "DEBUG_PRINT_LIMIT=10 vitest run --config vitest.integration.config.ts --silent=passed-only",
     "test:integration": "npm run build:napi --silent && npm run test:integration:run",
     "test": "npm run test:unit && npm run test:integration",
     "screenshot:css": "node scripts/screenshot/build-css.mjs",

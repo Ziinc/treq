@@ -13,9 +13,13 @@ const { mockFeatures } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("../lib/features", () => ({
-  FEATURES: mockFeatures,
-}));
+vi.mock("../lib/features", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/features")>();
+  return {
+    ...actual,
+    FEATURES: mockFeatures,
+  };
+});
 
 vi.mock("./FileBrowser", () => ({
   FileBrowser: () => <div data-testid="file-browser" />,
@@ -39,7 +43,7 @@ vi.mock("../lib/api", async () => {
   return {
     ...actual,
     getSetting: vi.fn().mockResolvedValue(null),
-    lsWorkspace: vi.fn().mockResolvedValue([]),
+    lsWorkspaceWithStatus: vi.fn().mockResolvedValue([]),
     getWorkspaceReadme: vi.fn().mockResolvedValue(null),
     jjGetDefaultBranch: vi.fn().mockResolvedValue("main"),
     listConflictedFiles: vi.fn().mockResolvedValue([]),
