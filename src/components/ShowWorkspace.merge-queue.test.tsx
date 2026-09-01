@@ -13,9 +13,13 @@ const { mockFeatures } = vi.hoisted(() => ({
   },
 }));
 
-vi.mock("../lib/features", () => ({
-  FEATURES: mockFeatures,
-}));
+vi.mock("../lib/features", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../lib/features")>();
+  return {
+    ...actual,
+    FEATURES: mockFeatures,
+  };
+});
 
 vi.mock("./FileBrowser", () => ({
   FileBrowser: () => <div data-testid="file-browser" />,

@@ -1443,7 +1443,9 @@ export const ShowWorkspace = ({
                           ? (stackWorkspaces) =>
                               setScheduleDialog({
                                 mode: "stack",
-                                workspaceIds: stackWorkspaces.map((ws) => ws.id),
+                                workspaceIds: stackWorkspaces.map(
+                                  (ws) => ws.id,
+                                ),
                                 currentHiddenUntil: stackWorkspaces.find((ws) =>
                                   isWorkspaceHidden(ws),
                                 )?.hidden_until,

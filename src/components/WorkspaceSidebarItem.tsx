@@ -394,25 +394,27 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                   <Pencil className="w-4 h-4 mr-2" />
                   Rename Workspace
                 </ContextMenuItem>
-                {workspaceScheduling && repoPath && isWorkspaceHidden(workspace) && (
-                  <ContextMenuItem
-                    data-testid="remove-schedule-menu-item"
-                    onClick={() => {
-                      void clearWorkspaceSchedule(repoPath, [
-                        workspace.id,
-                      ]).then(() => {
-                        addToast({
-                          title: "Workspace unscheduled",
-                          description: "Shown in the sidebar again.",
-                          type: "success",
+                {workspaceScheduling &&
+                  repoPath &&
+                  isWorkspaceHidden(workspace) && (
+                    <ContextMenuItem
+                      data-testid="remove-schedule-menu-item"
+                      onClick={() => {
+                        void clearWorkspaceSchedule(repoPath, [
+                          workspace.id,
+                        ]).then(() => {
+                          addToast({
+                            title: "Workspace unscheduled",
+                            description: "Shown in the sidebar again.",
+                            type: "success",
+                          });
                         });
-                      });
-                    }}
-                  >
-                    <CalendarClock className="w-4 h-4 mr-2" />
-                    Remove schedule
-                  </ContextMenuItem>
-                )}
+                      }}
+                    >
+                      <CalendarClock className="w-4 h-4 mr-2" />
+                      Remove schedule
+                    </ContextMenuItem>
+                  )}
                 <ContextMenuSeparator />
                 <PathContextMenuItems
                   relativePath={

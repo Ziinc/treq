@@ -10,7 +10,10 @@ import { useAutoUpdate } from "../hooks/useAutoUpdate";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
 import { useMutation } from "../hooks/useMutation";
 import { useTwoFingerSwipe } from "../hooks/useTwoFingerSwipe";
-import { useFeaturePreviewStore, usePreviewFeature } from "../stores/featurePreviewStore";
+import {
+  useFeaturePreviewStore,
+  usePreviewFeature,
+} from "../stores/featurePreviewStore";
 import { useWorkspaceHierarchy } from "../hooks/useWorkspaceHierarchy";
 import {
   type AgentDeepLinkRequest,

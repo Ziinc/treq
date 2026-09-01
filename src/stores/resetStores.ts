@@ -1,5 +1,8 @@
 import { defaultAuthState, useAuthStore } from "./authStore";
-import { defaultFeaturePreviewState, useFeaturePreviewStore } from "./featurePreviewStore";
+import {
+  defaultFeaturePreviewState,
+  useFeaturePreviewStore,
+} from "./featurePreviewStore";
 import {
   defaultDiffSettingsState,
   useDiffSettingsStore,

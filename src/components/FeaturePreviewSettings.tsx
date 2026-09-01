@@ -14,10 +14,9 @@ export function FeaturePreviewSettings() {
       <div>
         <h2 className="text-base font-semibold">Feature Preview</h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Turn on experimental features. Off hides them in the UI and blocks
-          the matching backend commands. Dev builds start with every preview
-          flag on. Release builds use the shipped default until you change a
-          switch.
+          Turn on experimental features. Off hides them in the UI and blocks the
+          matching backend commands. Dev builds start with every preview flag
+          on. Release builds use the shipped default until you change a switch.
         </p>
       </div>
       <ul className="space-y-4">
