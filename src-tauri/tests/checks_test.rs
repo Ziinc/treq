@@ -124,8 +124,37 @@ fn passing_check_creates_autosave_commit_for_dirty_workspace() {
   assert!(
     descriptions
       .iter()
-      .any(|d| d.starts_with("treq-autosave: ci.yaml")),
-    "expected an autosave commit after a passing check, got: {descriptions:?}"
+      .any(|d| d.starts_with("treq-autosave: good.txt")),
+    "expected an autosave commit listing the dirty file, got: {descriptions:?}"
+  );
+}
+
+#[test]
+fn passing_check_autosave_message_ellipsizes_after_two_files() {
+  let repo = TestRepo::new().expect("Failed to create test repo");
+  repo
+    .write_workflow("ci.yaml", PASSING_WORKFLOW)
+    .expect("Failed to write workflow");
+  treq_lib::local_db::trust_repo(&repo.repo_path).expect("Failed to trust repo");
+  let workspace = repo
+    .create_workspace_simple("feat/autosave-many-files")
+    .expect("Failed to create workspace");
+  let ws_path = repo.workspace_full_path(&workspace);
+  TestRepo::write_workspace_file(&ws_path, "a.txt", "a\n").expect("Failed to write a.txt");
+  TestRepo::write_workspace_file(&ws_path, "b.txt", "b\n").expect("Failed to write b.txt");
+  TestRepo::write_workspace_file(&ws_path, "c.txt", "c\n").expect("Failed to write c.txt");
+
+  let result =
+    core::run_workflow_job_sync(&repo.repo_path, "ci.yaml", "greet", workspace.id, &ws_path)
+      .expect("Failed to run job");
+  assert!(result.success);
+
+  let descriptions = workspace_log_descriptions(&repo.repo_path, workspace.id);
+  assert!(
+    descriptions
+      .iter()
+      .any(|d| d.starts_with("treq-autosave: a.txt, b.txt, … N1 more")),
+    "expected autosave to list two files then remaining count, got: {descriptions:?}"
   );
 }
 

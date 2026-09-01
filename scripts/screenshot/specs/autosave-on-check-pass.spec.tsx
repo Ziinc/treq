@@ -100,13 +100,13 @@ it("captures autosave after a passing check and drop after a manual commit", asy
 
 	await user.click(await screen.findByRole("tab", { name: /^Commits/ }));
 	await screen.findByRole("tab", { name: /^Commits/, selected: true });
-	await screen.findByText(/treq-autosave: ci.yaml/);
+	await screen.findByText(/treq-autosave: good\.txt/);
 
 	await captureDocument(document, {
 		name: "autosave-on-check-pass-02-autosave-in-log",
 		expectations: [
 			"The Commits tab is selected.",
-			'The commit list shows a row whose message starts with "treq-autosave: ci.yaml".',
+			'The commit list shows a row whose message starts with "treq-autosave: good.txt".',
 		],
 	});
 
@@ -130,7 +130,7 @@ it("captures autosave after a passing check and drop after a manual commit", asy
 		{ timeout: 15000 },
 	);
 	await waitFor(() => {
-		expect(screen.queryByText(/treq-autosave: ci.yaml/)).toBeNull();
+		expect(screen.queryByText(/treq-autosave: good\.txt/)).toBeNull();
 	});
 
 	await captureDocument(document, {

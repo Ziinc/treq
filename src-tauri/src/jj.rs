@@ -616,8 +616,18 @@ pub fn is_autosave_description(description: &str) -> bool {
     .starts_with(AUTOSAVE_DESCRIPTION_PREFIX)
 }
 
-pub fn autosave_commit_message(filename: &str) -> String {
-  format!("{AUTOSAVE_DESCRIPTION_PREFIX} {filename}")
+pub fn autosave_commit_message(paths: &[String]) -> String {
+  let mut paths: Vec<&str> = paths.iter().map(String::as_str).collect();
+  paths.sort_unstable();
+  match paths.as_slice() {
+    [] => AUTOSAVE_DESCRIPTION_PREFIX.to_string(),
+    [one] => format!("{AUTOSAVE_DESCRIPTION_PREFIX} {one}"),
+    [first, second] => format!("{AUTOSAVE_DESCRIPTION_PREFIX} {first}, {second}"),
+    [first, second, rest @ ..] => format!(
+      "{AUTOSAVE_DESCRIPTION_PREFIX} {first}, {second}, … N{} more",
+      rest.len()
+    ),
+  }
 }
 
 fn commit_description_first_line(commit: &jj_lib::commit::Commit) -> String {
@@ -8284,10 +8294,41 @@ mod tests {
 
   #[test]
   fn is_autosave_description_matches_first_line_prefix() {
-    assert!(is_autosave_description("treq-autosave: ci.yaml"));
-    assert!(is_autosave_description("treq-autosave: ci.yaml\nmore"));
+    assert!(is_autosave_description("treq-autosave: good.txt"));
+    assert!(is_autosave_description(
+      "treq-autosave: a.txt, b.txt, … N1 more\nmore"
+    ));
     assert!(!is_autosave_description("ship the good changes"));
     assert!(!is_autosave_description(""));
+  }
+
+  #[test]
+  fn autosave_commit_message_lists_up_to_two_files() {
+    assert_eq!(
+      autosave_commit_message(&["good.txt".to_string()]),
+      "treq-autosave: good.txt"
+    );
+    assert_eq!(
+      autosave_commit_message(&["b.txt".to_string(), "a.txt".to_string()]),
+      "treq-autosave: a.txt, b.txt"
+    );
+  }
+
+  #[test]
+  fn autosave_commit_message_ellipsizes_after_two_files() {
+    let paths: Vec<String> = (1..=57).map(|i| format!("f{i:02}.txt")).collect();
+    assert_eq!(
+      autosave_commit_message(&paths),
+      "treq-autosave: f01.txt, f02.txt, … N55 more"
+    );
+    assert_eq!(
+      autosave_commit_message(&[
+        "c.txt".to_string(),
+        "a.txt".to_string(),
+        "b.txt".to_string()
+      ]),
+      "treq-autosave: a.txt, b.txt, … N1 more"
+    );
   }
 
   fn init_git_repo(temp: &TempDir) {
