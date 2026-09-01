@@ -27,12 +27,22 @@ export type TreqCommandRequest =
   | { kind: "RepositoryStatus"; repo: string }
   | { kind: "ListBranches"; repo: string }
   | { kind: "ListWorkspaces"; repo: string }
+  | { kind: "InspectWorkspace"; repo: string; workspace: string }
   | { kind: "ListChanges"; repo: string; workspace?: string | null }
   | {
       kind: "DiffFile";
       repo: string;
       workspace?: string | null;
       path: string;
+    }
+  | {
+      kind: "ReadFile";
+      repo: string;
+      workspace?: string | null;
+      path: string;
+      revision: "WorkingCopy" | "Parent";
+      start_line?: number | null;
+      end_line?: number | null;
     }
   | { kind: "ListCommits"; repo: string; workspace?: string | null }
   | { kind: "ListConflicts"; repo: string; workspace?: string | null }
@@ -50,8 +60,10 @@ export type TreqCommandRequest =
       prompt: string;
       idempotency_key?: string | null;
     }
+  | { kind: "AgentInput"; repo: string; workspace: string; input: string }
   | { kind: "AgentStatus"; repo: string; workspace: string }
-  | { kind: "AgentStop"; repo: string; workspace: string };
+  | { kind: "AgentStop"; repo: string; workspace: string }
+  | { kind: "AgentLogs"; repo: string; workspace: string };
 
 /**
  * Remote commands the PRD or Phase 5 explicitly marks `not_implemented` over

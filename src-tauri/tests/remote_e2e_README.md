@@ -20,6 +20,19 @@ already carries (from Phase 4) - and this phase extends - native-SSH-only
 coverage that runs against an in-process mock `russh::server`, not a real
 provider. That coverage runs unconditionally, today, in this sandbox.
 
+A fourth file, `src-tauri/tests/remote_ssh_server_it.rs`, runs the same
+production transport against a *real*, independently implemented `sshd`
+(a `linuxserver/openssh-server` container started as a job service in
+`.github/workflows/remote-ssh-server-it.yml`) instead of the in-process
+mock. It is gated on `TREQ_SSH_SERVER_IT=1` and connection details for a
+reachable server, following the same skip-gracefully contract as the two
+files above - see its own header comment for the exact variables and for
+what it does and does not prove (real publickey auth, real host-key
+accept/reject, real connection reuse, and real exec-channel argument
+round-tripping against a stub CLI shim; not the certificate-auth half, and
+not `TreqCommandRequest` payload coverage against a real Treq CLI - see
+gap #11 below, which this file narrows but does not close).
+
 ## Acceptance criteria mapping
 
 | # | Criterion | Covered by | Sandbox status |
@@ -131,8 +144,11 @@ accounting:
   Rust transport to authenticate against the real VM's real `sshd` using
   that certificate, or wait out a certificate's expiry against a live
   server. `remote_ssh_transport.rs`'s host-key tests cover the "unknown/
-  changed host key" half of this against the mock server; the certificate-
-  auth half against a live `sshd` is the gap.
+  changed host key" half of this against the mock server, and
+  `remote_ssh_server_it.rs` now covers publickey auth plus host-key
+  accept/reject against a *real* `sshd`; only the certificate-auth half
+  against a live server remains a gap, since that needs a real Supabase-
+  issued short-lived certificate, not a static test keypair.
 - **Fly-side orphan-machine scanning** in `scripts/remote-e2e-cleanup.ts` is
   documented as a manual operator step (a `curl`/`jq` one-liner in the
   script's own comments) rather than automated, to avoid handing the

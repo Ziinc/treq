@@ -8,6 +8,7 @@ import {
 import { dispatchOverSsh } from "../lib/remote-dispatch";
 import type { SshEndpoint } from "../lib/api-types-remote";
 import type { RemoteRepoProbe } from "../lib/api-types";
+import { RemoteRepoScreen } from "./RemoteRepoScreen";
 
 type Step =
   | "idle"
@@ -20,6 +21,7 @@ type Step =
   | "error";
 
 const DEVICE_KEY_COMMENT = "treq-mobile-device";
+const LAST_REPO_KEY = "treq-mobile-last-remote-repo";
 
 /**
  * Mobile connectivity prototype (mobile PRD, Phase 2): registers this
@@ -32,8 +34,11 @@ export function RemoteConnectPanel() {
   const [step, setStep] = useState<Step>("idle");
   const [error, setError] = useState<string | null>(null);
   const [endpoint, setEndpoint] = useState<SshEndpoint | null>(null);
-  const [repoPath, setRepoPath] = useState("");
+  const [repoPath, setRepoPath] = useState(
+    () => localStorage.getItem(LAST_REPO_KEY) ?? "",
+  );
   const [probe, setProbe] = useState<RemoteRepoProbe | null>(null);
+  const [connectedRepo, setConnectedRepo] = useState<string | null>(null);
 
   async function connect() {
     setError(null);
@@ -81,6 +86,8 @@ export function RemoteConnectPanel() {
         repo: repoPath,
       });
       setProbe(result);
+      localStorage.setItem(LAST_REPO_KEY, repoPath);
+      setConnectedRepo(repoPath);
       setStep("connected");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -123,10 +130,13 @@ export function RemoteConnectPanel() {
           >
             {step === "probe" ? "Inspecting..." : "Inspect repository"}
           </button>
-          {probe && (
-            <pre className="overflow-x-auto rounded-md border bg-muted px-3 py-2 text-xs">
-              {JSON.stringify(probe, null, 2)}
-            </pre>
+          {probe && !probe.exists && (
+            <p className="text-sm text-destructive">
+              Repository not found at {repoPath} on the instance.
+            </p>
+          )}
+          {probe?.exists && connectedRepo && (
+            <RemoteRepoScreen endpoint={endpoint} repo={connectedRepo} />
           )}
         </div>
       )}
