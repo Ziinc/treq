@@ -1,11 +1,11 @@
 /**
  * Captures the Code tab's (workspace Overview) top-level file list
- * highlighting jj file status via core::ls_workspace /
+ * highlighting jj file status via core::ls_workspace_with_status /
  * core::files::annotate_entry_statuses: a red pip for an unresolved
  * conflict, a blue pip for a file changed by an already-committed
  * (not-yet-rebased) ancestor commit, a yellow pip for an uncommitted
- * working-copy change, and untouched files collapsed behind a toggle. File
- * names themselves stay unstyled — only the pip carries the status color.
+ * working-copy change, and a dimmed name (no pip) for untouched files.
+ * File names otherwise stay unstyled — only the pip carries status color.
  */
 
 import * as React from "react";
@@ -101,29 +101,13 @@ it("captures conflict/committed/working-copy status pips in the Code tab file li
     ],
   });
 
-  // Untouched files (e.g. the repo's other starting files) should be
-  // collapsed behind a toggle instead of cluttering the list.
-  const toggle = await screen.findByTestId("toggle-untouched-files");
+  // Untouched files (e.g. the repo's other starting files) stay in the list,
+  // dimmed and pip-less, rather than being hidden.
   await captureDocument(document, {
-    name: "filebrowser-status-pips-02-collapsed-toggle",
+    name: "filebrowser-status-pips-02-untouched-dimmed",
     expectations: [
-      'A "Show N unchanged files" toggle button is visible below the highlighted files.',
-      "Only README.md, committed.txt, and dirty.txt are listed above the toggle — no other, untouched files are shown.",
-    ],
-  });
-
-  await user.click(toggle);
-  await screen.findByTestId("toggle-untouched-files");
-  await waitFor(() => {
-    expect(screen.getByTestId("toggle-untouched-files")).toHaveTextContent(
-      "Hide unchanged files",
-    );
-  });
-  await captureDocument(document, {
-    name: "filebrowser-status-pips-03-expanded",
-    expectations: [
-      "Clicking the toggle revealed additional, untouched files in dimmed/grey text with no pip.",
-      'The toggle button now reads "Hide unchanged files".',
+      "At least one other, untouched file (e.g. .gitignore) is visible in the list alongside the highlighted ones.",
+      "That untouched file's name renders dimmed/grey with no colored pip, contrasting with README.md/committed.txt/dirty.txt.",
     ],
   });
 }, 90000);
