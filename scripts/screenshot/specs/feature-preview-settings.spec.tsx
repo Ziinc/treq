@@ -1,26 +1,62 @@
 import * as React from "react";
 import { expect, it } from "vitest";
 import userEvent from "@testing-library/user-event";
-import { createTestRepo, openRepo } from "../../../test/utils";
+import {
+  createTestRepo,
+  findSidebarBranchElement,
+  openRepo,
+} from "../../../test/utils";
 import { render, screen } from "../../../test/test-utils";
 import { Dashboard } from "../../../src/components/Dashboard";
+import { createWorkspace } from "../../../src/lib/api";
 import { captureDocument } from "../capture";
 
-it("captures the Feature Preview settings tab", async () => {
+it("captures the Feature Preview settings tab and gated UI", async () => {
   const { repoPath } = createTestRepo(false);
   openRepo(repoPath);
+  await createWorkspace(repoPath, "feat/preview");
   const user = userEvent.setup();
   render(<Dashboard />);
 
   await user.click(await screen.findByLabelText("Settings"));
-  await user.click(await screen.findByRole("tab", { name: /feature preview/i }));
+  await user.click(
+    await screen.findByRole("tab", { name: /feature preview/i }),
+  );
   await screen.findByTestId("feature-preview-settings");
 
   await captureDocument(document, {
-    name: "feature-preview-settings",
+    name: "feature-preview-01-settings-tab",
     expectations: [
       "Settings shows a Feature Preview tab with Skills installation, Workspace scheduling, and Remote SSH.",
       "Each feature title is a documentation link and has an on/off switch.",
     ],
   });
-});
+
+  expect(screen.getByRole("tab", { name: /skills/i })).toBeVisible();
+  await user.click(screen.getByLabelText("Skills installation"));
+  expect(screen.queryByRole("tab", { name: /^skills$/i })).toBeNull();
+
+  await captureDocument(document, {
+    name: "feature-preview-02-skills-tab-hidden",
+    expectations: [
+      "The Skills settings tab is gone after Skills installation is switched off.",
+      "Feature Preview remains the selected settings tab.",
+    ],
+  });
+
+  await user.click(screen.getByLabelText("Workspace scheduling"));
+  await user.click(screen.getByRole("button", { name: "Close" }));
+  await user.click(await findSidebarBranchElement("feat/preview"));
+  expect(await screen.findByTestId("show-workspace-header")).toBeTruthy();
+  expect(
+    screen.queryByTestId("schedule-workspace-button"),
+  ).not.toBeInTheDocument();
+
+  await captureDocument(document, {
+    name: "feature-preview-03-schedule-button-hidden",
+    expectations: [
+      "The workspace header is visible for feat/preview.",
+      "The Schedule button is not shown in the workspace header.",
+    ],
+  });
+}, 60000);
