@@ -242,6 +242,7 @@ pub fn ls_workspace(
         modified_at,
         submodule_pin: None,
         submodule_synced: None,
+        status: None,
       });
     }
   }
@@ -251,6 +252,19 @@ pub fn ls_workspace(
     workspace_id,
     &workspace_root,
     &mut entries,
+  );
+
+  let target_branch = match workspace_id {
+    Some(id) => local_db::get_workspace_by_id(repo_path, id)
+      .ok()
+      .flatten()
+      .and_then(|ws| ws.target_branch),
+    None => None,
+  };
+  crate::core::files::annotate_entry_statuses(
+    &workspace_root,
+    &mut entries,
+    target_branch.as_deref(),
   );
 
   entries.sort_by(|a, b| match (a.is_directory, b.is_directory) {

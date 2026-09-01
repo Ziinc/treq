@@ -186,6 +186,29 @@ const StatusPip = ({ status }: { status?: string }) =>
     />
   ) : null;
 
+// jj-derived file status from core::files::list_workspace_files /
+// core::ls_workspace: "conflict" | "workingCopy" | "committed", or absent
+// (untouched). Conflicts are red, committed-but-not-working-copy changes are
+// blue, and working-copy changes are yellow.
+const JJ_STATUS_PIP_CLASSES: Record<string, string> = {
+  conflict: "bg-red-500",
+  committed: "bg-blue-500",
+  workingCopy: "bg-yellow-500",
+};
+
+const JJ_STATUS_TEXT_CLASSES: Record<string, string> = {
+  conflict: "text-red-500",
+  committed: "text-blue-500",
+  workingCopy: "text-yellow-500",
+};
+
+const JjStatusPip = ({ status }: { status?: string | null }) => {
+  const pipClass = status ? JJ_STATUS_PIP_CLASSES[status] : undefined;
+  return pipClass ? (
+    <span className={cn("w-2 h-2 rounded-full flex-shrink-0", pipClass)} />
+  ) : null;
+};
+
 export const ShowWorkspace = ({
   repositoryPath,
   workspace,
@@ -301,6 +324,7 @@ export const ShowWorkspace = ({
     useState<HTMLDivElement | null>(null);
   const [scrollToCommitId, setScrollToCommitId] = useState<string | null>(null);
   const [showFileBrowserInCode, setShowFileBrowserInCode] = useState(false);
+  const [showUntouchedFiles, setShowUntouchedFiles] = useState(false);
 
   // `treq send --browser <url-or-file>` opens the Browser view directly,
   // instead of showing an attachment preview like image/text sends do.
@@ -331,6 +355,7 @@ export const ShowWorkspace = ({
     setBookmarkConflict(null);
     setConflictModalOpen(false);
     setChangedFiles(new Map());
+    setShowUntouchedFiles(false);
   }, [workspace?.id]);
 
   useEffect(() => {
@@ -735,7 +760,8 @@ export const ShowWorkspace = ({
     }
   };
 
-  // Helper to get status for a directory entry
+  // Helper to get status for a directory entry (legacy M/A/D/R fallback,
+  // used only when the entry has no jj status from core::ls_workspace).
   const getEntryStatus = (entry: DirectoryEntry): string | undefined => {
     const fullPath = `${workingDirectory}/${entry.name}`;
     if (!entry.is_directory) {
@@ -1207,8 +1233,15 @@ export const ShowWorkspace = ({
     mode: "plan" | "acceptEdits",
   ) => createAgentWithReview(reviewMarkdown, mode, "Page Review");
 
-  // Display all files in the list
-  const displayedEntries = rootEntries;
+  // Untouched top-level entries (no jj status: not conflicted, not committed,
+  // not a working-copy change) are hidden by default and revealed on click.
+  // Only collapse when status info is actually available for at least one
+  // entry — otherwise (e.g. status computation failed) show everything.
+  const touchedEntries = rootEntries.filter((entry) => entry.status);
+  const untouchedEntries = rootEntries.filter((entry) => !entry.status);
+  const canCollapseUntouched = touchedEntries.length > 0;
+  const displayedEntries =
+    showUntouchedFiles || !canCollapseUntouched ? rootEntries : touchedEntries;
 
   const executionPanel = workingDirectory ? (
     <div className="flex flex-col h-full">
@@ -1482,7 +1515,13 @@ export const ShowWorkspace = ({
                               <File className="w-4 h-4 text-muted-foreground shrink-0" />
                             )}
                             <span
-                              className="flex-1 font-mono truncate"
+                              className={cn(
+                                "flex-1 font-mono truncate",
+                                entry.status
+                                  ? JJ_STATUS_TEXT_CLASSES[entry.status]
+                                  : canCollapseUntouched &&
+                                      "text-muted-foreground/50",
+                              )}
                               style={{ fontSize: `${fontSize}px` }}
                             >
                               {entry.name}
@@ -1493,7 +1532,11 @@ export const ShowWorkspace = ({
                                 </span>
                               )}
                             </span>
-                            <StatusPip status={getEntryStatus(entry)} />
+                            {entry.status ? (
+                              <JjStatusPip status={entry.status} />
+                            ) : (
+                              <StatusPip status={getEntryStatus(entry)} />
+                            )}
                           </button>
                           {showSyncToggle && (
                             <label className="flex items-center gap-1.5 shrink-0 pr-4 pl-2 text-xs text-muted-foreground cursor-pointer">
@@ -1521,6 +1564,18 @@ export const ShowWorkspace = ({
                       <div className="px-4 py-8 text-center text-sm text-muted-foreground">
                         No files found
                       </div>
+                    )}
+                    {canCollapseUntouched && untouchedEntries.length > 0 && (
+                      <button
+                        type="button"
+                        data-testid="toggle-untouched-files"
+                        onClick={() => setShowUntouchedFiles((prev) => !prev)}
+                        className="w-full px-4 py-2 text-sm text-muted-foreground hover:bg-muted/60 transition text-left"
+                      >
+                        {showUntouchedFiles
+                          ? "Hide unchanged files"
+                          : `Show ${untouchedEntries.length} unchanged file${untouchedEntries.length === 1 ? "" : "s"}`}
+                      </button>
                     )}
                   </div>
 

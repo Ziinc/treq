@@ -1021,27 +1021,25 @@ const TreeNode = ({
             >
               {entry.name}
             </span>
-            {entry.status ? (
-              (() => {
-                const pip = jjStatusPip(entry.status);
-                return pip ? (
+            {entry.status
+              ? (() => {
+                  const pip = jjStatusPip(entry.status);
+                  return pip ? (
+                    <span
+                      className={cn(
+                        "w-2 h-2 rounded-full flex-shrink-0 ml-auto",
+                        pip.bg,
+                      )}
+                      title={pip.title}
+                    />
+                  ) : null;
+                })()
+              : hasChanges && (
                   <span
-                    className={cn(
-                      "w-2 h-2 rounded-full flex-shrink-0 ml-auto",
-                      pip.bg,
-                    )}
-                    title={pip.title}
+                    className="w-2 h-2 rounded-full flex-shrink-0 bg-yellow-500 ml-auto"
+                    title="Contains modified files"
                   />
-                ) : null;
-              })()
-            ) : (
-              hasChanges && (
-                <span
-                  className="w-2 h-2 rounded-full flex-shrink-0 bg-yellow-500 ml-auto"
-                  title="Contains modified files"
-                />
-              )
-            )}
+                )}
           </button>
           {renderNested && isExpanded && children.length > 0 && (
             <div>

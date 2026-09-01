@@ -45,23 +45,9 @@ pub fn list_workspace_files(
     return Err(format!("Directory does not exist: {}", dir));
   }
 
-  let conflicted: HashSet<String> = jj::get_conflicted_files(&workspace_path, target_branch)
-    .unwrap_or_default()
-    .into_iter()
-    .collect();
-  let working_copy: HashSet<String> = jj::jj_get_changed_files(&workspace_path)
-    .unwrap_or_default()
-    .into_iter()
-    .map(|f| f.path)
-    .collect();
-  let committed: HashSet<String> = jj::jj_get_committed_files(&workspace_path, target_branch)
-    .unwrap_or_default()
-    .into_iter()
-    .collect();
-
   let mut entries = Vec::new();
-  for entry in std::fs::read_dir(base_path)
-    .map_err(|e| format!("Failed to read directory {}: {}", dir, e))?
+  for entry in
+    std::fs::read_dir(base_path).map_err(|e| format!("Failed to read directory {}: {}", dir, e))?
   {
     let entry = entry.map_err(|e| e.to_string())?;
     let name = entry.file_name().to_string_lossy().to_string();
@@ -71,13 +57,6 @@ pub fn list_workspace_files(
     let entry_path = entry.path();
     let is_directory = entry_path.is_dir();
     let path_str = entry_path.to_string_lossy().to_string();
-    let rel_path = relative_path(&workspace_path, &path_str);
-
-    let status = if is_directory {
-      directory_status(&rel_path, &conflicted, &working_copy, &committed)
-    } else {
-      file_status(&rel_path, &conflicted, &working_copy, &committed)
-    };
 
     let modified_at = entry
       .metadata()
@@ -92,9 +71,11 @@ pub fn list_workspace_files(
       modified_at,
       submodule_pin: None,
       submodule_synced: None,
-      status: status.map(|s| s.as_str().to_string()),
+      status: None,
     });
   }
+
+  annotate_entry_statuses(&workspace_path, &mut entries, target_branch);
 
   entries.sort_by(|a, b| match (a.is_directory, b.is_directory) {
     (true, false) => std::cmp::Ordering::Less,
@@ -103,6 +84,39 @@ pub fn list_workspace_files(
   });
 
   Ok(entries)
+}
+
+/// Populate `status` on each entry (file or directory) in place, based on
+/// each entry's path relative to `workspace_path`. Entries whose `path` isn't
+/// inside `workspace_path` are left untouched (no status).
+pub fn annotate_entry_statuses(
+  workspace_path: &str,
+  entries: &mut [WorkspaceEntry],
+  target_branch: Option<&str>,
+) {
+  let conflicted: HashSet<String> = jj::get_conflicted_files(workspace_path, target_branch)
+    .unwrap_or_default()
+    .into_iter()
+    .collect();
+  let working_copy: HashSet<String> = jj::jj_get_changed_files(workspace_path)
+    .unwrap_or_default()
+    .into_iter()
+    .map(|f| f.path)
+    .collect();
+  let committed: HashSet<String> = jj::jj_get_committed_files(workspace_path, target_branch)
+    .unwrap_or_default()
+    .into_iter()
+    .collect();
+
+  for entry in entries.iter_mut() {
+    let rel_path = relative_path(workspace_path, &entry.path);
+    let status = if entry.is_directory {
+      directory_status(&rel_path, &conflicted, &working_copy, &committed)
+    } else {
+      file_status(&rel_path, &conflicted, &working_copy, &committed)
+    };
+    entry.status = status.map(|s| s.as_str().to_string());
+  }
 }
 
 fn relative_path(workspace_path: &str, full_path: &str) -> String {
