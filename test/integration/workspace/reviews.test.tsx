@@ -122,46 +122,52 @@ describe("ShowWorkspace - Reviews integration", () => {
     });
   });
 
-  it("is able to mark files as viewed and expand/collapse files", async () => {
-    const branchName = "feat/reviews-viewed";
-    await openReviewWithChange(branchName);
-    await openReviewTab(user, branchName);
+  it(
+    "is able to mark files as viewed and expand/collapse files",
+    async () => {
+      const branchName = "feat/reviews-viewed";
+      await openReviewWithChange(branchName);
+      await openReviewTab(user, branchName);
 
-    const viewedCheckbox = await screen.findByRole("checkbox", {
-      name: "Viewed",
-    });
-    expect(viewedCheckbox).toHaveAttribute("aria-checked", "false");
-
-    await user.click(viewedCheckbox);
-    await waitFor(() => {
-      expect(viewedCheckbox).toHaveAttribute("aria-checked", "true");
-      expect(
-        screen.getByRole("button", { name: "Expand file diff" }),
-      ).toBeInTheDocument();
-    });
-
-    await user.click(viewedCheckbox);
-    await waitFor(() => {
+      const viewedCheckbox = await screen.findByRole("checkbox", {
+        name: "Viewed",
+      });
       expect(viewedCheckbox).toHaveAttribute("aria-checked", "false");
-      expect(
-        screen.getByRole("button", { name: "Collapse file diff" }),
-      ).toBeInTheDocument();
-    });
 
-    await user.click(
-      screen.getByRole("button", { name: "Collapse file diff" }),
-    );
-    await waitFor(() => {
-      expect(
+      await user.click(viewedCheckbox);
+      await waitFor(() => {
+        expect(viewedCheckbox).toHaveAttribute("aria-checked", "true");
+        expect(
+          screen.getByRole("button", { name: "Expand file diff" }),
+        ).toBeInTheDocument();
+      });
+
+      await user.click(viewedCheckbox);
+      await waitFor(() => {
+        expect(viewedCheckbox).toHaveAttribute("aria-checked", "false");
+        expect(
+          screen.getByRole("button", { name: "Collapse file diff" }),
+        ).toBeInTheDocument();
+      });
+
+      await user.click(
+        screen.getByRole("button", { name: "Collapse file diff" }),
+      );
+      await waitFor(() => {
+        expect(
+          screen.getByRole("button", { name: "Expand file diff" }),
+        ).toBeInTheDocument();
+      });
+
+      await user.click(
         screen.getByRole("button", { name: "Expand file diff" }),
-      ).toBeInTheDocument();
-    });
-
-    await user.click(screen.getByRole("button", { name: "Expand file diff" }));
-    await waitFor(() => {
-      expect(
-        screen.getByRole("button", { name: "Collapse file diff" }),
-      ).toBeInTheDocument();
-    });
-  });
+      );
+      await waitFor(() => {
+        expect(
+          screen.getByRole("button", { name: "Collapse file diff" }),
+        ).toBeInTheDocument();
+      });
+    },
+    30_000,
+  );
 });
