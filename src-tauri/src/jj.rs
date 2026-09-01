@@ -2383,8 +2383,8 @@ pub fn remove_workspace_directory_only(workspace_path: &str) -> Result<(), JjErr
   Ok(())
 }
 
-/// Remove a workspace (jj workspace + files)
-pub fn remove_workspace(repo_path: &str, workspace_path: &str) -> Result<(), JjError> {
+/// Forget a jj workspace without deleting its directory.
+pub fn forget_workspace(repo_path: &str, workspace_path: &str) -> Result<(), JjError> {
   let workspace_dir = Path::new(workspace_path);
 
   // Extract workspace name from path (last component)
@@ -2421,6 +2421,12 @@ pub fn remove_workspace(repo_path: &str, workspace_path: &str) -> Result<(), JjE
     }
   }
 
+  Ok(())
+}
+
+/// Remove a workspace (jj workspace + files)
+pub fn remove_workspace(repo_path: &str, workspace_path: &str) -> Result<(), JjError> {
+  forget_workspace(repo_path, workspace_path)?;
   remove_workspace_directory_only(workspace_path)
 }
 

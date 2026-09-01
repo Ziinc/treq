@@ -18,7 +18,7 @@ import {
 } from "./ui/context-menu";
 import { SidebarMenuButton, SidebarMenuItem } from "./ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
-import { PathContextMenuItems } from "./WorkspaceSidebarItem";
+import { PathContextMenuItems } from "./WorkspacePathContextMenu";
 
 interface HomeRepoSidebarRowProps {
   repoPath?: string;
