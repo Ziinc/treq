@@ -13,8 +13,8 @@ export default defineConfig({
   test: {
     projects: [
       "./vitest.unit.config.ts",
-      "./vitest.integration.serial.config.ts",
-      "./vitest.integration.parallel.config.ts",
+      "./vitest.integration-serial.config.ts",
+      "./vitest.integration-parallel.config.ts",
     ],
   },
 });

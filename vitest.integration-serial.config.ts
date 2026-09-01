@@ -6,7 +6,7 @@ import { integrationBaseTest, integrationPlugins } from "./vitest.integration.ba
  * discard, review, commit refresh, ...). These contend heavily for
  * spawn_blocking / jj-lib: running them concurrently with other NAPI forks
  * starves that pool and the Changes list never resolves in time, so they
- * stay serial. See vitest.integration.parallel.config.ts for the rest.
+ * stay serial. See vitest.integration-parallel.config.ts for the rest.
  */
 export default defineConfig({
   plugins: integrationPlugins,
