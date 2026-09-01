@@ -1,4 +1,11 @@
-import { FolderGit2, GitBranch, Plug, Settings, User } from "lucide-react";
+import {
+  BookOpen,
+  FolderGit2,
+  GitBranch,
+  Plug,
+  Settings,
+  User,
+} from "lucide-react";
 import { useRef, useState } from "react";
 import useSWR from "swr";
 import { useAutoUpdate } from "../hooks/useAutoUpdate";
@@ -14,6 +21,7 @@ import { getSetting, setSetting } from "../lib/api";
 import { AccountSettings } from "./AccountSettings";
 import { GitHubIntegrationSettings } from "./GitHubIntegrationSettings";
 import { RepoYamlConfigCard } from "./RepoYamlConfigCard";
+import { SkillLibrarySettings } from "./SkillLibrarySettings";
 import {
   RepositorySettingsContent,
   type RepositorySettingsContentHandle,
@@ -25,7 +33,12 @@ import { Slider } from "./ui/slider";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { useToast } from "./ui/toast";
 
-type TabValue = "application" | "repository" | "account" | "integrations";
+type TabValue =
+  | "application"
+  | "repository"
+  | "account"
+  | "integrations"
+  | "skills";
 
 interface SettingsPageProps {
   repoPath: string;
@@ -160,6 +173,10 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 <TabsTrigger value="integrations">
                   <Plug className="w-4 h-4" />
                   Integrations
+                </TabsTrigger>
+                <TabsTrigger value="skills">
+                  <BookOpen className="w-4 h-4" />
+                  Skills
                 </TabsTrigger>
               </TabsList>
 
@@ -379,6 +396,11 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 </TabsContent>
                 <TabsContent value="integrations">
                   <GitHubIntegrationSettings repoPath={repoPath} />
+                </TabsContent>
+                <TabsContent value="skills">
+                  {currentTab === "skills" && (
+                    <SkillLibrarySettings repoPath={repoPath} />
+                  )}
                 </TabsContent>
               </div>
             </Tabs>

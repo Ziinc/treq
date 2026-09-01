@@ -46,6 +46,7 @@ const sidebars: SidebarsConfig = {
         'how-to/connecting-github',
         'how-to/creating-and-viewing-pull-requests',
         'how-to/using-the-merge-queue',
+        'how-to/installing-skills',
       ],
     },
     {

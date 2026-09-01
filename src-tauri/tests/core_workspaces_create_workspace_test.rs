@@ -1158,3 +1158,62 @@ fn test_create_workspace_sets_target_branch_in_db() {
     "target_branch should default to the repo default branch"
   );
 }
+
+#[test]
+fn test_create_workspace_materializes_installed_library_skills() {
+  let repo = TestRepo::new().expect("Failed to create test repo");
+  let app_dir = repo.temp_dir.path().join("app-data");
+  fs::create_dir_all(&app_dir).expect("app data");
+  let previous = std::env::var("TREQ_APP_DATA_DIR").ok();
+  std::env::set_var("TREQ_APP_DATA_DIR", app_dir.to_str().unwrap());
+
+  let files = vec![(
+    "SKILL.md".to_string(),
+    b"---\nname: demo\ndescription: demo\n---\n# Demo\n".to_vec(),
+  )];
+  let checksum = treq_lib::core::skills::skill_checksum(&files);
+  let entry = treq_lib::core::skills::SkillCatalogEntry {
+    id: "test/demo".to_string(),
+    name: "demo".to_string(),
+    description: Some("demo".to_string()),
+    source: "test".to_string(),
+    category: None,
+    license: None,
+    proprietary: false,
+    url: None,
+    checksum: Some(checksum),
+    files: vec![],
+  };
+  let install = treq_lib::core::skills::install_skill_files(
+    &entry,
+    &files,
+    treq_lib::core::skills::SkillInstallScope::Application,
+    None,
+  );
+  let created = if install.is_ok() {
+    treq_lib::core::create_workspace(
+      &repo.repo_path,
+      "feat/with-skill",
+      None,
+      None,
+      None,
+      None,
+      None,
+    )
+  } else {
+    Err(install.err().unwrap())
+  };
+
+  match previous {
+    Some(value) => std::env::set_var("TREQ_APP_DATA_DIR", value),
+    None => std::env::remove_var("TREQ_APP_DATA_DIR"),
+  }
+
+  let workspace = created.expect("Failed to create workspace");
+  let ws = repo.workspaces_dir().join(&workspace.workspace_path);
+  assert!(
+    ws.join(".agents/skills/demo/SKILL.md").exists(),
+    "library skill should be copied into the workspace"
+  );
+  assert!(ws.join(".claude/skills/demo/SKILL.md").exists());
+}

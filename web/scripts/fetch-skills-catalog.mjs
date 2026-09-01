@@ -11,6 +11,7 @@ import { mkdtempSync, readdirSync, statSync, readFileSync, writeFileSync, rmSync
 import { join, relative, dirname } from 'path';
 import { tmpdir } from 'os';
 import { fileURLToPath } from 'url';
+import { createHash } from 'crypto';
 import matter from 'gray-matter';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
@@ -234,6 +235,20 @@ function cloneSource(source, scratchDir) {
   return dest;
 }
 
+function skillChecksum(skillDir, relPaths) {
+  const hash = createHash('sha256');
+  for (const relPath of [...relPaths].sort()) {
+    const content = readFileSync(join(skillDir, relPath));
+    hash.update(relPath);
+    hash.update(Buffer.from([0]));
+    const len = Buffer.alloc(8);
+    len.writeBigUInt64BE(BigInt(content.length));
+    hash.update(len);
+    hash.update(content);
+  }
+  return hash.digest('hex');
+}
+
 function buildFileManifest(source, skillDir, repoRelPath) {
   return walkFiles(skillDir, skillDir)
     .sort()
@@ -275,6 +290,8 @@ function extractSkills(source, cloneDir, rootLicense) {
     // link to GitHub instead. This also keeps their text out of the search
     // index (which only reads description/name).
     const proprietary = license === 'Proprietary';
+    const files = proprietary ? [] : buildFileManifest(source, skillDir, repoRelPath);
+    const checksum = proprietary ? null : skillChecksum(skillDir, files.map((file) => file.path));
 
     skills.push({
       id: `${source.id}/${relDir}`,
@@ -287,7 +304,8 @@ function extractSkills(source, cloneDir, rootLicense) {
       path: repoRelPath,
       url: `https://github.com/${source.org}/${source.repo}/tree/${source.branch}/${repoRelPath}`,
       route: `/skills/${source.id}/${routeSlug}`,
-      files: proprietary ? [] : buildFileManifest(source, skillDir, repoRelPath),
+      checksum,
+      files,
     });
   }
 

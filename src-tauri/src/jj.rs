@@ -134,7 +134,7 @@ fn build_snapshot_base_ignores(ignore_root: &str) -> Arc<GitIgnoreFile> {
     .chain(
       "",
       Path::new("<treq builtins>"),
-      b".jj/\n.treq/\n.jj*/\nnode_modules/\n.agents/skills/treq*/\n.claude/skills/treq*/\n",
+      b".jj/\n.treq/\n.jj*/\nnode_modules/\n.agents/skills/\n.claude/skills/\n.agents/skills/treq*/\n.claude/skills/treq*/\n",
     )
     .unwrap_or_else(|_| GitIgnoreFile::empty());
 
@@ -1144,6 +1144,8 @@ pub fn ensure_gitignore_entries(repo_path: &str) -> Result<(), JjError> {
     ".jj/",
     ".jj*/",
     ".treq/",
+    ".agents/skills/",
+    ".claude/skills/",
     ".agents/skills/treq*/",
     ".claude/skills/treq*/",
   ];
@@ -8374,6 +8376,8 @@ mod tests {
     let again = fs::read_to_string(temp.path().join(".gitignore")).expect("read gitignore");
     assert_eq!(again.matches(".agents/skills/treq*/").count(), 1);
     assert_eq!(again.matches(".claude/skills/treq*/").count(), 1);
+    assert!(gitignore.contains(".agents/skills/"));
+    assert!(gitignore.contains(".claude/skills/"));
   }
 
   #[test]

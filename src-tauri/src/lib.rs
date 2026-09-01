@@ -48,6 +48,8 @@ use crate::core::remote::TreqCommandRequest;
 #[cfg(feature = "tauri-test")]
 use crate::core::remote_control_plane::SshEndpoint;
 #[cfg(feature = "tauri-test")]
+use crate::core::skills::SkillInstallScope;
+#[cfg(feature = "tauri-test")]
 use commands::RemoteExecState;
 
 #[cfg(feature = "tauri-test")]
@@ -756,6 +758,11 @@ pub fn run() {
             commands::set_setting,
             commands::get_repo_setting,
             commands::set_repo_setting,
+            commands::list_skill_catalog,
+            commands::list_installed_skills,
+            commands::install_skill,
+            commands::uninstall_skill,
+            commands::set_skill_install_scope,
             commands::check_for_app_update,
             commands::install_app_update,
             commands::get_workspace_file_hunks,

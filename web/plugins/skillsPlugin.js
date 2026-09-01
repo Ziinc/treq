@@ -14,6 +14,9 @@ function skillsPlugin(context) {
       const catalogPath = path.join(context.siteDir, 'src', 'data', 'skills.json');
       if (!fs.existsSync(catalogPath)) return [];
       const catalog = JSON.parse(fs.readFileSync(catalogPath, 'utf8'));
+      const staticDir = path.join(context.siteDir, 'static', 'skills');
+      fs.mkdirSync(staticDir, { recursive: true });
+      fs.copyFileSync(catalogPath, path.join(staticDir, 'catalog.json'));
       return catalog.skills;
     },
     async contentLoaded({ content: skills, actions }) {

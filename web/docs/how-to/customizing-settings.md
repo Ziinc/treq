@@ -6,7 +6,9 @@ sidebar_position: 2
 
 _Personalize Treq to match your preferences and workflow._
 
-Open settings with the gear icon (⚙️) in the sidebar. Settings split into two levels. Repository settings apply to the current Git repository. Application settings apply everywhere. Both are saved when you save them, but repository settings live in the `.treq` directory and are lost if you delete it.
+Open settings with the gear icon (⚙️) in the sidebar. Settings split into repository, application, account, integrations, and skills. Repository settings apply to the current Git repository. Application settings apply everywhere. Both are saved when you save them, but repository settings live in the `.treq` directory and are lost if you delete it.
+
+The **Skills** tab browses the Treq skill registry. **Install…** opens a dialog where you choose application or repository storage. Treq copies installed skills into new workspaces. See [Installing Skills from the Library](/docs/how-to/installing-skills).
 
 ## Repository Settings
 

@@ -632,3 +632,82 @@ export const remoteClearCutoff = (endpointId: string): Promise<void> =>
 export const remoteCutoffReason = (
   endpointId: string,
 ): Promise<string | null> => invoke("remote_cutoff_reason", { endpointId });
+
+export type SkillInstallScope = "application" | "repository";
+
+export interface InstalledSkill {
+  id: string;
+  name: string;
+  checksum: string;
+  scope: SkillInstallScope;
+}
+
+export interface SkillCatalogFile {
+  path: string;
+  size: number;
+  binary: boolean;
+  githubUrl?: string | null;
+  rawUrl?: string | null;
+}
+
+export interface SkillCatalogSkill {
+  id: string;
+  name: string;
+  description?: string | null;
+  source: string;
+  category?: string | null;
+  license?: string | null;
+  proprietary: boolean;
+  url?: string | null;
+  checksum?: string | null;
+  files: SkillCatalogFile[];
+  installed?: InstalledSkill | null;
+}
+
+export interface SkillCatalogView {
+  generatedAt?: string | null;
+  sources: unknown[];
+  skills: SkillCatalogSkill[];
+}
+
+export const listSkillCatalog = (
+  repoPath?: string | null,
+  catalogUrl?: string | null,
+): Promise<SkillCatalogView> =>
+  invoke("list_skill_catalog", {
+    repoPath: repoPath ?? null,
+    catalogUrl: catalogUrl ?? null,
+  });
+
+export const installSkill = (
+  skillId: string,
+  scope: SkillInstallScope,
+  repoPath?: string | null,
+  catalogUrl?: string | null,
+): Promise<InstalledSkill> =>
+  invoke("install_skill", {
+    skillId,
+    scope,
+    repoPath: repoPath ?? null,
+    catalogUrl: catalogUrl ?? null,
+  });
+
+export const uninstallSkill = (
+  skillId: string,
+  repoPath?: string | null,
+): Promise<void> =>
+  invoke("uninstall_skill", {
+    skillId,
+    repoPath: repoPath ?? null,
+  });
+
+export const setSkillInstallScope = (
+  skillId: string,
+  scope: SkillInstallScope,
+  repoPath?: string | null,
+): Promise<InstalledSkill> =>
+  invoke("set_skill_install_scope", {
+    skillId,
+    scope,
+    repoPath: repoPath ?? null,
+  });

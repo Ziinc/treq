@@ -121,6 +121,19 @@ export async function captureDocument(
   }
   const css = fs.readFileSync(CSS_PATH, "utf8");
 
+  // innerHTML omits the selected attribute on <option>, so Chromium would
+  // paint the first option even when jsdom's select.value is correct.
+  for (const select of doc.querySelectorAll("select")) {
+    const current = (select as HTMLSelectElement).value;
+    for (const option of Array.from((select as HTMLSelectElement).options)) {
+      if (option.value === current) {
+        option.setAttribute("selected", "");
+      } else {
+        option.removeAttribute("selected");
+      }
+    }
+  }
+
   const htmlClass = doc.documentElement.className;
   const bodyHtml = doc.body.innerHTML;
 
