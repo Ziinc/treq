@@ -51,7 +51,7 @@ import {
   SidebarMenuSkeleton,
   SidebarSeparator,
 } from "./ui/sidebar";
-import { Tooltip, TooltipProvider } from "./ui/tooltip";
+import { TooltipProvider } from "./ui/tooltip";
 import { WorkspaceSidebarHeaderActions } from "./WorkspaceSidebarHeaderActions";
 import { WorkspaceSidebarItem } from "./WorkspaceSidebarItem";
 import { WorkspaceSidebarResizeHandle } from "./WorkspaceSidebarResizeHandle";
