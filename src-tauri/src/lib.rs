@@ -840,6 +840,7 @@ pub fn run() {
             commands::remote_open_repo,
             commands::remote_dispatch_local,
             commands::remote_dispatch_over_ssh,
+            commands::remote_dispatch_mutation_over_ssh,
             commands::remote_transport_metrics,
             commands::remote_force_cutoff,
             commands::remote_clear_cutoff,

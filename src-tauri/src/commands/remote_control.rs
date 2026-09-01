@@ -15,7 +15,7 @@
 //! transport. Neither is wired into any component yet — that is Phase 6's
 //! job — but both are real, callable, and tested.
 
-use crate::core::remote::{RemoteCommandError, TreqCommandRequest};
+use crate::core::remote::{MutationRetryOutcome, RemoteCommandError, TreqCommandRequest};
 use crate::core::remote_control_plane::SshEndpoint;
 use crate::core::remote_ssh_transport::{
   CancellationToken, CutoffReason, ExecLimits, SshConnectionPool, SshTransportMetricsSnapshot,
@@ -165,6 +165,59 @@ pub async fn remote_cutoff_reason(
   state: State<'_, RemoteExecState>,
 ) -> Result<Option<CutoffReasonDto>, String> {
   Ok(state.0.cutoff_reason(&endpoint_id).await.map(Into::into))
+}
+
+/// Frontend-facing shape of [`MutationRetryOutcome`], so the UI can render
+/// each of the PRD's three post-reconnect cases (treat-as-complete,
+/// retry-with-idempotency-key already performed, or surface-ambiguity) from
+/// one typed response instead of inferring it from a thrown error string.
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub enum MutationDispatchResult {
+  /// The mutation's exec channel completed normally — whether on the first
+  /// attempt or after a not-applied verdict triggered a same-idempotency-key
+  /// retry. Carries the fresh response.
+  Applied { value: serde_json::Value },
+  /// A network failure interrupted the mutation, but post-reconnect state
+  /// verification showed it had already applied. Nothing was resent.
+  AlreadyApplied,
+  /// A network failure interrupted the mutation and post-reconnect state
+  /// verification could not determine whether it applied. The UI must ask
+  /// the user rather than the client guessing.
+  Ambiguous { reason: String },
+}
+
+/// Runs a typed *mutation* request against a real `SshEndpoint` with the
+/// PRD's verify-before-retry behavior: a network failure while the command
+/// was in flight never triggers a blind resend. See
+/// `crate::core::remote::retry_after_reconnect` for the full decision logic.
+/// Non-mutating (read/inspect) requests should keep using
+/// `remote_dispatch_over_ssh`, which is always safe to retry.
+#[tauri::command]
+pub async fn remote_dispatch_mutation_over_ssh(
+  endpoint: SshEndpoint,
+  request: TreqCommandRequest,
+  state: State<'_, RemoteExecState>,
+) -> Result<MutationDispatchResult, String> {
+  let pool = state.0.clone();
+  let cancellation = CancellationToken::new();
+  let metrics = pool.metrics.clone();
+  let outcome = crate::core::remote::retry_after_reconnect::<serde_json::Value, _>(
+    &pool,
+    &endpoint,
+    request,
+    ExecLimits::default(),
+    &cancellation,
+    move |verification| metrics.record_post_reconnect_verification(verification),
+  )
+  .await
+  .map_err(remote_command_error_to_string)?;
+
+  Ok(match outcome {
+    MutationRetryOutcome::Applied(value) => MutationDispatchResult::Applied { value },
+    MutationRetryOutcome::AlreadyApplied => MutationDispatchResult::AlreadyApplied,
+    MutationRetryOutcome::Ambiguous { reason } => MutationDispatchResult::Ambiguous { reason },
+  })
 }
 
 /// Returns a snapshot of this session's SSH transport telemetry (PRD Phase 7
