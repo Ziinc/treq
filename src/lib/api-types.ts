@@ -392,18 +392,9 @@ export interface PendingReview {
   comments: LineComment[];
   viewed_files: string[];
   summary_text: string | null;
-  conflict_comments: ConflictCommentRecord[];
+  conflict_comments: import("./api-types-review").ConflictCommentRecord[];
   created_at: string;
   updated_at: string;
-}
-
-export interface ConflictCommentRecord {
-  id: string;
-  conflictId: string;
-  filePath: string;
-  conflictNumber: number;
-  text: string;
-  createdAt: string;
 }
 
 /** Pending review session for the FileBrowser, kept separate from PendingReview. */
@@ -594,3 +585,4 @@ export interface ConflictRegion {
 
 export * from "./api-types-checks";
 export * from "./api-types-remote";
+export * from "./api-types-review";

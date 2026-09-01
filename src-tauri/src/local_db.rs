@@ -2673,8 +2673,15 @@ mod tests {
     .expect("add_workspace should succeed");
 
     // Save a review
-    save_pending_review(repo_path, workspace_id, r#"[{"id":"c1"}]"#, None, None, None)
-      .expect("save should succeed");
+    save_pending_review(
+      repo_path,
+      workspace_id,
+      r#"[{"id":"c1"}]"#,
+      None,
+      None,
+      None,
+    )
+    .expect("save should succeed");
 
     // Verify it exists
     let review = get_pending_review(repo_path, workspace_id).expect("get should succeed");
@@ -2710,8 +2717,15 @@ mod tests {
     .expect("add_workspace should succeed");
 
     // Save a review
-    save_pending_review(repo_path, workspace_id, r#"[{"id":"c1"}]"#, None, None, None)
-      .expect("save should succeed");
+    save_pending_review(
+      repo_path,
+      workspace_id,
+      r#"[{"id":"c1"}]"#,
+      None,
+      None,
+      None,
+    )
+    .expect("save should succeed");
 
     // Verify it exists
     let review = get_pending_review(repo_path, workspace_id).expect("get should succeed");
@@ -2750,8 +2764,15 @@ mod tests {
     .expect("add_workspace should succeed");
 
     // Save first review
-    save_pending_review(repo_path, workspace_id, r#"[{"id":"c1"}]"#, None, None, None)
-      .expect("save should succeed");
+    save_pending_review(
+      repo_path,
+      workspace_id,
+      r#"[{"id":"c1"}]"#,
+      None,
+      None,
+      None,
+    )
+    .expect("save should succeed");
 
     let first_review = get_pending_review(repo_path, workspace_id)
       .expect("get should succeed")
@@ -2762,8 +2783,15 @@ mod tests {
     std::thread::sleep(std::time::Duration::from_millis(10));
 
     // Update the review
-    save_pending_review(repo_path, workspace_id, r#"[{"id":"c2"}]"#, None, None, None)
-      .expect("update should succeed");
+    save_pending_review(
+      repo_path,
+      workspace_id,
+      r#"[{"id":"c2"}]"#,
+      None,
+      None,
+      None,
+    )
+    .expect("update should succeed");
 
     let updated_review = get_pending_review(repo_path, workspace_id)
       .expect("get should succeed")

@@ -8,8 +8,7 @@ export function shouldWritePendingReview(args: {
   debouncedConflictCommentCount?: number;
 }): boolean {
   const liveConflictCommentCount = args.liveConflictCommentCount ?? 0;
-  const debouncedConflictCommentCount =
-    args.debouncedConflictCommentCount ?? 0;
+  const debouncedConflictCommentCount = args.debouncedConflictCommentCount ?? 0;
   if (
     args.liveCommentCount === 0 &&
     !args.liveSummary.trim() &&
