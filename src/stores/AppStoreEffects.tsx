@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import useSWR from "swr";
 import { listen } from "@tauri-apps/api/event";
 import { detectEditorApps, getSettingsBatch } from "../lib/api";
+import { PREVIEW_FEATURE_IDS, previewSettingKey } from "../lib/features";
 import { TREQ_SEND_EVENT, type TreqSendPayload } from "../lib/treqSend";
 import { useAuthStore } from "./authStore";
 import { useEditorAppsStore } from "./editorAppsStore";
@@ -16,6 +17,7 @@ const SETTINGS_BATCH_KEYS = [
   "diff_font_size",
   "ui_zoom",
   "workspace_sidebar_width",
+  ...PREVIEW_FEATURE_IDS.map(previewSettingKey),
 ] as const;
 
 /**

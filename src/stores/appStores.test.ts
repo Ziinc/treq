@@ -14,6 +14,7 @@ import {
   useSidebarWidthStore,
 } from "./sidebarWidthStore";
 import { applySettingsRecord } from "./settingsHydration";
+import { useFeaturePreviewStore } from "./featurePreviewStore";
 
 vi.mock("../lib/api", () => ({
   setSetting: vi.fn().mockResolvedValue(undefined),
@@ -67,12 +68,14 @@ describe("client zustand stores", () => {
       diff_font_size: "13",
       ui_zoom: "125",
       workspace_sidebar_width: "360",
+      "feature_preview.remoteSsh": "false",
     });
     expect(useThemeStore.getState().theme).toBe("dark");
     expect(useTerminalSettingsStore.getState().fontSize).toBe(18);
     expect(useDiffSettingsStore.getState().fontSize).toBe(13);
     expect(useZoomSettingsStore.getState().zoom).toBe(125);
     expect(useSidebarWidthStore.getState().width).toBe(360);
+    expect(useFeaturePreviewStore.getState().flags.remoteSsh).toBe(false);
   });
 
   it("clamps workspace sidebar width to the allowed range", async () => {

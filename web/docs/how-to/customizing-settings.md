@@ -6,9 +6,21 @@ sidebar_position: 2
 
 _Personalize Treq to match your preferences and workflow._
 
-Open settings with the gear icon (⚙️) in the sidebar. Settings split into repository, application, account, integrations, and skills. Repository settings apply to the current Git repository. Application settings apply everywhere. Both are saved when you save them, but repository settings live in the `.treq` directory and are lost if you delete it.
+Open settings with the gear icon (⚙️) in the sidebar. Settings split into repository, application, account, integrations, skills, and Feature Preview. Repository settings apply to the current Git repository. Application settings apply everywhere. Both are saved when you save them, but repository settings live in the `.treq` directory and are lost if you delete it.
 
-The **Skills** tab browses the Treq skill registry. **Install…** opens a dialog where you choose application or repository storage. Treq copies installed skills into new workspaces. See [Installing Skills from the Library](/docs/how-to/installing-skills).
+The **Skills** tab browses the Treq skill registry when **Skills installation** is on in Feature Preview. **Install…** opens a dialog where you choose application or repository storage. Treq copies installed skills into new workspaces. See [Installing Skills from the Library](/docs/how-to/installing-skills).
+
+## Feature Preview
+
+Feature Preview lists experimental features. Each title opens the docs page for that feature. The switch stores your choice in application settings.
+
+| Feature | Docs |
+| --- | --- |
+| Skills installation | [Installing Skills from the Library](/docs/how-to/installing-skills) |
+| Workspace scheduling | [Scheduling Workspaces](/docs/how-to/scheduling-workspaces) |
+| Remote SSH | [Remote SSH Workspaces](/docs/how-to/remote-ssh-workspaces) |
+
+Release builds start from the shipped default. Dev builds start with every preview feature on. Turning a switch off hides the UI and rejects the matching backend commands.
 
 ## Repository Settings
 

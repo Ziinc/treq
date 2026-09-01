@@ -10,6 +10,10 @@ import { useAutoUpdate } from "../hooks/useAutoUpdate";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
 import { useMutation } from "../hooks/useMutation";
 import { useTwoFingerSwipe } from "../hooks/useTwoFingerSwipe";
+import {
+  useFeaturePreviewStore,
+  usePreviewFeature,
+} from "../stores/featurePreviewStore";
 import { useWorkspaceHierarchy } from "../hooks/useWorkspaceHierarchy";
 import {
   type AgentDeepLinkRequest,
@@ -202,6 +206,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [changeMovePending, setChangeMovePending] = useState(false);
   const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode);
   const [location, navigate] = useLocation();
+  const remoteSshEnabled = usePreviewFeature("remoteSsh");
   const previousViewModeRef = useRef<ViewMode>(
     initialViewMode === "settings" ? "show-workspace" : initialViewMode,
   );
@@ -328,6 +333,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   };
 
   const handleOpenRemoteSetup = async () => {
+    if (!useFeaturePreviewStore.getState().flags.remoteSsh) return;
     setProvisioningError(undefined);
     try {
       const [hosts, identities, regions, sizes, status] = await Promise.all([
@@ -900,6 +906,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   // Restore the last-opened remote SSH repository (if any) when no local repo is active.
   useEffect(() => {
+    if (!remoteSshEnabled) {
+      setActiveRemoteRepo(null);
+      return;
+    }
     void getSetting("last_opened_remote_repo").then((saved) => {
       if (!saved || repoPath) return;
       try {
@@ -908,7 +918,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         void setSetting("last_opened_remote_repo", "");
       }
     });
-  }, [repoPath]);
+  }, [repoPath, remoteSshEnabled]);
 
   const rememberRemoteHost = async (host: string) => {
     const raw = await getSetting("remote_ssh_recent_hosts").catch(() => null);
@@ -1029,6 +1039,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       }),
       // Menu open via SSH
       listen("menu-open-ssh", () => {
+        if (!useFeaturePreviewStore.getState().flags.remoteSsh) return;
         void handleOpenRemoteSetup();
       }),
       // Menu factory reset
@@ -1883,7 +1894,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
     />
   );
 
-  if (!repoPath && (activeRemoteRepo || activeSshEndpoint)) {
+  if (
+    remoteSshEnabled &&
+    !repoPath &&
+    (activeRemoteRepo || activeSshEndpoint)
+  ) {
     const connectionState = activeSshEndpoint
       ? connectionStateFromInstanceState(
           instanceStatus?.instance?.status,
@@ -1986,7 +2001,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     <>
       <Onboarding
         onOpenRepo={handleOpenRepository}
-        onOpenRemoteSsh={handleOpenRemoteSetup}
+        onOpenRemoteSsh={remoteSshEnabled ? handleOpenRemoteSetup : undefined}
       />
       {remoteSetupDialog}
       {remoteSshDialog}
