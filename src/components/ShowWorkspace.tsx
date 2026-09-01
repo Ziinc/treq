@@ -58,7 +58,7 @@ import {
   getWorkspaceStatus,
   type JjLogResult,
   listCommits,
-  lsWorkspace,
+  lsWorkspaceWithStatus,
   pullWorkspaceFromRemote,
   pushWorkspaceToRemote,
   rebaseHomeRepoBranch,
@@ -185,6 +185,23 @@ const StatusPip = ({ status }: { status?: string }) =>
       )}
     />
   ) : null;
+
+// jj-derived file status from core::files::list_workspace_files /
+// core::ls_workspace: "conflict" | "workingCopy" | "committed", or absent
+// (untouched). Conflicts are red, committed-but-not-working-copy changes are
+// blue, and working-copy changes are yellow.
+const JJ_STATUS_PIP_CLASSES: Record<string, string> = {
+  conflict: "bg-red-500",
+  committed: "bg-blue-500",
+  workingCopy: "bg-yellow-500",
+};
+
+const JjStatusPip = ({ status }: { status?: string | null }) => {
+  const pipClass = status ? JJ_STATUS_PIP_CLASSES[status] : undefined;
+  return pipClass ? (
+    <span className={cn("w-2 h-2 rounded-full flex-shrink-0", pipClass)} />
+  ) : null;
+};
 
 export const ShowWorkspace = ({
   repositoryPath,
@@ -514,7 +531,7 @@ export const ShowWorkspace = ({
     async () => {
       try {
         const [entries, readme] = await Promise.all([
-          lsWorkspace(effectiveRepoPath, workspace?.id ?? null),
+          lsWorkspaceWithStatus(effectiveRepoPath, workspace?.id ?? null),
           getWorkspaceReadme(effectiveRepoPath, workspace?.id ?? null),
         ]);
         return { entries, readme };
@@ -735,7 +752,8 @@ export const ShowWorkspace = ({
     }
   };
 
-  // Helper to get status for a directory entry
+  // Helper to get status for a directory entry (legacy M/A/D/R fallback,
+  // used only when the entry has no jj status from core::ls_workspace).
   const getEntryStatus = (entry: DirectoryEntry): string | undefined => {
     const fullPath = `${workingDirectory}/${entry.name}`;
     if (!entry.is_directory) {
@@ -1207,7 +1225,6 @@ export const ShowWorkspace = ({
     mode: "plan" | "acceptEdits",
   ) => createAgentWithReview(reviewMarkdown, mode, "Page Review");
 
-  // Display all files in the list
   const displayedEntries = rootEntries;
 
   const executionPanel = workingDirectory ? (
@@ -1482,7 +1499,10 @@ export const ShowWorkspace = ({
                               <File className="w-4 h-4 text-muted-foreground shrink-0" />
                             )}
                             <span
-                              className="flex-1 font-mono truncate"
+                              className={cn(
+                                "flex-1 font-mono truncate",
+                                !entry.status && "text-muted-foreground/70",
+                              )}
                               style={{ fontSize: `${fontSize}px` }}
                             >
                               {entry.name}
@@ -1493,7 +1513,11 @@ export const ShowWorkspace = ({
                                 </span>
                               )}
                             </span>
-                            <StatusPip status={getEntryStatus(entry)} />
+                            {entry.status ? (
+                              <JjStatusPip status={entry.status} />
+                            ) : (
+                              <StatusPip status={getEntryStatus(entry)} />
+                            )}
                           </button>
                           {showSyncToggle && (
                             <label className="flex items-center gap-1.5 shrink-0 pr-4 pl-2 text-xs text-muted-foreground cursor-pointer">

@@ -146,6 +146,7 @@ pub fn list_directory(path: String) -> Result<Vec<DirectoryEntry>, String> {
           modified_at: modified_at_rfc3339(&entry_path.to_string_lossy()),
           submodule_pin: None,
           submodule_synced: None,
+          status: None,
         });
       }
     }
@@ -183,11 +184,11 @@ pub fn list_directories_batch(paths: Vec<String>) -> Vec<DirectoryBatchResult> {
 }
 
 #[tauri::command]
-pub fn ls_workspace(
+pub fn ls_workspace_with_status(
   repo_path: String,
   workspace_id: Option<i64>,
 ) -> Result<Vec<DirectoryEntry>, String> {
-  crate::core::ls_workspace(&repo_path, workspace_id)
+  crate::core::ls_workspace_with_status(&repo_path, workspace_id)
 }
 
 /// Suggests gitignored root paths for workspace create overlays (symlinks/copies).

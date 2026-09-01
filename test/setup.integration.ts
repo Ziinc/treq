@@ -20,11 +20,11 @@ import { configure } from "@testing-library/dom";
 // Shared DOM polyfills, browser API stubs, Tauri plugin mocks, and hook mocks
 import "./setup.common";
 
-// tauri-test invoke runs on spawn_blocking; the default 5s async util timeout
-// flakes under CI load when waiting for Changes file lists. Kept in line with
-// the global 15s test timeout (vitest.integration.config.ts) so a stuck
-// waitFor fails fast instead of silently eating the whole test budget.
-configure({ asyncUtilTimeout: 15_000 });
+// tauri-test invoke runs on spawn_blocking. Kept just under the global 5s
+// test timeout (vitest.integration.config.ts) so a stuck waitFor reports a
+// clear timeout error instead of racing the outer test timeout and showing
+// up as a plain, harder-to-diagnose assertion failure.
+configure({ asyncUtilTimeout: 4_000 });
 
 // Keep integration tests deterministic: avoid background auto-rebase races
 // during commit creation in Rust core.

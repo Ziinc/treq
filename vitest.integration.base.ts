@@ -25,8 +25,8 @@ export const integrationBaseTest: ViteUserConfig["test"] = {
   // "threads") -- otherwise files sharing a worker process would share an
   // app.db.
   pool: "forks",
-  testTimeout: 15_000,
-  hookTimeout: 15_000,
+  testTimeout: 5_000,
+  hookTimeout: 5_000,
   env: {
     LD_LIBRARY_PATH: process.env.LD_LIBRARY_PATH
       ? `${duckdbLibDir}:${process.env.LD_LIBRARY_PATH}`
