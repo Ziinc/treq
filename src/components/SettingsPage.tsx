@@ -21,6 +21,7 @@ import {
 import { getSetting, setSetting } from "../lib/api";
 import { AccountSettings } from "./AccountSettings";
 import { GitHubIntegrationSettings } from "./GitHubIntegrationSettings";
+import { LinearIntegrationSettings } from "./LinearIntegrationSettings";
 import { RepoYamlConfigCard } from "./RepoYamlConfigCard";
 import { FeaturePreviewSettings } from "./FeaturePreviewSettings";
 import { SkillLibrarySettings } from "./SkillLibrarySettings";
@@ -412,7 +413,10 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                   <AccountSettings />
                 </TabsContent>
                 <TabsContent value="integrations">
-                  <GitHubIntegrationSettings repoPath={repoPath} />
+                  <div className="space-y-12">
+                    <GitHubIntegrationSettings repoPath={repoPath} />
+                    <LinearIntegrationSettings repoPath={repoPath} />
+                  </div>
                 </TabsContent>
                 {skillsInstallation && (
                   <TabsContent value="skills">

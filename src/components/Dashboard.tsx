@@ -101,6 +101,7 @@ import {
   githubListPath,
   stateFilterForPrState,
 } from "../lib/githubRoutes";
+import { LINEAR_BASE_PATH } from "../lib/linearRoutes";
 import type { GitHubIssueAttachment } from "../lib/promptAttachments";
 import { invalidateReviewChangeCount } from "../lib/review-change-count";
 import {
@@ -120,6 +121,7 @@ import { ArtifactsPage } from "./ArtifactsPage";
 import { CommandPalette } from "./CommandPalette";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { GitHubPanel } from "./GitHubPanel";
+import { LinearPanel } from "./LinearPanel";
 import { KeyboardShortcutsModal } from "./KeyboardShortcutsModal";
 import { MergePreviewPage } from "./MergePreviewPage";
 import { Onboarding } from "./Onboarding";
@@ -171,7 +173,8 @@ type ViewMode =
   | "settings"
   | "artifacts"
   | "merge-preview"
-  | "github";
+  | "github"
+  | "linear";
 
 type SessionOpenOptions = {
   initialPrompt?: string;
@@ -547,6 +550,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
     navigate(githubListPath("issues"));
   };
 
+  const openLinear = () => {
+    if (viewMode !== "linear") {
+      previousViewModeRef.current = viewMode;
+    }
+    setViewMode("linear");
+    navigate(LINEAR_BASE_PATH);
+  };
+
   const openGitHubPr = (prNumber: number, prState: string) => {
     if (viewMode !== "github") {
       previousViewModeRef.current = viewMode;
@@ -565,11 +576,20 @@ export const Dashboard: React.FC<DashboardProps> = ({
     if (viewMode === "artifacts" && !location.startsWith(ARTIFACTS_BASE_PATH)) {
       setViewMode(previousViewModeRef.current);
     }
+    if (viewMode === "linear" && !location.startsWith(LINEAR_BASE_PATH)) {
+      setViewMode(previousViewModeRef.current);
+    }
     if (location.startsWith(ARTIFACTS_BASE_PATH) && viewMode !== "artifacts") {
       if (viewMode !== "github") {
         previousViewModeRef.current = viewMode;
       }
       setViewMode("artifacts");
+    }
+    if (location.startsWith(LINEAR_BASE_PATH) && viewMode !== "linear") {
+      if (viewMode !== "github" && viewMode !== "artifacts") {
+        previousViewModeRef.current = viewMode;
+      }
+      setViewMode("linear");
     }
   }, [location, viewMode]);
 
@@ -584,11 +604,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const leftArtifacts =
       previousViewModeForUrlRef.current === "artifacts" &&
       viewMode !== "artifacts";
+    const leftLinear =
+      previousViewModeForUrlRef.current === "linear" && viewMode !== "linear";
     previousViewModeForUrlRef.current = viewMode;
     if (leftGitHub && location.startsWith(GITHUB_BASE_PATH)) {
       navigate("/", { replace: true });
     }
     if (leftArtifacts && location.startsWith(ARTIFACTS_BASE_PATH)) {
+      navigate("/", { replace: true });
+    }
+    if (leftLinear && location.startsWith(LINEAR_BASE_PATH)) {
       navigate("/", { replace: true });
     }
   }, [viewMode, location, navigate]);
@@ -2046,6 +2071,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         onCreateShellTerminal={handleCreateShellTerminalFromSidebar}
         onDropChangeFiles={handleDropChangeFiles}
         onOpenGitHub={openGitHub}
+        onOpenLinear={openLinear}
         onOpenArtifacts={openArtifacts}
         currentPage={
           viewMode === "settings"
@@ -2054,9 +2080,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
               ? "github"
               : viewMode === "artifacts"
                 ? "artifacts"
-                : viewMode === "session" || viewMode === "show-workspace"
-                  ? "session"
-                  : undefined
+                : viewMode === "linear"
+                  ? "linear"
+                  : viewMode === "session" || viewMode === "show-workspace"
+                    ? "session"
+                    : undefined
         }
       />
 
@@ -2223,6 +2251,26 @@ export const Dashboard: React.FC<DashboardProps> = ({
               repoPath={repoPath}
               onOpenSettings={openSettings}
               onStartPromptFromIssue={handleStartPromptFromIssue}
+              onOpenWorkspace={async (workspaceId) => {
+                await invalidateQueries(["workspaces", repoPath]);
+                const updatedWorkspaces = await fetchAndCache(
+                  ["workspaces", repoPath],
+                  () => getWorkspaces(repoPath),
+                );
+                const workspace = updatedWorkspaces.find(
+                  (w) => w.id === workspaceId,
+                );
+                if (workspace) {
+                  handleSelectWorkspace(workspace);
+                }
+              }}
+            />
+          )}
+
+          {/* Linear Panel */}
+          {viewMode === "linear" && (
+            <LinearPanel
+              repoPath={repoPath}
               onOpenWorkspace={async (workspaceId) => {
                 await invalidateQueries(["workspaces", repoPath]);
                 const updatedWorkspaces = await fetchAndCache(

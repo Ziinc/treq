@@ -29,7 +29,9 @@ import {
   Upload,
   Workflow,
   Database,
+  Zap,
 } from "lucide-react";
+import { openUrl } from "@tauri-apps/plugin-opener";
 import { useEffect, useRef, useState } from "react";
 import {
   useEnqueueWorkspace,
@@ -1687,6 +1689,9 @@ export const ShowWorkspace = ({
           return JSON.parse(workspace.metadata) as {
             title?: string;
             description?: string;
+            linear_issue_key?: string;
+            linear_issue_url?: string;
+            linear_issue_title?: string;
           };
         } catch {
           return null;
@@ -1729,6 +1734,22 @@ export const ShowWorkspace = ({
                   {branchTitle}
                 </span>
               )}
+              {workspace &&
+                workspaceMetadata?.linear_issue_key &&
+                workspaceMetadata?.linear_issue_url && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void openUrl(workspaceMetadata.linear_issue_url!)
+                    }
+                    data-testid="linear-issue-badge"
+                    title={workspaceMetadata.linear_issue_title}
+                    className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted text-xs font-medium text-muted-foreground hover:bg-muted/80 transition-colors shrink-0"
+                  >
+                    <Zap className="w-3 h-3" />
+                    {workspaceMetadata.linear_issue_key}
+                  </button>
+                )}
               {workspace && workspace.branch_name !== defaultBranch && (
                 <>
                   <ArrowRight className="w-4 h-4 text-muted-foreground shrink-0" />

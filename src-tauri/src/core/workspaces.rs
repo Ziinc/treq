@@ -167,6 +167,12 @@ pub struct WorkspaceMetadata {
   /// into the new workspace (e.g. `node_modules`). Applied at create time.
   #[serde(skip_serializing_if = "Option::is_none")]
   pub symlinked_dirs: Option<Vec<String>>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub linear_issue_key: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub linear_issue_url: Option<String>,
+  #[serde(skip_serializing_if = "Option::is_none")]
+  pub linear_issue_title: Option<String>,
 }
 
 /// Parse the creation metadata JSON sent by the frontend/NAPI callers.
@@ -312,6 +318,42 @@ impl WorkspaceMetadata {
   pub fn to_json(&self) -> String {
     serde_json::to_string(self).unwrap_or_else(|_| "{}".to_string())
   }
+}
+
+pub fn merge_linear_issue_metadata_json(
+  existing: Option<&str>,
+  issue_key: &str,
+  issue_url: &str,
+  issue_title: &str,
+) -> Result<String, String> {
+  let mut metadata = parse_workspace_metadata(existing);
+  metadata.linear_issue_key = Some(issue_key.to_string());
+  metadata.linear_issue_url = Some(issue_url.to_string());
+  metadata.linear_issue_title = Some(issue_title.to_string());
+  serde_json::to_string(&metadata).map_err(|e| format!("Failed to serialize metadata: {e}"))
+}
+
+pub fn merge_linear_issue_metadata(
+  repo_path: &str,
+  workspace_id: i64,
+  issue_key: &str,
+  issue_url: &str,
+  issue_title: &str,
+) -> Result<local_db::Workspace, String> {
+  let existing_workspace = local_db::get_workspace_by_id(repo_path, workspace_id)?
+    .ok_or_else(|| format!("Workspace not found: {workspace_id}"))?;
+
+  let new_json = merge_linear_issue_metadata_json(
+    existing_workspace.metadata.as_deref(),
+    issue_key,
+    issue_url,
+    issue_title,
+  )?;
+
+  local_db::set_workspace_metadata(repo_path, workspace_id, &new_json)?;
+
+  local_db::get_workspace_by_id(repo_path, workspace_id)?
+    .ok_or_else(|| format!("Workspace not found after update: {workspace_id}"))
 }
 
 pub fn parse_hunk_spec(raw: &str) -> Result<HunkSpec, String> {
@@ -1257,11 +1299,12 @@ pub fn workspace_status(
 #[cfg(test)]
 mod tests {
   use super::{
-    is_workspace_hidden, parse_hunk_spec, parse_workspace_metadata, plan_workspace_target_move,
+    is_workspace_hidden, merge_linear_issue_metadata_json, parse_hunk_spec,
+    parse_workspace_metadata, plan_workspace_target_move,
     resolve_workspace_diff_base_revision_from_last_rebased,
     resolve_workspace_diff_conflict_marker_style,
     resolve_workspace_diff_tip_revision_from_workspace_state, schedule_workspaces, HunkSpec,
-    WorkspaceMoveRequest, WorkspaceTargetMoveStep,
+    WorkspaceMetadata, WorkspaceMoveRequest, WorkspaceTargetMoveStep,
   };
   use crate::jj;
   use crate::local_db::Workspace;
@@ -1701,6 +1744,86 @@ mod tests {
     let repo_path = temp_dir.path().to_str().unwrap();
     assert!(schedule_workspaces(repo_path, &[], Some("2026-12-01T09:00:00Z")).is_err());
     assert!(schedule_workspaces(repo_path, &[1], Some("tomorrow")).is_err());
+  }
+
+  #[test]
+  fn merge_linear_issue_metadata_empty_existing() {
+    let result = merge_linear_issue_metadata_json(
+      None,
+      "ENG-123",
+      "https://linear.app/issue/ENG-123",
+      "Test Issue",
+    );
+    assert!(result.is_ok());
+    let json = result.unwrap();
+    let parsed: WorkspaceMetadata = serde_json::from_str(&json).unwrap();
+    assert_eq!(parsed.linear_issue_key, Some("ENG-123".to_string()));
+    assert_eq!(
+      parsed.linear_issue_url,
+      Some("https://linear.app/issue/ENG-123".to_string())
+    );
+    assert_eq!(parsed.linear_issue_title, Some("Test Issue".to_string()));
+  }
+
+  #[test]
+  fn merge_linear_issue_metadata_preserves_existing_fields() {
+    let existing = r#"{"title":"My Workspace","description":"A description"}"#;
+    let result = merge_linear_issue_metadata_json(
+      Some(existing),
+      "ENG-456",
+      "https://linear.app/issue/ENG-456",
+      "Another Issue",
+    );
+    assert!(result.is_ok());
+    let json = result.unwrap();
+    let parsed: WorkspaceMetadata = serde_json::from_str(&json).unwrap();
+    assert_eq!(parsed.title, Some("My Workspace".to_string()));
+    assert_eq!(parsed.description, Some("A description".to_string()));
+    assert_eq!(parsed.linear_issue_key, Some("ENG-456".to_string()));
+    assert_eq!(
+      parsed.linear_issue_url,
+      Some("https://linear.app/issue/ENG-456".to_string())
+    );
+    assert_eq!(parsed.linear_issue_title, Some("Another Issue".to_string()));
+  }
+
+  #[test]
+  fn merge_linear_issue_metadata_persists_to_real_workspace() {
+    let temp = TempDir::new().expect("tempdir");
+    let repo_path = init_workspace_creation_repo(&temp);
+    let created = super::create_workspace(
+      &repo_path,
+      "eng-142-fix-login-bug",
+      None,
+      None,
+      None,
+      None,
+      None,
+    )
+    .expect("create workspace");
+
+    let updated = super::merge_linear_issue_metadata(
+      &repo_path,
+      created.id,
+      "ENG-142",
+      "https://linear.app/treq/issue/ENG-142",
+      "Fix login bug",
+    )
+    .expect("merge linear metadata");
+
+    let parsed = parse_workspace_metadata(updated.metadata.as_deref());
+    assert_eq!(parsed.linear_issue_key, Some("ENG-142".to_string()));
+    assert_eq!(
+      parsed.linear_issue_url,
+      Some("https://linear.app/treq/issue/ENG-142".to_string())
+    );
+    assert_eq!(parsed.linear_issue_title, Some("Fix login bug".to_string()));
+
+    let reloaded = crate::local_db::get_workspace_by_id(&repo_path, created.id)
+      .expect("get workspace")
+      .expect("workspace exists");
+    let reparsed = parse_workspace_metadata(reloaded.metadata.as_deref());
+    assert_eq!(reparsed.linear_issue_key, Some("ENG-142".to_string()));
   }
 }
 
