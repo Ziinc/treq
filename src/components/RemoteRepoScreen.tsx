@@ -89,19 +89,37 @@ export function RemoteRepoScreen({
         />
       )}
       {screen.name === "commits" && (
-        <CommitsScreen endpoint={endpoint} repo={repo} workspace={screen.workspace} />
+        <CommitsScreen
+          endpoint={endpoint}
+          repo={repo}
+          workspace={screen.workspace}
+        />
       )}
       {screen.name === "conflicts" && (
-        <ConflictsScreen endpoint={endpoint} repo={repo} workspace={screen.workspace} />
+        <ConflictsScreen
+          endpoint={endpoint}
+          repo={repo}
+          workspace={screen.workspace}
+        />
       )}
       {screen.name === "agent" && (
-        <RemoteAgentScreen endpoint={endpoint} repo={repo} workspace={screen.workspace} />
+        <RemoteAgentScreen
+          endpoint={endpoint}
+          repo={repo}
+          workspace={screen.workspace}
+        />
       )}
     </div>
   );
 }
 
-function RefreshButton({ onClick, loading }: { onClick: () => void; loading?: boolean }) {
+function RefreshButton({
+  onClick,
+  loading,
+}: {
+  onClick: () => void;
+  loading?: boolean;
+}) {
   return (
     <button
       type="button"
@@ -124,7 +142,8 @@ function WorkspaceListScreen({
 }) {
   const { data, error, isLoading, mutate } = useSWR(
     ["remote-workspaces", endpoint.hostname, repo],
-    () => dispatchOverSsh<Workspace[]>(endpoint, { kind: "ListWorkspaces", repo }),
+    () =>
+      dispatchOverSsh<Workspace[]>(endpoint, { kind: "ListWorkspaces", repo }),
   );
 
   return (
@@ -146,7 +165,9 @@ function WorkspaceListScreen({
               className="w-full rounded-md border px-3 py-2 text-left text-sm"
             >
               <div className="font-medium">{ws.title || ws.workspace_name}</div>
-              <div className="text-xs text-muted-foreground">{ws.branch_name}</div>
+              <div className="text-xs text-muted-foreground">
+                {ws.branch_name}
+              </div>
             </button>
           </li>
         ))}
@@ -172,15 +193,24 @@ function WorkspaceDetailScreen({
   onOpenConflicts: () => void;
   onOpenAgent: () => void;
 }) {
-  const statusKey = ["remote-workspace-status", endpoint.hostname, repo, workspace];
-  const { data: status, error: statusError, isLoading: statusLoading, mutate: mutateStatus } =
-    useSWR(statusKey, () =>
-      dispatchOverSsh<WorkspaceStatus>(endpoint, {
-        kind: "InspectWorkspace",
-        repo,
-        workspace,
-      }),
-    );
+  const statusKey = [
+    "remote-workspace-status",
+    endpoint.hostname,
+    repo,
+    workspace,
+  ];
+  const {
+    data: status,
+    error: statusError,
+    isLoading: statusLoading,
+    mutate: mutateStatus,
+  } = useSWR(statusKey, () =>
+    dispatchOverSsh<WorkspaceStatus>(endpoint, {
+      kind: "InspectWorkspace",
+      repo,
+      workspace,
+    }),
+  );
 
   const {
     data: changes,
@@ -195,10 +225,7 @@ function WorkspaceDetailScreen({
     }),
   );
 
-  const {
-    data: marker,
-    mutate: mutateMarker,
-  } = useSWR(
+  const { data: marker, mutate: mutateMarker } = useSWR(
     ["remote-change-marker", endpoint.hostname, repo, workspace],
     () =>
       dispatchOverSsh<WorkspaceChangeMarker>(endpoint, {
@@ -219,12 +246,19 @@ function WorkspaceDetailScreen({
     <section className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold">{workspace}</h2>
-        <RefreshButton onClick={refreshAll} loading={statusLoading || changesLoading} />
+        <RefreshButton
+          onClick={refreshAll}
+          loading={statusLoading || changesLoading}
+        />
       </div>
       {marker && (
-        <p className="text-xs text-muted-foreground">op {marker.operation_id.slice(0, 12)}</p>
+        <p className="text-xs text-muted-foreground">
+          op {marker.operation_id.slice(0, 12)}
+        </p>
       )}
-      {statusError && <p className="text-sm text-destructive">{String(statusError)}</p>}
+      {statusError && (
+        <p className="text-sm text-destructive">{String(statusError)}</p>
+      )}
       {status && (
         <div className="rounded-md border px-3 py-2 text-sm">
           <p>{status.has_changes ? "Has uncommitted changes" : "Clean"}</p>
@@ -257,7 +291,9 @@ function WorkspaceDetailScreen({
       </div>
 
       <h3 className="text-sm font-semibold">Changed files</h3>
-      {changesError && <p className="text-sm text-destructive">{String(changesError)}</p>}
+      {changesError && (
+        <p className="text-sm text-destructive">{String(changesError)}</p>
+      )}
       {changes?.length === 0 && (
         <p className="text-sm text-muted-foreground">No changed files.</p>
       )}
@@ -374,8 +410,13 @@ function CommitsScreen({
       {error && <p className="text-sm text-destructive">{String(error)}</p>}
       <ul className="flex flex-col gap-2">
         {data?.map((commit) => (
-          <li key={commit.commit_id} className="rounded-md border px-3 py-2 text-sm">
-            <p className="font-mono text-xs text-muted-foreground">{commit.short_id}</p>
+          <li
+            key={commit.commit_id}
+            className="rounded-md border px-3 py-2 text-sm"
+          >
+            <p className="font-mono text-xs text-muted-foreground">
+              {commit.short_id}
+            </p>
             <p>{commit.description || "(no description)"}</p>
             <p className="text-xs text-muted-foreground">
               {commit.author_name} · {commit.timestamp}
@@ -418,7 +459,10 @@ function ConflictsScreen({
       )}
       <ul className="flex flex-col gap-2">
         {data?.map((path) => (
-          <li key={path} className="rounded-md border px-3 py-2 font-mono text-sm">
+          <li
+            key={path}
+            className="rounded-md border px-3 py-2 font-mono text-sm"
+          >
             {path}
           </li>
         ))}

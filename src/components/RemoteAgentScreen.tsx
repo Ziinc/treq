@@ -1,6 +1,9 @@
 import { useState } from "react";
 import useSWR from "swr";
-import { dispatchOverSsh, dispatchMutationOverSsh } from "../lib/remote-dispatch";
+import {
+  dispatchOverSsh,
+  dispatchMutationOverSsh,
+} from "../lib/remote-dispatch";
 import type { SshEndpoint } from "../lib/api-types-remote";
 
 interface AgentStatusResult {
@@ -50,8 +53,11 @@ export function RemoteAgentScreen({
   );
 
   const { data: logs, mutate: mutateLogs } = useSWR(
-    status?.running ? ["remote-agent-logs", endpoint.hostname, repo, workspace] : null,
-    () => dispatchOverSsh<string>(endpoint, { kind: "AgentLogs", repo, workspace }),
+    status?.running
+      ? ["remote-agent-logs", endpoint.hostname, repo, workspace]
+      : null,
+    () =>
+      dispatchOverSsh<string>(endpoint, { kind: "AgentLogs", repo, workspace }),
     { refreshInterval: 4_000 },
   );
 
@@ -82,7 +88,11 @@ export function RemoteAgentScreen({
     setActionError(null);
     setBusy(true);
     try {
-      await dispatchMutationOverSsh(endpoint, { kind: "AgentStop", repo, workspace });
+      await dispatchMutationOverSsh(endpoint, {
+        kind: "AgentStop",
+        repo,
+        workspace,
+      });
       await mutateStatus();
       await mutateLogs();
     } catch (err) {
@@ -104,15 +114,20 @@ export function RemoteAgentScreen({
           Refresh
         </button>
       </div>
-      {statusError && <p className="text-sm text-destructive">{String(statusError)}</p>}
+      {statusError && (
+        <p className="text-sm text-destructive">{String(statusError)}</p>
+      )}
       {actionError && <p className="text-sm text-destructive">{actionError}</p>}
 
       {status?.running ? (
         <div className="flex flex-col gap-2 rounded-md border px-3 py-2 text-sm">
           <p>
-            Running <span className="font-mono">{status.agent}</span> (pid {status.pid})
+            Running <span className="font-mono">{status.agent}</span> (pid{" "}
+            {status.pid})
           </p>
-          <p className="text-xs text-muted-foreground">Started {status.started_at}</p>
+          <p className="text-xs text-muted-foreground">
+            Started {status.started_at}
+          </p>
           <button
             type="button"
             onClick={stopAgent}
@@ -153,14 +168,18 @@ export function RemoteAgentScreen({
       )}
 
       <p className="text-xs text-muted-foreground">
-        Sending additional input to a running agent is not supported over this connection
-        yet — interactive input requires a live terminal attach.
+        Sending additional input to a running agent is not supported over this
+        connection yet — interactive input requires a live terminal attach.
       </p>
 
       {logs && (
         <details open className="rounded-md border px-3 py-2 text-xs">
-          <summary className="cursor-pointer text-sm font-semibold">Logs</summary>
-          <pre className="max-h-96 overflow-y-auto whitespace-pre-wrap font-mono">{logs}</pre>
+          <summary className="cursor-pointer text-sm font-semibold">
+            Logs
+          </summary>
+          <pre className="max-h-96 overflow-y-auto whitespace-pre-wrap font-mono">
+            {logs}
+          </pre>
         </details>
       )}
     </section>

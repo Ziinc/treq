@@ -991,7 +991,16 @@ pub async fn exec_command(
         } => {
           exit_status = Some(status);
         }
-        ChannelMsg::Eof | ChannelMsg::Close => {
+        // `Eof` only signals the stdout/stderr streams are done; a real
+        // server (unlike the in-process mock this file's unit tests use)
+        // commonly sends it *before* the `ExitStatus` channel request, not
+        // after. Breaking here discarded that still-incoming exit status,
+        // intermittently reporting `exit_status: None` for a command that
+        // exited normally - caught by remote_ssh_server_it.rs's real-sshd
+        // tests, not by the mock server below. `Close` is the one message
+        // guaranteed to be last, so only it ends the loop.
+        ChannelMsg::Eof => {}
+        ChannelMsg::Close => {
           break;
         }
         _ => {}
