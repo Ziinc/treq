@@ -104,9 +104,7 @@ export const registerClientKey = async (
     request,
   );
   if (response.key) return response.key;
-  const match = response.keys?.find(
-    (key) => key.comment === request.comment,
-  );
+  const match = response.keys?.find((key) => key.comment === request.comment);
   const fallback = match ?? response.keys?.[0];
   if (!fallback) {
     throw new Error("register_client_key returned no key");

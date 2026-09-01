@@ -27,16 +27,11 @@ export function MobileShell() {
             No repository selected yet.
           </p>
         )}
-        {error && (
-          <p className="text-sm text-destructive">{String(error)}</p>
-        )}
+        {error && <p className="text-sm text-destructive">{String(error)}</p>}
         {repoPath && workspaces && (
           <ul className="flex flex-col gap-2">
             {workspaces.map((ws) => (
-              <li
-                key={ws.id}
-                className="rounded-md border px-3 py-2 text-sm"
-              >
+              <li key={ws.id} className="rounded-md border px-3 py-2 text-sm">
                 {ws.workspace_name}
               </li>
             ))}
