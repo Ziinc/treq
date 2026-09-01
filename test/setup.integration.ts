@@ -55,7 +55,7 @@ let pendingInvokes = 0;
 let onAllSettled: (() => void) | null = null;
 
 export function waitForPendingInvokes(
-  timeoutMs = 5_000,
+  timeoutMs = 4_000,
   quietMs = 75,
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs;
