@@ -5,7 +5,6 @@ import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import type {
   CachedDirectoryEntry,
-  ConflictCommentRecord,
   DiffCacheEntry,
   DirectoryEntry,
   FileBrowserPendingReview,
@@ -19,6 +18,7 @@ import type {
   Session,
   StashEntry,
 } from "./api-types";
+import type { ConflictCommentRecord } from "./api-types-review";
 
 export * from "./api-pr-status";
 
