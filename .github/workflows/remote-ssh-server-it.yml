@@ -1,0 +1,156 @@
+name: Remote SSH Server Integration
+
+# Real-`sshd` counterpart to the in-process mock-server unit tests in
+# `core::remote_ssh_transport`'s `mod tests`. Starts an actual OpenSSH
+# server as a job service (not a step-managed `docker run`, so the
+# container's lifecycle is owned by the Actions runner the same way any
+# other job service is) and runs `src-tauri/tests/remote_ssh_server_it.rs`
+# against it over a real network connection: real publickey auth, real
+# host-key presentation (accepted and rejected), real connection pooling,
+# real exec-channel argument round-tripping. See that test file's header
+# for exactly what this does and does not prove.
+
+defaults:
+  run:
+    shell: bash
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_PROFILE_TEST_DEBUG: 0
+
+on:
+  pull_request:
+    paths:
+      - "src-tauri/src/core/remote_ssh_transport.rs"
+      - "src-tauri/src/core/remote_control_plane.rs"
+      - "src-tauri/src/core/remote.rs"
+      - "src-tauri/tests/remote_ssh_server_it.rs"
+      - "src-tauri/tests/fixtures/remote_ssh_it/**"
+      - ".github/workflows/remote-ssh-server-it.yml"
+  workflow_dispatch:
+
+jobs:
+  remote-ssh-server-it:
+    name: Real sshd integration
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    services:
+      sshd:
+        image: linuxserver/openssh-server:latest
+        ports:
+          - 2222:2222
+        env:
+          PUID: "1000"
+          PGID: "1000"
+          TZ: "Etc/UTC"
+          USER_NAME: "treq"
+          # This is the public half of the throwaway keypair committed at
+          # src-tauri/tests/fixtures/remote_ssh_it/id_ed25519 - see the
+          # README next to it for why that is not a secret. `services:`
+          # containers start before any step runs, so this cannot be
+          # computed dynamically from a step output; it is pinned here and
+          # must be updated together if that key is ever rotated.
+          PUBLIC_KEY: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG6V1MZP6t97dWKMoMfmUOi/082R/d1r9CsNzIIvv5m1 treq-ci-remote-ssh-it (test-only, no real access)"
+          PASSWORD_ACCESS: "false"
+          # Needed only so the "install stub treq CLI" step below can place
+          # the stub on PATH at /usr/local/bin without also needing a
+          # root-owned image variant.
+          SUDO_ACCESS: "true"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restrict test private key permissions
+        run: chmod 600 src-tauri/tests/fixtures/remote_ssh_it/id_ed25519
+
+      - name: Wait for sshd to accept connections
+        run: |
+          for i in $(seq 1 60); do
+            if (exec 3<>"/dev/tcp/127.0.0.1/2222") 2>/dev/null; then
+              exec 3<&- 3>&-
+              echo "sshd is accepting connections"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "sshd never came up on 127.0.0.1:2222" >&2
+          exit 1
+
+      - name: Discover the server's real host key fingerprint
+        id: hostkey
+        run: |
+          set -euo pipefail
+          # Deliberately not hardcoded: this is what the test file's
+          # HostKeyVerifier is pinned against, so it must come from the
+          # live server on this run, the same way a real client's first-trust
+          # flow would derive it - never a value nobody actually measured.
+          fingerprint=$(ssh-keyscan -p 2222 -t ed25519 127.0.0.1 2>/dev/null \
+            | ssh-keygen -lf - -E sha256 | awk '{print $2}')
+          if [ -z "$fingerprint" ]; then
+            echo "failed to discover the server's host key fingerprint" >&2
+            exit 1
+          fi
+          echo "Discovered host key fingerprint: $fingerprint"
+          echo "fingerprint=$fingerprint" >> "$GITHUB_OUTPUT"
+
+      - name: Install stub treq CLI on the server
+        # exec_command always runs `treq <args>` on the far end (see
+        # build_remote_command_line in remote_ssh_transport.rs); this
+        # minimal container has no GTK/WebKit runtime to run the real
+        # desktop-linked `treq` binary, so a tiny stub stands in. It only
+        # proves argument passing, stdout/stderr separation, and exit
+        # codes survive a real SSH exec channel - see
+        # remote_ssh_server_it.rs's header for what it does not prove.
+        env:
+          SSH_KEY: src-tauri/tests/fixtures/remote_ssh_it/id_ed25519
+        run: |
+          set -euo pipefail
+          ssh_opts=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$SSH_KEY" -p 2222 treq@127.0.0.1)
+
+          ssh "${ssh_opts[@]}" 'cat > /tmp/treq-stub.sh' <<'STUB'
+          #!/bin/sh
+          case "$1" in
+            --version) echo "treq-ci-stub 0.0.0" ;;
+            ok) echo "stub-ok:$2"; exit 0 ;;
+            fail) echo "stub-fail:$2" >&2; exit 7 ;;
+            sleep) sleep "$2"; echo "stub-slept:$2" ;;
+            *) echo "unknown stub command: $*" >&2; exit 2 ;;
+          esac
+          STUB
+
+          ssh "${ssh_opts[@]}" \
+            'sudo mv /tmp/treq-stub.sh /usr/local/bin/treq && sudo chmod +x /usr/local/bin/treq'
+          ssh "${ssh_opts[@]}" 'treq --version'
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          workspaces: |
+            ./src-tauri -> target
+
+      # Needed to link `treq` at all (see ci.yml's identical step) - not
+      # needed to run it, since the real binary never leaves this runner.
+      - name: install dependencies (ubuntu only)
+        uses: awalsh128/cache-apt-pkgs-action@v1.6.1
+        with:
+          packages: libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          version: webkit-4.1-1
+          execute_install_scripts: true
+
+      - name: Run real-sshd integration tests
+        working-directory: src-tauri
+        env:
+          RUST_BACKTRACE: 1
+          TREQ_SSH_SERVER_IT: "1"
+          TREQ_SSH_IT_HOST: "127.0.0.1"
+          TREQ_SSH_IT_PORT: "2222"
+          TREQ_SSH_IT_USERNAME: "treq"
+          TREQ_SSH_IT_KEY_PATH: ${{ github.workspace }}/src-tauri/tests/fixtures/remote_ssh_it/id_ed25519
+          TREQ_SSH_IT_HOST_KEY_ALGORITHM: "ssh-ed25519"
+          TREQ_SSH_IT_HOST_KEY_FINGERPRINT: ${{ steps.hostkey.outputs.fingerprint }}
+        run: cargo test --locked --test remote_ssh_server_it -- --test-threads=1
