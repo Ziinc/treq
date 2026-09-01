@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 2 in progress. Treq ships as a Tauri application; mobile support extends the existing Tauri build to the Android and iOS targets instead of a separate native client. The app renders a distinct, touch-first mobile layout on those targets, backed by the same Rust core and Tauri IPC commands the desktop app uses. Phase 1 (build targets, mobile shell) is done; Phase 2 (device key registration, certificate issuance, SSH connectivity) has a working prototype path, gated on real platform-keystore storage before it can ship - see Phase 2 below.
+Phases 3 and 4 in progress. Treq ships as a Tauri application; mobile support extends the existing Tauri build to the Android and iOS targets instead of a separate native client. The app renders a distinct, touch-first mobile layout on those targets, backed by the same Rust core and Tauri IPC commands the desktop app uses. Phase 1 (build targets, mobile shell) is done; Phase 2 (device key registration, certificate issuance, SSH connectivity) has a working prototype path, gated on real platform-keystore storage before it can ship - see Phase 2 below. Phase 3 (read-only review) and Phase 4 (agent control) now have mobile UI wired to the typed `TreqCommandRequest` dispatch surface that already existed for the desktop remote-review work - see Phase 3/4 below for what's covered and what still needs on-device verification.
 
 ## Summary
 
@@ -143,22 +143,36 @@ Open items before this can ship as more than a prototype:
 - Neither this plugin nor the biometric gate has been exercised on a real device or emulator - this sandbox has no Android SDK/NDK or Xcode, so the mobile-only code path (`#[cfg(mobile)]`) has been reviewed and its shared helpers unit-tested, but not built or run for an actual mobile target. First real verification should happen on-device via `npm run tauri:android:dev` / `tauri:ios:dev`.
 - No UI path yet for the "biometrics not set up" error `require_biometrics` returns - `RemoteConnectPanel` currently surfaces it as the same generic connection error as everything else in the flow.
 
-### Phase 3: Read-only review
+### Phase 3: Read-only review (this delivery)
 
-- Instance and repository selection.
-- Workspace list and status.
-- Changed files and structured diffs.
-- Working-copy and parent file context.
-- Commit and conflict views.
-- Manual refresh and stale-state presentation.
+Done in this delivery, built on `remote_dispatch_over_ssh` / `TreqCommandRequest`, which already implemented every read variant needed here (`ListWorkspaces`, `InspectWorkspace`, `ListChanges`, `DiffFile`, `ReadFile`, `ListCommits`, `ListConflicts`, `WorkspaceChangeMarker`) but had no UI calling them:
 
-### Phase 4: Agent control
+- Instance and repository selection (`RemoteConnectPanel`, unchanged from Phase 2, now persists the last repository path so reconnecting doesn't require retyping it).
+- Workspace list and status (`RemoteRepoScreen`'s `WorkspaceListScreen`/`WorkspaceDetailScreen`).
+- Changed files and structured diffs (`DiffScreen`, via `DiffFile`).
+- Working-copy file context (`ReadFile` with `revision: "WorkingCopy"`, shown inline on the diff screen). Parent-revision context uses the same `ReadFile` request with `revision: "Parent"` and is wired the same way but not surfaced as a separate screen yet.
+- Commit and conflict views (`CommitsScreen`, `ConflictsScreen`).
+- Manual refresh per screen, plus a polled `WorkspaceChangeMarker` on the workspace detail screen so a stale op id is visible without a full data refetch.
 
-- Start an agent in a selected workspace.
-- Send input and respond to permission requests.
-- Read status and bounded logs.
-- Reattach after app suspension.
-- Stop a running agent.
+Open items before this can ship as more than a prototype:
+
+- No TypeScript types exist yet for the `TreqCommandRequest` JSON responses beyond what happens to match the existing local `api-types.ts` shapes (workspace/status/changes/diff/commit responses do line up with local desktop types today because both paths call the same Rust core functions - `ReadFile`'s `JjFileLines`, `ListCommits`' `JjLogCommit`, etc. - but that's convergence, not a contract; a future response shape change on either path could silently drift).
+- Not exercised against a real managed instance or device - this sandbox has no way to provision one, so the mobile-only screens have been reviewed and type/lint-checked but not run against live SSH-dispatched data. First real verification should happen the same way Phase 2 flagged: on-device via `npm run tauri:android:dev` / `tauri:ios:dev` against an actual instance.
+- No parent-file-context screen (only working-copy content is shown inline); no dedicated commit-diff or per-commit conflict detail view beyond the flat lists.
+
+### Phase 4: Agent control (this delivery)
+
+Done in this delivery, using the existing `AgentStart`/`AgentStatus`/`AgentStop`/`AgentLogs` `TreqCommandRequest` variants and the VM-local `core::agent_supervisor` they already dispatch to:
+
+- Start an agent in a selected workspace (`RemoteAgentScreen`, `AgentStart` routed through `dispatchMutationOverSsh` for verify-before-retry semantics).
+- Read status and bounded logs (`AgentStatus`/`AgentLogs`, polled every 4s while an agent is running).
+- Stop a running agent (`AgentStop`).
+- Reattach after app suspension: there is no distinct reattach request in the protocol - polling `AgentStatus`/`AgentLogs` again for the same `workspace` key after reconnecting is the reattach path, backed by `agent_supervisor`'s on-disk record surviving process/connection restarts.
+
+Explicitly not done, and not silently stubbed:
+
+- Sending input to a running agent. `core::agent_supervisor::send_agent_input` returns `not_implemented` today (the supervisor does not keep a child process's stdin open across separate CLI/exec invocations) - this is a real backend limitation, not missing UI, so the agent screen states this plainly instead of offering an input box that would always fail.
+- Structured permission-request handling. Neither `AgentStatusResult` nor the log output distinguishes "waiting on a permission prompt" from ordinary running/log state in the current protocol, so there is no permission-response UI yet; adding it needs a small protocol addition (a status field or event) before it can be built as more than a generic text box.
 
 ### Phase 5: Controlled mutations
 
