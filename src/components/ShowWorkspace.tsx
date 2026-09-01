@@ -58,7 +58,7 @@ import {
   getWorkspaceStatus,
   type JjLogResult,
   listCommits,
-  lsWorkspace,
+  lsWorkspaceWithStatus,
   pullWorkspaceFromRemote,
   pushWorkspaceToRemote,
   rebaseHomeRepoBranch,
@@ -318,7 +318,6 @@ export const ShowWorkspace = ({
     useState<HTMLDivElement | null>(null);
   const [scrollToCommitId, setScrollToCommitId] = useState<string | null>(null);
   const [showFileBrowserInCode, setShowFileBrowserInCode] = useState(false);
-  const [showUntouchedFiles, setShowUntouchedFiles] = useState(false);
 
   // `treq send --browser <url-or-file>` opens the Browser view directly,
   // instead of showing an attachment preview like image/text sends do.
@@ -349,7 +348,6 @@ export const ShowWorkspace = ({
     setBookmarkConflict(null);
     setConflictModalOpen(false);
     setChangedFiles(new Map());
-    setShowUntouchedFiles(false);
   }, [workspace?.id]);
 
   useEffect(() => {
@@ -533,7 +531,7 @@ export const ShowWorkspace = ({
     async () => {
       try {
         const [entries, readme] = await Promise.all([
-          lsWorkspace(effectiveRepoPath, workspace?.id ?? null),
+          lsWorkspaceWithStatus(effectiveRepoPath, workspace?.id ?? null),
           getWorkspaceReadme(effectiveRepoPath, workspace?.id ?? null),
         ]);
         return { entries, readme };
@@ -1227,15 +1225,7 @@ export const ShowWorkspace = ({
     mode: "plan" | "acceptEdits",
   ) => createAgentWithReview(reviewMarkdown, mode, "Page Review");
 
-  // Untouched top-level entries (no jj status: not conflicted, not committed,
-  // not a working-copy change) are hidden by default and revealed on click.
-  // Only collapse when status info is actually available for at least one
-  // entry — otherwise (e.g. status computation failed) show everything.
-  const touchedEntries = rootEntries.filter((entry) => entry.status);
-  const untouchedEntries = rootEntries.filter((entry) => !entry.status);
-  const canCollapseUntouched = touchedEntries.length > 0;
-  const displayedEntries =
-    showUntouchedFiles || !canCollapseUntouched ? rootEntries : touchedEntries;
+  const displayedEntries = rootEntries;
 
   const executionPanel = workingDirectory ? (
     <div className="flex flex-col h-full">
@@ -1511,9 +1501,7 @@ export const ShowWorkspace = ({
                             <span
                               className={cn(
                                 "flex-1 font-mono truncate",
-                                !entry.status &&
-                                  canCollapseUntouched &&
-                                  "text-muted-foreground/50",
+                                !entry.status && "text-muted-foreground/70",
                               )}
                               style={{ fontSize: `${fontSize}px` }}
                             >
@@ -1557,18 +1545,6 @@ export const ShowWorkspace = ({
                       <div className="px-4 py-8 text-center text-sm text-muted-foreground">
                         No files found
                       </div>
-                    )}
-                    {canCollapseUntouched && untouchedEntries.length > 0 && (
-                      <button
-                        type="button"
-                        data-testid="toggle-untouched-files"
-                        onClick={() => setShowUntouchedFiles((prev) => !prev)}
-                        className="w-full px-4 py-2 text-sm text-muted-foreground hover:bg-muted/60 transition text-left"
-                      >
-                        {showUntouchedFiles
-                          ? "Hide unchanged files"
-                          : `Show ${untouchedEntries.length} unchanged file${untouchedEntries.length === 1 ? "" : "s"}`}
-                      </button>
                     )}
                   </div>
 

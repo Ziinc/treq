@@ -1,7 +1,6 @@
 import type {
   BranchStatus,
   BookmarkConflictResolutionResult,
-  DirectoryEntry,
   EditorAppsResponse,
   GitRemoteInfo,
   PrCiStatus,
@@ -160,12 +159,6 @@ export const getWorkspaceChangedFiles = (
   enqueueJjExclusive(() =>
     invoke("get_workspace_changed_files", { repoPath, workspaceId }),
   );
-
-export const lsWorkspace = (
-  repoPath: string,
-  workspaceId: number | null,
-): Promise<DirectoryEntry[]> =>
-  invoke("ls_workspace", { repoPath, workspaceId });
 
 export const listGitignoredPathSuggestions = (
   repoPath: string,

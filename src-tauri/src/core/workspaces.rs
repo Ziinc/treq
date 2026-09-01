@@ -254,6 +254,27 @@ pub fn ls_workspace(
     &mut entries,
   );
 
+  entries.sort_by(|a, b| match (a.is_directory, b.is_directory) {
+    (true, false) => std::cmp::Ordering::Less,
+    (false, true) => std::cmp::Ordering::Greater,
+    _ => a.name.cmp(&b.name),
+  });
+
+  Ok(entries)
+}
+
+/// Like `ls_workspace`, but also annotates each entry with its jj file
+/// status (conflict/committed/working-copy) for the Code tab's file list.
+/// This is meaningfully more expensive (three extra jj computations), so it
+/// is kept separate from the plain `ls_workspace` used by callers (e.g.
+/// `get_workspace_readme`) that don't need status.
+pub fn ls_workspace_with_status(
+  repo_path: &str,
+  workspace_id: Option<i64>,
+) -> Result<Vec<WorkspaceEntry>, String> {
+  let workspace_root = resolve_workspace_root(repo_path, workspace_id)?;
+  let mut entries = ls_workspace(repo_path, workspace_id)?;
+
   let target_branch = match workspace_id {
     Some(id) => local_db::get_workspace_by_id(repo_path, id)
       .ok()
@@ -266,12 +287,6 @@ pub fn ls_workspace(
     &mut entries,
     target_branch.as_deref(),
   );
-
-  entries.sort_by(|a, b| match (a.is_directory, b.is_directory) {
-    (true, false) => std::cmp::Ordering::Less,
-    (false, true) => std::cmp::Ordering::Greater,
-    _ => a.name.cmp(&b.name),
-  });
 
   Ok(entries)
 }

@@ -163,16 +163,6 @@ pub fn list_directory(path: String) -> Result<Vec<DirectoryEntry>, String> {
 }
 
 #[tauri::command]
-pub fn list_workspace_files(
-  repo_path: String,
-  workspace_id: Option<i64>,
-  dir: String,
-  target_branch: Option<String>,
-) -> Result<Vec<DirectoryEntry>, String> {
-  crate::core::list_workspace_files(&repo_path, workspace_id, &dir, target_branch.as_deref())
-}
-
-#[tauri::command]
 pub fn list_directories_batch(paths: Vec<String>) -> Vec<DirectoryBatchResult> {
   let mut seen = std::collections::HashSet::new();
   paths
@@ -194,11 +184,11 @@ pub fn list_directories_batch(paths: Vec<String>) -> Vec<DirectoryBatchResult> {
 }
 
 #[tauri::command]
-pub fn ls_workspace(
+pub fn ls_workspace_with_status(
   repo_path: String,
   workspace_id: Option<i64>,
 ) -> Result<Vec<DirectoryEntry>, String> {
-  crate::core::ls_workspace(&repo_path, workspace_id)
+  crate::core::ls_workspace_with_status(&repo_path, workspace_id)
 }
 
 /// Suggests gitignored root paths for workspace create overlays (symlinks/copies).

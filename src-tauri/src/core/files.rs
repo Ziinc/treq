@@ -1,8 +1,6 @@
-use super::changes::resolve_workspace_dir;
 use crate::core::WorkspaceEntry;
 use crate::jj;
 use std::collections::HashSet;
-use std::path::Path;
 
 /// Status of a file (or, for a directory, the most severe status among its
 /// descendants) relative to the working copy and target branch.
@@ -24,66 +22,6 @@ impl FileStatus {
       FileStatus::Committed => "committed",
     }
   }
-}
-
-/// List the immediate children of `dir` (a directory inside the workspace),
-/// annotated with each entry's file status so the UI can highlight it.
-///
-/// A directory's status is the most severe status found among any of its
-/// descendants (conflict > working copy change > committed). Entries with no
-/// status are untouched since the merge base with `target_branch`.
-pub fn list_workspace_files(
-  repo_path: &str,
-  workspace_id: Option<i64>,
-  dir: &str,
-  target_branch: Option<&str>,
-) -> Result<Vec<WorkspaceEntry>, String> {
-  let workspace_path = resolve_workspace_dir(repo_path, workspace_id)?;
-
-  let base_path = Path::new(dir);
-  if !base_path.is_dir() {
-    return Err(format!("Directory does not exist: {}", dir));
-  }
-
-  let mut entries = Vec::new();
-  for entry in
-    std::fs::read_dir(base_path).map_err(|e| format!("Failed to read directory {}: {}", dir, e))?
-  {
-    let entry = entry.map_err(|e| e.to_string())?;
-    let name = entry.file_name().to_string_lossy().to_string();
-    if name == ".jj" || name == ".git" || name == ".treq" {
-      continue;
-    }
-    let entry_path = entry.path();
-    let is_directory = entry_path.is_dir();
-    let path_str = entry_path.to_string_lossy().to_string();
-
-    let modified_at = entry
-      .metadata()
-      .ok()
-      .and_then(|meta| meta.modified().ok())
-      .map(|modified| chrono::DateTime::<chrono::Utc>::from(modified).to_rfc3339());
-
-    entries.push(WorkspaceEntry {
-      name,
-      path: path_str,
-      is_directory,
-      modified_at,
-      submodule_pin: None,
-      submodule_synced: None,
-      status: None,
-    });
-  }
-
-  annotate_entry_statuses(&workspace_path, &mut entries, target_branch);
-
-  entries.sort_by(|a, b| match (a.is_directory, b.is_directory) {
-    (true, false) => std::cmp::Ordering::Less,
-    (false, true) => std::cmp::Ordering::Greater,
-    _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
-  });
-
-  Ok(entries)
 }
 
 /// Populate `status` on each entry (file or directory) in place, based on
