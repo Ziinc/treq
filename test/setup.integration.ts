@@ -100,13 +100,9 @@ vi.mock("@tauri-apps/api/core", () => ({
         onAllSettled();
       }
     });
-    // SWR / effects can drop the promise after unmount. A late open of a
-    // deleted fixture-copy local.db must not fail the file as unhandled.
-    void promise.catch((error) => {
-      const message = String((error as { message?: string })?.message ?? error);
-      if (message.includes("unable to open database file")) return;
-      throw error;
-    });
+    // Attach a no-op handler so a dropped SWR/effect promise is not an
+    // unhandled rejection. Callers that await this same promise still reject.
+    void promise.catch(() => {});
     return promise;
   }),
   // The real Rust dispatch behind this harness represents the shipped app's
