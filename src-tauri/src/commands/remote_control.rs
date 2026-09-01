@@ -15,11 +15,13 @@
 //! transport. Neither is wired into any component yet — that is Phase 6's
 //! job — but both are real, callable, and tested.
 
+use crate::core::feature_preview::PreviewFeature;
 use crate::core::remote::{MutationRetryOutcome, RemoteCommandError, TreqCommandRequest};
 use crate::core::remote_control_plane::SshEndpoint;
 use crate::core::remote_ssh_transport::{
   CancellationToken, CutoffReason, ExecLimits, SshConnectionPool, SshTransportMetricsSnapshot,
 };
+use crate::AppState;
 use serde::Serialize;
 use std::sync::Arc;
 use tauri::{Emitter, State};
@@ -55,7 +57,9 @@ pub async fn remote_dispatch_over_ssh(
   endpoint: SshEndpoint,
   request: TreqCommandRequest,
   state: State<'_, RemoteExecState>,
+  app_state: State<'_, AppState>,
 ) -> Result<serde_json::Value, String> {
+  crate::commands::feature_preview::require(&app_state, PreviewFeature::RemoteSsh)?;
   let pool = state.0.clone();
   let cancellation = CancellationToken::new();
   crate::core::remote::execute_remote_command::<serde_json::Value>(
@@ -198,7 +202,9 @@ pub async fn remote_dispatch_mutation_over_ssh(
   endpoint: SshEndpoint,
   request: TreqCommandRequest,
   state: State<'_, RemoteExecState>,
+  app_state: State<'_, AppState>,
 ) -> Result<MutationDispatchResult, String> {
+  crate::commands::feature_preview::require(&app_state, PreviewFeature::RemoteSsh)?;
   let pool = state.0.clone();
   let cancellation = CancellationToken::new();
   let metrics = pool.metrics.clone();

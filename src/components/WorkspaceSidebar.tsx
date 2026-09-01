@@ -30,6 +30,7 @@ import {
   getEntireStack,
 } from "../lib/workspace-tree";
 import { isWorkspaceHidden } from "../lib/workspace-utils";
+import { usePreviewFeature } from "../stores/featurePreviewStore";
 import { HomeRepoSidebarRow } from "./HomeRepoSidebarRow";
 import { RenameWorkspaceDialog } from "./RenameWorkspaceDialog";
 import { TerminalSessionsSidebar } from "./TerminalSessionsSidebar";
@@ -134,6 +135,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
   onCreateShellTerminal,
   onDropChangeFiles,
 }) => {
+  const workspaceScheduling = usePreviewFeature("workspaceScheduling");
   const { data: workspaces = [], isLoading: workspacesPending } = useSWR(
     repoPath ? ["workspaces", repoPath] : null,
     () => getWorkspaces(repoPath || ""),
@@ -202,12 +204,12 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
   const [showHidden, setShowHidden] = useState(false);
 
   const visibleStatuses = (() => {
-    if (showHidden) return statuses;
+    if (!workspaceScheduling || showHidden) return statuses;
     return statuses.filter((status) => !isWorkspaceHidden(status.current));
   })();
-  const hiddenCount = statuses.filter((status) =>
-    isWorkspaceHidden(status.current),
-  ).length;
+  const hiddenCount = workspaceScheduling
+    ? statuses.filter((status) => isWorkspaceHidden(status.current)).length
+    : 0;
 
   const flattenedNodes = (() => {
     const isMergedBranch = (branchName: string) =>
@@ -380,6 +382,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
             <SidebarGroupLabel className="uppercase tracking-widest">
               Workspaces
             </SidebarGroupLabel>
+            {workspaceScheduling && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <SidebarGroupAction
@@ -417,6 +420,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
                     : "Show hidden workspaces"}
               </TooltipContent>
             </Tooltip>
+            )}
             <SidebarGroupContent>
               <DragDropContext onDragEnd={handleDragEnd}>
                 <Droppable droppableId="sidebar-root" isCombineEnabled>

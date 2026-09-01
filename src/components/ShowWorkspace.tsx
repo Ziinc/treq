@@ -70,6 +70,7 @@ import {
   type WorkspaceBookmarkConflict,
 } from "../lib/api";
 import { FEATURES } from "../lib/features";
+import { usePreviewFeature } from "../stores/featurePreviewStore";
 import { getStatusBgColor } from "../lib/git-status-colors";
 import {
   countUniqueReviewChangePaths,
@@ -233,6 +234,7 @@ export const ShowWorkspace = ({
   const effectiveRepoPath = workspace?.repo_path || repositoryPath || "";
 
   const { addToast } = useToast();
+  const workspaceScheduling = usePreviewFeature("workspaceScheduling");
   const { fontSize } = useTerminalSettingsStore();
 
   const { data: remoteInfo } = useGitRemoteInfo(effectiveRepoPath || undefined);
@@ -1436,17 +1438,20 @@ export const ShowWorkspace = ({
                       workspace={workspace}
                       defaultBranch={defaultTargetBranch}
                       onSelectWorkspace={onNavigateToWorkspace}
-                      onScheduleStack={(stackWorkspaces) =>
-                        setScheduleDialog({
-                          mode: "stack",
-                          workspaceIds: stackWorkspaces.map((ws) => ws.id),
-                          currentHiddenUntil: stackWorkspaces.find((ws) =>
-                            isWorkspaceHidden(ws),
-                          )?.hidden_until,
-                          canRemoveSchedule: stackWorkspaces.some((ws) =>
-                            isWorkspaceHidden(ws),
-                          ),
-                        })
+                      onScheduleStack={
+                        workspaceScheduling
+                          ? (stackWorkspaces) =>
+                              setScheduleDialog({
+                                mode: "stack",
+                                workspaceIds: stackWorkspaces.map((ws) => ws.id),
+                                currentHiddenUntil: stackWorkspaces.find((ws) =>
+                                  isWorkspaceHidden(ws),
+                                )?.hidden_until,
+                                canRemoveSchedule: stackWorkspaces.some((ws) =>
+                                  isWorkspaceHidden(ws),
+                                ),
+                              })
+                          : undefined
                       }
                     />
                   )}
@@ -1765,7 +1770,7 @@ export const ShowWorkspace = ({
                   </Tooltip>
                 </TooltipProvider>
               )}
-              {workspace && (
+              {workspace && workspaceScheduling && (
                 <TooltipProvider delayDuration={200}>
                   <Tooltip>
                     <TooltipTrigger asChild>

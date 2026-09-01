@@ -4,6 +4,12 @@ sidebar_position: 5
 
 # Remote SSH Workspaces
 
+:::note[Work in progress]
+
+Remote SSH is a Feature Preview. Turn **Remote SSH** on in Settings → Feature Preview. Dev builds start with the flag on. Release builds follow the shipped default until you change the switch.
+
+:::
+
 Treq can connect to a remote development node through your existing SSH configuration so you can prepare a repository directory, clone a repository when needed, validate the remote Treq installation, inspect repository identity through the remote CLI, and run remote terminal or agent sessions from the client UI.
 
 Remote SSH mode follows a **remote-control** model: the desktop UI stays on your local machine, while the remote node remains the source of truth for repository files, `.treq` metadata, Jujutsu and Git state, workspaces, commits, conflicts, terminals, and coding-agent processes.

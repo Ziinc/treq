@@ -1,3 +1,56 @@
 import pkg from "../../package.json";
 
 export const FEATURES = pkg.featureFlags;
+
+export const PREVIEW_FEATURE_IDS = [
+  "skillsInstallation",
+  "workspaceScheduling",
+  "remoteSsh",
+] as const;
+
+export type PreviewFeatureId = (typeof PREVIEW_FEATURE_IDS)[number];
+
+export type PreviewFeature = {
+  id: PreviewFeatureId;
+  title: string;
+  docsPath: string;
+};
+
+export const PREVIEW_FEATURES: readonly PreviewFeature[] = [
+  {
+    id: "skillsInstallation",
+    title: "Skills installation",
+    docsPath: "/docs/how-to/installing-skills",
+  },
+  {
+    id: "workspaceScheduling",
+    title: "Workspace scheduling",
+    docsPath: "/docs/how-to/scheduling-workspaces",
+  },
+  {
+    id: "remoteSsh",
+    title: "Remote SSH",
+    docsPath: "/docs/how-to/remote-ssh-workspaces",
+  },
+];
+
+export function previewSettingKey(id: PreviewFeatureId): string {
+  return `feature_preview.${id}`;
+}
+
+/** Startup default: Vite dev (and Vitest) turn every preview flag on. */
+export function previewFeatureDefault(id: PreviewFeatureId): boolean {
+  if (import.meta.env.DEV || import.meta.env.MODE === "test") {
+    return true;
+  }
+  return FEATURES[id] === true;
+}
+
+export function parsePreviewSetting(
+  raw: string | null | undefined,
+  id: PreviewFeatureId,
+): boolean {
+  if (raw === "true") return true;
+  if (raw === "false") return false;
+  return previewFeatureDefault(id);
+}

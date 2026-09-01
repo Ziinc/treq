@@ -47,6 +47,7 @@ const sidebars: SidebarsConfig = {
         'how-to/creating-and-viewing-pull-requests',
         'how-to/using-the-merge-queue',
         'how-to/installing-skills',
+        'how-to/scheduling-workspaces',
       ],
     },
     {

@@ -6,7 +6,9 @@ sidebar_position: 9
 
 _Browse the Treq skill registry, verify the download, and choose where each skill lives._
 
-Open **Settings** and select the **Skills** tab. Treq loads the public catalog from [treq.dev/skills](https://treq.dev/skills). Search by name or description. **Install level** next to search limits the list to skills already installed for the application, the current repository, or both.
+Open **Settings** and select the **Skills** tab. That tab is present when **Skills installation** is on under Settings → Feature Preview.
+
+Treq loads the public catalog from [treq.dev/skills](https://treq.dev/skills). Search by name or description. **Install level** next to search limits the list to skills already installed for the application, the current repository, or both.
 
 ## Install a skill
 

@@ -8,6 +8,7 @@ pub mod changes;
 pub mod checks;
 pub mod checks_logs;
 pub mod commits;
+pub mod feature_preview;
 pub mod files;
 pub mod remote;
 pub mod remote_bootstrap;

@@ -379,10 +379,15 @@ pub async fn update_workspace(
 
 #[tauri::command]
 pub async fn schedule_workspaces(
+  state: State<'_, AppState>,
   repo_path: String,
   workspace_ids: Vec<i64>,
   hidden_until: Option<String>,
 ) -> Result<Vec<Workspace>, String> {
+  crate::commands::feature_preview::require(
+    &state,
+    crate::core::feature_preview::PreviewFeature::WorkspaceScheduling,
+  )?;
   tauri::async_runtime::spawn_blocking(move || {
     crate::core::schedule_workspaces(&repo_path, &workspace_ids, hidden_until.as_deref())
   })

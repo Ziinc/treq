@@ -26,6 +26,7 @@ import {
   isChangeFilesDrag,
   type ChangeFilesMoveRequest,
 } from "../lib/change-file-drag";
+import { usePreviewFeature } from "../stores/featurePreviewStore";
 import { Button } from "./ui/button";
 import { SidebarMenuItem } from "./ui/sidebar";
 import { useToast } from "./ui/toast";
@@ -137,6 +138,7 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
 }) => {
   const workspace = node.status.current;
   const { addToast } = useToast();
+  const workspaceScheduling = usePreviewFeature("workspaceScheduling");
   const isSelected =
     selectedWorkspaceIds?.has(workspace.id) ||
     selectedWorkspaceId === workspace.id;
@@ -263,7 +265,7 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                       >
                         {workspaceTitle}
                       </span>
-                      {isHidden && (
+                      {workspaceScheduling && isHidden && (
                         <CalendarClock
                           className="w-3 h-3 text-muted-foreground shrink-0 mr-1"
                           aria-label="Scheduled hidden"
@@ -392,7 +394,7 @@ export const WorkspaceSidebarItem: React.FC<WorkspaceSidebarItemProps> = ({
                   <Pencil className="w-4 h-4 mr-2" />
                   Rename Workspace
                 </ContextMenuItem>
-                {repoPath && isWorkspaceHidden(workspace) && (
+                {workspaceScheduling && repoPath && isWorkspaceHidden(workspace) && (
                   <ContextMenuItem
                     data-testid="remove-schedule-menu-item"
                     onClick={() => {

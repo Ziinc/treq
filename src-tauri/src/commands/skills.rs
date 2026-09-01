@@ -54,15 +54,27 @@ async fn download_skill_files(entry: &SkillCatalogEntry) -> Result<Vec<(String, 
 
 #[tauri::command]
 pub async fn list_skill_catalog(
+  state: State<'_, AppState>,
   repo_path: Option<String>,
   catalog_url: Option<String>,
 ) -> Result<SkillCatalogView, String> {
+  crate::commands::feature_preview::require(
+    &state,
+    crate::core::feature_preview::PreviewFeature::SkillsInstallation,
+  )?;
   let catalog = load_catalog(catalog_url.as_deref()).await?;
   merge_catalog_with_installed(catalog, repo_path.as_deref())
 }
 
 #[tauri::command]
-pub fn list_installed_skills(repo_path: Option<String>) -> Result<Vec<InstalledSkill>, String> {
+pub fn list_installed_skills(
+  state: State<'_, AppState>,
+  repo_path: Option<String>,
+) -> Result<Vec<InstalledSkill>, String> {
+  crate::commands::feature_preview::require(
+    &state,
+    crate::core::feature_preview::PreviewFeature::SkillsInstallation,
+  )?;
   crate::core::skills::list_installed_skills(repo_path.as_deref())
 }
 
@@ -74,6 +86,10 @@ pub async fn install_skill(
   repo_path: Option<String>,
   catalog_url: Option<String>,
 ) -> Result<InstalledSkill, String> {
+  crate::commands::feature_preview::require(
+    &state,
+    crate::core::feature_preview::PreviewFeature::SkillsInstallation,
+  )?;
   let catalog = load_catalog(catalog_url.as_deref()).await?;
   let entry = catalog
     .skills
@@ -93,6 +109,10 @@ pub fn uninstall_skill(
   skill_id: String,
   repo_path: Option<String>,
 ) -> Result<(), String> {
+  crate::commands::feature_preview::require(
+    &state,
+    crate::core::feature_preview::PreviewFeature::SkillsInstallation,
+  )?;
   crate::core::skills::uninstall_skill(&skill_id, repo_path.as_deref())?;
   let db = state.db.lock().unwrap();
   persist_app_index_setting(&db)?;
@@ -106,6 +126,10 @@ pub fn set_skill_install_scope(
   scope: SkillInstallScope,
   repo_path: Option<String>,
 ) -> Result<InstalledSkill, String> {
+  crate::commands::feature_preview::require(
+    &state,
+    crate::core::feature_preview::PreviewFeature::SkillsInstallation,
+  )?;
   let installed =
     crate::core::skills::set_skill_install_scope(&skill_id, scope, repo_path.as_deref())?;
   let db = state.db.lock().unwrap();

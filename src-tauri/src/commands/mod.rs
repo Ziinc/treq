@@ -7,6 +7,7 @@ pub mod browser_review;
 pub mod browser_webview;
 pub mod checks;
 pub mod commits;
+pub mod feature_preview;
 pub mod file_browser_review;
 pub mod file_view;
 pub mod file_watcher;

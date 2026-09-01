@@ -9,6 +9,7 @@ import {
   useTerminalSettingsStore,
 } from "./terminalSettingsStore";
 import { type Theme, useThemeStore } from "./themeStore";
+import { useFeaturePreviewStore } from "./featurePreviewStore";
 import {
   MAX_SIDEBAR_WIDTH,
   MIN_SIDEBAR_WIDTH,
@@ -66,4 +67,6 @@ export function applySettingsRecord(
   if (sidebarWidth != null) {
     useSidebarWidthStore.getState().hydrateWidth(sidebarWidth);
   }
+
+  useFeaturePreviewStore.getState().hydrateFlags(settings);
 }

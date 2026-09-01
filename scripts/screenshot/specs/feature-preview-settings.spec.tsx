@@ -1,0 +1,26 @@
+import * as React from "react";
+import { expect, it } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { createTestRepo, openRepo } from "../../../test/utils";
+import { render, screen } from "../../../test/test-utils";
+import { Dashboard } from "../../../src/components/Dashboard";
+import { captureDocument } from "../capture";
+
+it("captures the Feature Preview settings tab", async () => {
+  const { repoPath } = createTestRepo(false);
+  openRepo(repoPath);
+  const user = userEvent.setup();
+  render(<Dashboard />);
+
+  await user.click(await screen.findByLabelText("Settings"));
+  await user.click(await screen.findByRole("tab", { name: /feature preview/i }));
+  await screen.findByTestId("feature-preview-settings");
+
+  await captureDocument(document, {
+    name: "feature-preview-settings",
+    expectations: [
+      "Settings shows a Feature Preview tab with Skills installation, Workspace scheduling, and Remote SSH.",
+      "Each feature title is a documentation link and has an on/off switch.",
+    ],
+  });
+});

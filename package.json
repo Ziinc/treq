@@ -7,7 +7,10 @@
     "pro": true,
     "stripePayments": false,
     "emailSignup": false,
-    "mergeQueue": true
+    "mergeQueue": true,
+    "skillsInstallation": false,
+    "workspaceScheduling": false,
+    "remoteSsh": false
   },
   "env": {
     "dev": {
