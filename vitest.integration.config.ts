@@ -38,8 +38,8 @@ export default defineConfig({
     pool: "forks",
     fileParallelism: false,
     maxWorkers: 1,
-    testTimeout: 15_000,
-    hookTimeout: 15_000,
+    testTimeout: 5_000,
+    hookTimeout: 5_000,
     env: {
       LD_LIBRARY_PATH: process.env.LD_LIBRARY_PATH
         ? `${duckdbLibDir}:${process.env.LD_LIBRARY_PATH}`
