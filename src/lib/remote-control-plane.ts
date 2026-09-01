@@ -9,6 +9,7 @@
 
 import { supabase } from "./supabase";
 import type {
+  ClientKeyResponse,
   DeleteInstanceRequest,
   InstanceStatusResponse,
   IssueCertificateRequest,
@@ -18,6 +19,8 @@ import type {
   OperationResponse,
   ProvisionInstanceRequest,
   RegionCode,
+  RegisterClientKeyRequest,
+  RegisterClientKeyResponse,
   ReprovisionInstanceRequest,
   RevokeClientKeyRequest,
   SizePreset,
@@ -80,18 +83,34 @@ export const deleteInstance = (
 ): Promise<OperationResponse> => invokeRemoteInstance("delete", request);
 
 // -- SSH trust and authentication (remote-ssh-trust) ------------------------
-//
-// Only `revoke_client_key` is wired to UI today (the managed-VM lifecycle
-// panel's "Revoke key" action). Registering a new client key, issuing a
-// certificate, and re-running a host-key scan are real edge-function actions
-// (see `supabase/functions/remote-ssh-trust`) that do not yet have a calling
-// UI surface - they belong with the certificate-issuance step of "Managed VM
-// certificate flow", which Phase 6 did not build a screen for.
 
 export const revokeClientKey = (
   request: RevokeClientKeyRequest,
 ): Promise<OperationResponse> =>
   invokeRemoteTrust("revoke_client_key", request);
+
+/**
+ * Registers a device's public key with the control plane, normalizing the
+ * edge function's two response shapes (a freshly registered `key`, or a
+ * `keys` list on an idempotent replay) down to the single matching key.
+ * Used by the mobile connectivity flow (mobile PRD, Phase 2) to register the
+ * key `ensureMobileDeviceKey` generates.
+ */
+export const registerClientKey = async (
+  request: RegisterClientKeyRequest,
+): Promise<ClientKeyResponse> => {
+  const response = await invokeRemoteTrust<RegisterClientKeyResponse>(
+    "register_client_key",
+    request,
+  );
+  if (response.key) return response.key;
+  const match = response.keys?.find((key) => key.comment === request.comment);
+  const fallback = match ?? response.keys?.[0];
+  if (!fallback) {
+    throw new Error("register_client_key returned no key");
+  }
+  return fallback;
+};
 
 // Issues (or, called again for the same instance/key, silently renews) a
 // short-lived certificate. See `src/lib/remote-cert-lifecycle.ts`, which

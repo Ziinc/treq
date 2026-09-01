@@ -1,4 +1,5 @@
 use crate::core::remote::{self, RemoteReadiness, RemoteRepoProbe, RemoteRepository, SshHost};
+use crate::core::remote_device_key::{self, DeviceKeyInfo};
 use crate::core::remote_local_keys::{self, LocalSshIdentity};
 
 #[tauri::command]
@@ -42,6 +43,14 @@ pub async fn remote_clone_repo(
 #[tauri::command]
 pub fn remote_open_repo(host: String, path: String) -> Result<RemoteRepository, String> {
   remote::open_repo(&host, &path)
+}
+
+/// Ensures this device has an ed25519 keypair for control-plane
+/// registration and certificate-based SSH auth, generating one on first
+/// use. Returns only public material - see `core::remote_device_key`.
+#[tauri::command]
+pub fn ensure_mobile_device_key(app: tauri::AppHandle) -> Result<DeviceKeyInfo, String> {
+  remote_device_key::ensure_device_key(&app)
 }
 
 #[cfg(test)]
