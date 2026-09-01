@@ -16,6 +16,10 @@ pub async fn linear_list_teams(
   state: State<'_, AppState>,
   repo_path: String,
 ) -> Result<Vec<LinearTeam>, String> {
+  crate::commands::feature_preview::require(
+    &state,
+    crate::core::feature_preview::PreviewFeature::LinearIntegration,
+  )?;
   let client_source = {
     let db = state.db.lock().unwrap();
     crate::linear::resolve_linear_client(&repo_path, &db)?
@@ -35,6 +39,10 @@ pub async fn linear_list_issues(
   repo_path: String,
   team_filter: Option<String>,
 ) -> Result<Vec<LinearIssue>, String> {
+  crate::commands::feature_preview::require(
+    &state,
+    crate::core::feature_preview::PreviewFeature::LinearIntegration,
+  )?;
   let client_source = {
     let db = state.db.lock().unwrap();
     crate::linear::resolve_linear_client(&repo_path, &db)?
@@ -57,6 +65,10 @@ pub async fn linear_open_or_create_workspace_from_issue(
   issue_id: String,
   include_subissues: bool,
 ) -> Result<Vec<LinearKickoffResult>, String> {
+  crate::commands::feature_preview::require(
+    &state,
+    crate::core::feature_preview::PreviewFeature::LinearIntegration,
+  )?;
   let client_source = {
     let db = state.db.lock().unwrap();
     crate::linear::resolve_linear_client(&repo_path, &db)?
@@ -183,7 +195,14 @@ pub async fn open_or_create_workspace_from_linear_issue(
 }
 
 #[tauri::command]
-pub fn linear_start_auto_kickoff_polling(repo_path: String) -> Result<(), String> {
+pub fn linear_start_auto_kickoff_polling(
+  state: State<'_, AppState>,
+  repo_path: String,
+) -> Result<(), String> {
+  crate::commands::feature_preview::require(
+    &state,
+    crate::core::feature_preview::PreviewFeature::LinearIntegration,
+  )?;
   crate::linear::kickoff_poller().watch_repo(&repo_path);
   Ok(())
 }

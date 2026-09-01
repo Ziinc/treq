@@ -6,6 +6,7 @@ export const PREVIEW_FEATURE_IDS = [
   "skillsInstallation",
   "workspaceScheduling",
   "remoteSsh",
+  "linearIntegration",
 ] as const;
 
 export type PreviewFeatureId = (typeof PREVIEW_FEATURE_IDS)[number];
@@ -31,6 +32,11 @@ export const PREVIEW_FEATURES: readonly PreviewFeature[] = [
     id: "remoteSsh",
     title: "Remote SSH",
     docsPath: "/docs/how-to/remote-ssh-workspaces",
+  },
+  {
+    id: "linearIntegration",
+    title: "Linear integration",
+    docsPath: "/docs/concepts/linear-integration",
   },
 ];
 

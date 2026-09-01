@@ -494,6 +494,13 @@ fn poll_linear_kickoff(repo_path: &str) -> Result<(), String> {
   let db = crate::db::Database::new(std::path::PathBuf::from(db_path))
     .map_err(|e| format!("Failed to open database: {e}"))?;
 
+  if !crate::core::feature_preview::is_enabled(
+    &db,
+    crate::core::feature_preview::PreviewFeature::LinearIntegration,
+  ) {
+    return Ok(());
+  }
+
   let label = db
     .get_repo_setting(repo_path, "linear_auto_kickoff_label")
     .map_err(|e| format!("Failed to read linear_auto_kickoff_label: {e}"))?;

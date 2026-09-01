@@ -237,6 +237,7 @@ export const ShowWorkspace = ({
 
   const { addToast } = useToast();
   const workspaceScheduling = usePreviewFeature("workspaceScheduling");
+  const linearIntegration = usePreviewFeature("linearIntegration");
   const { fontSize } = useTerminalSettingsStore();
 
   const { data: remoteInfo } = useGitRemoteInfo(effectiveRepoPath || undefined);
@@ -1735,6 +1736,7 @@ export const ShowWorkspace = ({
                 </span>
               )}
               {workspace &&
+                linearIntegration &&
                 workspaceMetadata?.linear_issue_key &&
                 workspaceMetadata?.linear_issue_url && (
                   <button

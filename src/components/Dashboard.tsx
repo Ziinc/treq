@@ -210,6 +210,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [viewMode, setViewMode] = useState<ViewMode>(initialViewMode);
   const [location, navigate] = useLocation();
   const remoteSshEnabled = usePreviewFeature("remoteSsh");
+  const linearIntegrationEnabled = usePreviewFeature("linearIntegration");
   const previousViewModeRef = useRef<ViewMode>(
     initialViewMode === "settings" ? "show-workspace" : initialViewMode,
   );
@@ -2071,7 +2072,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         onCreateShellTerminal={handleCreateShellTerminalFromSidebar}
         onDropChangeFiles={handleDropChangeFiles}
         onOpenGitHub={openGitHub}
-        onOpenLinear={openLinear}
+        onOpenLinear={linearIntegrationEnabled ? openLinear : undefined}
         onOpenArtifacts={openArtifacts}
         currentPage={
           viewMode === "settings"
@@ -2268,7 +2269,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           )}
 
           {/* Linear Panel */}
-          {viewMode === "linear" && (
+          {viewMode === "linear" && linearIntegrationEnabled && (
             <LinearPanel
               repoPath={repoPath}
               onOpenWorkspace={async (workspaceId) => {

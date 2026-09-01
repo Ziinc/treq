@@ -134,6 +134,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
   onDropChangeFiles,
 }) => {
   const workspaceScheduling = usePreviewFeature("workspaceScheduling");
+  const linearIntegration = usePreviewFeature("linearIntegration");
   const { data: workspaces = [], isLoading: workspacesPending } = useSWR(
     repoPath ? ["workspaces", repoPath] : null,
     () => getWorkspaces(repoPath || ""),
@@ -365,7 +366,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
                   />
                 )}
 
-                {onOpenLinear && (
+                {onOpenLinear && linearIntegration && (
                   <WorkspaceSidebarPanelButton
                     page="linear"
                     currentPage={currentPage}

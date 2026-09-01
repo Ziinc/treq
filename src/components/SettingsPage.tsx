@@ -73,6 +73,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const zoom = useZoomSettingsStore((s) => s.zoom);
   const setZoom = useZoomSettingsStore((s) => s.setZoom);
   const skillsInstallation = usePreviewFeature("skillsInstallation");
+  const linearIntegration = usePreviewFeature("linearIntegration");
 
   useEffect(() => {
     if (!skillsInstallation && currentTab === "skills") {
@@ -415,7 +416,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                 <TabsContent value="integrations">
                   <div className="space-y-12">
                     <GitHubIntegrationSettings repoPath={repoPath} />
-                    <LinearIntegrationSettings repoPath={repoPath} />
+                    {linearIntegration && (
+                      <LinearIntegrationSettings repoPath={repoPath} />
+                    )}
                   </div>
                 </TabsContent>
                 {skillsInstallation && (
