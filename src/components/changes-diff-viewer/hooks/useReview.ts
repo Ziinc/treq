@@ -115,8 +115,14 @@ export function useReview({
     if (hydratedReviewKeyRef.current === pendingReviewKey) return;
     hydratedReviewKeyRef.current = pendingReviewKey;
     const loaded = pendingReview?.comments ?? [];
-    if (loaded.length === 0) return;
-    setComments(loaded.map(toLocalLineComment));
+    const loadedConflictComments = pendingReview?.conflict_comments ?? [];
+    if (loaded.length === 0 && loadedConflictComments.length === 0) return;
+    if (loaded.length > 0) setComments(loaded.map(toLocalLineComment));
+    if (loadedConflictComments.length > 0) {
+      setConflictComments(
+        new Map(loadedConflictComments.map((c) => [c.conflictId, c])),
+      );
+    }
     if (pendingReview?.summary_text)
       setFinalReviewComment(pendingReview.summary_text);
     setHasUserAddedComments(true);
@@ -125,19 +131,25 @@ export function useReview({
     pendingReviewLoading,
     pendingReviewKey,
     setComments,
+    setConflictComments,
     setFinalReviewComment,
     setHasUserAddedComments,
   ]);
 
   const debouncedComments = useDebounce(comments, 500);
   const debouncedSummary = useDebounce(finalReviewComment, 500);
+  const debouncedConflictComments = useDebounce(conflictComments, 500);
 
   const persistSuppressedRef = useRef(false);
   const persistGenRef = useRef(0);
 
   useEffect(() => {
     if (!repoPath || workspaceId === undefined) return;
-    if (comments.length > 0 || finalReviewComment.trim()) {
+    if (
+      comments.length > 0 ||
+      finalReviewComment.trim() ||
+      conflictComments.size > 0
+    ) {
       persistSuppressedRef.current = false;
     }
     if (persistSuppressedRef.current) return;
@@ -147,6 +159,8 @@ export function useReview({
         liveSummary: finalReviewComment,
         debouncedCommentCount: debouncedComments.length,
         debouncedSummary,
+        liveConflictCommentCount: conflictComments.size,
+        debouncedConflictCommentCount: debouncedConflictComments.size,
       })
     ) {
       return;
@@ -158,6 +172,7 @@ export function useReview({
       debouncedComments.map(toApiLineComment),
       undefined,
       debouncedSummary.trim() || undefined,
+      Array.from(debouncedConflictComments.values()),
     ).then(async () => {
       if (persistSuppressedRef.current || gen !== persistGenRef.current) {
         await clearPendingReview(repoPath, workspaceId);
@@ -169,8 +184,10 @@ export function useReview({
     workspaceId,
     comments.length,
     finalReviewComment,
+    conflictComments.size,
     debouncedComments,
     debouncedSummary,
+    debouncedConflictComments,
   ]);
 
   useEffect(() => {

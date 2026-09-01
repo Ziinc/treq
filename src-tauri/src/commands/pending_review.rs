@@ -15,6 +15,7 @@ pub fn save_pending_review(
   comments: String,
   viewed_files: Option<String>,
   summary_text: Option<String>,
+  conflict_comments: Option<String>,
 ) -> Result<i64, String> {
   local_db::save_pending_review(
     &repo_path,
@@ -22,6 +23,7 @@ pub fn save_pending_review(
     &comments,
     viewed_files.as_deref(),
     summary_text.as_deref(),
+    conflict_comments.as_deref(),
   )
 }
 

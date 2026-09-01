@@ -5,6 +5,7 @@ import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import type {
   CachedDirectoryEntry,
+  ConflictCommentRecord,
   DiffCacheEntry,
   DirectoryEntry,
   FileBrowserPendingReview,
@@ -334,6 +335,7 @@ export const loadPendingReview = (
     const normalized = { ...review } as PendingReview & {
       comments: unknown;
       viewed_files: unknown;
+      conflict_comments: unknown;
     };
     if (typeof normalized.comments === "string") {
       normalized.comments = JSON.parse(normalized.comments);
@@ -341,6 +343,10 @@ export const loadPendingReview = (
     if (typeof normalized.viewed_files === "string") {
       normalized.viewed_files = JSON.parse(normalized.viewed_files);
     }
+    normalized.conflict_comments =
+      typeof normalized.conflict_comments === "string"
+        ? JSON.parse(normalized.conflict_comments)
+        : [];
     return normalized as PendingReview;
   });
 
@@ -350,6 +356,7 @@ export const savePendingReview = (
   comments: LineComment[],
   viewedFiles?: string[],
   summaryText?: string,
+  conflictComments?: ConflictCommentRecord[],
 ): Promise<number> =>
   invoke("save_pending_review", {
     repoPath,
@@ -357,6 +364,10 @@ export const savePendingReview = (
     comments: JSON.stringify(comments),
     viewedFiles: viewedFiles ? JSON.stringify(viewedFiles) : null,
     summaryText: summaryText ?? null,
+    conflictComments:
+      conflictComments && conflictComments.length > 0
+        ? JSON.stringify(conflictComments)
+        : null,
   });
 
 export const clearPendingReview = (

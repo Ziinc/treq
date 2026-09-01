@@ -392,8 +392,18 @@ export interface PendingReview {
   comments: LineComment[];
   viewed_files: string[];
   summary_text: string | null;
+  conflict_comments: ConflictCommentRecord[];
   created_at: string;
   updated_at: string;
+}
+
+export interface ConflictCommentRecord {
+  id: string;
+  conflictId: string;
+  filePath: string;
+  conflictNumber: number;
+  text: string;
+  createdAt: string;
 }
 
 /** Pending review session for the FileBrowser, kept separate from PendingReview. */
