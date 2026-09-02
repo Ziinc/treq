@@ -570,12 +570,8 @@ fn ensure_setup_script_complete(repo_path: &str, workspace_id: i64) -> Result<()
     crate::local_db::list_workflow_runs(repo_path, workspace_id, SETUP_SCRIPT_FILENAME, 1)?;
   match runs.first() {
     Some(run) if run.status != "running" => Ok(()),
-    Some(_) => Err(
-      "setup_script_pending: The workspace setup script is still running".to_string(),
-    ),
-    None => Err(
-      "setup_script_pending: The workspace setup script has not run yet".to_string(),
-    ),
+    Some(_) => Err("setup_script_pending: The workspace setup script is still running".to_string()),
+    None => Err("setup_script_pending: The workspace setup script has not run yet".to_string()),
   }
 }
 
@@ -588,7 +584,8 @@ pub fn run_setup_script_sync(
   workspace_path: &str,
   script: &str,
 ) -> Result<JobResult, String> {
-  let run_id = crate::local_db::create_workflow_run(repo_path, workspace_id, SETUP_SCRIPT_FILENAME)?;
+  let run_id =
+    crate::local_db::create_workflow_run(repo_path, workspace_id, SETUP_SCRIPT_FILENAME)?;
 
   let base_dir = if Path::new(workspace_path).is_dir() {
     workspace_path.to_string()
@@ -629,7 +626,11 @@ pub fn get_setup_script_status_sync(
   workspace_id: i64,
 ) -> Result<SetupScriptStatus, String> {
   let config = crate::repo_config::parse_config(repo_path)?;
-  if config.setup_script.filter(|s| !s.trim().is_empty()).is_none() {
+  if config
+    .setup_script
+    .filter(|s| !s.trim().is_empty())
+    .is_none()
+  {
     return Ok(SetupScriptStatus {
       configured: false,
       status: "not_configured".to_string(),
