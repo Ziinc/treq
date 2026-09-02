@@ -11,6 +11,7 @@ pub mod db;
 pub mod file_indexer;
 pub mod github;
 pub mod jj;
+pub mod linear;
 pub mod local_db;
 mod open_new_window;
 pub mod pr_status;
@@ -891,6 +892,10 @@ pub fn run() {
             commands::gh_set_pr_draft,
             commands::gh_create_pr,
             commands::gh_list_pr_review_threads,
+            commands::linear_list_teams,
+            commands::linear_list_issues,
+            commands::linear_open_or_create_workspace_from_issue,
+            commands::linear_start_auto_kickoff_polling,
             commands::load_repo_yaml_config,
             commands::list_workflows,
             commands::run_workflow_job,

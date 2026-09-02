@@ -10,6 +10,7 @@ pub enum PreviewFeature {
   SkillsInstallation,
   WorkspaceScheduling,
   RemoteSsh,
+  LinearIntegration,
 }
 
 impl PreviewFeature {
@@ -18,6 +19,7 @@ impl PreviewFeature {
       Self::SkillsInstallation => "skillsInstallation",
       Self::WorkspaceScheduling => "workspaceScheduling",
       Self::RemoteSsh => "remoteSsh",
+      Self::LinearIntegration => "linearIntegration",
     }
   }
 
@@ -95,6 +97,7 @@ mod tests {
     assert!(!package_json_default(PreviewFeature::SkillsInstallation));
     assert!(!package_json_default(PreviewFeature::WorkspaceScheduling));
     assert!(!package_json_default(PreviewFeature::RemoteSsh));
+    assert!(!package_json_default(PreviewFeature::LinearIntegration));
   }
 
   #[test]

@@ -10,6 +10,7 @@ import RoadmapGraphicTabs from '@site/src/components/RoadmapGraphicTabs';
 
 export const toc = [
   { id: '2026', value: '2026', level: 2 },
+  { id: 'linear-integration', value: 'Linear Integration', level: 2 },
   { id: 'github-integration-with-merge-queue', value: 'GitHub Integration with Merge Queue', level: 2 },
   { id: 'workspace-checks', value: 'Workspace Checks', level: 2 },
   { id: 'ssh-remote-development', value: 'SSH Remote Development', level: 2 },
@@ -27,6 +28,16 @@ _Year-by-year product milestones for Treq. Newer years are added above older one
 <RoadmapGraphicTabs version="2026" />
 
 Q1 and Q2 have nothing planned. Q3 targets GitHub merge-queue integration and workspace checks. Q4 targets SSH remote development.
+
+## Linear Integration
+
+:::tip[Shipped]
+
+View Linear issues, create workspaces from issues, and auto-kickoff on labels are all available. See [Linear Integration](/docs/concepts/linear-integration).
+
+:::
+
+Treq integrates with Linear to view issues and create workspaces directly. You can authenticate with a personal API key (free) or OAuth2 (Pro). The auto-kickoff feature lets you configure a label that automatically creates workspaces when issues receive that label, useful for "ready for dev" workflows.
 
 ## GitHub Integration with Merge Queue
 

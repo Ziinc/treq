@@ -1,5 +1,5 @@
 import { DragDropContext, Droppable, type DropResult } from "@hello-pangea/dnd";
-import { Archive, Github, Search } from "lucide-react";
+import { Archive, Github, ListTodo, Search } from "lucide-react";
 import { useState } from "react";
 import useSWR from "swr";
 import {
@@ -54,6 +54,7 @@ import {
 import { TooltipProvider } from "./ui/tooltip";
 import { WorkspaceSidebarHeaderActions } from "./WorkspaceSidebarHeaderActions";
 import { WorkspaceSidebarItem } from "./WorkspaceSidebarItem";
+import { WorkspaceSidebarPanelButton } from "./WorkspaceSidebarPanelButton";
 import { WorkspaceSidebarResizeHandle } from "./WorkspaceSidebarResizeHandle";
 
 interface WorkspaceSidebarProps {
@@ -75,6 +76,7 @@ interface WorkspaceSidebarProps {
   onOpenCommandPalette?: () => void;
   onOpenBranchSwitcher?: () => void;
   onOpenGitHub?: () => void;
+  onOpenLinear?: () => void;
   onOpenArtifacts?: () => void;
   currentPage?: string;
   onAddBefore?: (workspace: Workspace) => void;
@@ -111,6 +113,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
   onOpenCommandPalette,
   onOpenBranchSwitcher,
   onOpenGitHub,
+  onOpenLinear,
   onOpenArtifacts,
   currentPage,
   onAddAfter,
@@ -131,6 +134,7 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
   onDropChangeFiles,
 }) => {
   const workspaceScheduling = usePreviewFeature("workspaceScheduling");
+  const linearIntegration = usePreviewFeature("linearIntegration");
   const { data: workspaces = [], isLoading: workspacesPending } = useSWR(
     repoPath ? ["workspaces", repoPath] : null,
     () => getWorkspaces(repoPath || ""),
@@ -283,10 +287,11 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
     ? repoPath.split("/").filter(Boolean).pop() || "Repository"
     : "Repository";
 
-  // GitHub/Settings are their own nav destinations — don't keep home/workspace
+  // GitHub/Linear/Settings are their own nav destinations — don't keep home/workspace
   // selection highlighted alongside them.
   const workspaceSelectionActive =
     currentPage !== "github" &&
+    currentPage !== "linear" &&
     currentPage !== "settings" &&
     currentPage !== "artifacts";
   const isHomeSelected =
@@ -351,21 +356,25 @@ export const WorkspaceSidebar: React.FC<WorkspaceSidebarProps> = ({
                 />
 
                 {onOpenGitHub && (
-                  <SidebarMenuItem>
-                    <SidebarMenuButton
-                      type="button"
-                      data-testid="github-sidebar-item"
-                      isActive={currentPage === "github"}
-                      onClick={onOpenGitHub}
-                      aria-label="GitHub"
-                      className={`h-auto py-1 ${
-                        currentPage === "github" ? "bg-primary/20" : ""
-                      }`}
-                    >
-                      <Github className="w-3 h-3" />
-                      <span>Github</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
+                  <WorkspaceSidebarPanelButton
+                    page="github"
+                    currentPage={currentPage}
+                    onClick={onOpenGitHub}
+                    icon={Github}
+                    label="Github"
+                    testId="github-sidebar-item"
+                  />
+                )}
+
+                {onOpenLinear && linearIntegration && (
+                  <WorkspaceSidebarPanelButton
+                    page="linear"
+                    currentPage={currentPage}
+                    onClick={onOpenLinear}
+                    icon={ListTodo}
+                    label="Linear"
+                    testId="linear-sidebar-item"
+                  />
                 )}
               </SidebarMenu>
             </SidebarGroupContent>

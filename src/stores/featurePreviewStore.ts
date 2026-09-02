@@ -22,6 +22,7 @@ function defaultFlags(): PreviewFlags {
     skillsInstallation: previewFeatureDefault("skillsInstallation"),
     workspaceScheduling: previewFeatureDefault("workspaceScheduling"),
     remoteSsh: previewFeatureDefault("remoteSsh"),
+    linearIntegration: previewFeatureDefault("linearIntegration"),
   };
 }
 

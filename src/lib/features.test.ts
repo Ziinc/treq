@@ -8,11 +8,12 @@ import {
 } from "./features";
 
 describe("preview features", () => {
-  it("lists the three preview features with docs paths", () => {
+  it("lists the four preview features with docs paths", () => {
     expect(PREVIEW_FEATURES.map((feature) => feature.id)).toEqual([
       "skillsInstallation",
       "workspaceScheduling",
       "remoteSsh",
+      "linearIntegration",
     ]);
     for (const feature of PREVIEW_FEATURES) {
       expect(feature.docsPath.startsWith("/docs/")).toBe(true);
@@ -24,12 +25,14 @@ describe("preview features", () => {
     expect(FEATURES.skillsInstallation).toBe(false);
     expect(FEATURES.workspaceScheduling).toBe(false);
     expect(FEATURES.remoteSsh).toBe(false);
+    expect(FEATURES.linearIntegration).toBe(false);
   });
 
   it("defaults every preview flag on in test and dev", () => {
     expect(previewFeatureDefault("skillsInstallation")).toBe(true);
     expect(previewFeatureDefault("workspaceScheduling")).toBe(true);
     expect(previewFeatureDefault("remoteSsh")).toBe(true);
+    expect(previewFeatureDefault("linearIntegration")).toBe(true);
   });
 
   it("honors stored true/false over the startup default", () => {

@@ -21,6 +21,7 @@ import {
 import { getSetting, setSetting } from "../lib/api";
 import { AccountSettings } from "./AccountSettings";
 import { GitHubIntegrationSettings } from "./GitHubIntegrationSettings";
+import { LinearIntegrationSettings } from "./LinearIntegrationSettings";
 import { RepoYamlConfigCard } from "./RepoYamlConfigCard";
 import { FeaturePreviewSettings } from "./FeaturePreviewSettings";
 import { SkillLibrarySettings } from "./SkillLibrarySettings";
@@ -72,6 +73,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
   const zoom = useZoomSettingsStore((s) => s.zoom);
   const setZoom = useZoomSettingsStore((s) => s.setZoom);
   const skillsInstallation = usePreviewFeature("skillsInstallation");
+  const linearIntegration = usePreviewFeature("linearIntegration");
 
   useEffect(() => {
     if (!skillsInstallation && currentTab === "skills") {
@@ -412,7 +414,12 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({
                   <AccountSettings />
                 </TabsContent>
                 <TabsContent value="integrations">
-                  <GitHubIntegrationSettings repoPath={repoPath} />
+                  <div className="space-y-12">
+                    <GitHubIntegrationSettings repoPath={repoPath} />
+                    {linearIntegration && (
+                      <LinearIntegrationSettings repoPath={repoPath} />
+                    )}
+                  </div>
                 </TabsContent>
                 {skillsInstallation && (
                   <TabsContent value="skills">

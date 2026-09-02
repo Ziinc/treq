@@ -10,7 +10,8 @@
     "mergeQueue": true,
     "skillsInstallation": false,
     "workspaceScheduling": false,
-    "remoteSsh": false
+    "remoteSsh": false,
+    "linearIntegration": false
   },
   "env": {
     "dev": {
