@@ -394,6 +394,7 @@ export interface PendingReview {
   comments: LineComment[];
   viewed_files: string[];
   summary_text: string | null;
+  conflict_comments: import("./api-types-review").ConflictCommentRecord[];
   created_at: string;
   updated_at: string;
 }

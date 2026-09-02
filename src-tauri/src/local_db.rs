@@ -93,6 +93,7 @@ pub struct PendingReview {
   pub comments: String,             // JSON string
   pub viewed_files: Option<String>, // JSON string
   pub summary_text: Option<String>,
+  pub conflict_comments: Option<String>, // JSON string
   pub created_at: String,
   pub updated_at: String,
 }
@@ -358,6 +359,7 @@ pub fn init_local_db(repo_path: &str) -> Result<PathBuf, String> {
             comments TEXT NOT NULL,
             viewed_files TEXT,
             summary_text TEXT,
+            conflict_comments TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL,
             FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
@@ -365,6 +367,22 @@ pub fn init_local_db(repo_path: &str) -> Result<PathBuf, String> {
       [],
     )
     .map_err(|e| format!("Failed to create pending_reviews table: {}", e))?;
+
+  // Migration: add conflict_comments column to pending_reviews if missing
+  // (covers DBs created before conflict comments were persisted).
+  let has_conflict_comments_column: Result<i64, _> = conn.query_row(
+    "SELECT COUNT(*) FROM pragma_table_info('pending_reviews') WHERE name = 'conflict_comments'",
+    [],
+    |row| row.get(0),
+  );
+  if matches!(has_conflict_comments_column, Ok(0)) {
+    conn
+      .execute(
+        "ALTER TABLE pending_reviews ADD COLUMN conflict_comments TEXT",
+        [],
+      )
+      .map_err(|e| format!("Failed to add conflict_comments column: {}", e))?;
+  }
 
   // Drop any prior schema of commit_diff_stats — keyed cache, safe to recreate.
   let needs_rebuild: bool = conn
@@ -648,6 +666,7 @@ pub fn init_local_db(repo_path: &str) -> Result<PathBuf, String> {
                     comments TEXT NOT NULL,
                     viewed_files TEXT,
                     summary_text TEXT,
+                    conflict_comments TEXT,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
                     FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE CASCADE
@@ -658,7 +677,7 @@ pub fn init_local_db(repo_path: &str) -> Result<PathBuf, String> {
 
       // Migrate old pending_reviews column names to new names.
       conn.execute(
-                "INSERT INTO pending_reviews_new
+                "INSERT INTO pending_reviews_new (id, workspace_id, comments, viewed_files, summary_text, created_at, updated_at)
                  SELECT id, workspace_id, comments_json, viewed_files_json, overall_comment, created_at, updated_at
                  FROM pending_reviews",
                 [],
@@ -1646,7 +1665,7 @@ pub fn get_pending_review(
   let conn = get_connection(repo_path)?;
   let mut stmt = conn
     .prepare(
-      "SELECT id, workspace_id, comments, viewed_files, summary_text, created_at, updated_at
+      "SELECT id, workspace_id, comments, viewed_files, summary_text, conflict_comments, created_at, updated_at
              FROM pending_reviews
              WHERE workspace_id = ?1",
     )
@@ -1660,8 +1679,9 @@ pub fn get_pending_review(
         comments: row.get(2)?,
         viewed_files: row.get(3)?,
         summary_text: row.get(4)?,
-        created_at: row.get(5)?,
-        updated_at: row.get(6)?,
+        conflict_comments: row.get(5)?,
+        created_at: row.get(6)?,
+        updated_at: row.get(7)?,
       })
     })
     .optional()
@@ -1677,22 +1697,24 @@ pub fn save_pending_review(
   comments: &str,
   viewed_files: Option<&str>,
   summary_text: Option<&str>,
+  conflict_comments: Option<&str>,
 ) -> Result<i64, String> {
   let conn = get_connection(repo_path)?;
   let now = Utc::now().to_rfc3339();
 
   // Use INSERT OR REPLACE to handle both insert and update
   conn.execute(
-        "INSERT OR REPLACE INTO pending_reviews (workspace_id, comments, viewed_files, summary_text, created_at, updated_at)
+        "INSERT OR REPLACE INTO pending_reviews (workspace_id, comments, viewed_files, summary_text, conflict_comments, created_at, updated_at)
          VALUES (
              ?1,
              ?2,
              ?3,
              ?4,
-             COALESCE((SELECT created_at FROM pending_reviews WHERE workspace_id = ?1), ?5),
-             ?5
+             ?5,
+             COALESCE((SELECT created_at FROM pending_reviews WHERE workspace_id = ?1), ?6),
+             ?6
          )",
-        params![workspace_id, comments, viewed_files, summary_text, now],
+        params![workspace_id, comments, viewed_files, summary_text, conflict_comments, now],
     )
     .map_err(|e| format!("Failed to save pending review: {}", e))?;
 
@@ -2565,6 +2587,7 @@ mod tests {
       comments,
       Some(viewed_files),
       Some(summary),
+      None,
     )
     .expect("save_pending_review should succeed");
     assert!(id > 0, "Review ID should be positive");
@@ -2604,7 +2627,7 @@ mod tests {
 
     // Save first review
     let comments1 = r#"[{"id":"c1","text":"First comment"}]"#;
-    save_pending_review(repo_path, workspace_id, comments1, None, None)
+    save_pending_review(repo_path, workspace_id, comments1, None, None, None)
       .expect("First save should succeed");
 
     // Save again with different data - should update, not create duplicate
@@ -2615,6 +2638,7 @@ mod tests {
       comments2,
       None,
       Some("New summary"),
+      None,
     )
     .expect("Second save should succeed");
 
@@ -2649,8 +2673,15 @@ mod tests {
     .expect("add_workspace should succeed");
 
     // Save a review
-    save_pending_review(repo_path, workspace_id, r#"[{"id":"c1"}]"#, None, None)
-      .expect("save should succeed");
+    save_pending_review(
+      repo_path,
+      workspace_id,
+      r#"[{"id":"c1"}]"#,
+      None,
+      None,
+      None,
+    )
+    .expect("save should succeed");
 
     // Verify it exists
     let review = get_pending_review(repo_path, workspace_id).expect("get should succeed");
@@ -2686,8 +2717,15 @@ mod tests {
     .expect("add_workspace should succeed");
 
     // Save a review
-    save_pending_review(repo_path, workspace_id, r#"[{"id":"c1"}]"#, None, None)
-      .expect("save should succeed");
+    save_pending_review(
+      repo_path,
+      workspace_id,
+      r#"[{"id":"c1"}]"#,
+      None,
+      None,
+      None,
+    )
+    .expect("save should succeed");
 
     // Verify it exists
     let review = get_pending_review(repo_path, workspace_id).expect("get should succeed");
@@ -2726,8 +2764,15 @@ mod tests {
     .expect("add_workspace should succeed");
 
     // Save first review
-    save_pending_review(repo_path, workspace_id, r#"[{"id":"c1"}]"#, None, None)
-      .expect("save should succeed");
+    save_pending_review(
+      repo_path,
+      workspace_id,
+      r#"[{"id":"c1"}]"#,
+      None,
+      None,
+      None,
+    )
+    .expect("save should succeed");
 
     let first_review = get_pending_review(repo_path, workspace_id)
       .expect("get should succeed")
@@ -2738,8 +2783,15 @@ mod tests {
     std::thread::sleep(std::time::Duration::from_millis(10));
 
     // Update the review
-    save_pending_review(repo_path, workspace_id, r#"[{"id":"c2"}]"#, None, None)
-      .expect("update should succeed");
+    save_pending_review(
+      repo_path,
+      workspace_id,
+      r#"[{"id":"c2"}]"#,
+      None,
+      None,
+      None,
+    )
+    .expect("update should succeed");
 
     let updated_review = get_pending_review(repo_path, workspace_id)
       .expect("get should succeed")

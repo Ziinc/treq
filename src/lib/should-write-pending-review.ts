@@ -4,11 +4,23 @@ export function shouldWritePendingReview(args: {
   liveSummary: string;
   debouncedCommentCount: number;
   debouncedSummary: string;
+  liveConflictCommentCount?: number;
+  debouncedConflictCommentCount?: number;
 }): boolean {
-  if (args.liveCommentCount === 0 && !args.liveSummary.trim()) {
+  const liveConflictCommentCount = args.liveConflictCommentCount ?? 0;
+  const debouncedConflictCommentCount = args.debouncedConflictCommentCount ?? 0;
+  if (
+    args.liveCommentCount === 0 &&
+    !args.liveSummary.trim() &&
+    liveConflictCommentCount === 0
+  ) {
     return false;
   }
-  if (args.debouncedCommentCount === 0 && !args.debouncedSummary.trim()) {
+  if (
+    args.debouncedCommentCount === 0 &&
+    !args.debouncedSummary.trim() &&
+    debouncedConflictCommentCount === 0
+  ) {
     return false;
   }
   return true;
