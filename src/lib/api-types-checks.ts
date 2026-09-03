@@ -35,6 +35,13 @@ export interface RunSummary {
   completed_at: string | null;
   jobs: RunJobSummary[];
 }
+export interface SetupScriptStatus {
+  configured: boolean;
+  /** "not_configured" | "pending" | "running" | "passed" | "failed" */
+  status: string;
+  run_id: number | null;
+}
+
 export interface LogRecordView {
   timestamp: string;
   severity_number: number;

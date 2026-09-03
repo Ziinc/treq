@@ -5,6 +5,7 @@ import type {
   LogBucket,
   LogRecordView,
   RunSummary,
+  SetupScriptStatus,
   SqlResult,
   WorkflowInfo,
 } from "./api-types";
@@ -56,6 +57,23 @@ export const listWorkflowRuns = (
     workspaceId,
     filename,
     limit: limit ?? null,
+  });
+
+export const getWorkspaceSetupStatus = (
+  repoPath: string,
+  workspaceId: number,
+): Promise<SetupScriptStatus> =>
+  invoke("get_workspace_setup_status", { repoPath, workspaceId });
+
+export const rerunWorkspaceSetupScript = (
+  repoPath: string,
+  workspaceId: number,
+  workspacePath: string,
+): Promise<JobResult> =>
+  invoke("rerun_workspace_setup_script", {
+    repoPath,
+    workspaceId,
+    workspacePath,
   });
 
 export const getRunLogs = (

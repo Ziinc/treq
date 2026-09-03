@@ -903,6 +903,8 @@ pub fn run() {
             commands::is_repo_trusted,
             commands::trust_repo,
             commands::list_workflow_runs,
+            commands::get_workspace_setup_status,
+            commands::rerun_workspace_setup_script,
             commands::get_run_logs,
             commands::export_run_logs,
             commands::get_repo_logs,
