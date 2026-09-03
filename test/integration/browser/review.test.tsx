@@ -157,7 +157,7 @@ describe("BrowserPanel - page review integration", () => {
       expect(pending?.comments).toHaveLength(1);
       expect(pending?.comments[0].selector).toBe("#checkout > button.primary");
     });
-  }, 15000);
+  });
 
   it("sends a multi-comment review with a summary to a new agent terminal session", async () => {
     const { workspace } = await setupWorkspace("feat/browser-agent-handoff");
@@ -212,7 +212,7 @@ describe("BrowserPanel - page review integration", () => {
         "Page Review",
       );
     });
-  }, 15000);
+  });
 
   it("discards the review and clears persisted state", async () => {
     const { repoPath, workspace } = await setupWorkspace(
@@ -252,5 +252,5 @@ describe("BrowserPanel - page review integration", () => {
       const pending = await api.loadPendingPageReview(repoPath, workspace.id);
       expect(pending).toBeNull();
     });
-  }, 15000);
+  });
 });

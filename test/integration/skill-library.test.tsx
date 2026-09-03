@@ -96,7 +96,7 @@ describe("skill library", () => {
     expect(
       await screen.findByRole("button", { name: /uninstall demo/i }),
     ).toBeTruthy();
-  }, 30000);
+  });
 
   it("filters the catalog by install level", async () => {
     await openSkillsTab();
@@ -119,7 +119,7 @@ describe("skill library", () => {
       "repository",
     );
     expect(await screen.findByText("demo skill")).toBeTruthy();
-  }, 30000);
+  });
 
   it("materializes installed library skills when stacking a workspace", async () => {
     const BRANCH_NAME = "feat/skill-materialize";
@@ -159,5 +159,5 @@ describe("skill library", () => {
     expect(
       fs.existsSync(path.join(workspacePath, ".claude/skills/demo/SKILL.md")),
     ).toBe(true);
-  }, 30000);
+  });
 });
