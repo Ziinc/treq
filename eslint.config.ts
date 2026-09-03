@@ -6,6 +6,7 @@ import globals from "globals";
 import js from "@eslint/js";
 import noDocumentDispatchEventRule from "./eslint-rules/no-document-dispatch-event.js";
 import noInlineCommentsRule from "./eslint-rules/no-inline-comments.js";
+import noLongTestTimeoutRule from "./eslint-rules/no-long-test-timeout.js";
 import noUnusedExportedTsFunctionsRule from "./eslint-rules/no-unused-exported-ts-functions.js";
 import noUnusedPubRustFunctionsRule from "./eslint-rules/no-unused-pub-rust-functions.js";
 import preferFindByTextRule from "./eslint-rules/prefer-find-by-text.js";
@@ -34,6 +35,7 @@ const ignoredGlobs = [
 const localRules = {
   "no-document-dispatch-event": noDocumentDispatchEventRule,
   "no-inline-comments": noInlineCommentsRule,
+  "no-long-test-timeout": noLongTestTimeoutRule,
   "no-unused-exported-ts-functions": noUnusedExportedTsFunctionsRule,
   "no-unused-pub-rust-functions": noUnusedPubRustFunctionsRule,
   "prefer-click-by-query": preferClickByQueryRule,
@@ -191,6 +193,7 @@ export default defineConfig([
       "max-nested-callbacks": "off",
       "local/no-document-dispatch-event": "error",
       "local/no-inline-comments": "error",
+      "local/no-long-test-timeout": "error",
       "local/prefer-click-by-query": "error",
       "local/prefer-find-by-text": "error",
       "local/user-event-setup-in-setup": "error",

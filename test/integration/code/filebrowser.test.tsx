@@ -147,9 +147,6 @@ describe("Dashboard - FileBrowser integration", () => {
     await setupWorkspace("feat/filebrowser-markdown-preview-test", {
       "guide.md": "# Getting started\n\nUse **Treq** to ship changes.\n",
     });
-    // This test renders both the highlighted code view and the markdown
-    // preview and switches tabs, so it does more work per run than its
-    // neighbors and can tip past the default 5000ms timeout under load.
 
     const fileBrowser = await openWorkspaceCodeBrowser(
       user,
@@ -172,7 +169,7 @@ describe("Dashboard - FileBrowser integration", () => {
     ).toBeTruthy();
     expect(fileBrowser.getByText("Treq").tagName).toBe("STRONG");
     expect(previewTab).toHaveAttribute("aria-selected", "true");
-  }, 15000);
+  });
 
   it("shows humanized modified time and reveals absolute timestamp on hover in file header", async () => {
     const { workspacePath } = await setupWorkspace(
