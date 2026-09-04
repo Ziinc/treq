@@ -10,6 +10,7 @@ pub mod checks_logs;
 pub mod commits;
 pub mod feature_preview;
 pub mod files;
+pub mod idempotency_store;
 pub mod remote;
 pub mod remote_bootstrap;
 pub mod remote_control_plane;
