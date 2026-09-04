@@ -1,26 +1,25 @@
-import * as React from "react";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import userEvent from "@testing-library/user-event";
+import * as React from "react";
 import { beforeEach, describe, expect, it } from "vitest";
 import { Dashboard } from "../../src/components/Dashboard";
-import { render, screen } from "../test-utils";
 import {
+  buildExplicitAliasSshEndpoint,
   listSshHosts,
-  remoteOpenRepo,
-  remoteProbeRepo,
   setSetting,
 } from "../../src/lib/api";
+import type {
+  RemoteRepoProbe,
+  RepositoryInspection,
+} from "../../src/lib/api-types-remote";
 import { dispatchLocal } from "../../src/lib/remote-dispatch";
 import {
   listSavedRepositoriesForEndpoint,
   upsertSavedRemoteRepository,
 } from "../../src/lib/remote-repository";
-import type {
-  RemoteRepoProbe,
-  RepositoryInspection,
-} from "../../src/lib/api-types-remote";
+import { render, screen } from "../test-utils";
 
 describe("remote SSH integration", () => {
   let user: ReturnType<typeof userEvent.setup>;
@@ -83,16 +82,19 @@ describe("remote SSH integration", () => {
     await setSetting("last_opened_remote_repo_id", "");
   });
 
-  it("rejects unsafe SSH aliases before remote open dispatch", async () => {
+  it("rejects an alias that resolves to no ~/.ssh/config Host block before any connection is made", async () => {
+    // No system ssh subprocess is spawned and no connection is ever
+    // attempted for an alias that was never explicitly configured - the
+    // native resolver rejects it up front (alias_not_found).
     await expect(
-      remoteOpenRepo("devbox; rm -rf /", "/srv/project"),
-    ).rejects.toThrow("SSH host must be a host alias from ssh config");
-  });
-
-  it("rejects unsafe SSH host aliases before opening a connection", async () => {
-    await expect(
-      remoteProbeRepo("devbox; rm -rf /", "/srv/project"),
-    ).rejects.toThrow("SSH host must be a host alias from ssh config");
+      buildExplicitAliasSshEndpoint({
+        endpointId: "endpoint-test",
+        alias: "devbox; rm -rf /",
+        expectedFingerprint: "SHA256:abc",
+        hostKeyAlgorithm: "ssh-ed25519",
+        keyReference: "id_ed25519",
+      }),
+    ).rejects.toThrow("alias_not_found");
   });
 
   it("lists SSH hosts as an array even when no user config is present", async () => {

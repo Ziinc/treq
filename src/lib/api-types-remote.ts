@@ -10,6 +10,20 @@ export interface LocalSshIdentity {
 }
 
 /**
+ * Explicit connection fields resolved from an explicitly-selected
+ * `~/.ssh/config` alias (Host/HostName/User/Port/IdentityFile, including
+ * `Include`). Autocomplete data only: resolving an alias performs no network
+ * I/O and never grants trust on its own.
+ */
+export interface ResolvedSshAlias {
+  alias: string;
+  hostname: string;
+  port: number;
+  username: string | null;
+  identity_file: string | null;
+}
+
+/**
  * A device-generated ed25519 keypair used to register this mobile device
  * with the control plane (see `core::remote_device_key`). Only public
  * material ever crosses the Tauri IPC boundary.
