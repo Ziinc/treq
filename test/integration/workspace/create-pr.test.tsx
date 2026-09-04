@@ -257,6 +257,36 @@ describe("ShowWorkspace - Create PR", () => {
     });
   });
 
+  it("pushes committed changes before creating a PR when the branch is ahead of remote", async () => {
+    const { workspace } = await setupPushedWorkspaceWithGitHub();
+    await commitWorkspaceFile(
+      repoPath,
+      { id: workspace.id, path: workspace.workspace_path },
+      "follow-up.txt",
+      "unpushed content",
+      "Add unpushed follow-up",
+    );
+    vi.mocked(pushWorkspaceToRemote).mockClear();
+    vi.mocked(pushWorkspaceToRemote).mockResolvedValueOnce("pushed");
+    render(<Dashboard />);
+
+    const header = await openWorkspace("feat/create-pr");
+    await user.click(await findEnabledCreatePr(header));
+
+    await waitFor(() => {
+      expect(pushWorkspaceToRemote).toHaveBeenCalledWith(
+        repoPath,
+        workspace.id,
+      );
+    });
+    await waitFor(() => {
+      expect(ghCreatePr).toHaveBeenCalled();
+    });
+    expect(
+      vi.mocked(pushWorkspaceToRemote).mock.invocationCallOrder[0],
+    ).toBeLessThan(vi.mocked(ghCreatePr).mock.invocationCallOrder[0]);
+  });
+
   it("hides Create PR when there is no GitHub remote", async () => {
     await setupPushedWorkspaceWithGitHub({ githubRemote: false });
     render(<Dashboard />);

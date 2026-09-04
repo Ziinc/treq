@@ -35,6 +35,7 @@ interface CreatePrButtonGroupProps {
   workspace: Workspace;
   baseBranch: string;
   hasCommits: boolean;
+  needsPush: boolean;
 }
 
 export function CreatePrButtonGroup({
@@ -42,6 +43,7 @@ export function CreatePrButtonGroup({
   workspace,
   baseBranch,
   hasCommits,
+  needsPush,
 }: CreatePrButtonGroupProps) {
   const { addToast } = useToast();
   const { data: remoteInfo } = useGitRemoteInfo(repoPath);
@@ -63,7 +65,7 @@ export function CreatePrButtonGroup({
     mutationKey: createPrMutationKey(repoPath, workspace.id),
     mutationFn: async (draft: boolean) => {
       if (!remoteInfo) throw new Error("No GitHub remote detected");
-      if (workspace.not_on_remote) {
+      if (needsPush) {
         await pushWorkspaceToRemote(repoPath, workspace.id);
       }
       return ghCreatePr(
@@ -113,7 +115,7 @@ export function CreatePrButtonGroup({
   const openManual = async () => {
     setPushingManually(true);
     try {
-      if (workspace.not_on_remote) {
+      if (needsPush) {
         await pushWorkspaceToRemote(repoPath, workspace.id);
         void invalidateQueries();
       }
@@ -139,7 +141,7 @@ export function CreatePrButtonGroup({
   };
 
   const creating = otherCreatePrActive || pushingManually;
-  const pushAndCreate = workspace.not_on_remote;
+  const pushAndCreate = needsPush;
   const disabled = creating || !hasCommits;
   const noCommitsTooltip =
     "Make a commit before creating a pull request. Uncommitted working-copy changes don't count.";
