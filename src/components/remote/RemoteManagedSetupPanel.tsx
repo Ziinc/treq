@@ -29,6 +29,7 @@ export interface RemoteManagedSetupPanelProps {
   onReprovision: (region: RegionCode, size: SizePreset) => Promise<void>;
   onDeleteInstance: () => Promise<void>;
   onRevokeKey: (keyReference: string) => Promise<void>;
+  onOpenRepositories?: () => void;
 }
 
 /** Treq-managed VM setup and lifecycle screen (region/size/identity picker, or lifecycle actions once provisioned). */
@@ -45,6 +46,7 @@ export function RemoteManagedSetupPanel({
   onReprovision,
   onDeleteInstance,
   onRevokeKey,
+  onOpenRepositories,
 }: RemoteManagedSetupPanelProps) {
   const [region, setRegion] = useState<RegionCode | "">("");
   const [size, setSize] = useState<SizePreset | "">("");
@@ -109,6 +111,13 @@ export function RemoteManagedSetupPanel({
           )}
 
           <div className="flex flex-wrap gap-2">
+            {existingEndpoint &&
+              existingInstance.status === "ready" &&
+              onOpenRepositories && (
+                <Button size="sm" onClick={onOpenRepositories}>
+                  Open repositories
+                </Button>
+              )}
             {(existingInstance.status === "suspended" ||
               existingInstance.status === "waking") && (
               <Button
