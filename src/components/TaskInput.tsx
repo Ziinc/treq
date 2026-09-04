@@ -13,6 +13,7 @@ import { TaskInputMentionDropdown } from "./task-input/TaskInputMentionDropdown"
 import { TaskInputToolbar } from "./task-input/TaskInputToolbar";
 import {
   createSession,
+  getWorkspaces,
   getSetting,
   getRepoSetting,
   searchWorkspaceFiles,
@@ -20,9 +21,12 @@ import {
   type FileSearchResult,
 } from "../lib/api";
 import {
+  formatPromptWithLinearIssue,
   formatPromptWithGitHubIssue,
   type GitHubIssueAttachment,
+  type LinearIssueAttachment,
 } from "../lib/promptAttachments";
+import { linearOpenOrCreateWorkspaceFromIssue } from "../lib/api-linear";
 import { useToast } from "./ui/toast";
 import { useDebounce } from "../hooks/useDebounce";
 import { cn } from "../lib/utils";
@@ -40,6 +44,7 @@ interface TaskInputProps {
   initialText?: string;
   /** Pre-attach a GitHub issue chip (e.g. starting a prompt from an issue). */
   initialGitHubIssue?: GitHubIssueAttachment | null;
+  initialLinearIssue?: LinearIssueAttachment | null;
 }
 
 export const TaskInput: React.FC<TaskInputProps> = ({
@@ -51,10 +56,14 @@ export const TaskInput: React.FC<TaskInputProps> = ({
   focusRequest,
   initialText,
   initialGitHubIssue = null,
+  initialLinearIssue = null,
 }) => {
   const [taskText, setTaskText] = useState(initialText ?? "");
   const [githubIssue, setGithubIssue] = useState<GitHubIssueAttachment | null>(
     initialGitHubIssue,
+  );
+  const [linearIssue, setLinearIssue] = useState<LinearIssueAttachment | null>(
+    initialLinearIssue,
   );
   const [filePickerOpen, setFilePickerOpen] = useState(false);
   const [focused, setFocused] = useState(false);
@@ -267,11 +276,13 @@ export const TaskInput: React.FC<TaskInputProps> = ({
   const [, submitTask, submitting] = useActionState(
     async (_prev: null, mode: "plan" | "acceptEdits") => {
       const trimmed = taskText.trim();
-      if (!trimmed && !githubIssue) return null;
+      if (!trimmed && !githubIssue && !linearIssue) return null;
 
-      const pendingPrompt = githubIssue
-        ? formatPromptWithGitHubIssue(trimmed, githubIssue)
-        : trimmed;
+      const pendingPrompt = linearIssue
+        ? formatPromptWithLinearIssue(trimmed, linearIssue)
+        : githubIssue
+          ? formatPromptWithGitHubIssue(trimmed, githubIssue)
+          : trimmed;
 
       try {
         if (saveAsRepoDefault && selectedAgent !== configuredDefaultAgent) {
@@ -284,9 +295,37 @@ export const TaskInput: React.FC<TaskInputProps> = ({
             ? `${pendingPrompt.slice(0, 47)}...`
             : pendingPrompt;
 
+        let targetWorkspaceId = workspaceId;
+        let targetWorkspacePath = workspacePath;
+        if (linearIssue) {
+          const results = await linearOpenOrCreateWorkspaceFromIssue(
+            repoPath,
+            linearIssue.id,
+            linearIssue.includeSubissues,
+          );
+          const result =
+            results.find((item) => item.issue_id === linearIssue.id) ??
+            results[0];
+          if (!result)
+            throw new Error(
+              `Failed to create workspace for ${linearIssue.identifier}`,
+            );
+          targetWorkspaceId = result.workspace_id;
+          const targetWorkspace = (await getWorkspaces(repoPath)).find(
+            (candidate) => candidate.id === targetWorkspaceId,
+          );
+          if (!targetWorkspace)
+            throw new Error(
+              `Created workspace for ${linearIssue.identifier} was not found`,
+            );
+          targetWorkspacePath = targetWorkspace.workspace_path.startsWith("/")
+            ? targetWorkspace.workspace_path
+            : `${repoPath}/${targetWorkspace.workspace_path}`;
+        }
+
         const dbSessionId = await createSession(
           repoPath,
-          workspaceId,
+          targetWorkspaceId,
           sessionName,
         );
 
@@ -295,8 +334,8 @@ export const TaskInput: React.FC<TaskInputProps> = ({
         onSessionCreated?.({
           sessionId: dbSessionId,
           sessionName,
-          workspaceId,
-          workspacePath,
+          workspaceId: targetWorkspaceId,
+          workspacePath: targetWorkspacePath,
           repoPath: sessionRepoPath,
           pendingPrompt,
           permissionMode: mode,
@@ -305,6 +344,7 @@ export const TaskInput: React.FC<TaskInputProps> = ({
 
         setTaskText("");
         setGithubIssue(null);
+        setLinearIssue(null);
         setShowSaveAsRepoDefault(false);
       } catch (error) {
         addToast({
@@ -358,7 +398,7 @@ export const TaskInput: React.FC<TaskInputProps> = ({
     }
   };
 
-  const isEmpty = taskText.trim().length === 0 && !githubIssue;
+  const isEmpty = taskText.trim().length === 0 && !githubIssue && !linearIssue;
 
   return (
     <>
@@ -386,6 +426,26 @@ export const TaskInput: React.FC<TaskInputProps> = ({
                   aria-label="Remove GitHub issue"
                   className="ml-0.5 rounded-sm p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
                   onClick={() => setGithubIssue(null)}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            </div>
+          )}
+          {linearIssue && (
+            <div className="flex flex-wrap items-center gap-1.5 px-3 pt-3 pb-0">
+              <span
+                data-testid="linear-issue-chip"
+                className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/50 px-2 py-0.5 text-xs text-foreground"
+                title={linearIssue.title}
+              >
+                <CircleDot className="h-3 w-3 text-violet-600 dark:text-violet-400" />
+                <span className="font-medium">{linearIssue.identifier}</span>
+                <button
+                  type="button"
+                  aria-label="Remove Linear issue"
+                  className="ml-0.5 rounded-sm p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+                  onClick={() => setLinearIssue(null)}
                 >
                   <X className="h-3 w-3" />
                 </button>
