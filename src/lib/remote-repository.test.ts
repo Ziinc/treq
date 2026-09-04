@@ -26,7 +26,9 @@ const store = new Map<string, string>();
 
 beforeEach(() => {
   store.clear();
-  vi.mocked(api.getSetting).mockImplementation(async (key) => store.get(key) ?? null);
+  vi.mocked(api.getSetting).mockImplementation(
+    async (key) => store.get(key) ?? null,
+  );
   vi.mocked(api.setSetting).mockImplementation(async (key, value) => {
     store.set(key, value);
   });

@@ -17,7 +17,10 @@ import {
   listSavedRepositoriesForEndpoint,
   upsertSavedRemoteRepository,
 } from "../../src/lib/remote-repository";
-import type { RemoteRepoProbe, RepositoryInspection } from "../../src/lib/api-types-remote";
+import type {
+  RemoteRepoProbe,
+  RepositoryInspection,
+} from "../../src/lib/api-types-remote";
 
 describe("remote SSH integration", () => {
   let user: ReturnType<typeof userEvent.setup>;

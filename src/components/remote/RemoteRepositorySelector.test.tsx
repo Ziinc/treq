@@ -5,10 +5,7 @@ import { render, screen } from "../../../test/test-utils";
 import { RemoteRepositorySelector } from "./RemoteRepositorySelector";
 import type { SavedRemoteRepositoryRecord } from "../../lib/remote-endpoints";
 
-function repo(
-  path: string,
-  generation = 1,
-): SavedRemoteRepositoryRecord {
+function repo(path: string, generation = 1): SavedRemoteRepositoryRecord {
   return {
     id: `id-${path}`,
     endpoint_id: "ep-1",

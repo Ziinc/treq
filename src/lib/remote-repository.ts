@@ -50,7 +50,9 @@ export function canonicalizeRemotePath(path: string): string {
   let rest = homeRelative ? trimmed.slice(1) : trimmed.replace(/\\/g, "/");
   rest = rest.replace(/\\/g, "/");
   const absolute = rest.startsWith("/");
-  const parts = rest.split("/").filter((part) => part.length > 0 && part !== ".");
+  const parts = rest
+    .split("/")
+    .filter((part) => part.length > 0 && part !== ".");
   const stack: string[] = [];
   for (const part of parts) {
     if (part === "..") {
@@ -125,7 +127,8 @@ export async function upsertSavedRemoteRepository(input: {
     endpoint_id: input.endpoint_id,
     endpoint_generation: input.endpoint_generation,
     canonical_remote_path: canonical,
-    display_name: input.display_name?.trim() || duplicate?.display_name || canonical,
+    display_name:
+      input.display_name?.trim() || duplicate?.display_name || canonical,
     last_successful_trust_validation:
       input.last_successful_trust_validation !== undefined
         ? input.last_successful_trust_validation
@@ -145,7 +148,8 @@ export async function listSavedRepositoriesForEndpoint(
   const all = await listSavedRemoteRepositories();
   return all.filter(
     (repo) =>
-      repo.endpoint_id === endpointId && repo.endpoint_generation === generation,
+      repo.endpoint_id === endpointId &&
+      repo.endpoint_generation === generation,
   );
 }
 

@@ -45,7 +45,10 @@ export function RemoteRepositorySelector({
   onInit,
 }: RemoteRepositorySelectorProps) {
   return (
-    <div className="flex flex-col gap-3" data-testid="remote-repository-selector">
+    <div
+      className="flex flex-col gap-3"
+      data-testid="remote-repository-selector"
+    >
       {savedRepositories.length > 0 && (
         <div className="flex flex-col gap-1">
           <span className="text-sm font-medium">Saved repositories</span>
