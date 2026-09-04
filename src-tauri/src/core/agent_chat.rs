@@ -420,10 +420,29 @@ pub fn register_agent_chat(
   name: &str,
   agent: &str,
   workspace_id: Option<i64>,
+  initial_prompt: Option<&str>,
 ) -> Result<AgentChat, String> {
   let _guard = CHAT_IO.lock().map_err(|e| e.to_string())?;
   if let Some(existing) = load_chat_unlocked(repo_path, session_id)? {
     return Ok(existing);
+  }
+  let created_at = now_rfc3339();
+  let mut messages = vec![ChatMessage {
+    id: 0,
+    role: ChatRole::Agent,
+    message: String::new(),
+    time: created_at.clone(),
+  }];
+  if let Some(prompt) = initial_prompt
+    .map(str::trim)
+    .filter(|prompt| !prompt.is_empty())
+  {
+    messages.push(ChatMessage {
+      id: 1,
+      role: ChatRole::User,
+      message: prompt.to_string(),
+      time: created_at.clone(),
+    });
   }
   let chat = AgentChat {
     session_id,
@@ -431,14 +450,9 @@ pub fn register_agent_chat(
     name: name.to_string(),
     agent: AgentType::parse(agent),
     workspace_id,
-    created_at: now_rfc3339(),
+    created_at,
     screen_before_last_user_message: String::new(),
-    messages: vec![ChatMessage {
-      id: 0,
-      role: ChatRole::Agent,
-      message: String::new(),
-      time: now_rfc3339(),
-    }],
+    messages,
   };
   save_chat_unlocked(repo_path, &chat)?;
   Ok(chat)
@@ -614,7 +628,7 @@ mod tests {
   fn register_and_list_skips_unregistered_shells() {
     let dir = TempDir::new().unwrap();
     let repo = dir.path().to_string_lossy().to_string();
-    register_agent_chat(&repo, 7, "pty-agent", "Claude", "claude", None).unwrap();
+    register_agent_chat(&repo, 7, "pty-agent", "Claude", "claude", None, None).unwrap();
     let listed = list_agent_chats(&repo).unwrap();
     assert_eq!(listed.len(), 1);
     assert_eq!(listed[0].session_id, 7);
@@ -626,7 +640,7 @@ mod tests {
   fn persist_round_trip_records_conversation() {
     let dir = TempDir::new().unwrap();
     let repo = dir.path().to_string_lossy().to_string();
-    register_agent_chat(&repo, 3, "pty-3", "Codex", "codex", Some(2)).unwrap();
+    register_agent_chat(&repo, 3, "pty-3", "Codex", "codex", Some(2), None).unwrap();
     record_screen(&repo, 3, "ready").unwrap();
     record_user_message(&repo, 3, "ready", "do the thing").unwrap();
     record_screen(&repo, 3, "ready\nworking on it").unwrap();
@@ -649,5 +663,44 @@ mod tests {
     let repo = dir.path().to_string_lossy().to_string();
     let err = record_screen(&repo, 1, "x").unwrap_err();
     assert!(err.contains("not registered"));
+  }
+
+  #[test]
+  fn registration_stores_non_empty_initial_prompt() {
+    let dir = TempDir::new().unwrap();
+    let repo = dir.path().to_string_lossy().to_string();
+    let chat = register_agent_chat(
+      &repo,
+      8,
+      "pty-8",
+      "Claude",
+      "claude",
+      None,
+      Some("fix the live logs"),
+    )
+    .unwrap();
+
+    assert_eq!(chat.messages.len(), 2);
+    assert_eq!(chat.messages[0].role, ChatRole::Agent);
+    assert_eq!(chat.messages[1].role, ChatRole::User);
+    assert_eq!(chat.messages[1].message, "fix the live logs");
+  }
+
+  #[test]
+  fn repeated_registration_does_not_duplicate_initial_prompt() {
+    let dir = TempDir::new().unwrap();
+    let repo = dir.path().to_string_lossy().to_string();
+    register_agent_chat(&repo, 9, "pty-9", "Codex", "codex", None, Some("only once")).unwrap();
+    let chat =
+      register_agent_chat(&repo, 9, "pty-9", "Codex", "codex", None, Some("only once")).unwrap();
+
+    assert_eq!(
+      chat
+        .messages
+        .iter()
+        .filter(|message| message.role == ChatRole::User && message.message == "only once")
+        .count(),
+      1
+    );
   }
 }
