@@ -470,8 +470,9 @@ impl ClientHandlerTrait for TreqSshClientHandler {
         );
         // Returning Ok(false) lets russh reject the connection cleanly
         // instead of propagating an error that could look like a transport
-        // fault; the caller still learns about the mismatch because
-        // `connect_verified` re-checks and returns `Err` explicitly below.
+        // fault. The `connect()` caller then sees `ConnectionFailed`
+        // ("Disconnected"), so host-key mismatch tests accept that error
+        // as well as `HostKeyMismatch`.
         Ok(false)
       }
     }
