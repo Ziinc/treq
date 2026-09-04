@@ -5,10 +5,12 @@ name: Remote SSH Server Integration
 # server as a job service (not a step-managed `docker run`, so the
 # container's lifecycle is owned by the Actions runner the same way any
 # other job service is) and runs `src-tauri/tests/remote_ssh_server_it.rs`
-# against it over a real network connection: real publickey auth, real
-# host-key presentation (accepted and rejected), real connection pooling,
-# real exec-channel argument round-tripping. See that test file's header
-# for exactly what this does and does not prove.
+# against it: publickey and certificate auth, host-key presentation
+# (accepted and rejected before authentication), connection pooling,
+# exec-channel round-tripping, and PTY start/IO/resize/close in a selected
+# directory. See that test file's header for exactly what this does and
+# does not prove, including that sshd KRLs are not used for client-key
+# revocation (client cutoff is tested separately).
 
 defaults:
   run:
@@ -122,6 +124,64 @@ jobs:
             'sudo mv /tmp/treq-stub.sh /usr/local/bin/treq && sudo chmod +x /usr/local/bin/treq'
           ssh "${ssh_opts[@]}" 'treq --version'
 
+      - name: Install test-only user CA and selected-workspace directory
+        id: certsetup
+        env:
+          SSH_KEY: src-tauri/tests/fixtures/remote_ssh_it/id_ed25519
+        run: |
+          set -euo pipefail
+          # Throwaway CA + cert-only client key: generated per job, never
+          # committed, never uploaded. The authorized bootstrap key remains
+          # the fixture pair; the cert-only key is not in authorized_keys, so
+          # certificate tests cannot accidentally succeed via publickey.
+          umask 077
+          CA_DIR="${RUNNER_TEMP:-/tmp}/treq-ssh-it-ca"
+          mkdir -p "$CA_DIR"
+          ssh-keygen -q -t ed25519 -N "" -C "treq-ci-user-ca (test-only, no real access)" -f "$CA_DIR/ca"
+          ssh-keygen -q -t ed25519 -N "" -C "treq-ci-cert-only (test-only, no real access)" -f "$CA_DIR/cert_client"
+          chmod 600 "$CA_DIR/ca" "$CA_DIR/cert_client"
+          echo "ca_dir=$CA_DIR" >> "$GITHUB_OUTPUT"
+
+          ssh_opts=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$SSH_KEY" -p 2222 treq@127.0.0.1)
+          # Public half only — never send the CA private key to the container.
+          ssh "${ssh_opts[@]}" "sudo tee /etc/ssh/treq_ca.pub >/dev/null" < "$CA_DIR/ca.pub"
+          ssh "${ssh_opts[@]}" 'sudo chmod 644 /etc/ssh/treq_ca.pub'
+
+          ssh "${ssh_opts[@]}" 'cat > /tmp/install-ca.sh' <<'INSTALL'
+          #!/bin/sh
+          set -eu
+          append_ca() {
+            cfg="$1"
+            if [ -f "$cfg" ] && ! grep -q '^TrustedUserCAKeys /etc/ssh/treq_ca.pub' "$cfg"; then
+              printf '\nTrustedUserCAKeys /etc/ssh/treq_ca.pub\n' | sudo tee -a "$cfg" >/dev/null
+            fi
+          }
+          append_ca /etc/ssh/sshd_config
+          append_ca /config/sshd/sshd_config
+          if [ -d /run/s6/services/svc-openssh ]; then
+            sudo s6-svc -h /run/s6/services/svc-openssh || true
+          fi
+          sudo pkill -HUP -x sshd || true
+          mkdir -p "$HOME/selected-workspace"
+          echo selected > "$HOME/selected-workspace/marker"
+          echo "$HOME/selected-workspace"
+          INSTALL
+          workspace=$(ssh "${ssh_opts[@]}" 'sh /tmp/install-ca.sh' | tr -d '\r' | tail -n 1)
+          echo "workspace_dir=$workspace" >> "$GITHUB_OUTPUT"
+          echo "Installed TrustedUserCAKeys; workspace dir recorded"
+
+      - name: Wait for sshd after CA reload
+        run: |
+          for i in $(seq 1 30); do
+            if (exec 3<>"/dev/tcp/127.0.0.1/2222") 2>/dev/null; then
+              exec 3<&- 3>&-
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "sshd did not come back after CA install" >&2
+          exit 1
+
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@v1
         with:
@@ -153,4 +213,7 @@ jobs:
           TREQ_SSH_IT_KEY_PATH: ${{ github.workspace }}/src-tauri/tests/fixtures/remote_ssh_it/id_ed25519
           TREQ_SSH_IT_HOST_KEY_ALGORITHM: "ssh-ed25519"
           TREQ_SSH_IT_HOST_KEY_FINGERPRINT: ${{ steps.hostkey.outputs.fingerprint }}
+          TREQ_SSH_IT_CA_KEY_PATH: ${{ steps.certsetup.outputs.ca_dir }}/ca
+          TREQ_SSH_IT_CERT_KEY_PATH: ${{ steps.certsetup.outputs.ca_dir }}/cert_client
+          TREQ_SSH_IT_WORKSPACE_DIR: ${{ steps.certsetup.outputs.workspace_dir }}
         run: cargo test --locked --test remote_ssh_server_it -- --test-threads=1
