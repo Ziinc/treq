@@ -1,160 +1,137 @@
 # Phase 8: Remote SSH real-API test infrastructure
 
-This document maps prds/remote-ssh.md's 16 "Acceptance criteria" to the tests
-that cover them, and states plainly which run today in this sandbox versus
-which require real credentials this sandbox does not have.
+This document maps `prds/remote-ssh.md`'s **21** acceptance criteria to the tests
+that cover them. It states plainly which run today in this sandbox versus which
+require real credentials this sandbox does not have.
 
-Two files hold the real-API (non-mocked) suite:
+`test/remote-ssh-traceability.test.ts` asserts the row count here matches the
+PRD. `test/vitest-config.test.ts` guards Vitest `sequence.groupOrder` against
+regression.
 
-- `src-tauri/tests/remote_e2e.rs` - real Fly Sprites provider adapter calls.
-- `supabase/functions/tests/remote_e2e.test.ts` - real deployed Supabase
-  Edge Function calls against a dedicated test project.
+## Test suites
 
-Both are gated on `TREQ_REMOTE_E2E=1` plus provider/project credentials (see
-the header comment of each file for the exact variable names). With no
-credentials set, every test in both files prints a `SKIP` reason and passes
-- it never fakes a passing assertion, and it never silently fails.
+| Suite | File(s) | Layer | Credential gate |
+|---|---|---|---|
+| Rust real-API e2e | `remote_e2e.rs` | rust-e2e | `TREQ_REMOTE_E2E=1` + `FLY_TEST_API_TOKEN`, `FLY_TEST_APP_NAME` |
+| Deno real-API e2e | `supabase/functions/tests/remote_e2e.test.ts` | deno-e2e | `TREQ_REMOTE_E2E=1` + Supabase test-project vars (see file header) |
+| Real `sshd` server-it | `remote_ssh_server_it.rs` | server-it | `TREQ_SSH_SERVER_IT=1` + `TREQ_SSH_IT_*` (see file header; CI: `.github/workflows/remote-ssh-server-it.yml`) |
+| Native SSH transport (mock server) | `core/remote_ssh_transport.rs` `mod tests` | unit (Rust) | none |
+| Control-plane / domain units | `core/remote*.rs`, `commands/remote*.rs` | unit (Rust) | none |
+| Quota catalog units | `supabase/functions/tests/remote_quota.test.ts` | unit (Deno) | none |
+| Frontend units | `src/lib/remote-*.test.ts`, `src/components/remote/*.test.tsx` | unit (Vitest) | none |
+| Frontend integration | `test/integration/remote-ssh.test.ts` | integration (Vitest + NAPI) | none (needs NAPI build) |
+| Compensating cleanup | `scripts/remote-e2e-cleanup.ts` | operator script | `REMOTE_ADMIN_API_KEY_TEST` (+ optional Fly scan documented in script) |
 
-A third file, `src-tauri/src/core/remote_ssh_transport.rs`'s `mod tests`,
-already carries (from Phase 4) - and this phase extends - native-SSH-only
-coverage that runs against an in-process mock `russh::server`, not a real
-provider. That coverage runs unconditionally, today, in this sandbox.
+**Skip contract:** gated suites print a `SKIP` reason and execute **zero**
+assertions when credentials are absent. That proves the harness compiles and
+skips gracefully; it is **not** a passing acceptance run. Status `skipped` below
+means exactly that.
 
-A fourth file, `src-tauri/tests/remote_ssh_server_it.rs`, runs the same
-production transport against a *real*, independently implemented `sshd`
-(a `linuxserver/openssh-server` container started as a job service in
-`.github/workflows/remote-ssh-server-it.yml`) instead of the in-process
-mock. It is gated on `TREQ_SSH_SERVER_IT=1` and connection details for a
-reachable server, following the same skip-gracefully contract as the two
-files above - see its own header comment for the exact variables and for
-what it does and does not prove (real publickey auth, real host-key
-accept/reject, real connection reuse, and real exec-channel argument
-round-tripping against a stub CLI shim; not the certificate-auth half, and
-not `TreqCommandRequest` payload coverage against a real Treq CLI - see
-gap #11 below, which this file narrows but does not close).
+**Partial transport coverage** is marked `partial`: the test runs
+unconditionally but only proves a transport/UI subset (for example mock `russh`
+server or stub CLI shim), not the full criterion against a provisioned VM.
 
 ## Acceptance criteria mapping
 
-| # | Criterion | Covered by | Sandbox status |
-|---|---|---|---|
-| 1 | Provision exactly one managed VM with region + size | `remote_e2e.rs::provisions_instance_with_selected_region_and_size`, `::provisions_across_every_region_and_size_preset` | Gated, not run here (no `FLY_TEST_API_TOKEN`) |
-| 2 | Repeated idempotency-key requests don't duplicate | `remote_e2e.rs::repeated_create_with_same_idempotency_key_does_not_duplicate_instance`; `remote_e2e.test.ts` "repeated ensure calls..." | Gated, not run here |
-| 3 | Bootstrapped to declared versions, passes expanded readiness | `remote_e2e.test.ts` "provisions with a selected region and size preset and reaches ready" (polls to `ready`) | Gated, not run here |
-| 4 | Client authenticates with user key + short-lived cert, no Treq-generated key | `remote_e2e.test.ts` "issues a short-lived certificate...", "...bounded, short expiry" | Gated, not run here |
-| 5 | Rejects unknown/changed host key | `remote_ssh_transport.rs::host_key_verifier_rejects_mismatched_fingerprint`, `::host_key_verifier_rejects_when_no_trusted_keys_are_recorded`, `::exec_command_rejects_unknown_host_key[_and_records_mismatch]` | **Runs today, passes** (in-process mock server, no vendor needed) |
-| 6 | Native SSH transport reuses a connection for multiple commands | `remote_ssh_transport.rs::exec_command_returns_stdout_and_reuses_pooled_connection` | **Runs today, passes** |
-| 7 | Register a fully explicit user-owned VM endpoint | Not in this phase's scope directly - covered by Phase 1/3 control-plane unit tests (`remote_control_plane.rs`, `remote-ssh-trust/index.ts` unit-style handlers). Phase 8 adds no new test here because no real vendor call is involved. | Out of Phase 8 scope |
-| 8 | Explicit SSH alias for user-owned endpoint, no auto-trust | Same as #7 | Out of Phase 8 scope |
-| 9 | Multiple repositories on one managed VM | Requires a real provisioned VM to open more than one repo against; not exercised by any test in this PR. | **Gap - not implemented** (see "Known gaps" below) |
-| 10 | Remote workspaces/changes/diffs/commits/conflicts render in existing UI | UI-level, out of this backend-test-infrastructure phase's scope (Phase 6). | Out of Phase 8 scope |
-| 11 | Structured mutations execute through typed Treq CLI commands | Requires a real VM with the Treq CLI installed; scaffolded as documented, gated Deno test would need a real VM's SSH endpoint, which this suite does not yet drive end-to-end (see "Known gaps"). | **Gap - not implemented** |
-| 12 | Shell/agent PTYs start in the selected remote workspace | `remote_ssh_transport.rs::pty_open_and_close_record_start_and_exit_counts` covers PTY start/exit against the mock server (not a real VM's shell). | **Runs today, passes** (transport-level only) |
-| 13 | Recover from vendor auto-suspension via wake/reconnect | `remote_e2e.rs::wakes_instance_from_vendor_suspension`; `remote_e2e.test.ts` "wake transitions..." | Gated, not run here. **Also a real gap**: neither test can force real vendor suspension on demand (see "Known gaps"). |
-| 14 | Reprovision increments generation + explicit host-trust transition | `remote_e2e.rs::reprovision_replaces_instance_and_can_change_region_and_size`; `remote_e2e.test.ts` "reprovisioning increments the instance generation and rotates the host key" | Gated, not run here |
-| 15 | Correlate lifecycle/cert/host-key/readiness/provider failures via audit, no secret/source leakage | `remote_e2e.test.ts` "lifecycle operations are correlated in audit events without leaking secrets" | Gated, not run here |
-| 16 | E2E acceptance tests pass against real test-environment APIs, no orphan resources | `remote_e2e.rs::delete_instance_removes_it_from_provider_inventory`; `remote_e2e.test.ts` "delete tears down the instance...", "remote-admin cleanup path..."; `scripts/remote-e2e-cleanup.ts` | Gated, not run here |
+| # | Criterion (summary) | Tests | Layer | Environment | Status | Proved |
+|---|---|---|---|---|---|---|
+| 1 | Provision exactly one managed VM with selected region and size preset | `remote_e2e.rs::provisions_instance_with_selected_region_and_size`; `::provisions_across_every_region_at_the_base_allocation` (needs `TREQ_REMOTE_E2E_FULL_MATRIX=1`); `remote_e2e.test.ts` "provisions with a selected region and size preset and reaches ready"; `remote_provider_sprites.rs::create_instance_normalizes_a_started_machine`; `RemoteSetupDialog.test.tsx` "shows region and size pickers..."; `test/integration/remote-ssh.test.ts` "opens the remote setup dialog from onboarding" | rust-e2e, deno-e2e, unit, integration | Fly + Supabase test project for e2e; jsdom + NAPI for integration | **skipped** (e2e); **pass** (unit); **blocked** (integration — NAPI) | Region/size provisioning against real Fly + control plane when creds set; UI exposes pickers. **Gap:** no test enforces one-VM-per-user cardinality. |
+| 2 | Base 5 GB / 1 vCPU / 2 GB RAM enforcement; distinct disk-quota errors | `remote.rs` `enforce_disk_quota_*`, `disk_quota_readiness_check_*`; `remote_provider.rs` `base_allocation_*`, `disk_quota_*`; `remote_provider_sprites.rs::create_instance_always_requests_the_base_allocation_regardless_of_preset`; `remote_quota.test.ts` (3 tests); `remote_e2e.rs::provisions_across_every_region_at_the_base_allocation` | unit (Rust/Deno), rust-e2e | In-process / mock HTTP; Fly for matrix e2e | **pass** (units); **skipped** (matrix e2e) | Structured `disk_quota_exceeded` errors and base-allocation constants match PRD; Sprites adapter always requests base guest spec. |
+| 3 | Repeated provisioning with same idempotency key does not duplicate | `remote_e2e.rs::repeated_create_with_same_idempotency_key_does_not_duplicate_instance`; `remote_e2e.test.ts` "repeated ensure calls with the same idempotency key provision exactly one instance"; `remote_provider_sprites.rs` `create_instance_sends_idempotency_headers`, `create_instance_conflict_returns_existing_machine_instead_of_erroring`; `remote.rs` `idempotency_key_replays_cached_result_*` | rust-e2e, deno-e2e, unit | Fly + Supabase test project; mock HTTP | **skipped** (e2e); **pass** (units) | Idempotency headers on provider create; replay cache on client mutations. |
+| 4 | VM bootstrapped to declared versions; expanded readiness passes | `remote_bootstrap.rs` (7 tests: manifest, idempotent bootstrap script, CA trust, authorized_keys markers); `remote_e2e.test.ts` "provisions... and reaches ready" (polls to `ready`); `remote_provider.rs::boot_manifest_round_trips_through_json`; `remote.rs::disk_quota_readiness_check_reports_a_distinct_code_when_over_quota` | unit, deno-e2e | In-process; Supabase test project | **pass** (units); **skipped** (e2e ready poll) | Bootstrap script/manifest wiring and readiness stage for disk quota. **Gap:** no test runs bootstrap against a real VM image. |
+| 5 | Client authenticates with user-selected key + short-lived cert; Treq never generates a private key | `remote_e2e.test.ts` "issues a short-lived certificate...", "issued certificates carry a bounded, short expiry"; `RemoteSetupDialog.test.tsx` "shows region and size pickers and the key fingerprint..."; `remote_local_keys.rs::returns_empty_when_ssh_dir_missing` | deno-e2e, unit | Supabase test project; jsdom | **skipped** (e2e); **pass** (UI unit) | Control plane issues bounded cert; UI shows fingerprint before registration. **Gap:** no live `sshd` cert-auth test (`remote_ssh_server_it.rs` uses static pubkey only). |
+| 6 | Silent certificate renewal ahead of expiry without interrupting channels | `remote-cert-lifecycle.test.ts` (`renewalDelayMs`, `CertificateRenewalManager` renew/retry cases); `remote_e2e.test.ts` "silent renewal issues a fresh certificate and is audited distinctly from first issuance" | unit, deno-e2e | jsdom; Supabase test project | **pass** (unit timing/manager); **skipped** (e2e) | Renewal schedule and client manager behavior. **Gap:** no test proves open exec/PTY channels stay up during renewal. |
+| 7 | Revoked key or lapsed cert blocks interaction until reauthentication | `remote-cert-lifecycle.test.ts` (`classifyRenewalError`, cutoff/session-ended/revoked/expired manager cases); `remote_e2e.test.ts` cert-after-revoke rejection + "a forced cutoff report is recorded..."; `remote_ssh_transport.rs` `force_cutoff_tears_down_*`, `clear_cutoff_restores_*` | unit, deno-e2e | jsdom; mock SSH server; Supabase test project | **pass** (units); **skipped** (e2e) | Client cutoff policy and transport teardown on forced cutoff. **Gap:** no live-server cert expiry/revocation block. |
+| 8 | Client rejects unknown or changed host key | `remote_ssh_transport.rs` `host_key_verifier_*`, `exec_command_rejects_unknown_host_key*`; `remote_ssh_server_it.rs::exec_command_rejects_a_real_server_whose_host_key_is_not_the_pinned_one`; `RemoteSetupDialog.test.tsx` "requires host-trust confirmation before registering a user-managed endpoint" | unit, server-it | In-process mock `russh`; real `sshd` container in CI; jsdom | **pass** (mock unit); **skipped** (server-it without creds); **pass** (UI unit) | Strict host-key pinning on mock and real servers; UI requires explicit trust for user-managed endpoints. |
+| 9 | Native SSH transport reuses a connection for multiple structured commands | `remote_ssh_transport.rs::exec_command_returns_stdout_and_reuses_pooled_connection`, `exec_command_reconnects_after_pooled_connection_is_marked_dead`, `pool_key_*`; `remote_ssh_server_it.rs::pool_reuses_one_connection_across_multiple_execs_against_a_real_server` | unit, server-it | Mock `russh`; real `sshd` | **pass** (mock unit); **skipped** (server-it) | Pooled connection reuse and generation-aware pool keys. |
+| 10 | Register a fully explicit user-owned VM endpoint | `remote_control_plane.rs::register_endpoint_request_alias_is_optional`; `RemoteSetupDialog.test.tsx` "requires host-trust confirmation..."; `test/integration/remote-ssh.test.ts` "opens the remote setup dialog..." (Your own VM path) | unit, integration | jsdom; NAPI | **pass** (UI unit); **blocked** (integration) | Registration request shape and host-trust UI. **Gap:** no e2e registers a user-managed endpoint against a real control plane. |
+| 11 | Explicit SSH alias for user-owned endpoint; no auto-discovery or trust | `remote.rs` `parses_ssh_hosts_*`, `lists_configured_hosts_*`, `rejects_unsafe_host_aliases`; `commands/remote.rs::remote_open_repo_rejects_unsafe_host_before_ssh`; `test/integration/remote-ssh.test.ts` unsafe-alias rejection + `listSshHosts` array tests | unit, integration | In-process; NAPI + jsdom | **pass** (Rust unit); **blocked** (integration) | Alias parsing is discovery-only; unsafe aliases rejected before SSH. **Gap:** no test for explicit alias *selection* in the user-managed registration flow. |
+| 12 | Multiple repositories on one managed VM | — | — | — | **gap** | No test opens more than one repository against a single provisioned managed VM. |
+| 13 | Remote workspaces, changes, diffs, file context, commits, conflicts render in existing UI | `test/integration/remote-ssh.test.ts` "restores the last remote repository without reading it locally"; `RemoteReviewPanel.change-marker.test.tsx` "refreshes remote review data when the operation marker changes underneath the client"; `remote-query-keys.test.ts` (endpoint/generation in query keys) | integration, unit | NAPI + jsdom | **pass** (review-panel unit); **blocked** (integration) | Last-remote restore banner and change-marker-driven refresh. **Gap:** no integration test renders diffs/commits/conflicts for a live remote repo. |
+| 14 | Detect VM-side changes from other sessions; refresh without conflict resolution | `RemoteReviewPanel.change-marker.test.tsx` (same as #13); `remote.rs` `builds_typed_change_marker_arguments`, `change_marker_reflects_new_operations_and_local_dispatch_matches_direct_jj_call` | unit | jsdom; in-process jj | **pass** | Change-marker poll refreshes client view; typed marker args match jj op log. Does not merge concurrent edits. |
+| 15 | Supported mutations execute through typed Treq commands | `remote.rs` `builds_typed_remote_review_command_arguments`, `builds_typed_probe_clone_init_arguments`, mutation classification tests; `commands/remote_control.rs` dispatch boundary tests; `remote_ssh_transport.rs` `structured_cli_error_survives_*`, `build_remote_command_line_quotes_arguments`; `remote_ssh_server_it.rs` stub CLI exec tests | unit, server-it | Mock `russh`; real `sshd` + stub CLI shim | **pass** (units); **partial** (server-it — stub CLI only, not real `treq` JSON) | Allow-listed command construction and exec-channel error mapping. **Gap:** no test drives real `treq ... --format=json` on a provisioned VM. |
+| 16 | After network loss during mutation, verify observable state before retry | `remote_ssh_transport.rs` `retry_after_reconnect_*` (4 tests); `remote.rs` workspace/agent verification recipes + `restore_file_has_no_verification_recipe` | unit | Mock `russh` with reconnect simulation | **pass** | Post-reconnect verify-then-retry/idempotency-key behavior and ambiguity surfacing. |
+| 17 | Shell and agent PTYs start in the selected remote workspace | `remote_ssh_transport.rs::pty_open_and_close_record_start_and_exit_counts`; `remote.rs` `builds_ssh_shell_command_with_working_dir`, `quotes_remote_paths_with_single_quotes` | unit | Mock `russh` | **partial** | PTY open/close mechanics and working-directory shell command builder. **Gap:** no real VM shell/agent in a selected workspace. |
+| 18 | Managed VMs recover from vendor auto-suspension via visible wake/reconnect | `remote_e2e.rs::wakes_instance_from_vendor_suspension`; `remote_e2e.test.ts` "wake transitions a suspended instance back toward ready"; `remote_provider_sprites.rs` wake/get_instance suspended mapping; `RemoteStatusBanner.test.tsx` suspended→waking banner | rust-e2e, deno-e2e, unit | Fly + Supabase; jsdom | **skipped** (e2e); **pass** (units) | Wake API and waking UI state. **Gap:** cannot force real vendor idle suspension on demand; suspend→wake round trip not proven. |
+| 19 | Reprovisioning increments generation; explicit host-trust transition | `remote_e2e.rs::reprovision_replaces_instance_and_can_change_region_and_size`; `remote_e2e.test.ts` "reprovisioning increments the instance generation and rotates the host key"; `remote-query-keys.test.ts` generation in cache keys; `remote_ssh_transport.rs::pool_key_differs_across_generations_for_same_hostname`; `remote_provider_sprites.rs::replace_instance_normalizes_updated_machine` | rust-e2e, deno-e2e, unit | Fly + Supabase; in-process | **skipped** (e2e); **pass** (units) | Generation bump rotates host key in e2e; pool/cache keys isolate generations. |
+| 20 | Lifecycle, cert, host-key, readiness, provider failures correlated in audit without secrets | `remote_e2e.test.ts` "lifecycle operations are correlated in audit events without leaking secrets", renewal/cutoff audit cases; `remote_e2e.rs::provisions_instance_with_selected_region_and_size` (captures `fly-request-id`); `remote_provider_sprites.rs` `create_instance_captures_vendor_request_id_header`, `config_debug_redacts_token` | deno-e2e, rust-e2e, unit | Supabase test project; Fly; mock HTTP | **skipped** (e2e); **pass** (units) | Audit rows correlate operations; vendor request IDs captured; tokens redacted in debug output. |
+| 21 | E2E acceptance tests pass against real test-environment APIs; no orphan resources | `remote_e2e.rs` (all 6 tests + `InstanceCleanupGuard` / `E2E_TAG_PREFIX`); `remote_e2e.test.ts` (10 cases incl. delete + remote-admin cleanup); `remote_ssh_server_it.rs` (5 tests); `scripts/remote-e2e-cleanup.ts` | rust-e2e, deno-e2e, server-it | Dedicated Fly org + Supabase test project + CI `sshd` job | **skipped** (all gated suites without creds) | Tagged resources, per-test compensating cleanup, admin cleanup path. Full green run requires credentials and compatible toolchain. Fly orphan scan in cleanup script remains a documented manual operator step. |
 
-## What actually ran and passed in this sandbox
+### Honest acceptance totals (this sandbox)
 
-No live Fly Sprites account, Supabase test project, or network access to
-either is available here. What *did* run, for real, with no mocking of the
-paths under test:
+| Status | Criteria | Notes |
+|---|---|---|
+| **pass** — unconditional tests prove core behavior | 2, 3, 4, 6, 7, 8, 9, 10, 11, 14, 16, 18, 19, 20 | Rust/Vitest units and mock transport; no Fly/Supabase/`sshd` creds required. |
+| **partial** — runs but does not close the full criterion | 1, 5, 13, 15, 17 | UI units, stub CLI server-it, mock PTY, or control-plane-only slices. |
+| **skipped** — gated real-API suites without creds (not acceptance pass) | 1, 3, 4, 5, 6, 7, 18, 19, 20, 21 | `remote_e2e.rs`, `remote_e2e.test.ts`, `remote_ssh_server_it.rs` print SKIP and run zero assertions. |
+| **gap** — no test | 12 | Multiple repositories on one managed VM. |
 
-- `cargo test --test remote_e2e` - all 6 tests execute, each hits the
-  `TREQ_REMOTE_E2E` gate, prints a skip reason, and passes. This proves the
-  harness itself compiles and behaves correctly when credentials are absent
-  (the "skip gracefully, never fake success" contract), not that the
-  underlying Fly calls work.
-- `cargo test --lib core::remote_ssh_transport::tests` (extended this
-  phase with `exec_command_reconnects_after_pooled_connection_is_marked_dead`)
-  and `core::remote_provider_sprites::tests` (extended with
-  `create_instance_captures_vendor_request_id_header`) - these are real,
-  unconditional tests against an in-process mock SSH server / mock HTTP
-  server, and they pass.
-- `deno check`/`deno lint` on `supabase/functions/tests/remote_e2e.test.ts`
-  and `scripts/remote-e2e-cleanup.ts` (static checks only - no Deno test run
-  was possible here, since that requires a reachable Supabase test project).
+Treat every **skipped** e2e row as "not proved in this environment", never as passed.
 
-## What is real code but unexecuted here (needs credentials)
+## Vitest targeted execution
 
-Every test in `remote_e2e.rs` and `remote_e2e.test.ts` is real code written
-against real APIs (Fly Machines REST API; deployed Supabase Edge Functions
-on a test project) - not stubs, not `wiremock`, not the
-`REMOTE_SPRITES_STUB`/`stub-sprites-adapter.ts` path. None of it executed in
-this sandbox because:
+Root `vitest.config.ts` lists unit, integration-serial, and integration-parallel
+as separate projects with different `maxWorkers`. Vitest 4 requires distinct
+`sequence.groupOrder` values when `maxWorkers` differ; shared defaults caused
+collection to fail on multi-core hosts before any tests ran:
 
-- there is no `FLY_TEST_API_TOKEN` / `FLY_TEST_APP_NAME`,
-- there is no `SUPABASE_TEST_URL` / `SUPABASE_TEST_SERVICE_ROLE_KEY` /
-  `SUPABASE_TEST_ANON_KEY`,
-- there is no network path to either vendor from this environment.
+```text
+Projects "unit" and "integration-parallel" have different 'maxWorkers'
+but same 'sequence.groupOrder'. Provide unique 'sequence.groupOrder' for them.
+```
 
-To actually run this suite, an operator needs:
+`vitest.projects.ts` centralizes `groupOrder` (unit → serial → parallel). Prefer
+targeted runs through the project-specific configs when you only need one layer:
 
-1. A disposable Fly organization/app dedicated to Treq e2e tests, and an API
-   token scoped to it.
-2. A dedicated Supabase *test* project (never staging/production) with the
-   Phase 1-7 migrations applied and the Remote SSH Edge Functions deployed,
-   its own `FLY_SPRITES_API_TOKEN` / `FLY_SPRITES_APP_NAME` / SSH CA key
-   material configured as Edge Function secrets, and `REMOTE_ADMIN_API_KEY`
-   set to a value also exported here as `REMOTE_ADMIN_API_KEY_TEST`.
-3. Set the environment variables documented at the top of each test file and
-   run:
-   ```
-   TREQ_REMOTE_E2E=1 cargo test --test remote_e2e -- --test-threads=1
-   TREQ_REMOTE_E2E=1 deno test --allow-net --allow-env supabase/functions/tests/remote_e2e.test.ts
-   ```
-   `--test-threads=1` on the Rust side is a recommendation, not a
-   requirement enforced by the harness itself beyond the in-process
-   `TREQ_REMOTE_E2E_MAX_CONCURRENCY` cap (default 2) in `remote_e2e.rs`.
-4. Periodically (e.g. daily via a scheduled CI workflow) run:
-   ```
-   deno run --allow-net --allow-env scripts/remote-e2e-cleanup.ts
-   ```
-   to remove any test resources whose per-test compensating cleanup did not
-   run (process killed, container OOM, etc).
+```bash
+npm run test:unit -- test/merge-queue
+npm run test:integration:run -- test/integration/settings test/integration/workspace
+```
 
-## Known gaps (not implemented in this phase)
+## What actually ran in this sandbox
 
-Being direct about what is left, per the task's request for an honest
-accounting:
+No live Fly Sprites account, Supabase test project, or reachable `sshd` for
+server-it. Unconditional suites that **did** run:
 
-- **Multiple repositories on one managed VM (#9)** and **typed CLI mutation
-  coverage against a real VM (#11)** are not implemented. Both require a
-  real provisioned VM with the Treq CLI, JJ, and Git actually installed and
-  reachable over SSH - `remote_e2e.test.ts` provisions and polls to `ready`
-  but does not yet open an SSH session to the resulting VM and drive
-  `treq repo inspect` / `workspace list` / `changes list` / commit / diff /
-  conflict / mutation commands against it. That is real, additional work
-  (an SSH client in the Deno test runtime, or a companion step that shells
-  out to the same Rust SSH transport used in production) that a future pass
-  should add once a stable test VM image exists.
-- **Terminal and agent execution against a real VM** is likewise not
-  implemented for the same reason - `remote_ssh_transport.rs`'s PTY test
-  proves PTY open/close mechanics against a mock server, not that a real
-  VM's shell or a coding agent starts correctly in a selected workspace.
-- **Forcing real vendor auto-suspension (#13)** is not implemented and
-  cannot be, without either a long soak (waiting out Fly's real idle
-  timer) or a Fly Sprites test-environment "force-suspend" API this harness
-  does not have access to document. `wake_instance` itself is exercised for
-  real; the suspend-then-wake round trip is not.
-- **Valid/expired/revoked certificate acceptance against a real `sshd`**:
-  `remote_e2e.test.ts` proves the control plane issues a certificate with a
-  short, bounded lifetime, and that a revoked key's key cannot be reissued
-  a certificate. It does not yet drive a real SSH client through the native
-  Rust transport to authenticate against the real VM's real `sshd` using
-  that certificate, or wait out a certificate's expiry against a live
-  server. `remote_ssh_transport.rs`'s host-key tests cover the "unknown/
-  changed host key" half of this against the mock server, and
-  `remote_ssh_server_it.rs` now covers publickey auth plus host-key
-  accept/reject against a *real* `sshd`; only the certificate-auth half
-  against a live server remains a gap, since that needs a real Supabase-
-  issued short-lived certificate, not a static test keypair.
-- **Fly-side orphan-machine scanning** in `scripts/remote-e2e-cleanup.ts` is
-  documented as a manual operator step (a `curl`/`jq` one-liner in the
-  script's own comments) rather than automated, to avoid handing the
-  cleanup script a Fly API token it does not otherwise need for its common
-  case (deleting leaked Supabase test users and their owned rows).
+- `npm run test:unit` — includes `remote-cert-lifecycle.test.ts`,
+  `remote-query-keys.test.ts`, `RemoteSetupDialog.test.tsx`,
+  `RemoteStatusBanner.test.tsx`, `RemoteReviewPanel.change-marker.test.tsx`,
+  `test/vitest-config.test.ts`, `test/remote-ssh-traceability.test.ts`
+- `cargo test --lib core::remote_ssh_transport::tests` (when Rust toolchain
+  supports the crate edition) — mock-server transport tests
+- Gated suites print SKIP and execute zero assertions (harness-only pass)
 
-None of these gaps are hidden inside a passing-looking test - each one is
-either absent from the test files entirely, or (for #13) present with an
-explicit code comment stating what it does and does not prove.
+## Running the gated real-API suites
+
+1. Disposable Fly organization/app + `FLY_TEST_API_TOKEN` / `FLY_TEST_APP_NAME`.
+2. Dedicated Supabase **test** project with Phase 1–7 migrations and Remote SSH
+   Edge Functions deployed; Edge Function secrets configured on the Supabase
+   side; `REMOTE_ADMIN_API_KEY_TEST` exported locally.
+3. For server-it: reachable `sshd` + `TREQ_SSH_IT_*` vars (see
+   `remote_ssh_server_it.rs` header).
+4. Run:
+
+```bash
+TREQ_REMOTE_E2E=1 cargo test --test remote_e2e -- --test-threads=1
+TREQ_REMOTE_E2E=1 deno test --allow-net --allow-env supabase/functions/tests/remote_e2e.test.ts
+TREQ_SSH_SERVER_IT=1 cargo test --test remote_ssh_server_it -- --test-threads=1
+```
+
+5. Periodically: `deno run --allow-net --allow-env scripts/remote-e2e-cleanup.ts`
+
+`--test-threads=1` on the Rust side is recommended; the harness also caps
+concurrency via `TREQ_REMOTE_E2E_MAX_CONCURRENCY` (default 2) in `remote_e2e.rs`.
+
+## Known gaps (not hidden in passing-looking tests)
+
+- **#12 Multiple repositories on one managed VM** — not implemented.
+- **Real `treq` CLI on a provisioned VM (#15)** — server-it uses a stub CLI shim only.
+- **Real VM shell/agent PTY (#17)** — mock transport only.
+- **True vendor suspend→wake (#18)** — wake API only; cannot force vendor idle timer.
+- **Certificate auth against live `sshd` (#5, #7)** — server-it covers pubkey path only.
+- **Full remote UI for diffs/commits/conflicts (#13)** — change-marker unit test only.
+- **One-VM-per-user enforcement (#1)** — not asserted.
+- **Explicit alias selection in user-managed flow (#11)** — discovery/rejection only.
+
+Each gap is either absent from the test files or called out explicitly in test
+comments and the Status/Proved columns above.
