@@ -257,6 +257,10 @@ fn poison_host_keys(endpoint: &mut SshEndpoint) {
   }
 }
 
+fn auth_rejected(error: &SshTransportError) -> bool {
+  matches!(error, SshTransportError::AuthenticationFailed(_))
+}
+
 async fn collect_pty_bytes(pty: &RemotePtyChannel, wait: Duration) -> Vec<u8> {
   let mut buf = Vec::new();
   let deadline = tokio::time::Instant::now() + wait;

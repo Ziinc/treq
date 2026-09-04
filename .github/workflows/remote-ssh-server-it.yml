@@ -180,23 +180,33 @@ jobs:
           SSH_KEY: src-tauri/tests/fixtures/remote_ssh_it/id_ed25519
         run: |
           set -euo pipefail
-          for i in $(seq 1 30); do
+          fingerprints=""
+          for i in $(seq 1 60); do
             if (exec 3<>"/dev/tcp/127.0.0.1/2222") 2>/dev/null; then
               exec 3<&- 3>&-
-              break
+              fingerprints=$(ssh-keyscan -p 2222 127.0.0.1 2>/dev/null \
+                | ssh-keygen -lf - -E sha256 2>/dev/null | awk '{print $2}' | paste -sd, - || true)
+              if [ -n "$fingerprints" ]; then
+                break
+              fi
             fi
             sleep 1
           done
-          fingerprints=$(ssh-keyscan -p 2222 127.0.0.1 2>/dev/null \
-            | ssh-keygen -lf - -E sha256 | awk '{print $2}' | paste -sd, -)
           if [ -z "$fingerprints" ]; then
             echo "failed to re-discover the server's host key fingerprints" >&2
             exit 1
           fi
           echo "Discovered host key fingerprints: $fingerprints"
           echo "fingerprint=$fingerprints" >> "$GITHUB_OUTPUT"
-          ssh_opts=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$SSH_KEY" -p 2222 treq@127.0.0.1)
-          ssh "${ssh_opts[@]}" 'treq --version'
+          ssh_opts=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -i "$SSH_KEY" -p 2222 treq@127.0.0.1)
+          for i in $(seq 1 30); do
+            if ssh "${ssh_opts[@]}" 'treq --version'; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "sshd did not accept the bootstrap key after restart" >&2
+          exit 1
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@v1
