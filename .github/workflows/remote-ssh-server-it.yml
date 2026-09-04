@@ -158,29 +158,46 @@ jobs:
           }
           append_ca /etc/ssh/sshd_config
           append_ca /config/sshd/sshd_config
-          if [ -d /run/s6/services/svc-openssh ]; then
-            sudo s6-svc -h /run/s6/services/svc-openssh || true
-          fi
-          sudo pkill -HUP -x sshd || true
           mkdir -p "$HOME/selected-workspace"
           echo selected > "$HOME/selected-workspace/marker"
           echo "$HOME/selected-workspace"
           INSTALL
           workspace=$(ssh "${ssh_opts[@]}" 'sh /tmp/install-ca.sh' | tr -d '\r' | tail -n 1)
           echo "workspace_dir=$workspace" >> "$GITHUB_OUTPUT"
-          echo "Installed TrustedUserCAKeys; workspace dir recorded"
 
-      - name: Wait for sshd after CA reload
+          # Reload sshd from the runner, not from inside an SSH session, and
+          # HUP only the oldest sshd (the listener). pkill of every sshd /
+          # s6 restart was rotating host keys and disconnecting the job.
+          cid=$(docker ps --format '{{.ID}} {{.Image}}' | awk '/openssh-server/{print $1; exit}')
+          if [ -z "$cid" ]; then
+            echo "could not find the openssh-server container" >&2
+            exit 1
+          fi
+          docker exec "$cid" sh -c 'kill -HUP "$(pidof -s sshd 2>/dev/null || pidof sshd | awk "{print \$1}")"'
+          echo "Installed TrustedUserCAKeys and HUPed sshd master in $cid"
+
+      - name: Re-discover host key and confirm sshd still accepts the bootstrap key
+        id: hostkey_after_ca
+        env:
+          SSH_KEY: src-tauri/tests/fixtures/remote_ssh_it/id_ed25519
         run: |
+          set -euo pipefail
           for i in $(seq 1 30); do
             if (exec 3<>"/dev/tcp/127.0.0.1/2222") 2>/dev/null; then
               exec 3<&- 3>&-
-              exit 0
+              break
             fi
             sleep 1
           done
-          echo "sshd did not come back after CA install" >&2
-          exit 1
+          fingerprint=$(ssh-keyscan -p 2222 -t ed25519 127.0.0.1 2>/dev/null \
+            | ssh-keygen -lf - -E sha256 | awk '{print $2}')
+          if [ -z "$fingerprint" ]; then
+            echo "failed to re-discover the server's host key fingerprint" >&2
+            exit 1
+          fi
+          echo "fingerprint=$fingerprint" >> "$GITHUB_OUTPUT"
+          ssh_opts=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$SSH_KEY" -p 2222 treq@127.0.0.1)
+          ssh "${ssh_opts[@]}" 'treq --version'
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@v1
@@ -212,7 +229,7 @@ jobs:
           TREQ_SSH_IT_USERNAME: "treq"
           TREQ_SSH_IT_KEY_PATH: ${{ github.workspace }}/src-tauri/tests/fixtures/remote_ssh_it/id_ed25519
           TREQ_SSH_IT_HOST_KEY_ALGORITHM: "ssh-ed25519"
-          TREQ_SSH_IT_HOST_KEY_FINGERPRINT: ${{ steps.hostkey.outputs.fingerprint }}
+          TREQ_SSH_IT_HOST_KEY_FINGERPRINT: ${{ steps.hostkey_after_ca.outputs.fingerprint }}
           TREQ_SSH_IT_CA_KEY_PATH: ${{ steps.certsetup.outputs.ca_dir }}/ca
           TREQ_SSH_IT_CERT_KEY_PATH: ${{ steps.certsetup.outputs.ca_dir }}/cert_client
           TREQ_SSH_IT_WORKSPACE_DIR: ${{ steps.certsetup.outputs.workspace_dir }}

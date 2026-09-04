@@ -243,10 +243,7 @@ fn issue_and_endpoint(
 }
 
 fn auth_rejected(error: &SshTransportError) -> bool {
-  matches!(
-    error,
-    SshTransportError::AuthenticationFailed(_) | SshTransportError::ConnectionFailed(_)
-  )
+  matches!(error, SshTransportError::AuthenticationFailed(_))
 }
 
 async fn collect_pty_bytes(pty: &RemotePtyChannel, wait: Duration) -> Vec<u8> {
