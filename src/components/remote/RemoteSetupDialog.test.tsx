@@ -23,6 +23,7 @@ function baseProps() {
     onReprovision: vi.fn().mockResolvedValue(undefined),
     onDeleteInstance: vi.fn().mockResolvedValue(undefined),
     onRevokeKey: vi.fn().mockResolvedValue(undefined),
+    onConnectManaged: vi.fn().mockResolvedValue(undefined),
     onRegisterUserManaged: vi.fn().mockResolvedValue(undefined),
   };
 }

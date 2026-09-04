@@ -65,8 +65,10 @@ import {
   deleteInstance as deleteManagedInstance,
   ensureInstance,
   getInstanceStatus,
+  issueCertificate,
   listRegions,
   listSizePresets,
+  registerClientKey,
   reprovisionInstance,
   revokeClientKey,
   wakeInstance,
@@ -78,6 +80,18 @@ import {
   publicKeyAuthentication,
 } from "../lib/remote-endpoints";
 import { dispatchOverSsh } from "../lib/remote-dispatch";
+import { readLocalSshPublicKey } from "../lib/api";
+import {
+  connectExistingReadyInstance,
+  connectManagedInstance,
+  reauthenticateManagedInstance,
+  waitForInstanceReady,
+  type ManagedConnectionDeps,
+  type RenewalController,
+} from "../lib/managed-ssh-connection";
+import { startManagedCertificateRenewal } from "../lib/remote-cert-lifecycle";
+import { useRemoteCutoffStore } from "../stores/remoteCutoffStore";
+import { remoteForceCutoff } from "../lib/api-extra";
 import {
   RemoteSetupDialog,
   type LocalKeyIdentity,
@@ -306,6 +320,70 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [explicitEndpointRepoConnected, setExplicitEndpointRepoConnected] =
     useState(false);
   const [explicitEndpointError, setExplicitEndpointError] = useState<string>();
+  // The currently registered client key for the managed instance, so a
+  // revocation of *this* key (PRD "Revoking the active key must immediately
+  // cut off the active endpoint") and reauthentication after a hard cutoff
+  // both know which local identity to use.
+  const [managedKeyId, setManagedKeyId] = useState<string | null>(null);
+  // Last local identity reference used to connect the managed instance, so
+  // wake/reconnect and reauthentication can re-run the same
+  // register-key -> issue-certificate sequence without asking the user to
+  // reselect their identity every time.
+  const [selectedKeyReference, setSelectedKeyReference] = useState<
+    string | null
+  >(null);
+  const renewalControllerRef = useRef<RenewalController | null>(null);
+  const cutoffs = useRemoteCutoffStore((s) => s.cutoffs);
+  const clearRemoteCutoff = useRemoteCutoffStore((s) => s.clearCutoff);
+
+  useEffect(() => {
+    void useRemoteCutoffStore.getState().startListening();
+    return () => useRemoteCutoffStore.getState().stopListening();
+  }, []);
+
+  // Stop renewal on disconnect or endpoint replacement (PRD "Stop renewal on
+  // disconnect or endpoint replacement") - this fires whenever
+  // `activeSshEndpoint` changes identity (including to null) or the
+  // component unmounts, before any new renewal loop for a replacement
+  // endpoint is started by the handler that set it.
+  useEffect(() => {
+    return () => {
+      renewalControllerRef.current?.stop();
+      renewalControllerRef.current = null;
+    };
+  }, [activeSshEndpoint]);
+
+  const managedConnectionDeps = (): ManagedConnectionDeps => ({
+    readPublicKey: readLocalSshPublicKey,
+    registerClientKey: async (publicKey, comment, idempotencyKey) => {
+      const key = await registerClientKey({
+        public_key: publicKey,
+        comment,
+        idempotency_key: idempotencyKey,
+      });
+      setManagedKeyId(key.id);
+      return key;
+    },
+    ensureInstance: (region, size, idempotencyKey) =>
+      ensureInstance({
+        region,
+        size_preset: size,
+        idempotency_key: idempotencyKey,
+      }),
+    getInstanceStatus,
+    issueCertificate: (instanceId, keyId) =>
+      issueCertificate({ instance_id: instanceId, key_id: keyId }),
+    activateEndpoint: (endpoint) => {
+      renewalControllerRef.current?.stop();
+      setActiveSshEndpoint(endpoint);
+      setActiveEndpointGeneration(
+        endpoint.source.type === "managed" ? endpoint.source.generation : 0,
+      );
+    },
+    startRenewal: (lease, onRenewed) =>
+      startManagedCertificateRenewal(lease, onRenewed),
+    clearCutoff: (endpointId) => clearRemoteCutoff(endpointId),
+  });
 
   const handleConnectExplicitEndpointRepo = async () => {
     if (!activeSshEndpoint) return;
@@ -372,6 +450,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
     }
   };
 
+  // Full identity -> registration -> certificate -> endpoint sequence (PRD
+  // "Managed VM certificate flow"), plus the initial silent-renewal start.
+  // See `src/lib/managed-ssh-connection.ts` for the state machine itself.
   const handleProvisionManaged = async (
     region: RegionCode,
     size: SizePreset,
@@ -380,11 +461,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
     setProvisioningError(undefined);
     setProvisioningStage("Requesting provisioning...");
     try {
-      await ensureInstance({
+      setProvisioningStage("Registering SSH key...");
+      const result = await connectManagedInstance(managedConnectionDeps(), {
         region,
-        size_preset: size,
-        idempotency_key: `provision-${keyReference}-${Date.now()}`,
+        size,
+        keyReference,
       });
+      renewalControllerRef.current = result.renewal;
+      setSelectedKeyReference(keyReference);
       await refreshInstanceStatus();
     } catch (error) {
       setProvisioningError(
@@ -395,16 +479,79 @@ export const Dashboard: React.FC<DashboardProps> = ({
     }
   };
 
-  const handleWakeManaged = async () => {
+  // Connect action for an existing ready managed instance (required behavior
+  // "Add a clear Connect action for an existing ready managed instance") -
+  // still runs key registration + certificate issuance + renewal, just skips
+  // provisioning/readiness polling since the instance is already `ready`.
+  const handleConnectManaged = async (keyReference: string) => {
+    if (!instanceStatus) return;
+    setProvisioningError(undefined);
+    try {
+      const result = await connectExistingReadyInstance(
+        managedConnectionDeps(),
+        { status: instanceStatus, keyReference },
+      );
+      renewalControllerRef.current = result.renewal;
+      setSelectedKeyReference(keyReference);
+      setShowRemoteSetupDialog(false);
+    } catch (error) {
+      setProvisioningError(
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  };
+
+  // Wake/reconnect ordering (required behavior): wake, poll readiness,
+  // refresh credentials (fresh certificate), validate generation/host trust
+  // (via `activateEndpoint` replacing the endpoint), reconnect - only then is
+  // interaction restored (the new `activeSshEndpoint` is what gates it).
+  const handleWakeManaged = async (keyReference?: string) => {
     const instanceId = instanceStatus?.instance?.instance_id;
-    if (!instanceId) return;
+    const resolvedKeyReference = keyReference ?? selectedKeyReference;
+    if (!instanceId || !resolvedKeyReference) return;
     setProvisioningError(undefined);
     try {
       await wakeInstance({
         instance_id: instanceId,
-        idempotency_key: `wake-${instanceId}-${Date.now()}`,
+        idempotency_key: `wake-${instanceId}`,
       });
+      const deps = managedConnectionDeps();
+      const readyStatus = await waitForInstanceReady(deps);
+      const result = await connectExistingReadyInstance(deps, {
+        status: readyStatus,
+        keyReference: resolvedKeyReference,
+      });
+      renewalControllerRef.current = result.renewal;
+      setSelectedKeyReference(resolvedKeyReference);
       await refreshInstanceStatus();
+    } catch (error) {
+      setProvisioningError(
+        error instanceof Error ? error.message : String(error),
+      );
+    }
+  };
+
+  // Reauthentication after a hard cutoff (PRD "The user regains access only
+  // by reauthenticating and obtaining a new certificate through the normal
+  // registration and issuance flow"). Cutoff is cleared only once
+  // `reauthenticateManagedInstance` confirms fresh certificate issuance
+  // succeeded.
+  const handleReauthenticateManaged = async (keyReference?: string) => {
+    const resolvedKeyReference = keyReference ?? selectedKeyReference;
+    if (!activeSshEndpoint || !instanceStatus?.instance || !resolvedKeyReference)
+      return;
+    setProvisioningError(undefined);
+    try {
+      const result = await reauthenticateManagedInstance(
+        managedConnectionDeps(),
+        {
+          instanceId: instanceStatus.instance.instance_id,
+          endpointId: activeSshEndpoint.id,
+          keyReference: resolvedKeyReference,
+        },
+      );
+      renewalControllerRef.current = result.renewal;
+      setSelectedKeyReference(resolvedKeyReference);
     } catch (error) {
       setProvisioningError(
         error instanceof Error ? error.message : String(error),
@@ -451,13 +598,28 @@ export const Dashboard: React.FC<DashboardProps> = ({
     }
   };
 
+  // Revoking the active key must immediately cut off the active endpoint
+  // (required behavior) - this is a client-driven mirror of the same forced
+  // cutoff the certificate-renewal loop performs when the control plane
+  // reports the key revoked on the next renewal attempt, so access is
+  // blocked right away rather than only after the current certificate would
+  // otherwise have been silently renewed.
   const handleRevokeKey = async (keyReference: string) => {
     setProvisioningError(undefined);
+    const keyId = managedKeyId ?? keyReference;
     try {
       await revokeClientKey({
-        key_id: keyReference,
-        idempotency_key: `revoke-${keyReference}-${Date.now()}`,
+        key_id: keyId,
+        idempotency_key: `revoke-${keyId}`,
       });
+      if (activeSshEndpoint && managedKeyId) {
+        renewalControllerRef.current?.stop();
+        renewalControllerRef.current = null;
+        await remoteForceCutoff(activeSshEndpoint.id, "key_revoked");
+        useRemoteCutoffStore
+          .getState()
+          .recordCutoff(activeSshEndpoint.id, "key_revoked");
+      }
     } catch (error) {
       setProvisioningError(
         error instanceof Error ? error.message : String(error),
@@ -1916,6 +2078,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       onReprovision={handleReprovisionManaged}
       onDeleteInstance={handleDeleteManagedInstance}
       onRevokeKey={handleRevokeKey}
+      onConnectManaged={handleConnectManaged}
       onRegisterUserManaged={handleRegisterUserManaged}
     />
   );
@@ -1963,7 +2126,31 @@ export const Dashboard: React.FC<DashboardProps> = ({
             />
           </div>
 
-          {activeSshEndpoint && !explicitEndpointRepoConnected && (
+          {activeSshEndpoint && cutoffs[activeSshEndpoint.id] && (
+            <div className="border-b border-red-500/40 bg-red-500/10 px-4 py-3 text-sm">
+              <p className="font-medium text-red-700 dark:text-red-300">
+                Access blocked ({cutoffs[activeSshEndpoint.id]
+                  .split("_")
+                  .join(" ")}
+                )
+              </p>
+              <p className="mt-1 text-muted-foreground">
+                This instance is cut off from further commands until you
+                reauthenticate and obtain a new certificate.
+              </p>
+              <Button
+                size="sm"
+                className="mt-2"
+                onClick={() => void handleReauthenticateManaged()}
+              >
+                Reauthenticate
+              </Button>
+            </div>
+          )}
+
+          {activeSshEndpoint &&
+            !explicitEndpointRepoConnected &&
+            !cutoffs[activeSshEndpoint.id] && (
             <div className="flex flex-col gap-2 border-b px-4 py-3">
               <label className="flex flex-col gap-1 max-w-md">
                 <span className="text-sm font-medium">
@@ -2001,7 +2188,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
               />
             ) : (
               activeSshEndpoint &&
-              explicitEndpointRepoConnected && (
+              explicitEndpointRepoConnected &&
+              !cutoffs[activeSshEndpoint.id] && (
                 <RemoteReviewPanel
                   endpoint={activeSshEndpoint}
                   endpointGeneration={activeEndpointGeneration}
