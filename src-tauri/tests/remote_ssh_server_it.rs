@@ -110,6 +110,19 @@ fn it_config() -> Option<ItConfig> {
   let algorithm =
     std::env::var("TREQ_SSH_IT_HOST_KEY_ALGORITHM").unwrap_or_else(|_| "ssh-ed25519".to_string());
   let fingerprint_sha256 = std::env::var("TREQ_SSH_IT_HOST_KEY_FINGERPRINT").ok()?;
+  let host_keys: Vec<TrustedHostKey> = fingerprint_sha256
+    .split(',')
+    .map(str::trim)
+    .filter(|fp| !fp.is_empty())
+    .map(|fp| TrustedHostKey {
+      algorithm: algorithm.clone(),
+      fingerprint_sha256: fp.to_string(),
+      comment: None,
+    })
+    .collect();
+  if host_keys.is_empty() {
+    return None;
+  }
 
   Some(ItConfig {
     endpoint: SshEndpoint {
@@ -119,11 +132,7 @@ fn it_config() -> Option<ItConfig> {
       hostname,
       port,
       username,
-      host_keys: vec![TrustedHostKey {
-        algorithm,
-        fingerprint_sha256,
-        comment: None,
-      }],
+      host_keys,
       authentication: SshAuthentication::PublicKey { key_reference },
     },
   })
@@ -242,8 +251,10 @@ fn issue_and_endpoint(
   cert_endpoint(cfg, &key_path, id_suffix)
 }
 
-fn auth_rejected(error: &SshTransportError) -> bool {
-  matches!(error, SshTransportError::AuthenticationFailed(_))
+fn poison_host_keys(endpoint: &mut SshEndpoint) {
+  for key in &mut endpoint.host_keys {
+    key.fingerprint_sha256 = "SHA256:not-the-real-host-key".to_string();
+  }
 }
 
 async fn collect_pty_bytes(pty: &RemotePtyChannel, wait: Duration) -> Vec<u8> {
@@ -351,7 +362,7 @@ async fn pool_reuses_one_connection_across_multiple_execs_against_a_real_server(
 #[tokio::test]
 async fn exec_command_rejects_a_real_server_whose_host_key_is_not_the_pinned_one() {
   let mut cfg = require_it!();
-  cfg.endpoint.host_keys[0].fingerprint_sha256 = "SHA256:not-the-real-host-key".to_string();
+  poison_host_keys(&mut cfg.endpoint);
   cfg.endpoint.id = "remote-ssh-server-it-wrong-fingerprint".to_string();
 
   let pool = SshConnectionPool::new();
@@ -572,7 +583,7 @@ async fn certificate_auth_rejects_host_key_mismatch_before_authentication() {
     "+5m",
     "hostkey-mismatch",
   );
-  endpoint.host_keys[0].fingerprint_sha256 = "SHA256:not-the-real-host-key".to_string();
+  poison_host_keys(&mut endpoint);
 
   let pool = SshConnectionPool::new();
   let cancellation = CancellationToken::new();

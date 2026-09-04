@@ -143,21 +143,18 @@ jobs:
           echo "ca_dir=$CA_DIR" >> "$GITHUB_OUTPUT"
 
           ssh_opts=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$SSH_KEY" -p 2222 treq@127.0.0.1)
-          # Public half only — never send the CA private key to the container.
-          ssh "${ssh_opts[@]}" "sudo tee /etc/ssh/treq_ca.pub >/dev/null" < "$CA_DIR/ca.pub"
-          ssh "${ssh_opts[@]}" 'sudo chmod 644 /etc/ssh/treq_ca.pub'
+          # Public half only. linuxserver sshd runs as USER_NAME and reads
+          # /config/sshd/sshd_config, not /etc/ssh/sshd_config.
+          ssh "${ssh_opts[@]}" "sudo tee /config/sshd/treq_ca.pub >/dev/null" < "$CA_DIR/ca.pub"
+          ssh "${ssh_opts[@]}" 'sudo chmod 644 /config/sshd/treq_ca.pub'
 
           ssh "${ssh_opts[@]}" 'cat > /tmp/install-ca.sh' <<'INSTALL'
           #!/bin/sh
           set -eu
-          append_ca() {
-            cfg="$1"
-            if [ -f "$cfg" ] && ! grep -q '^TrustedUserCAKeys /etc/ssh/treq_ca.pub' "$cfg"; then
-              printf '\nTrustedUserCAKeys /etc/ssh/treq_ca.pub\n' | sudo tee -a "$cfg" >/dev/null
-            fi
-          }
-          append_ca /etc/ssh/sshd_config
-          append_ca /config/sshd/sshd_config
+          cfg=/config/sshd/sshd_config
+          if [ -f "$cfg" ] && ! grep -q '^TrustedUserCAKeys /config/sshd/treq_ca.pub' "$cfg"; then
+            printf '\nTrustedUserCAKeys /config/sshd/treq_ca.pub\n' | sudo tee -a "$cfg" >/dev/null
+          fi
           mkdir -p "$HOME/selected-workspace"
           echo selected > "$HOME/selected-workspace/marker"
           echo "$HOME/selected-workspace"
@@ -165,16 +162,17 @@ jobs:
           workspace=$(ssh "${ssh_opts[@]}" 'sh /tmp/install-ca.sh' | tr -d '\r' | tail -n 1)
           echo "workspace_dir=$workspace" >> "$GITHUB_OUTPUT"
 
-          # Reload sshd from the runner, not from inside an SSH session, and
-          # HUP only the oldest sshd (the listener). pkill of every sshd /
-          # s6 restart was rotating host keys and disconnecting the job.
+          # Full container restart (not SIGHUP): this image starts sshd as
+          # the unprivileged user with `sshd -h` host keys. SIGHUP made it
+          # reread HostKey from the config file, so russh saw a different
+          # algorithm than the pinned ed25519 fingerprint.
           cid=$(docker ps --format '{{.ID}} {{.Image}}' | awk '/openssh-server/{print $1; exit}')
           if [ -z "$cid" ]; then
             echo "could not find the openssh-server container" >&2
             exit 1
           fi
-          docker exec "$cid" sh -c 'kill -HUP "$(pidof -s sshd 2>/dev/null || pidof sshd | awk "{print \$1}")"'
-          echo "Installed TrustedUserCAKeys and HUPed sshd master in $cid"
+          docker restart "$cid"
+          echo "Restarted openssh-server container $cid"
 
       - name: Re-discover host key and confirm sshd still accepts the bootstrap key
         id: hostkey_after_ca
@@ -189,13 +187,14 @@ jobs:
             fi
             sleep 1
           done
-          fingerprint=$(ssh-keyscan -p 2222 -t ed25519 127.0.0.1 2>/dev/null \
-            | ssh-keygen -lf - -E sha256 | awk '{print $2}')
-          if [ -z "$fingerprint" ]; then
-            echo "failed to re-discover the server's host key fingerprint" >&2
+          fingerprints=$(ssh-keyscan -p 2222 127.0.0.1 2>/dev/null \
+            | ssh-keygen -lf - -E sha256 | awk '{print $2}' | paste -sd, -)
+          if [ -z "$fingerprints" ]; then
+            echo "failed to re-discover the server's host key fingerprints" >&2
             exit 1
           fi
-          echo "fingerprint=$fingerprint" >> "$GITHUB_OUTPUT"
+          echo "Discovered host key fingerprints: $fingerprints"
+          echo "fingerprint=$fingerprints" >> "$GITHUB_OUTPUT"
           ssh_opts=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$SSH_KEY" -p 2222 treq@127.0.0.1)
           ssh "${ssh_opts[@]}" 'treq --version'
 
