@@ -225,6 +225,24 @@ export interface SshEndpoint {
   authentication: SshAuthentication;
 }
 
+/**
+ * Allow-listed remote agent identifiers (mirrors `RemoteAgentId` in
+ * `src-tauri/src/core/remote_pty.rs`). Closed set - never an arbitrary
+ * string - so the backend can never be asked to exec an unknown binary.
+ */
+export type RemoteAgentId = "claude" | "codex" | "cursor_agent";
+
+/**
+ * Typed launch behavior for a new remote PTY session (mirrors
+ * `PtyLaunchSpec` in `src-tauri/src/core/remote_pty.rs`). Never an arbitrary
+ * shell command string - this is the type-level half of the backend's
+ * shell-injection guard: only a closed set of launch shapes exists, and
+ * every dynamic field within them is individually shell-quoted server-side.
+ */
+export type PtyLaunchSpec =
+  | { type: "shell" }
+  | { type: "agent"; agent: RemoteAgentId; args: string[] };
+
 export type OperationStatus =
   | "pending"
   | "in_progress"

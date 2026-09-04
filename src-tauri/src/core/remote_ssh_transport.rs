@@ -1079,7 +1079,17 @@ fn build_remote_command_line(args: &[String]) -> String {
 /// knows the local PTY API is not learning a second vocabulary, even though
 /// the two are separate transports.
 pub struct RemotePtyChannel {
-  channel: AsyncMutex<russh::Channel<russh::client::Msg>>,
+  // Split into read/write halves rather than one `AsyncMutex<Channel>`: the
+  // read half's `wait()` needs `&mut self` and blocks for as long as no new
+  // message has arrived, so a single shared lock around the whole channel
+  // would let a concurrent read loop hold that lock indefinitely and
+  // deadlock any caller of `write`/`resize`/`close` that runs while a read
+  // is in flight — exactly the pattern a streaming consumer (read output in
+  // a background task while writes/closes happen from elsewhere) needs.
+  // `ChannelWriteHalf`'s operations only need `&self` (they just enqueue a
+  // message), so they never contend with the read half's mutex at all.
+  read_half: AsyncMutex<russh::ChannelReadHalf>,
+  write_half: russh::ChannelWriteHalf<russh::client::Msg>,
   metrics: Arc<SshTransportMetrics>,
 }
 
@@ -1115,18 +1125,19 @@ impl RemotePtyChannel {
         .map_err(|error| SshTransportError::ChannelError(error.to_string()))?,
     }
     pool.metrics.pty_start_count.fetch_add(1, Ordering::Relaxed);
+    let (read_half, write_half) = channel.split();
     Ok(Self {
-      channel: AsyncMutex::new(channel),
+      read_half: AsyncMutex::new(read_half),
+      write_half,
       metrics: pool.metrics.clone(),
     })
   }
 
   /// Writes raw bytes to the remote PTY (keystrokes, pasted input, etc.).
   /// Never logs `data`, per the PRD's "raw terminal output ... by default"
-  /// never-log requirement.
+  /// never-log requirement. Never contends with an in-flight `read_chunk`.
   pub async fn write(&self, data: &[u8]) -> Result<(), SshTransportError> {
-    let channel = self.channel.lock().await;
-    let mut writer = channel.make_writer();
+    let mut writer = self.write_half.make_writer();
     writer
       .write_all(data)
       .await
@@ -1138,9 +1149,9 @@ impl RemotePtyChannel {
   /// Callers own their own output buffering and redaction policy for what
   /// they do with the bytes (e.g. terminal echo vs. a log line).
   pub async fn read_chunk(&self) -> Result<Option<Vec<u8>>, SshTransportError> {
-    let mut channel = self.channel.lock().await;
+    let mut read_half = self.read_half.lock().await;
     loop {
-      match channel.wait().await {
+      match read_half.wait().await {
         Some(ChannelMsg::Data { data }) => return Ok(Some(data.to_vec())),
         Some(ChannelMsg::ExtendedData { data, .. }) => return Ok(Some(data.to_vec())),
         Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) | None => return Ok(None),
@@ -1149,23 +1160,54 @@ impl RemotePtyChannel {
     }
   }
 
+  /// Reads the next chunk of output along with an exit status, if the
+  /// message that ended the wait was `ExitStatus`. Distinct from
+  /// `read_chunk` only in that it surfaces `ExitStatus` instead of treating
+  /// it as an ignorable message, so a caller that wants to observe a remote
+  /// process's exit code does not have to guess it from the channel closing.
+  pub async fn read_event(&self) -> Result<PtyReadEvent, SshTransportError> {
+    let mut read_half = self.read_half.lock().await;
+    loop {
+      match read_half.wait().await {
+        Some(ChannelMsg::Data { data }) => return Ok(PtyReadEvent::Data(data.to_vec())),
+        Some(ChannelMsg::ExtendedData { data, .. }) => {
+          return Ok(PtyReadEvent::Data(data.to_vec()))
+        }
+        Some(ChannelMsg::ExitStatus { exit_status }) => {
+          return Ok(PtyReadEvent::ExitStatus(exit_status))
+        }
+        Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) | None => return Ok(PtyReadEvent::Closed),
+        Some(_) => continue,
+      }
+    }
+  }
+
   pub async fn resize(&self, cols: u16, rows: u16) -> Result<(), SshTransportError> {
-    let channel = self.channel.lock().await;
-    channel
+    self
+      .write_half
       .window_change(cols as u32, rows as u32, 0, 0)
       .await
       .map_err(|error| SshTransportError::ChannelError(error.to_string()))
   }
 
   pub async fn close(&self) -> Result<(), SshTransportError> {
-    let channel = self.channel.lock().await;
-    let result = channel
+    let result = self
+      .write_half
       .close()
       .await
       .map_err(|error| SshTransportError::ChannelError(error.to_string()));
     self.metrics.pty_exit_count.fetch_add(1, Ordering::Relaxed);
     result
   }
+}
+
+/// One event yielded by [`RemotePtyChannel::read_event`]: either an output
+/// chunk, an observed exit status, or the channel ending without one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PtyReadEvent {
+  Data(Vec<u8>),
+  ExitStatus(u32),
+  Closed,
 }
 
 // ---------------------------------------------------------------------------
