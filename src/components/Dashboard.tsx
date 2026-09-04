@@ -1211,13 +1211,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
       let generation = descriptor.endpoint_generation;
       if (!endpoint) {
         const status = await getInstanceStatus().catch(() => null);
-        if (status?.endpoint?.id === descriptor.endpoint_id) {
-          endpoint = status.endpoint;
+        const { endpoint: statusEndpoint, instance } = status ?? {};
+        if (statusEndpoint?.id === descriptor.endpoint_id) {
+          endpoint = statusEndpoint;
           generation = generationFromEndpoint(
-            status.endpoint,
-            status.instance?.generation ?? descriptor.endpoint_generation,
+            statusEndpoint,
+            instance?.generation ?? descriptor.endpoint_generation,
           );
-          if (!cancelled) setInstanceStatus(status);
+          if (!cancelled && status) setInstanceStatus(status);
         }
       }
       if (!endpoint || cancelled) return;

@@ -107,7 +107,16 @@ export async function saveRemoteRepository(
         ),
     ),
   ];
-  await setSetting(SAVED_REPOS_KEY, JSON.stringify(next));
+  await replaceSavedRemoteRepositories(next);
+}
+
+export async function replaceSavedRemoteRepositories(
+  records: SavedRemoteRepositoryRecord[],
+): Promise<void> {
+  await setSetting(
+    SAVED_REPOS_KEY,
+    JSON.stringify(records.map(normalizeSavedRecord)),
+  );
 }
 
 /** Builds the trusted-host-key record from a user-entered fingerprint. */

@@ -8,6 +8,7 @@ import { getSetting, setSetting } from "./api";
 import type { RepositoryInspection } from "./api-types-remote";
 import {
   listSavedRemoteRepositories,
+  replaceSavedRemoteRepositories,
   saveRemoteRepository,
   type SavedRemoteRepositoryRecord,
 } from "./remote-endpoints";
@@ -165,18 +166,15 @@ export async function invalidateTrustAfterGenerationChange(
   previousGeneration: number,
 ): Promise<void> {
   const all = await listSavedRemoteRepositories();
-  for (const repo of all) {
-    if (
+  await replaceSavedRemoteRepositories(
+    all.map((repo) =>
       repo.endpoint_id === endpointId &&
       repo.endpoint_generation === previousGeneration &&
       repo.last_successful_trust_validation
-    ) {
-      await saveRemoteRepository({
-        ...toPersistedRecord(repo),
-        last_successful_trust_validation: null,
-      });
-    }
-  }
+        ? { ...toPersistedRecord(repo), last_successful_trust_validation: null }
+        : repo,
+    ),
+  );
 }
 
 export async function rememberLastOpenedRemoteRepository(
