@@ -450,18 +450,35 @@ mod tests {
     let repo = dir.path().to_str().unwrap();
     fs::create_dir_all(dir.path().join("ws")).unwrap();
     let workspace_path = dir.path().join("ws").to_str().unwrap().to_string();
-    let _record = start_test_process(repo, "demo", &workspace_path, "cat");
+    struct StopGuard<'a> {
+      repo: &'a str,
+      workspace: &'a str,
+    }
+    impl Drop for StopGuard<'_> {
+      fn drop(&mut self) {
+        let _ = stop_agent(self.repo, self.workspace);
+      }
+    }
+    let _guard = StopGuard {
+      repo,
+      workspace: "demo",
+    };
+    // Unix `cat` echoes stdin into the log. Windows has no FIFO, so the
+    // helper process is only required to stay alive for a successful write.
+    let placeholder = if cfg!(windows) { "sleep" } else { "cat" };
+    let _record = start_test_process(repo, "demo", &workspace_path, placeholder);
     std::thread::sleep(std::time::Duration::from_millis(150));
 
     let sent = send_agent_input(repo, "demo", "hello-from-supervisor").unwrap();
     assert!(sent.contains("sent"));
-    std::thread::sleep(std::time::Duration::from_millis(150));
-    let logs = agent_logs(repo, "demo").unwrap();
-    assert!(
-      logs.contains("hello-from-supervisor"),
-      "expected agent log to contain written stdin, got: {logs:?}"
-    );
-    stop_agent(repo, "demo").unwrap();
+    if !cfg!(windows) {
+      std::thread::sleep(std::time::Duration::from_millis(150));
+      let logs = agent_logs(repo, "demo").unwrap();
+      assert!(
+        logs.contains("hello-from-supervisor"),
+        "expected agent log to contain written stdin, got: {logs:?}"
+      );
+    }
   }
 
   #[test]
@@ -490,7 +507,7 @@ mod tests {
     repo_path: &str,
     workspace: &str,
     workspace_path: &str,
-    _agent_placeholder: &str,
+    placeholder: &str,
   ) -> AgentRecord {
     let log_file_path = log_path(repo_path, workspace);
     fs::create_dir_all(agents_dir(repo_path)).unwrap();
@@ -501,12 +518,12 @@ mod tests {
       .unwrap();
     let fifo_path = stdin_fifo_path(repo_path, workspace);
     let (agent_stdin, keeper_pid) = setup_agent_stdin(&fifo_path).unwrap();
-    let mut command = if cfg!(windows) {
+    let mut command = if placeholder == "cat" && !cfg!(windows) {
+      Command::new("cat")
+    } else if cfg!(windows) {
       let mut command = Command::new("ping");
       command.args(["-n", "30", "127.0.0.1"]);
       command
-    } else if _agent_placeholder == "cat" {
-      Command::new("cat")
     } else {
       let mut command = Command::new("sleep");
       command.arg("30");
