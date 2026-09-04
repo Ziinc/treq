@@ -1,5 +1,6 @@
 import { defineConfig } from "vitest/config";
 import { integrationBaseTest, integrationPlugins } from "./vitest.integration.base";
+import { VITEST_PROJECT_SEQUENCE } from "./vitest.projects";
 
 /**
  * Integration tests that mutate/poll the jj "Changes" file list (staging,
@@ -13,6 +14,9 @@ export default defineConfig({
   test: {
     ...integrationBaseTest,
     name: "integration-serial",
+    sequence: {
+      groupOrder: VITEST_PROJECT_SEQUENCE.integrationSerial,
+    },
     include: [
       "test/integration/review/**/*.test.{ts,tsx}",
       "test/integration/workspace/**/*.test.{ts,tsx}",
