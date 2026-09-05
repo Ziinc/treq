@@ -215,8 +215,8 @@ command, not a test-only stub.
    across the two.
 
 4. **Run it.** If this is a fresh environment (no `node_modules/`, or `cargo build`
-   fails on GTK/webkit headers or a `libduckdb-sys` TLS error), do the
-   "First-time environment setup" section above first.
+   fails on GTK/webkit headers), do the "First-time environment setup" section
+   above first.
    - First run in a session, or after touching `src-tauri`, or
      adding new Tailwind classes: `npm run screenshot` (rebuilds the NAPI addon,
      recompiles CSS, runs every spec — slow but complete).
