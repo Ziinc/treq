@@ -359,25 +359,44 @@ fn ensure_schema(conn: &Connection) -> Result<(), String> {
 
 /// Open a connection tuned for a single writer appending to its own file,
 /// while tolerating concurrent readers/writers via WAL.
+///
+/// Switching a brand-new file to WAL mode takes an exclusive lock of its own,
+/// and that lock isn't reliably covered by `PRAGMA busy_timeout`'s retry
+/// logic: concurrent job writers can all open the same day's database for the
+/// first time at once, and lose that race with an immediate "database is
+/// locked" instead of a wait. So retry the whole open+configure step with a
+/// short backoff rather than trusting busy_timeout alone.
 fn open_writable(path: &Path) -> Result<Connection, String> {
-  let conn =
-    Connection::open(path).map_err(|e| format!("Failed to open telemetry database: {}", e))?;
-  conn
-    .execute_batch(
-      "PRAGMA journal_mode=WAL;
-       PRAGMA synchronous=NORMAL;
-       PRAGMA busy_timeout=5000;",
-    )
-    .map_err(|e| format!("Failed to configure telemetry database: {}", e))?;
-  Ok(conn)
+  let mut last_err = String::new();
+  for attempt in 0..50 {
+    if attempt > 0 {
+      std::thread::sleep(Duration::from_millis(20));
+    }
+    let conn = match Connection::open(path) {
+      Ok(conn) => conn,
+      Err(e) => {
+        last_err = format!("Failed to open telemetry database: {}", e);
+        continue;
+      }
+    };
+    match conn.execute_batch(
+      "PRAGMA busy_timeout=5000;
+       PRAGMA journal_mode=WAL;
+       PRAGMA synchronous=NORMAL;",
+    ) {
+      Ok(()) => return Ok(conn),
+      Err(e) => last_err = format!("Failed to configure telemetry database: {}", e),
+    }
+  }
+  Err(last_err)
 }
 
 /// Delete dated telemetry databases (and their WAL/SHM sidecars) older than
 /// `max_age`, based on the date encoded in the filename.
 fn cleanup_old_telemetry_dbs(dir: &Path, max_age: Duration) {
-  let Some(cutoff) = chrono::Utc::now().checked_sub_signed(
-    chrono::Duration::from_std(max_age).unwrap_or(chrono::Duration::zero()),
-  ) else {
+  let Some(cutoff) = chrono::Utc::now()
+    .checked_sub_signed(chrono::Duration::from_std(max_age).unwrap_or(chrono::Duration::zero()))
+  else {
     return;
   };
   let Ok(entries) = std::fs::read_dir(dir) else {
@@ -518,8 +537,8 @@ fn has_any_logs(repo_path: &str) -> bool {
 /// `log_iostream` columns, so the UI's own queries don't have to pay for
 /// `json_extract` on every row.
 fn connect_with_logs_view(repo_path: &str) -> Result<Connection, String> {
-  let conn = Connection::open_in_memory()
-    .map_err(|e| format!("Failed to open SQLite connection: {}", e))?;
+  let conn =
+    Connection::open_in_memory().map_err(|e| format!("Failed to open SQLite connection: {}", e))?;
 
   let files = telemetry_db_files(repo_path);
   let mut union_parts = Vec::with_capacity(files.len());
@@ -775,7 +794,8 @@ pub fn query_log_timeseries(
 
 /// Statement kinds the explorer will run. Everything else is rejected so a
 /// stray ATTACH/PRAGMA can't reach outside the `logs` view.
-const ALLOWED_SQL_PREFIXES: [&str; 5] = ["select", "with", "explain", "pragma table_info", "values"];
+const ALLOWED_SQL_PREFIXES: [&str; 5] =
+  ["select", "with", "explain", "pragma table_info", "values"];
 
 /// Reject anything that isn't a single read-only statement.
 fn validate_sql(sql: &str) -> Result<(), String> {
@@ -793,15 +813,13 @@ fn validate_sql(sql: &str) -> Result<(), String> {
     .iter()
     .any(|p| lower.starts_with(p) && lower[p.len()..].starts_with(char::is_whitespace))
   {
-    return Err(
-      "Only read-only queries are allowed (SELECT, WITH, VALUES, EXPLAIN)".to_string(),
-    );
+    return Err("Only read-only queries are allowed (SELECT, WITH, VALUES, EXPLAIN)".to_string());
   }
 
   // These can still appear mid-statement, e.g. inside a CTE body.
   let blocked = [
-    "attach ", "detach ", "copy ", "install ", "load ", "export ", "import ", "create ",
-    "insert ", "update ", "delete ", "drop ", "alter ", "vacuum", "reindex",
+    "attach ", "detach ", "copy ", "install ", "load ", "export ", "import ", "create ", "insert ",
+    "update ", "delete ", "drop ", "alter ", "vacuum", "reindex",
   ];
   if let Some(word) = blocked.iter().find(|w| lower.contains(*w)) {
     return Err(format!(
@@ -952,7 +970,13 @@ mod tests {
   #[test]
   fn test_query_logs_returns_empty_without_any_db() {
     let dir = TempDir::new().unwrap();
-    let result = query_logs(&dir.path().to_string_lossy(), 1, "job", &LogQuery::default()).unwrap();
+    let result = query_logs(
+      &dir.path().to_string_lossy(),
+      1,
+      "job",
+      &LogQuery::default(),
+    )
+    .unwrap();
     assert!(result.is_empty());
   }
 
@@ -968,7 +992,13 @@ mod tests {
         sample_line(1, "error", "boom"),
       ],
     );
-    let result = query_logs(&dir.path().to_string_lossy(), 1, "job", &LogQuery::default()).unwrap();
+    let result = query_logs(
+      &dir.path().to_string_lossy(),
+      1,
+      "job",
+      &LogQuery::default(),
+    )
+    .unwrap();
     assert_eq!(result.len(), 2);
     assert_eq!(result[0].body, "hello");
   }
@@ -1116,6 +1146,49 @@ mod tests {
     let result = query_logs(&repo, 1, "build", &LogQuery::default()).unwrap();
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].body, "run1 build");
+  }
+
+  #[test]
+  fn test_concurrent_writers_to_same_day_do_not_error() {
+    // Regression test: multiple jobs in one run (or across runs on the same
+    // day) all write into the same dated database concurrently. Each opens
+    // its own connection and races to set journal_mode/create the schema on
+    // first use -- without busy_timeout configured before that race, SQLite
+    // returns "database is locked" instead of waiting its turn.
+    let dir = TempDir::new().unwrap();
+    let repo = dir.path().to_string_lossy().to_string();
+
+    let handles: Vec<_> = (0..8)
+      .map(|i| {
+        let repo = repo.clone();
+        std::thread::spawn(move || {
+          let job_id = format!("job-{}", i);
+          let writer = LogWriter::create(&repo, 1, &job_id).unwrap();
+          for step in 0..20 {
+            writer
+              .write_line(&make_log_line(
+                now_timestamp(),
+                1,
+                &job_id,
+                step,
+                "step",
+                "stdout",
+                "info",
+                "line",
+              ))
+              .unwrap();
+          }
+          writer.flush().unwrap();
+        })
+      })
+      .collect();
+
+    for handle in handles {
+      handle.join().unwrap();
+    }
+
+    let result = query_repo_logs(&repo, &LogQuery::default()).unwrap();
+    assert_eq!(result.len(), 8 * 20);
   }
 
   #[test]
