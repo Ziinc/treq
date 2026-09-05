@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { resolveSshConfigAlias } from "../../lib/api-remote-ssh";
 import { Button } from "../ui/button";
 import type { UserManagedFormValues } from "./remoteSetupLabels";
 
@@ -29,6 +30,27 @@ export function RemoteUserManagedSetupPanel({
   const [alias, setAlias] = useState("");
   const [showTrustConfirm, setShowTrustConfirm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [resolvingAlias, setResolvingAlias] = useState(false);
+  const [resolveAliasError, setResolveAliasError] = useState("");
+
+  const resolveAlias = async () => {
+    const trimmedAlias = alias.trim();
+    if (!trimmedAlias) return;
+    setResolvingAlias(true);
+    setResolveAliasError("");
+    try {
+      const resolved = await resolveSshConfigAlias(trimmedAlias);
+      setHostname(resolved.hostname);
+      setPort(String(resolved.port));
+      if (resolved.username) setUsername(resolved.username);
+    } catch (error) {
+      setResolveAliasError(
+        error instanceof Error ? error.message : String(error),
+      );
+    } finally {
+      setResolvingAlias(false);
+    }
+  };
 
   const submitUserManaged = async () => {
     setShowTrustConfirm(false);
@@ -132,12 +154,33 @@ export function RemoteUserManagedSetupPanel({
         {aliasMode && (
           <label className="flex flex-col gap-1 sm:col-span-2">
             <span className="text-sm font-medium">Alias</span>
-            <input
-              className="rounded-md border border-border/60 bg-background px-2 py-1.5"
-              value={alias}
-              onChange={(e) => setAlias(e.target.value)}
-              list="remote-setup-ssh-config-aliases"
-            />
+            <div className="flex gap-2">
+              <input
+                className="flex-1 rounded-md border border-border/60 bg-background px-2 py-1.5"
+                value={alias}
+                onChange={(e) => setAlias(e.target.value)}
+                list="remote-setup-ssh-config-aliases"
+              />
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={!alias.trim() || resolvingAlias}
+                onClick={() => void resolveAlias()}
+              >
+                {resolvingAlias ? "Resolving..." : "Autofill from alias"}
+              </Button>
+            </div>
+            <span className="text-xs text-muted-foreground">
+              Reads hostname/port/username from ~/.ssh/config for this alias
+              only. This never grants trust - you still confirm the host-key
+              fingerprint yourself below.
+            </span>
+            {resolveAliasError && (
+              <span className="text-xs text-destructive">
+                {resolveAliasError}
+              </span>
+            )}
           </label>
         )}
       </div>

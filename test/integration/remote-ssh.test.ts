@@ -83,9 +83,6 @@ describe("remote SSH integration", () => {
   });
 
   it("rejects an alias that resolves to no ~/.ssh/config Host block before any connection is made", async () => {
-    // No system ssh subprocess is spawned and no connection is ever
-    // attempted for an alias that was never explicitly configured - the
-    // native resolver rejects it up front (alias_not_found).
     await expect(
       buildExplicitAliasSshEndpoint({
         endpointId: "endpoint-test",
