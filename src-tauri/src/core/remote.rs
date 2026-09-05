@@ -1091,12 +1091,9 @@ pub trait TreqCommandTransport {
   fn execute<T: DeserializeOwned>(&self, request: TreqCommandRequest) -> Result<T, TransportError>;
 }
 
-pub struct SshCliTransport {
-  host: String,
-}
-
-/// In-process counterpart to [`SshCliTransport`]. Both transports serialize the
-/// same core DTOs, which keeps local and remote callers on one response contract.
+/// Serializes the same core DTOs the native SSH exec transport
+/// (`crate::core::remote_ssh_transport`) does, which keeps local and remote
+/// callers on one response contract.
 pub struct LocalTransport;
 
 impl TreqCommandTransport for LocalTransport {
@@ -1112,31 +1109,40 @@ impl TreqCommandTransport for LocalTransport {
 //
 // Mutations that could duplicate work on retry (create, movement, git push,
 // agent start) accept an idempotency key. A repeated call with the same key
-// replays the cached response instead of re-running the mutation. This is an
-// in-process, per-`treq` invocation-boundary cache: on the remote VM the CLI
-// process starting fresh for every exec channel would defeat it, so the
-// process-wide store here matters most for the VM-local agent supervisor
-// (Phase 5 scope) and for local/dev use; a durable cross-process store would
-// be a natural Phase 7 (observability/ops) follow-up.
+// replays the recorded response instead of re-running the mutation.
+//
+// Persisted durably in `core::idempotency_store::IdempotencyStore`, keyed by
+// the same repo-local `.treq/local.db` convention `local_db.rs` uses — not
+// an in-process cache — because the remote VM starts a fresh `treq` CLI
+// process per SSH exec channel, and a process-local cache cannot deduplicate
+// a retry, or a concurrent invocation, that lands in a different process.
 //
 // Naturally idempotent operations (describe/update, which simply overwrite;
 // fetch/inspect/list, which are read-only) do not accept a key at all —
 // adding dedupe machinery for those would be needless per the PRD's own
 // carve-out.
-static IDEMPOTENCY_STORE: std::sync::OnceLock<
-  std::sync::Mutex<std::collections::HashMap<String, serde_json::Value>>,
-> = std::sync::OnceLock::new();
+use crate::core::idempotency_store::{
+  fingerprint, redact_for_storage, IdempotencyStore, RecoveryDecision,
+};
 
-fn idempotency_store(
-) -> &'static std::sync::Mutex<std::collections::HashMap<String, serde_json::Value>> {
-  IDEMPOTENCY_STORE.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
-}
-
-/// Runs `run` unless `key` was already used for `operation`, in which case the
-/// previously recorded response is replayed and `run` is never invoked again.
+/// Runs `run` unless `key` was already used for `operation` on an equivalent
+/// `request`, in which case the previously recorded (or verification-derived)
+/// response is replayed and `run` is never invoked again. Durable across CLI
+/// process boundaries: `repo` selects the same `.treq/local.db` any other
+/// invocation against that repository would open.
+///
+/// Reusing `key` for a different operation, or the same operation with a
+/// different request body, returns a structured `idempotency_conflict`
+/// error. A pending claim left behind by a process that died mid-mutation
+/// (lost SSH connection, crashed CLI) is resolved by re-running the
+/// mutation's existing observable-state verification recipe
+/// ([`verification_for`]) once it goes stale, exactly as a post-reconnect
+/// retry would.
 fn with_idempotency_key<F>(
+  repo: &str,
   operation: &str,
   key: Option<&str>,
+  request: &TreqCommandRequest,
   run: F,
 ) -> Result<serde_json::Value, String>
 where
@@ -1145,16 +1151,60 @@ where
   let Some(key) = key.filter(|k| !k.trim().is_empty()) else {
     return run();
   };
-  let cache_key = format!("{operation}:{key}");
-  if let Some(cached) = idempotency_store().lock().unwrap().get(&cache_key) {
-    return Ok(cached.clone());
+
+  let request_json = serde_json::to_value(request).map_err(|e| e.to_string())?;
+  let request_fingerprint = fingerprint(&request_json);
+  let store = IdempotencyStore::open(repo)?;
+
+  let claim = store.claim_or_replay(
+    operation,
+    key,
+    &request_fingerprint,
+    crate::core::idempotency_store::DEFAULT_STALE_AFTER,
+    || recover_stale_claim(request),
+  )?;
+  if let Some(replay) = claim {
+    return Ok(replay);
   }
-  let result = run()?;
-  idempotency_store()
-    .lock()
-    .unwrap()
-    .insert(cache_key, result.clone());
-  Ok(result)
+
+  let outcome = match run() {
+    Ok(result) => {
+      store.complete(operation, key, &redact_for_storage(&result))?;
+      Ok(result)
+    }
+    Err(error) => {
+      // A structured failure, not a "did it land?" ambiguity: free the key
+      // for reuse rather than leaving a pending claim behind forever.
+      store.abandon(operation, key)?;
+      Err(error)
+    }
+  };
+  // Best-effort, bounded retention: opportunistically sweep old completed
+  // records on the same connection rather than running a separate cleanup
+  // process. A failure here must never mask the mutation's own outcome.
+  let _ = store.cleanup(crate::core::idempotency_store::DEFAULT_RETENTION);
+  outcome
+}
+
+/// Resolves a stale pending claim by running the mutation's existing
+/// observable-state verification recipe locally (the same recipe
+/// [`verification_for`] builds for the async post-reconnect retry path,
+/// applied here via a synchronous local dispatch instead of an SSH read).
+fn recover_stale_claim(request: &TreqCommandRequest) -> Result<RecoveryDecision, String> {
+  let Some(verification) = verification_for(request) else {
+    return Ok(RecoveryDecision::Ambiguous);
+  };
+  let observed = match execute_local_request(verification.read_request) {
+    Ok(value) => value,
+    Err(_) => return Ok(RecoveryDecision::Ambiguous),
+  };
+  match (verification.check)(&observed) {
+    MutationVerificationOutcome::AlreadyApplied => {
+      Ok(RecoveryDecision::AlreadyApplied { observed })
+    }
+    MutationVerificationOutcome::NotApplied => Ok(RecoveryDecision::VerifiedNotApplied),
+    MutationVerificationOutcome::Ambiguous => Ok(RecoveryDecision::Ambiguous),
+  }
 }
 
 fn resolve_workspace_path(repo: &str, id: Option<i64>) -> Result<String, String> {
@@ -1192,6 +1242,14 @@ pub fn execute_local_request(request: TreqCommandRequest) -> Result<serde_json::
   fn json<T: Serialize>(result: Result<T, String>) -> Result<serde_json::Value, String> {
     serde_json::to_value(result?).map_err(|error| error.to_string())
   }
+  // Snapshotted before the match consumes `request` by value: mutation arms
+  // need the whole original request both for the idempotency store's
+  // fingerprint and, on a stale claim, for `verification_for`.
+  let request_snapshot = if request.is_mutation() {
+    Some(clone_request(&request))
+  } else {
+    None
+  };
   match request {
     TreqCommandRequest::InspectRepository { repo } => json(inspect_repository_path(&repo)),
     TreqCommandRequest::RepositoryStatus { repo } => {
@@ -1260,32 +1318,48 @@ pub fn execute_local_request(request: TreqCommandRequest) -> Result<serde_json::
     TreqCommandRequest::InitRepo {
       repo,
       idempotency_key,
-    } => with_idempotency_key("repo.init", idempotency_key.as_deref(), || {
-      json(init_repo_path(&repo))
-    }),
+    } => with_idempotency_key(
+      &repo,
+      "repo.init",
+      idempotency_key.as_deref(),
+      request_snapshot.as_ref().expect("InitRepo is a mutation"),
+      || json(init_repo_path(&repo)),
+    ),
     TreqCommandRequest::CloneRepo {
       repo_url,
       destination,
       idempotency_key,
-    } => with_idempotency_key("repo.clone", idempotency_key.as_deref(), || {
-      json(clone_repo_local(&repo_url, &destination))
-    }),
+    } => with_idempotency_key(
+      &destination,
+      "repo.clone",
+      idempotency_key.as_deref(),
+      request_snapshot.as_ref().expect("CloneRepo is a mutation"),
+      || json(clone_repo_local(&repo_url, &destination)),
+    ),
     TreqCommandRequest::CreateWorkspace {
       repo,
       branch_name,
       source_branch,
       idempotency_key,
-    } => with_idempotency_key("workspace.create", idempotency_key.as_deref(), || {
-      json(crate::core::workspaces::create_workspace(
-        &repo,
-        &branch_name,
-        None,
-        None,
-        source_branch.as_deref(),
-        None,
-        None,
-      ))
-    }),
+    } => with_idempotency_key(
+      &repo,
+      "workspace.create",
+      idempotency_key.as_deref(),
+      request_snapshot
+        .as_ref()
+        .expect("CreateWorkspace is a mutation"),
+      || {
+        json(crate::core::workspaces::create_workspace(
+          &repo,
+          &branch_name,
+          None,
+          None,
+          source_branch.as_deref(),
+          None,
+          None,
+        ))
+      },
+    ),
     TreqCommandRequest::RenameWorkspace {
       repo,
       workspace,
@@ -1323,19 +1397,27 @@ pub fn execute_local_request(request: TreqCommandRequest) -> Result<serde_json::
       destination,
       commits,
       idempotency_key,
-    } => with_idempotency_key("workspace.move", idempotency_key.as_deref(), || {
-      let request = crate::core::workspaces::WorkspaceMoveRequest {
-        files: vec![],
-        hunks: vec![],
-        commits: commits.iter().filter(|c| !c.is_empty()).cloned().collect(),
-      };
-      json(crate::core::workspaces::move_workspace_changes(
-        &repo,
-        &workspace,
-        &destination,
-        request,
-      ))
-    }),
+    } => with_idempotency_key(
+      &repo,
+      "workspace.move",
+      idempotency_key.as_deref(),
+      request_snapshot
+        .as_ref()
+        .expect("MoveWorkspaceChanges is a mutation"),
+      || {
+        let request = crate::core::workspaces::WorkspaceMoveRequest {
+          files: vec![],
+          hunks: vec![],
+          commits: commits.iter().filter(|c| !c.is_empty()).cloned().collect(),
+        };
+        json(crate::core::workspaces::move_workspace_changes(
+          &repo,
+          &workspace,
+          &destination,
+          request,
+        ))
+      },
+    ),
     TreqCommandRequest::RebaseWorkspace {
       repo,
       workspace,
@@ -1366,26 +1448,40 @@ pub fn execute_local_request(request: TreqCommandRequest) -> Result<serde_json::
       path,
       patch_base64,
       idempotency_key,
-    } => with_idempotency_key("file.patch", idempotency_key.as_deref(), || {
-      json(apply_remote_patch(
-        &repo,
-        workspace_id(workspace.as_ref())?,
-        &path,
-        &patch_base64,
-      ))
-    }),
+    } => with_idempotency_key(
+      &repo,
+      "file.patch",
+      idempotency_key.as_deref(),
+      request_snapshot.as_ref().expect("PatchFile is a mutation"),
+      || {
+        json(apply_remote_patch(
+          &repo,
+          workspace_id(workspace.as_ref())?,
+          &path,
+          &patch_base64,
+        ))
+      },
+    ),
     TreqCommandRequest::CreateCommit {
       repo,
       workspace,
       message,
       idempotency_key,
-    } => with_idempotency_key("commit.create", idempotency_key.as_deref(), || {
-      json(crate::core::workspaces::commit_workspace_with_auto_push(
-        &repo,
-        workspace_id(workspace.as_ref())?,
-        &message,
-      ))
-    }),
+    } => with_idempotency_key(
+      &repo,
+      "commit.create",
+      idempotency_key.as_deref(),
+      request_snapshot
+        .as_ref()
+        .expect("CreateCommit is a mutation"),
+      || {
+        json(crate::core::workspaces::commit_workspace_with_auto_push(
+          &repo,
+          workspace_id(workspace.as_ref())?,
+          &message,
+        ))
+      },
+    ),
     TreqCommandRequest::DescribeCommit {
       repo,
       workspace,
@@ -1456,29 +1552,42 @@ pub fn execute_local_request(request: TreqCommandRequest) -> Result<serde_json::
       repo,
       workspace,
       idempotency_key,
-    } => with_idempotency_key("git.push", idempotency_key.as_deref(), || {
-      json(crate::core::workspaces::push_workspace_to_remote(
-        &repo,
-        workspace_id(workspace.as_ref())?,
-      ))
-    }),
+    } => with_idempotency_key(
+      &repo,
+      "git.push",
+      idempotency_key.as_deref(),
+      request_snapshot.as_ref().expect("GitPush is a mutation"),
+      || {
+        json(crate::core::workspaces::push_workspace_to_remote(
+          &repo,
+          workspace_id(workspace.as_ref())?,
+        ))
+      },
+    ),
     TreqCommandRequest::AgentStart {
       repo,
       workspace,
       agent,
       prompt,
       idempotency_key,
-    } => with_idempotency_key("agent.start", idempotency_key.as_deref(), || {
-      let id = workspace_id(Some(&workspace))?.ok_or("invalid_arguments: workspace is required")?;
-      let workspace_path = resolve_workspace_path(&repo, Some(id))?;
-      json(crate::core::agent_supervisor::start_agent(
-        &repo,
-        &workspace,
-        &workspace_path,
-        &agent,
-        &prompt,
-      ))
-    }),
+    } => with_idempotency_key(
+      &repo,
+      "agent.start",
+      idempotency_key.as_deref(),
+      request_snapshot.as_ref().expect("AgentStart is a mutation"),
+      || {
+        let id =
+          workspace_id(Some(&workspace))?.ok_or("invalid_arguments: workspace is required")?;
+        let workspace_path = resolve_workspace_path(&repo, Some(id))?;
+        json(crate::core::agent_supervisor::start_agent(
+          &repo,
+          &workspace,
+          &workspace_path,
+          &agent,
+          &prompt,
+        ))
+      },
+    ),
     TreqCommandRequest::AgentInput {
       repo,
       workspace,
@@ -1694,62 +1803,15 @@ fn decode_base64(input: &str) -> Result<Vec<u8>, String> {
   Ok(out)
 }
 
-impl SshCliTransport {
-  pub fn new(host: String) -> Result<Self, String> {
-    validate_host_alias(&host)?;
-    Ok(Self { host })
-  }
-}
-
-impl TreqCommandTransport for SshCliTransport {
-  fn execute<T: DeserializeOwned>(&self, request: TreqCommandRequest) -> Result<T, TransportError> {
-    let args = request.cli_args().map_err_command()?;
-    let output = Command::new("ssh")
-      .arg("-o")
-      .arg("BatchMode=yes")
-      .arg("-o")
-      .arg("ConnectTimeout=10")
-      .arg(&self.host)
-      .arg("env")
-      .arg("LC_ALL=C")
-      .arg("treq")
-      .args(args)
-      .output()
-      .map_err(|e| TransportError::SshConnectionFailed(e.to_string()))?;
-
-    if !output.status.success() {
-      let stdout_error = serde_json::from_slice::<CliErrorBody>(&output.stdout)
-        .ok()
-        .map(|body| body.error.message);
-      let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-      return Err(TransportError::CommandFailed {
-        code: output.status.code(),
-        message: stdout_error.unwrap_or_else(|| {
-          if stderr.is_empty() {
-            "Remote treq command failed".to_string()
-          } else {
-            stderr
-          }
-        }),
-      });
-    }
-
-    serde_json::from_slice::<T>(&output.stdout)
-      .map_err(|e| TransportError::InvalidJson(e.to_string()))
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Native (Phase 4) SSH exec transport for typed commands
 // ---------------------------------------------------------------------------
 //
-// `SshCliTransport` above is the legacy alias/subprocess transport, kept for
-// the explicit-alias endpoint mode (`SshEndpointSource::ExplicitAlias`) where
-// a user has deliberately opted into an ambient `~/.ssh` alias rather than a
-// fully-modeled `SshEndpoint`. Every other path — managed and user-managed
-// endpoints with real host-key pinning — goes through `SshExecTransport`,
-// which never shells out to a system `ssh` binary and instead reuses the
-// Phase 4 pooled `russh` connection.
+// Every reachable connection path — managed, user-managed, and explicit-alias
+// (`SshEndpointSource::ExplicitAlias`, built by
+// `crate::core::remote_ssh_config::build_explicit_alias_endpoint`) — goes
+// through the pooled native `russh` transport below and in
+// `crate::core::remote_ssh_transport`, never a system `ssh` subprocess.
 
 /// Structured error for a typed command executed over the native transport.
 /// Distinguishes a transport-layer failure (connection/host-key/auth/limits —
@@ -1922,6 +1984,94 @@ pub fn remote_repository_from_inspection(
   }
 }
 
+/// A stable label for an [`SshEndpoint`] to display in place of a bare host
+/// string: the alias for an explicit-alias endpoint (matching what the user
+/// actually selected), otherwise the resolved hostname.
+fn endpoint_label(endpoint: &crate::core::remote_control_plane::SshEndpoint) -> String {
+  match &endpoint.source {
+    crate::core::remote_control_plane::SshEndpointSource::ExplicitAlias { alias } => alias.clone(),
+    _ => endpoint.hostname.clone(),
+  }
+}
+
+/// Probes a remote path over the pooled native SSH transport for an already
+/// trust-pinned [`crate::core::remote_control_plane::SshEndpoint`] (built via
+/// `crate::core::remote_ssh_config::build_explicit_alias_endpoint` for the
+/// explicit-alias case, or from a managed/user-managed registration
+/// otherwise). This never shells out to a system `ssh` binary: the exec
+/// channel runs over the same `russh`-based connection every other typed
+/// command uses.
+pub async fn probe_repo_native(
+  pool: &crate::core::remote_ssh_transport::SshConnectionPool,
+  endpoint: &crate::core::remote_control_plane::SshEndpoint,
+  path: &str,
+) -> Result<RemoteRepoProbe, RemoteCommandError> {
+  let cancellation = crate::core::remote_ssh_transport::CancellationToken::new();
+  let mut probe: RemoteRepoProbe = execute_remote_command(
+    pool,
+    endpoint,
+    TreqCommandRequest::ProbeRepo {
+      repo: path.to_string(),
+    },
+    crate::core::remote_ssh_transport::ExecLimits::default(),
+    &cancellation,
+  )
+  .await?;
+  probe.host = endpoint_label(endpoint);
+  Ok(probe)
+}
+
+/// Inspects an existing remote repository over the native transport and
+/// returns it in the same [`RemoteRepository`] shape the (now-removed)
+/// subprocess-based `open_repo` used to produce, so callers do not need to
+/// know the transport changed.
+pub async fn open_repo_native(
+  pool: &crate::core::remote_ssh_transport::SshConnectionPool,
+  endpoint: &crate::core::remote_control_plane::SshEndpoint,
+  path: &str,
+) -> Result<RemoteRepository, RemoteCommandError> {
+  let cancellation = crate::core::remote_ssh_transport::CancellationToken::new();
+  let inspection: RepositoryInspection = execute_remote_command(
+    pool,
+    endpoint,
+    TreqCommandRequest::InspectRepository {
+      repo: path.to_string(),
+    },
+    crate::core::remote_ssh_transport::ExecLimits::default(),
+    &cancellation,
+  )
+  .await?;
+  Ok(remote_repository_from_inspection(
+    &endpoint_label(endpoint),
+    inspection,
+  ))
+}
+
+/// Clones a repository into `destination` on the remote host over the native
+/// transport (the typed `CloneRepo` command), then inspects it the same way
+/// [`open_repo_native`] does.
+pub async fn clone_repo_native(
+  pool: &crate::core::remote_ssh_transport::SshConnectionPool,
+  endpoint: &crate::core::remote_control_plane::SshEndpoint,
+  repo_url: &str,
+  destination: &str,
+) -> Result<RemoteRepository, RemoteCommandError> {
+  let cancellation = crate::core::remote_ssh_transport::CancellationToken::new();
+  let _inspection: RepositoryInspection = execute_remote_command(
+    pool,
+    endpoint,
+    TreqCommandRequest::CloneRepo {
+      repo_url: repo_url.to_string(),
+      destination: destination.to_string(),
+      idempotency_key: None,
+    },
+    crate::core::remote_ssh_transport::ExecLimits::default(),
+    &cancellation,
+  )
+  .await?;
+  open_repo_native(pool, endpoint, destination).await
+}
+
 pub fn parse_ssh_config_hosts(contents: &str) -> Vec<SshHost> {
   let mut aliases = BTreeSet::new();
   for line in contents.lines() {
@@ -1960,130 +2110,6 @@ pub fn list_configured_hosts_from_paths(paths: Vec<PathBuf>) -> Result<Vec<SshHo
     }
   }
   Ok(all.into_iter().map(|alias| SshHost { alias }).collect())
-}
-
-pub fn check_readiness(host: &str) -> Result<RemoteReadiness, String> {
-  validate_host_alias(host)?;
-  // The trailing `df` term reports how many 1K blocks are in use on the
-  // instance's home volume, which feeds the "sufficient disk space ...
-  // remain within the user's base disk quota" expanded-readiness check
-  // (PRD "Boot manifest and readiness").
-  let script = "set -u; for c in treq jj git; do command -v $c >/dev/null 2>&1 && echo $c:ok || echo $c:missing; done; for c in claude codex cursor-agent cursor; do command -v $c >/dev/null 2>&1 && echo agent:$c:ok; done; df -Pk /home/treq 2>/dev/null | awk 'NR==2{print \"disk_used_kb:\"$3}'";
-  let output = ssh_output(host, script)?;
-  let stdout = String::from_utf8_lossy(&output.stdout);
-  let mut checks = Vec::new();
-  for line in stdout.lines() {
-    let parts: Vec<_> = line.split(':').collect();
-    match parts.as_slice() {
-      [name, "ok"] => checks.push(RemoteReadinessCheck {
-        name: (*name).to_string(),
-        available: true,
-        detail: "available".to_string(),
-        code: None,
-      }),
-      [name, "missing"] => checks.push(RemoteReadinessCheck {
-        name: (*name).to_string(),
-        available: false,
-        detail: "missing from PATH".to_string(),
-        code: None,
-      }),
-      ["agent", name, "ok"] => checks.push(RemoteReadinessCheck {
-        name: format!("agent:{name}"),
-        available: true,
-        detail: "available".to_string(),
-        code: None,
-      }),
-      ["disk_used_kb", used_kb] => {
-        if let Ok(used_kb) = used_kb.parse::<u64>() {
-          checks.push(disk_quota_readiness_check(used_kb * 1024));
-        }
-      }
-      _ => {}
-    }
-  }
-  Ok(RemoteReadiness {
-    host: host.to_string(),
-    connected: output.status.success(),
-    checks,
-  })
-}
-
-/// Builds the "disk_quota" expanded-readiness check for `used_bytes` against
-/// the base disk quota (PRD "Resource quotas" / "Expanded readiness").
-/// Failing this check is a distinct, structured readiness failure (`code:
-/// Some("disk_quota_exceeded")`), not a generic filesystem failure.
-fn disk_quota_readiness_check(used_bytes: u64) -> RemoteReadinessCheck {
-  match crate::core::remote_provider::check_disk_quota(used_bytes) {
-    Ok(()) => RemoteReadinessCheck {
-      name: "disk_quota".to_string(),
-      available: true,
-      detail: format!(
-        "{used_bytes} of {} bytes base disk quota used",
-        crate::core::remote_provider::BASE_DISK_QUOTA_BYTES
-      ),
-      code: None,
-    },
-    Err(err) => RemoteReadinessCheck {
-      name: "disk_quota".to_string(),
-      available: false,
-      detail: err.to_string(),
-      code: Some("disk_quota_exceeded".to_string()),
-    },
-  }
-}
-
-pub fn probe_repo(host: &str, path: &str) -> Result<RemoteRepoProbe, String> {
-  validate_host_alias(host)?;
-  validate_remote_path(path)?;
-  let quoted = shell_quote(path);
-  let script = format!("if [ -d {quoted} ]; then echo exists; if [ -d {quoted}/.jj ] || [ -d {quoted}/.git ]; then echo repo; fi; else echo missing; fi");
-  let output = ssh_output(host, &script)?;
-  let stdout = String::from_utf8_lossy(&output.stdout);
-  let exists = stdout.lines().any(|line| line == "exists");
-  let is_repo = stdout.lines().any(|line| line == "repo");
-  Ok(RemoteRepoProbe {
-    host: host.to_string(),
-    path: path.to_string(),
-    exists,
-    is_repo,
-    needs_clone: !is_repo,
-  })
-}
-
-pub fn clone_repo(
-  host: &str,
-  repo_url: &str,
-  destination: &str,
-) -> Result<RemoteRepository, String> {
-  validate_host_alias(host)?;
-  validate_remote_path(destination)?;
-  if repo_url.trim().is_empty() {
-    return Err("Repository URL is required".to_string());
-  }
-  let quoted_url = shell_quote(repo_url);
-  let quoted_destination = shell_quote(destination);
-  let script = format!("git clone {quoted_url} {quoted_destination} && cd {quoted_destination} && treq st >/dev/null 2>&1 || true");
-  let output = ssh_output(host, &script)?;
-  if !output.status.success() {
-    return Err(String::from_utf8_lossy(&output.stderr).trim().to_string());
-  }
-  open_repo(host, destination)
-}
-
-pub fn open_repo(host: &str, path: &str) -> Result<RemoteRepository, String> {
-  let transport = SshCliTransport::new(host.to_string())?;
-  let inspection = transport
-    .execute::<RepositoryInspection>(TreqCommandRequest::InspectRepository {
-      repo: path.to_string(),
-    })
-    .map_err(|error| match error {
-      TransportError::SshConnectionFailed(message) => {
-        format!("ssh_connection_failed: {message}")
-      }
-      TransportError::CommandFailed { message, .. } => message,
-      TransportError::InvalidJson(message) => format!("invalid_remote_json: {message}"),
-    })?;
-  Ok(remote_repository_from_inspection(host, inspection))
 }
 
 pub fn build_ssh_shell_command(
@@ -2161,18 +2187,6 @@ fn ssh_config_paths() -> Vec<PathBuf> {
   paths
 }
 
-fn ssh_output(host: &str, script: &str) -> Result<std::process::Output, String> {
-  Command::new("ssh")
-    .arg("-o")
-    .arg("BatchMode=yes")
-    .arg("-o")
-    .arg("ConnectTimeout=10")
-    .arg(host)
-    .arg(script)
-    .output()
-    .map_err(|e| format!("Failed to run ssh: {e}"))
-}
-
 pub fn shell_quote(value: &str) -> String {
   format!("'{}'", value.replace('\'', "'\\''"))
 }
@@ -2223,18 +2237,6 @@ mod tests {
   }
 
   #[test]
-  fn probe_repo_rejects_empty_path_before_ssh() {
-    let error = probe_repo("devbox", "").unwrap_err();
-    assert_eq!(error, "Remote path is required");
-  }
-
-  #[test]
-  fn clone_repo_rejects_empty_url_before_ssh() {
-    let error = clone_repo("devbox", "", "/srv/project").unwrap_err();
-    assert_eq!(error, "Repository URL is required");
-  }
-
-  #[test]
   fn directory_usage_sums_nested_file_sizes() {
     let dir = tempfile::tempdir().unwrap();
     std::fs::write(dir.path().join("a.txt"), vec![0u8; 10]).unwrap();
@@ -2272,17 +2274,6 @@ mod tests {
     let error = enforce_disk_quota_against(&not_yet_created, 5).unwrap_err();
     assert!(error.starts_with("disk_quota_exceeded: "));
     assert!(enforce_disk_quota_against(&not_yet_created, 100).is_ok());
-  }
-
-  #[test]
-  fn disk_quota_readiness_check_reports_a_distinct_code_when_over_quota() {
-    let over = disk_quota_readiness_check(crate::core::remote_provider::BASE_DISK_QUOTA_BYTES);
-    assert!(!over.available);
-    assert_eq!(over.code.as_deref(), Some("disk_quota_exceeded"));
-
-    let under = disk_quota_readiness_check(1);
-    assert!(under.available);
-    assert_eq!(under.code, None);
   }
 
   #[test]
@@ -2422,8 +2413,20 @@ mod tests {
 
   // -- Idempotency ------------------------------------------------------------
 
+  fn test_request(repo: &str) -> TreqCommandRequest {
+    TreqCommandRequest::CreateWorkspace {
+      repo: repo.to_string(),
+      branch_name: "feature-x".into(),
+      source_branch: None,
+      idempotency_key: None,
+    }
+  }
+
   #[test]
   fn idempotency_key_replays_cached_result_for_a_create_style_mutation_instead_of_rerunning() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let repo = dir.path().to_str().unwrap();
+    let request = test_request(repo);
     let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let calls_clone = calls.clone();
     let run = move || {
@@ -2431,8 +2434,9 @@ mod tests {
       Ok(serde_json::json!({ "created_count": n }))
     };
     let key = format!("test-create-{}", uuid_like());
-    let first = with_idempotency_key("test.create", Some(&key), run.clone()).unwrap();
-    let second = with_idempotency_key("test.create", Some(&key), run).unwrap();
+    let first =
+      with_idempotency_key(repo, "test.create", Some(&key), &request, run.clone()).unwrap();
+    let second = with_idempotency_key(repo, "test.create", Some(&key), &request, run).unwrap();
     // The second call must replay the first response rather than invoking
     // `run` again — a retried "create" mutation must not duplicate work.
     assert_eq!(first, second);
@@ -2441,16 +2445,66 @@ mod tests {
 
   #[test]
   fn missing_idempotency_key_always_reruns_the_operation() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let repo = dir.path().to_str().unwrap();
+    let request = test_request(repo);
     let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
     for _ in 0..2 {
       let calls_clone = calls.clone();
-      with_idempotency_key("test.no-key", None, move || {
+      with_idempotency_key(repo, "test.no-key", None, &request, move || {
         calls_clone.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         Ok(serde_json::json!(null))
       })
       .unwrap();
     }
     assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 2);
+  }
+
+  #[test]
+  fn reusing_key_for_a_different_request_is_a_structured_conflict() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let repo = dir.path().to_str().unwrap();
+    let key = format!("test-conflict-{}", uuid_like());
+    let first_request = test_request(repo);
+    with_idempotency_key(repo, "test.create", Some(&key), &first_request, || {
+      Ok(serde_json::json!({ "id": 1 }))
+    })
+    .unwrap();
+
+    let second_request = TreqCommandRequest::CreateWorkspace {
+      repo: repo.to_string(),
+      branch_name: "different-branch".into(),
+      source_branch: None,
+      idempotency_key: None,
+    };
+    let error = with_idempotency_key(repo, "test.create", Some(&key), &second_request, || {
+      panic!("must not execute a mutation reusing a key for a different request")
+    })
+    .unwrap_err();
+    assert!(error.starts_with("idempotency_conflict:"), "{error}");
+  }
+
+  #[test]
+  fn a_failed_mutation_frees_its_idempotency_key_for_reuse() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let repo = dir.path().to_str().unwrap();
+    let request = test_request(repo);
+    let key = format!("test-fail-{}", uuid_like());
+
+    let error = with_idempotency_key(repo, "test.create", Some(&key), &request, || {
+      Err("workspace_not_found: boom".to_string())
+    })
+    .unwrap_err();
+    assert_eq!(error, "workspace_not_found: boom");
+
+    // The failed attempt must not leave a pending claim behind: a retry
+    // with the same key runs the mutation again rather than replaying or
+    // conflicting.
+    let result = with_idempotency_key(repo, "test.create", Some(&key), &request, || {
+      Ok(serde_json::json!({ "id": 2 }))
+    })
+    .unwrap();
+    assert_eq!(result, serde_json::json!({ "id": 2 }));
   }
 
   /// `describe_commit`'s CLI dispatch takes no idempotency key at all: it is

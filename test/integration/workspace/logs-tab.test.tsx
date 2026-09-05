@@ -1,11 +1,6 @@
-import * as React from "react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it } from "vitest";
-import {
-  createTestRepo,
-  findSidebarBranchElement,
-  openRepo,
-  writeRepoFile,
-} from "../../utils";
+import { Dashboard } from "../../../src/components/Dashboard";
 import {
   createWorkspace,
   recordAgentChatScreen,
@@ -14,8 +9,12 @@ import {
   trustRepo,
 } from "../../../src/lib/api";
 import { render, screen, waitFor, within } from "../../test-utils";
-import { Dashboard } from "../../../src/components/Dashboard";
-import userEvent from "@testing-library/user-event";
+import {
+  createTestRepo,
+  findSidebarBranchElement,
+  openRepo,
+  writeRepoFile,
+} from "../../utils";
 
 const LOGGING_WORKFLOW = `
 name: Logging CI
@@ -340,5 +339,35 @@ describe("Home repo Logs tab", () => {
     });
     expect(picker).toHaveTextContent(/Claude/);
     expect(screen.queryByText(/Shell/i)).toBeNull();
+  });
+
+  it("shows newly registered chats and live partial output without remounting", async () => {
+    const { repoPath } = createTestRepo(false);
+    openRepo(repoPath);
+
+    await openLogsTab();
+    await user.click(
+      await screen.findByRole("button", { name: /Agent chats/i }),
+    );
+    await screen.findByText(/No agent chat logs yet/i);
+
+    await registerAgentChat(
+      repoPath,
+      12,
+      "pty-live",
+      "Live Codex",
+      "codex",
+      null,
+      "investigate the issue",
+    );
+
+    const picker = await screen.findByRole("combobox", {
+      name: /Agent terminal/i,
+    });
+    await waitFor(() => expect(picker).toHaveTextContent("Live Codex"));
+    await screen.findByText("investigate the issue");
+
+    await recordAgentChatScreen(repoPath, 12, "partial response is streaming");
+    await screen.findByText("partial response is streaming");
   });
 });

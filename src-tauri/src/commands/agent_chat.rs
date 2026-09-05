@@ -8,6 +8,7 @@ pub fn register_agent_chat(
   name: String,
   agent: String,
   workspace_id: Option<i64>,
+  initial_prompt: Option<String>,
 ) -> Result<AgentChat, String> {
   crate::core::agent_chat::register_agent_chat(
     &repo_path,
@@ -16,6 +17,7 @@ pub fn register_agent_chat(
     &name,
     &agent,
     workspace_id,
+    initial_prompt.as_deref(),
   )
 }
 

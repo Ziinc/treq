@@ -134,7 +134,7 @@ fn build_snapshot_base_ignores(ignore_root: &str) -> Arc<GitIgnoreFile> {
     .chain(
       "",
       Path::new("<treq builtins>"),
-      b".jj/\n.treq/\n.jj*/\nnode_modules/\n.agents/skills/\n.claude/skills/\n.agents/skills/treq*/\n.claude/skills/treq*/\n",
+      b".jj/\n.treq/\n.jj*/\nnode_modules/\n.agents/skills/treq*/\n.claude/skills/treq*/\n",
     )
     .unwrap_or_else(|_| GitIgnoreFile::empty());
 
@@ -1144,8 +1144,6 @@ pub fn ensure_gitignore_entries(repo_path: &str) -> Result<(), JjError> {
     ".jj/",
     ".jj*/",
     ".treq/",
-    ".agents/skills/",
-    ".claude/skills/",
     ".agents/skills/treq*/",
     ".claude/skills/treq*/",
   ];
@@ -8451,8 +8449,14 @@ mod tests {
     let again = fs::read_to_string(temp.path().join(".gitignore")).expect("read gitignore");
     assert_eq!(again.matches(".agents/skills/treq*/").count(), 1);
     assert_eq!(again.matches(".claude/skills/treq*/").count(), 1);
-    assert!(gitignore.contains(".agents/skills/"));
-    assert!(gitignore.contains(".claude/skills/"));
+    assert!(
+      !gitignore.lines().any(|line| line == ".agents/skills/"),
+      "must not ignore all Codex/Cursor user skills, got:\n{gitignore}"
+    );
+    assert!(
+      !gitignore.lines().any(|line| line == ".claude/skills/"),
+      "must not ignore all Claude user skills, got:\n{gitignore}"
+    );
   }
 
   #[test]
@@ -8475,7 +8479,7 @@ mod tests {
   }
 
   #[test]
-  fn git_status_ignores_treq_prefixed_skill_dirs() {
+  fn git_status_ignores_treq_prefixed_skill_dirs_but_reports_user_skills() {
     let temp = TempDir::new().expect("tempdir");
     init_git_repo(&temp);
     let repo_path = temp.path().to_str().expect("utf8");
@@ -8485,6 +8489,8 @@ mod tests {
       ".agents/skills/treq-extra/SKILL.md",
       ".claude/skills/treq/SKILL.md",
       ".claude/skills/treq-extra/SKILL.md",
+      ".agents/skills/user-skill/SKILL.md",
+      ".claude/skills/user-skill/SKILL.md",
     ] {
       let path = temp.path().join(relative);
       fs::create_dir_all(path.parent().expect("parent")).expect("mkdir skill");
@@ -8498,9 +8504,10 @@ mod tests {
     assert!(status.status.success(), "git status should succeed");
     let stdout = String::from_utf8_lossy(&status.stdout);
     assert!(
-      !stdout.contains(".agents/skills/") && !stdout.contains(".claude/skills/"),
+      !stdout.contains(".agents/skills/treq") && !stdout.contains(".claude/skills/treq"),
       "external git should ignore treq-prefixed skills, got:\n{stdout}"
     );
+    assert!(stdout.contains(".agents/") && stdout.contains(".claude/"));
   }
 
   #[test]

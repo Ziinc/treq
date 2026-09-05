@@ -10,6 +10,20 @@ export interface LocalSshIdentity {
 }
 
 /**
+ * Explicit connection fields resolved from an explicitly-selected
+ * `~/.ssh/config` alias (Host/HostName/User/Port/IdentityFile, including
+ * `Include`). Autocomplete data only: resolving an alias performs no network
+ * I/O and never grants trust on its own.
+ */
+export interface ResolvedSshAlias {
+  alias: string;
+  hostname: string;
+  port: number;
+  username: string | null;
+  identity_file: string | null;
+}
+
+/**
  * A device-generated ed25519 keypair used to register this mobile device
  * with the control plane (see `core::remote_device_key`). Only public
  * material ever crosses the Tauri IPC boundary.
@@ -224,6 +238,24 @@ export interface SshEndpoint {
   host_keys: TrustedHostKey[];
   authentication: SshAuthentication;
 }
+
+/**
+ * Allow-listed remote agent identifiers (mirrors `RemoteAgentId` in
+ * `src-tauri/src/core/remote_pty.rs`). Closed set - never an arbitrary
+ * string - so the backend can never be asked to exec an unknown binary.
+ */
+export type RemoteAgentId = "claude" | "codex" | "cursor_agent";
+
+/**
+ * Typed launch behavior for a new remote PTY session (mirrors
+ * `PtyLaunchSpec` in `src-tauri/src/core/remote_pty.rs`). Never an arbitrary
+ * shell command string - this is the type-level half of the backend's
+ * shell-injection guard: only a closed set of launch shapes exists, and
+ * every dynamic field within them is individually shell-quoted server-side.
+ */
+export type PtyLaunchSpec =
+  | { type: "shell" }
+  | { type: "agent"; agent: RemoteAgentId; args: string[] };
 
 export type OperationStatus =
   | "pending"

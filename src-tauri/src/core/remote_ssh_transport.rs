@@ -470,8 +470,9 @@ impl ClientHandlerTrait for TreqSshClientHandler {
         );
         // Returning Ok(false) lets russh reject the connection cleanly
         // instead of propagating an error that could look like a transport
-        // fault; the caller still learns about the mismatch because
-        // `connect_verified` re-checks and returns `Err` explicitly below.
+        // fault. The `connect()` caller then sees `ConnectionFailed`
+        // ("Disconnected"), so host-key mismatch tests accept that error
+        // as well as `HostKeyMismatch`.
         Ok(false)
       }
     }
@@ -1079,7 +1080,17 @@ fn build_remote_command_line(args: &[String]) -> String {
 /// knows the local PTY API is not learning a second vocabulary, even though
 /// the two are separate transports.
 pub struct RemotePtyChannel {
-  channel: AsyncMutex<russh::Channel<russh::client::Msg>>,
+  // Split into read/write halves rather than one `AsyncMutex<Channel>`: the
+  // read half's `wait()` needs `&mut self` and blocks for as long as no new
+  // message has arrived, so a single shared lock around the whole channel
+  // would let a concurrent read loop hold that lock indefinitely and
+  // deadlock any caller of `write`/`resize`/`close` that runs while a read
+  // is in flight — exactly the pattern a streaming consumer (read output in
+  // a background task while writes/closes happen from elsewhere) needs.
+  // `ChannelWriteHalf`'s operations only need `&self` (they just enqueue a
+  // message), so they never contend with the read half's mutex at all.
+  read_half: AsyncMutex<russh::ChannelReadHalf>,
+  write_half: russh::ChannelWriteHalf<russh::client::Msg>,
   metrics: Arc<SshTransportMetrics>,
 }
 
@@ -1094,6 +1105,22 @@ impl RemotePtyChannel {
     rows: u16,
     command: Option<&str>,
   ) -> Result<Self, SshTransportError> {
+    Self::open_in_directory(pool, endpoint, term, cols, rows, command, None).await
+  }
+
+  /// Same as [`open`], but starts the remote process in `working_directory`
+  /// when set (PRD: a terminal is bound to `remote_working_directory`).
+  /// OpenSSH has no working-directory channel request, so this execs a
+  /// quoted `cd` followed by the shell or command.
+  pub async fn open_in_directory(
+    pool: &SshConnectionPool,
+    endpoint: &SshEndpoint,
+    term: &str,
+    cols: u16,
+    rows: u16,
+    command: Option<&str>,
+    working_directory: Option<&str>,
+  ) -> Result<Self, SshTransportError> {
     let handle = pool.get_or_connect(endpoint).await?;
     let session = handle.lock().await;
     let channel = session
@@ -1104,7 +1131,7 @@ impl RemotePtyChannel {
       .request_pty(true, term, cols as u32, rows as u32, 0, 0, &[])
       .await
       .map_err(|error| SshTransportError::ChannelError(error.to_string()))?;
-    match command {
+    match pty_startup_command(command, working_directory) {
       Some(command) => channel
         .exec(true, command.as_bytes())
         .await
@@ -1115,18 +1142,19 @@ impl RemotePtyChannel {
         .map_err(|error| SshTransportError::ChannelError(error.to_string()))?,
     }
     pool.metrics.pty_start_count.fetch_add(1, Ordering::Relaxed);
+    let (read_half, write_half) = channel.split();
     Ok(Self {
-      channel: AsyncMutex::new(channel),
+      read_half: AsyncMutex::new(read_half),
+      write_half,
       metrics: pool.metrics.clone(),
     })
   }
 
   /// Writes raw bytes to the remote PTY (keystrokes, pasted input, etc.).
   /// Never logs `data`, per the PRD's "raw terminal output ... by default"
-  /// never-log requirement.
+  /// never-log requirement. Never contends with an in-flight `read_chunk`.
   pub async fn write(&self, data: &[u8]) -> Result<(), SshTransportError> {
-    let channel = self.channel.lock().await;
-    let mut writer = channel.make_writer();
+    let mut writer = self.write_half.make_writer();
     writer
       .write_all(data)
       .await
@@ -1138,9 +1166,9 @@ impl RemotePtyChannel {
   /// Callers own their own output buffering and redaction policy for what
   /// they do with the bytes (e.g. terminal echo vs. a log line).
   pub async fn read_chunk(&self) -> Result<Option<Vec<u8>>, SshTransportError> {
-    let mut channel = self.channel.lock().await;
+    let mut read_half = self.read_half.lock().await;
     loop {
-      match channel.wait().await {
+      match read_half.wait().await {
         Some(ChannelMsg::Data { data }) => return Ok(Some(data.to_vec())),
         Some(ChannelMsg::ExtendedData { data, .. }) => return Ok(Some(data.to_vec())),
         Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) | None => return Ok(None),
@@ -1149,23 +1177,73 @@ impl RemotePtyChannel {
     }
   }
 
+  /// Reads the next chunk of output along with an exit status, if the
+  /// message that ended the wait was `ExitStatus`. Distinct from
+  /// `read_chunk` only in that it surfaces `ExitStatus` instead of treating
+  /// it as an ignorable message, so a caller that wants to observe a remote
+  /// process's exit code does not have to guess it from the channel closing.
+  pub async fn read_event(&self) -> Result<PtyReadEvent, SshTransportError> {
+    let mut read_half = self.read_half.lock().await;
+    loop {
+      match read_half.wait().await {
+        Some(ChannelMsg::Data { data }) => return Ok(PtyReadEvent::Data(data.to_vec())),
+        Some(ChannelMsg::ExtendedData { data, .. }) => {
+          return Ok(PtyReadEvent::Data(data.to_vec()))
+        }
+        Some(ChannelMsg::ExitStatus { exit_status }) => {
+          return Ok(PtyReadEvent::ExitStatus(exit_status))
+        }
+        Some(ChannelMsg::Eof) | Some(ChannelMsg::Close) | None => return Ok(PtyReadEvent::Closed),
+        Some(_) => continue,
+      }
+    }
+  }
+
   pub async fn resize(&self, cols: u16, rows: u16) -> Result<(), SshTransportError> {
-    let channel = self.channel.lock().await;
-    channel
+    self
+      .write_half
       .window_change(cols as u32, rows as u32, 0, 0)
       .await
       .map_err(|error| SshTransportError::ChannelError(error.to_string()))
   }
 
   pub async fn close(&self) -> Result<(), SshTransportError> {
-    let channel = self.channel.lock().await;
-    let result = channel
+    let result = self
+      .write_half
       .close()
       .await
       .map_err(|error| SshTransportError::ChannelError(error.to_string()));
     self.metrics.pty_exit_count.fetch_add(1, Ordering::Relaxed);
     result
   }
+}
+
+/// Builds the remote exec string for a PTY. `None` means a shell request
+/// (no working directory, no explicit command). The directory is quoted
+/// with [`crate::core::remote::shell_quote`]; `command` is caller-owned.
+fn pty_startup_command(command: Option<&str>, working_directory: Option<&str>) -> Option<String> {
+  match (command, working_directory) {
+    (None, None) => None,
+    (Some(command), None) => Some(command.to_string()),
+    (None, Some(dir)) => Some(format!(
+      "cd {} && exec ${{SHELL:-/bin/sh}} -l",
+      crate::core::remote::shell_quote(dir)
+    )),
+    (Some(command), Some(dir)) => Some(format!(
+      "cd {} && {}",
+      crate::core::remote::shell_quote(dir),
+      command
+    )),
+  }
+}
+
+/// One event yielded by [`RemotePtyChannel::read_event`]: either an output
+/// chunk, an observed exit status, or the channel ending without one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PtyReadEvent {
+  Data(Vec<u8>),
+  ExitStatus(u32),
+  Closed,
 }
 
 // ---------------------------------------------------------------------------
@@ -1357,6 +1435,34 @@ mod tests {
       _session: &mut ServerSession,
     ) -> Result<(), Self::Error> {
       reply.accept().await;
+      Ok(())
+    }
+
+    async fn pty_request(
+      &mut self,
+      channel: ChannelId,
+      _term: &str,
+      _col_width: u32,
+      _row_height: u32,
+      _pix_width: u32,
+      _pix_height: u32,
+      _modes: &[(russh::Pty, u32)],
+      session: &mut ServerSession,
+    ) -> Result<(), Self::Error> {
+      session.channel_success(channel)?;
+      Ok(())
+    }
+
+    async fn window_change_request(
+      &mut self,
+      channel: ChannelId,
+      _col_width: u32,
+      _row_height: u32,
+      _pix_width: u32,
+      _pix_height: u32,
+      session: &mut ServerSession,
+    ) -> Result<(), Self::Error> {
+      session.channel_success(channel)?;
       Ok(())
     }
 
@@ -1862,6 +1968,55 @@ mod tests {
     assert_eq!(snapshot.host_key_mismatch_count, 1);
   }
 
+  #[test]
+  fn pty_startup_command_cds_into_the_selected_directory() {
+    assert_eq!(pty_startup_command(None, None), None);
+    assert_eq!(
+      pty_startup_command(Some("pwd"), None).as_deref(),
+      Some("pwd")
+    );
+    assert_eq!(
+      pty_startup_command(Some("pwd"), Some("/srv/workspace")).as_deref(),
+      Some("cd '/srv/workspace' && pwd")
+    );
+    assert_eq!(
+      pty_startup_command(None, Some("/srv/workspace")).as_deref(),
+      Some("cd '/srv/workspace' && exec ${SHELL:-/bin/sh} -l")
+    );
+  }
+
+  #[tokio::test]
+  async fn pty_open_in_directory_execs_a_quoted_cd_before_the_command() {
+    let (addr, host_key) = start_mock_server(0).await;
+    let client_key = test_host_key();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let key_reference = write_client_key(temp_dir.path(), &client_key);
+    let endpoint = test_endpoint(addr, &host_key, key_reference);
+
+    let pool = SshConnectionPool::new();
+    let pty = RemotePtyChannel::open_in_directory(
+      &pool,
+      &endpoint,
+      "xterm",
+      80,
+      24,
+      Some("pwd"),
+      Some("/srv/workspace"),
+    )
+    .await
+    .unwrap();
+    let chunk = pty.read_chunk().await.unwrap().unwrap();
+    assert!(
+      String::from_utf8_lossy(&chunk).contains("cd '/srv/workspace' && pwd"),
+      "PTY exec must cd into the selected workspace before the command"
+    );
+
+    let _ = pty.close().await;
+    let snapshot = pool.metrics_snapshot();
+    assert_eq!(snapshot.pty_start_count, 1);
+    assert_eq!(snapshot.pty_exit_count, 1);
+  }
+
   #[tokio::test]
   async fn pty_open_and_close_record_start_and_exit_counts() {
     let (addr, host_key) = start_mock_server(0).await;
@@ -2234,5 +2389,190 @@ mod tests {
     }
     // No verification read was ever issued.
     assert!(verifications.is_empty());
+  }
+
+  // -- Explicit-alias endpoints over the real native transport ------------------
+  //
+  // These exercise `core::remote_ssh_config::build_explicit_alias_endpoint`
+  // end-to-end against a real (mock) SSH server: an alias resolved from a
+  // temp `~/.ssh/config`-style file, paired with a user-supplied expected
+  // fingerprint, connects over this module's pooled `russh` transport with no
+  // system `ssh` subprocess involved.
+
+  fn write_alias_config(
+    dir: &std::path::Path,
+    alias: &str,
+    addr: std::net::SocketAddr,
+  ) -> Vec<PathBuf> {
+    let config_path = dir.join("config");
+    std::fs::write(
+      &config_path,
+      format!(
+        "Host {alias}\n  HostName {}\n  Port {}\n",
+        addr.ip(),
+        addr.port()
+      ),
+    )
+    .unwrap();
+    vec![config_path]
+  }
+
+  #[tokio::test]
+  async fn explicit_alias_endpoint_connects_when_fingerprint_matches() {
+    let (addr, host_key) = start_mock_server(0).await;
+    let client_key = test_host_key();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let key_reference = write_client_key(temp_dir.path(), &client_key);
+    let paths = write_alias_config(temp_dir.path(), "prod-alias", addr);
+    let expected_fingerprint = host_key
+      .public_key()
+      .fingerprint(russh::keys::HashAlg::Sha256)
+      .to_string();
+
+    let endpoint = crate::core::remote_ssh_config::build_explicit_alias_endpoint(
+      "endpoint-1".to_string(),
+      "prod-alias",
+      &paths,
+      expected_fingerprint,
+      "ssh-ed25519".to_string(),
+      Some(std::env::var("USER").unwrap_or_else(|_| "user".to_string())),
+      key_reference,
+    )
+    .unwrap();
+    assert_eq!(
+      endpoint.source,
+      SshEndpointSource::ExplicitAlias {
+        alias: "prod-alias".to_string()
+      }
+    );
+
+    let pool = SshConnectionPool::new();
+    let cancellation = CancellationToken::new();
+    let output = exec_command(
+      &pool,
+      &endpoint,
+      &["repo".to_string(), "inspect".to_string()],
+      ExecLimits::default(),
+      &cancellation,
+    )
+    .await
+    .unwrap();
+    assert!(output.success());
+  }
+
+  #[tokio::test]
+  async fn explicit_alias_endpoint_rejects_mismatched_fingerprint() {
+    let (addr, host_key) = start_mock_server(0).await;
+    let client_key = test_host_key();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let key_reference = write_client_key(temp_dir.path(), &client_key);
+    let paths = write_alias_config(temp_dir.path(), "prod-alias", addr);
+    let _ = &host_key;
+
+    // The user typed/confirmed the wrong fingerprint (or none at all was
+    // ever verified against the real server) - the endpoint must still be
+    // constructible (registration does not itself connect), but the native
+    // transport must reject the connection rather than silently trusting it.
+    let endpoint = crate::core::remote_ssh_config::build_explicit_alias_endpoint(
+      "endpoint-1".to_string(),
+      "prod-alias",
+      &paths,
+      "SHA256:not-the-real-fingerprint".to_string(),
+      "ssh-ed25519".to_string(),
+      Some(std::env::var("USER").unwrap_or_else(|_| "user".to_string())),
+      key_reference,
+    )
+    .unwrap();
+
+    let pool = SshConnectionPool::new();
+    let cancellation = CancellationToken::new();
+    let error = exec_command(
+      &pool,
+      &endpoint,
+      &["repo".to_string(), "inspect".to_string()],
+      ExecLimits::default(),
+      &cancellation,
+    )
+    .await
+    .unwrap_err();
+    assert!(matches!(error, SshTransportError::ConnectionFailed(_)));
+  }
+
+  #[tokio::test]
+  async fn explicit_alias_endpoint_rejects_a_changed_host_key_rather_than_silently_accepting_it() {
+    // Simulates the "changed key" scenario from the PRD's host-key
+    // verification requirements: a fingerprint that was valid for a
+    // *previous* key (e.g. one the user trusted at an earlier registration)
+    // must be rejected once the server presents a *different* key, never
+    // silently upgraded to the new one.
+    let (addr, host_key) = start_mock_server(0).await;
+    let previously_trusted_key = test_host_key();
+    assert_ne!(
+      previously_trusted_key
+        .public_key()
+        .fingerprint(russh::keys::HashAlg::Sha256),
+      host_key
+        .public_key()
+        .fingerprint(russh::keys::HashAlg::Sha256)
+    );
+
+    let client_key = test_host_key();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let key_reference = write_client_key(temp_dir.path(), &client_key);
+    let paths = write_alias_config(temp_dir.path(), "prod-alias", addr);
+
+    let endpoint = crate::core::remote_ssh_config::build_explicit_alias_endpoint(
+      "endpoint-1".to_string(),
+      "prod-alias",
+      &paths,
+      previously_trusted_key
+        .public_key()
+        .fingerprint(russh::keys::HashAlg::Sha256)
+        .to_string(),
+      "ssh-ed25519".to_string(),
+      Some(std::env::var("USER").unwrap_or_else(|_| "user".to_string())),
+      key_reference,
+    )
+    .unwrap();
+
+    let pool = SshConnectionPool::new();
+    let cancellation = CancellationToken::new();
+    let error = exec_command(
+      &pool,
+      &endpoint,
+      &["repo".to_string(), "inspect".to_string()],
+      ExecLimits::default(),
+      &cancellation,
+    )
+    .await
+    .unwrap_err();
+    assert!(matches!(error, SshTransportError::ConnectionFailed(_)));
+  }
+
+  #[test]
+  fn explicit_alias_endpoint_rejects_unsupported_proxyjump_before_any_connection_is_attempted() {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let config_path = temp_dir.path().join("config");
+    std::fs::write(
+      &config_path,
+      "Host bastioned\n  HostName inner.example.com\n  ProxyJump bastion.example.com\n",
+    )
+    .unwrap();
+
+    let error = crate::core::remote_ssh_config::build_explicit_alias_endpoint(
+      "endpoint-1".to_string(),
+      "bastioned",
+      &[config_path],
+      "SHA256:expected".to_string(),
+      "ssh-ed25519".to_string(),
+      None,
+      "id_ed25519".to_string(),
+    )
+    .unwrap_err();
+
+    assert!(matches!(
+      error,
+      crate::core::remote_ssh_config::SshConfigError::UnsupportedFeature { .. }
+    ));
   }
 }

@@ -1,9 +1,12 @@
+import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import type { InstalledSkill, RepoYamlConfig } from "./api-extra";
 import type {
-  BranchStatus,
   BookmarkConflictResolutionResult,
+  BranchStatus,
+  DeviceKeyInfo,
   EditorAppsResponse,
   GitRemoteInfo,
-  PrCiStatus,
   HomeRebaseDryRunResult,
   JjBranch,
   JjCommitsAhead,
@@ -14,25 +17,18 @@ import type {
   JjLogResult,
   JjRebaseResult,
   JjRevisionDiff,
+  LocalSshIdentity,
   MergeStrategy,
+  PrCiStatus,
   PullWorkspaceResult,
-  RepoBranch,
   RenameWorkspaceResult,
+  RepoBranch,
   SingleRebaseResult,
+  SshHost,
   Workspace,
   WorkspaceSidebarStatus,
   WorkspaceStatus,
-  SshHost,
-  RemoteReadiness,
-  RemoteRepoProbe,
-  RemoteRepository,
-  LocalSshIdentity,
-  DeviceKeyInfo,
 } from "./api-types";
-import type { InstalledSkill, RepoYamlConfig } from "./api-extra";
-
-import { invoke } from "@tauri-apps/api/core";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { enqueueJjExclusive } from "./enqueue-jj-exclusive";
 
 function currentWindowLabel(): string {
@@ -47,6 +43,7 @@ export * from "./api-browser";
 export * from "./api-checks-logs";
 export * from "./api-extra";
 export * from "./api-github";
+export * from "./api-remote-ssh";
 export * from "./api-types";
 
 export const initRepo = (repoPath: string): Promise<void> =>
@@ -537,28 +534,16 @@ export const dryRunHomeRepoRebase = (
 
 export const listSshHosts = (): Promise<SshHost[]> => invoke("list_ssh_hosts");
 
-export const checkSshHost = (host: string): Promise<RemoteReadiness> =>
-  invoke("check_ssh_host", { host });
-
-export const remoteProbeRepo = (
-  host: string,
-  path: string,
-): Promise<RemoteRepoProbe> => invoke("remote_probe_repo", { host, path });
-
-export const remoteCloneRepo = (
-  host: string,
-  repoUrl: string,
-  destination: string,
-): Promise<RemoteRepository> =>
-  invoke("remote_clone_repo", { host, repoUrl, destination });
-
-export const remoteOpenRepo = (
-  host: string,
-  path: string,
-): Promise<RemoteRepository> => invoke("remote_open_repo", { host, path });
-
 export const listLocalSshIdentities = (): Promise<LocalSshIdentity[]> =>
   invoke("list_local_ssh_identities");
+
+/**
+ * Reads the raw OpenSSH public-key text for a `listLocalSshIdentities`
+ * `reference`, so it can be registered with the control plane. Never reads
+ * or returns private key material.
+ */
+export const readLocalSshPublicKey = (reference: string): Promise<string> =>
+  invoke("read_local_ssh_public_key", { reference });
 
 /**
  * Generates (on first call) or loads this device's ed25519 keypair for

@@ -6,6 +6,7 @@ import React, {
   useState,
 } from "react";
 import { useAgentMessageQueue } from "../../hooks/useAgentMessageQueue";
+import { looksLikeAgentUserQuestion } from "../../lib/agentMessageQueue";
 import {
   ptyClose,
   ptyWrite,
@@ -14,7 +15,6 @@ import {
   registerAgentChat,
   setSessionModel,
 } from "../../lib/api";
-import { looksLikeAgentUserQuestion } from "../../lib/agentMessageQueue";
 import { cn } from "../../lib/utils";
 import {
   ConsolidatedTerminal,
@@ -32,16 +32,20 @@ import {
   TooltipTrigger,
 } from "../ui/tooltip";
 import { AgentMessageQueue } from "./AgentMessageQueue";
+import {
+  type AgentChatRecorder,
+  createAgentChatRecorder,
+} from "./agentChatRecorder";
 import { TerminalSearchOverlay } from "./TerminalSearchOverlay";
 import { TerminalSendPreviews } from "./TerminalSendPreviews";
-import type { ClaudeSessionData } from "./types";
 import { TerminalWorkspaceLabel } from "./TerminalWorkspaceLabel";
-import { useAgentAutoCommand } from "./useAgentAutoCommand";
 import {
   appendTerminalOutput,
   createTerminalOutputTail,
   terminalQuestionWindow,
 } from "./terminalOutputTail";
+import type { ClaudeSessionData } from "./types";
+import { useAgentAutoCommand } from "./useAgentAutoCommand";
 
 export interface AgentTerminalPanelProps {
   sessionData: ClaudeSessionData;
@@ -105,24 +109,53 @@ export const AgentTerminalPanel = ({
     null,
   );
   const processOutputTailRef = useRef(createTerminalOutputTail());
+  const chatRecorderRef = useRef<AgentChatRecorder | null>(null);
 
   useEffect(() => {
-    void registerAgentChat(
-      sessionData.repoPath,
-      sessionData.sessionId,
-      sessionData.ptySessionId,
-      sessionData.sessionName,
-      sessionData.agent ?? "claude",
-      null,
-    ).catch((error) => {
-      console.error("Failed to register agent chat log:", error);
+    const recorder = createAgentChatRecorder({
+      register: () =>
+        registerAgentChat(
+          sessionData.repoPath,
+          sessionData.sessionId,
+          sessionData.ptySessionId,
+          sessionData.sessionName,
+          sessionData.agent ?? "claude",
+          null,
+          sessionData.pendingPrompt,
+        ),
+      recordUserMessage: (screenBefore, text) =>
+        recordAgentChatUserMessage(
+          sessionData.repoPath,
+          sessionData.sessionId,
+          screenBefore,
+          text,
+        ),
+      recordScreen: (screen) =>
+        recordAgentChatScreen(
+          sessionData.repoPath,
+          sessionData.sessionId,
+          screen,
+        ),
+      getScreen: () =>
+        terminalRefs.current.get(terminalId)?.getScreenText() ?? "",
+      onError: (error) => {
+        console.error("Failed to capture agent chat log:", error);
+      },
     });
+    chatRecorderRef.current = recorder;
+    return () => {
+      recorder.dispose();
+      if (chatRecorderRef.current === recorder) chatRecorderRef.current = null;
+    };
   }, [
     sessionData.repoPath,
     sessionData.sessionId,
     sessionData.ptySessionId,
     sessionData.sessionName,
     sessionData.agent,
+    sessionData.pendingPrompt,
+    terminalId,
+    terminalRefs,
   ]);
 
   const {
@@ -136,17 +169,8 @@ export const AgentTerminalPanel = ({
   } = useAgentMessageQueue({
     ptySessionId: sessionData.ptySessionId,
     write: async (sessionId, data) => {
-      const screen =
-        terminalRefs.current.get(terminalId)?.getScreenText() ?? "";
       const text = data.replace(/\r$/, "");
-      await recordAgentChatUserMessage(
-        sessionData.repoPath,
-        sessionData.sessionId,
-        screen,
-        text,
-      ).catch((error) => {
-        console.error("Failed to record agent chat user message:", error);
-      });
+      await chatRecorderRef.current?.userMessage(text);
       await ptyWrite(sessionId, data);
     },
   });
@@ -164,6 +188,7 @@ export const AgentTerminalPanel = ({
         output,
       );
       markBusy();
+      chatRecorderRef.current?.output();
     }
     onTerminalOutput?.(output, fromProcess);
   };
@@ -174,16 +199,7 @@ export const AgentTerminalPanel = ({
         terminalQuestionWindow(processOutputTailRef.current),
       ),
     });
-    const screen = terminalRefs.current.get(terminalId)?.getScreenText() ?? "";
-    if (screen) {
-      void recordAgentChatScreen(
-        sessionData.repoPath,
-        sessionData.sessionId,
-        screen,
-      ).catch((error) => {
-        console.error("Failed to record agent chat screen:", error);
-      });
-    }
+    chatRecorderRef.current?.idle();
     onTerminalIdle?.();
   };
 

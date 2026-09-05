@@ -504,6 +504,38 @@ pub fn open_or_create_workspace_from_pr(
   Ok((updated, true))
 }
 
+pub fn open_or_create_workspace_from_linear_issue(
+  repo_path: &str,
+  branch_name: &str,
+  base_branch: &str,
+  title: &str,
+  description: Option<&str>,
+) -> Result<(local_db::Workspace, bool), String> {
+  if let Some(existing) = local_db::get_workspace_by_branch(repo_path, branch_name)
+    .map_err(|e| format!("Failed to check existing workspace: {e}"))?
+  {
+    return Ok((existing, false));
+  }
+  let workspace = create_workspace(
+    repo_path,
+    branch_name,
+    description.map(str::to_string),
+    None,
+    None,
+    None,
+    None,
+  )?;
+  apply_workspace_target_branch(repo_path, workspace.id, base_branch)?;
+  if !title.trim().is_empty() {
+    local_db::update_workspace_title(repo_path, workspace.id, title.trim())
+      .map_err(|e| format!("Failed to set workspace title: {e}"))?;
+  }
+  let updated = local_db::get_workspace_by_id(repo_path, workspace.id)
+    .map_err(|e| format!("Failed to reload workspace: {e}"))?
+    .ok_or_else(|| format!("Workspace not found after create: {}", workspace.id))?;
+  Ok((updated, true))
+}
+
 /// Creates a workspace and optionally symlinks heavy directories from the home repo.
 ///
 /// `symlinked_dirs` are paths relative to the repo root (e.g. `node_modules`). Each
@@ -1407,6 +1439,43 @@ mod tests {
 
     assert_eq!(created.branch_name, "fix/partial");
     assert!(!partial.join("partial").exists());
+  }
+
+  #[test]
+  fn opens_or_creates_linear_issue_workspace_without_existing_branch() {
+    let temp = TempDir::new().expect("tempdir");
+    let repo_path = init_workspace_creation_repo(&temp);
+
+    let (created, was_created) = super::open_or_create_workspace_from_linear_issue(
+      &repo_path,
+      "ty/treq-281-linear-integration",
+      "main",
+      "Linear integration should CRUD issues",
+      Some("Implement the issue workflow"),
+    )
+    .expect("create Linear issue workspace");
+
+    assert!(was_created);
+    assert_eq!(created.branch_name, "ty/treq-281-linear-integration");
+    assert_eq!(created.target_branch.as_deref(), Some("main"));
+    assert_eq!(created.title, "Linear integration should CRUD issues");
+    assert_eq!(
+      created.description.as_deref(),
+      Some("Implement the issue workflow")
+    );
+
+    let (reopened, was_created) = super::open_or_create_workspace_from_linear_issue(
+      &repo_path,
+      "ty/treq-281-linear-integration",
+      "main",
+      "Ignored replacement title",
+      None,
+    )
+    .expect("reuse Linear issue workspace");
+
+    assert!(!was_created);
+    assert_eq!(reopened.id, created.id);
+    assert_eq!(reopened.title, "Linear integration should CRUD issues");
   }
 
   #[test]

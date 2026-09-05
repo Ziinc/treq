@@ -953,7 +953,7 @@ fn test_sync_workspaces_delete_forgotten_directories() {
 }
 
 #[test]
-fn test_jj_get_changed_files_ignores_gitignored_noise_in_workspace() {
+fn test_jj_get_changed_files_ignores_treq_skills_but_keeps_user_skills() {
   let repo = TestRepo::new().expect("Failed to create test repo");
   let gitignore = repo.read_gitignore().expect("Failed to read .gitignore");
   repo
@@ -1011,14 +1011,33 @@ fn test_jj_get_changed_files_ignores_gitignored_noise_in_workspace() {
     "---\nname: treq\n---\n",
   )
   .expect("Failed to write bundled Claude skill");
+  TestRepo::write_workspace_file(
+    workspace_path_str,
+    ".agents/skills/user-skill/SKILL.md",
+    "---\nname: user-skill\n---\n",
+  )
+  .expect("Failed to write user Codex skill");
+  TestRepo::write_workspace_file(
+    workspace_path_str,
+    ".claude/skills/user-skill/SKILL.md",
+    "---\nname: user-skill\n---\n",
+  )
+  .expect("Failed to write user Claude skill");
 
   let changed_files =
     treq_lib::jj::jj_get_changed_files(workspace_path_str).expect("Failed to get changed files");
 
-  assert!(
-    changed_files.is_empty(),
-    "Expected ignored noise to be excluded, got {:?}",
-    changed_files
+  let paths: Vec<_> = changed_files
+    .iter()
+    .map(|change| change.path.as_str())
+    .collect();
+  assert_eq!(
+    paths,
+    [
+      ".agents/skills/user-skill/SKILL.md",
+      ".claude/skills/user-skill/SKILL.md",
+    ],
+    "Expected only user-owned skills to remain visible"
   );
 }
 
