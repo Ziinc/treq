@@ -29,6 +29,7 @@ export interface RemoteManagedSetupPanelProps {
   onReprovision: (region: RegionCode, size: SizePreset) => Promise<void>;
   onDeleteInstance: () => Promise<void>;
   onRevokeKey: (keyReference: string) => Promise<void>;
+  onOpenRepositories?: () => void;
   /** Connect action for an existing `ready` managed instance. */
   onConnectManaged: (keyReference: string) => Promise<void>;
 }
@@ -47,6 +48,7 @@ export function RemoteManagedSetupPanel({
   onReprovision,
   onDeleteInstance,
   onRevokeKey,
+  onOpenRepositories,
   onConnectManaged,
 }: RemoteManagedSetupPanelProps) {
   const [region, setRegion] = useState<RegionCode | "">("");
@@ -155,6 +157,13 @@ export function RemoteManagedSetupPanel({
             )}
 
           <div className="flex flex-wrap gap-2">
+            {existingEndpoint &&
+              existingInstance.status === "ready" &&
+              onOpenRepositories && (
+                <Button size="sm" onClick={onOpenRepositories}>
+                  Open repositories
+                </Button>
+              )}
             {(existingInstance.status === "suspended" ||
               existingInstance.status === "waking") && (
               <Button
