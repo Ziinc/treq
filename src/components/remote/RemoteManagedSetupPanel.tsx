@@ -135,7 +135,10 @@ export function RemoteManagedSetupPanel({
                       Choose a key
                     </option>
                     {localKeyIdentities.map((identity) => (
-                      <option key={identity.reference} value={identity.reference}>
+                      <option
+                        key={identity.reference}
+                        value={identity.reference}
+                      >
                         {identity.label}
                       </option>
                     ))}

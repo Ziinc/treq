@@ -44,6 +44,7 @@ import {
   listSshHosts,
   listWorkspaceStatuses,
   moveWorkspaceChanges,
+  readLocalSshPublicKey,
   remoteCloneRepo,
   remoteOpenRepo,
   remoteProbeRepo,
@@ -80,7 +81,6 @@ import {
   publicKeyAuthentication,
 } from "../lib/remote-endpoints";
 import { dispatchOverSsh } from "../lib/remote-dispatch";
-import { readLocalSshPublicKey } from "../lib/api";
 import {
   connectExistingReadyInstance,
   connectManagedInstance,
@@ -346,12 +346,13 @@ export const Dashboard: React.FC<DashboardProps> = ({
   // `activeSshEndpoint` changes identity (including to null) or the
   // component unmounts, before any new renewal loop for a replacement
   // endpoint is started by the handler that set it.
-  useEffect(() => {
-    return () => {
+  useEffect(
+    () => () => {
       renewalControllerRef.current?.stop();
       renewalControllerRef.current = null;
-    };
-  }, [activeSshEndpoint]);
+    },
+    [activeSshEndpoint],
+  );
 
   const managedConnectionDeps = (): ManagedConnectionDeps => ({
     readPublicKey: readLocalSshPublicKey,
@@ -538,7 +539,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
   // succeeded.
   const handleReauthenticateManaged = async (keyReference?: string) => {
     const resolvedKeyReference = keyReference ?? selectedKeyReference;
-    if (!activeSshEndpoint || !instanceStatus?.instance || !resolvedKeyReference)
+    if (
+      !activeSshEndpoint ||
+      !instanceStatus?.instance ||
+      !resolvedKeyReference
+    )
       return;
     setProvisioningError(undefined);
     try {
@@ -2129,10 +2134,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
           {activeSshEndpoint && cutoffs[activeSshEndpoint.id] && (
             <div className="border-b border-red-500/40 bg-red-500/10 px-4 py-3 text-sm">
               <p className="font-medium text-red-700 dark:text-red-300">
-                Access blocked ({cutoffs[activeSshEndpoint.id]
-                  .split("_")
-                  .join(" ")}
-                )
+                Access blocked (
+                {cutoffs[activeSshEndpoint.id].split("_").join(" ")})
               </p>
               <p className="mt-1 text-muted-foreground">
                 This instance is cut off from further commands until you
@@ -2151,31 +2154,33 @@ export const Dashboard: React.FC<DashboardProps> = ({
           {activeSshEndpoint &&
             !explicitEndpointRepoConnected &&
             !cutoffs[activeSshEndpoint.id] && (
-            <div className="flex flex-col gap-2 border-b px-4 py-3">
-              <label className="flex flex-col gap-1 max-w-md">
-                <span className="text-sm font-medium">
-                  Remote repository path
-                </span>
-                <input
-                  className="rounded-md border border-border/60 bg-background px-2 py-1.5"
-                  value={explicitEndpointRepoPath}
-                  onChange={(e) => setExplicitEndpointRepoPath(e.target.value)}
-                />
-              </label>
-              {explicitEndpointError && (
-                <p className="text-sm text-red-600 dark:text-red-400">
-                  {explicitEndpointError}
-                </p>
-              )}
-              <Button
-                size="sm"
-                className="w-fit"
-                onClick={() => void handleConnectExplicitEndpointRepo()}
-              >
-                Connect
-              </Button>
-            </div>
-          )}
+              <div className="flex flex-col gap-2 border-b px-4 py-3">
+                <label className="flex flex-col gap-1 max-w-md">
+                  <span className="text-sm font-medium">
+                    Remote repository path
+                  </span>
+                  <input
+                    className="rounded-md border border-border/60 bg-background px-2 py-1.5"
+                    value={explicitEndpointRepoPath}
+                    onChange={(e) =>
+                      setExplicitEndpointRepoPath(e.target.value)
+                    }
+                  />
+                </label>
+                {explicitEndpointError && (
+                  <p className="text-sm text-red-600 dark:text-red-400">
+                    {explicitEndpointError}
+                  </p>
+                )}
+                <Button
+                  size="sm"
+                  className="w-fit"
+                  onClick={() => void handleConnectExplicitEndpointRepo()}
+                >
+                  Connect
+                </Button>
+              </div>
+            )}
 
           <div className="flex-1 min-h-0">
             {activeRemoteRepo ? (

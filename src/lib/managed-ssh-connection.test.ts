@@ -52,9 +52,7 @@ const KEY: ClientKeyResponse = {
   revoked_at: null,
 };
 
-function makeCertResponse(
-  generation = 1,
-): IssueCertificateResponse {
+function makeCertResponse(generation = 1): IssueCertificateResponse {
   return {
     certificate: "ssh-ed25519-cert-v01@openssh.com AAAA...",
     serial: "serial-1",
@@ -145,7 +143,7 @@ describe("connectManagedInstance", () => {
       keyReference: "/home/user/.ssh/id_ed25519.pub",
     });
 
-    const {calls} = (registerClientKey as ReturnType<typeof vi.fn>).mock;
+    const { calls } = (registerClientKey as ReturnType<typeof vi.fn>).mock;
     expect(calls[0][2]).toEqual(calls[1][2]); // idempotency key argument
   });
 

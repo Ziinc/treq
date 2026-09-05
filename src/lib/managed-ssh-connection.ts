@@ -124,7 +124,9 @@ export async function waitForInstanceReady(
     const state = status.instance?.status;
     if (state === READY_STATE) return status;
     if (state && TERMINAL_FAILURE_STATES.has(state)) {
-      throw new Error(`Managed instance provisioning failed (status: ${state}).`);
+      throw new Error(
+        `Managed instance provisioning failed (status: ${state}).`,
+      );
     }
     if (now() >= deadline) {
       throw new Error(
@@ -142,7 +144,7 @@ async function issueAndActivate(
   key: ClientKeyResponse,
 ): Promise<{ endpoint: SshEndpoint; renewal: RenewalController }> {
   const response = await deps.issueCertificate(instanceId, key.id);
-  const {endpoint} = response;
+  const { endpoint } = response;
   deps.activateEndpoint(endpoint);
 
   const now = deps.now ?? Date.now;
@@ -210,7 +212,7 @@ export async function connectExistingReadyInstance(
   deps: ManagedConnectionDeps,
   options: ConnectExistingReadyInstanceOptions,
 ): Promise<ManagedConnectionResult> {
-  const {instance} = options.status;
+  const { instance } = options.status;
   if (!instance || instance.status !== READY_STATE) {
     throw new Error(
       `Managed instance is not ready (status: ${instance?.status ?? "unprovisioned"}).`,
