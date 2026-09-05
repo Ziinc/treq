@@ -45,6 +45,7 @@ export interface RemoteSetupDialogProps {
   onReprovision: (region: RegionCode, size: SizePreset) => Promise<void>;
   onDeleteInstance: () => Promise<void>;
   onRevokeKey: (keyReference: string) => Promise<void>;
+  onConnectManaged: (keyReference: string) => Promise<void>;
 
   onRegisterUserManaged: (values: UserManagedFormValues) => Promise<void>;
 }
@@ -72,6 +73,7 @@ export function RemoteSetupDialog({
   onReprovision,
   onDeleteInstance,
   onRevokeKey,
+  onConnectManaged,
   onRegisterUserManaged,
 }: RemoteSetupDialogProps) {
   const [mode, setMode] = useState<RemoteSetupMode>("choice");
@@ -140,6 +142,7 @@ export function RemoteSetupDialog({
               onReprovision={onReprovision}
               onDeleteInstance={onDeleteInstance}
               onRevokeKey={onRevokeKey}
+              onConnectManaged={onConnectManaged}
             />
           </>
         )}

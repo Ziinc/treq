@@ -76,3 +76,5 @@ scripts/storybook/.generated/
 .jj*/
 .agents/skills/treq*/
 .claude/skills/treq*/
+.agents/skills/
+.claude/skills/

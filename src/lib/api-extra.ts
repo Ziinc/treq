@@ -103,6 +103,76 @@ export const ptyListen = (
 ) =>
   listen<string>(`pty-data-${sessionId}`, (event) => callback(event.payload));
 
+// -- Native remote PTY sessions (shell/agent over SSH) -----------------------
+//
+// Mirrors the local `pty*`/`ptyListen` API shape above so a caller that
+// already knows the local terminal API is not learning a second vocabulary.
+// `launch` must be a typed `PtyLaunchSpec` (see `api-types-remote.ts`) -
+// never an arbitrary shell command string - so the backend's injection
+// guard (typed launch fields, each individually shell-quoted) holds at the
+// IPC boundary too.
+
+export const remotePtyCreate = (
+  sessionId: string,
+  endpoint: unknown,
+  repositoryId: string,
+  workspaceId: string,
+  remoteWorkingDirectory: string,
+  launch: unknown,
+  cols: number,
+  rows: number,
+): Promise<void> =>
+  invoke("remote_pty_create", {
+    sessionId,
+    endpoint,
+    repositoryId,
+    workspaceId,
+    remoteWorkingDirectory,
+    launch,
+    cols,
+    rows,
+  });
+
+export const remotePtyWrite = (
+  sessionId: string,
+  data: string,
+): Promise<void> => invoke("remote_pty_write", { sessionId, data });
+
+export const remotePtyResize = (
+  sessionId: string,
+  cols: number,
+  rows: number,
+): Promise<void> => invoke("remote_pty_resize", { sessionId, cols, rows });
+
+export const remotePtyClose = (sessionId: string): Promise<void> =>
+  invoke("remote_pty_close", { sessionId });
+
+// eslint-disable-next-line local/no-unused-exported-ts-functions, local/require-tauri-api-exports-used
+export const remotePtySessionExists = (sessionId: string): Promise<boolean> =>
+  invoke("remote_pty_session_exists", { sessionId });
+
+/** Streamed output chunks, named `remote-pty-data-<sessionId>` (bytes decoded as UTF-8 on the backend). */
+export const remotePtyListen = (
+  sessionId: string,
+  callback: (data: string) => void,
+) =>
+  listen<string>(`remote-pty-data-${sessionId}`, (event) =>
+    callback(event.payload),
+  );
+
+/** Payload of the `remote-pty-exit-<sessionId>` event, emitted exactly once when the session's process/channel ends. */
+export interface RemotePtyExitPayload {
+  exit_status: number | null;
+}
+
+export const remotePtyListenExit = (
+  sessionId: string,
+  callback: (payload: RemotePtyExitPayload) => void,
+) =>
+  listen<RemotePtyExitPayload>(`remote-pty-exit-${sessionId}`, (event) =>
+    callback(event.payload),
+  );
+
 // File System API
 export const readFile = (path: string): Promise<string> =>
   invoke("read_file", { path });

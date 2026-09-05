@@ -65,9 +65,46 @@ pub fn list_local_ssh_identities() -> Result<Vec<LocalSshIdentity>, String> {
   Ok(identities)
 }
 
+/// Reads the raw OpenSSH public-key text for a previously listed identity,
+/// so the managed-VM setup flow can register it with the control plane
+/// (prds/remote-ssh.md, "Client key policy": "Users select an existing key
+/// identity ... Private keys remain on the user's device").
+///
+/// `reference` must be exactly a `reference` value returned by
+/// [`list_local_ssh_identities`] (an absolute path to a `*.pub` file under
+/// `~/.ssh`). This is deliberately strict - it never reads an arbitrary path
+/// the frontend might pass, and it never reads a private-key file (which
+/// would not end in `.pub` and would not be returned by `list_local_ssh_identities`
+/// in the first place).
+pub fn read_local_public_key(reference: &str) -> Result<String, String> {
+  let Some(dir) = ssh_dir() else {
+    return Err("No local SSH identity found (HOME is not set).".to_string());
+  };
+  let path = PathBuf::from(reference);
+  if path.extension().and_then(|ext| ext.to_str()) != Some("pub") {
+    return Err("Not a public key reference".to_string());
+  }
+  let canonical_dir = std::fs::canonicalize(&dir)
+    .map_err(|_| "Local SSH identity directory is unavailable".to_string())?;
+  let canonical_path =
+    std::fs::canonicalize(&path).map_err(|_| "Local SSH identity no longer exists".to_string())?;
+  if !canonical_path.starts_with(&canonical_dir) {
+    return Err("Local SSH identity reference is outside ~/.ssh".to_string());
+  }
+  let contents = std::fs::read_to_string(&canonical_path)
+    .map_err(|e| format!("Failed to read local SSH identity: {e}"))?;
+  // Validate it really is a well-formed public key rather than returning
+  // arbitrary file contents.
+  PublicKey::from_openssh(contents.trim())
+    .map_err(|e| format!("Not a valid OpenSSH public key: {e}"))?;
+  Ok(contents.trim().to_string())
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
+  use std::io::Write;
+  use tempfile::TempDir;
 
   #[test]
   fn returns_empty_when_ssh_dir_missing() {
@@ -76,5 +113,59 @@ mod tests {
     // panic and returns a list (possibly empty) rather than erroring.
     let result = list_local_ssh_identities();
     assert!(result.is_ok());
+  }
+
+  fn with_fake_home<F: FnOnce(&std::path::Path)>(f: F) {
+    let tmp = TempDir::new().unwrap();
+    let ssh = tmp.path().join(".ssh");
+    std::fs::create_dir_all(&ssh).unwrap();
+    let prev = std::env::var("HOME").ok();
+    std::env::set_var("HOME", tmp.path());
+    f(&ssh);
+    match prev {
+      Some(v) => std::env::set_var("HOME", v),
+      None => std::env::remove_var("HOME"),
+    }
+  }
+
+  const TEST_PUBKEY: &str =
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBWtypxSPtLuNKcOKQ+z0nJXYSjbYyBSCzqDG3TAWZ4z test@example";
+
+  #[test]
+  fn reads_public_key_contents_for_a_listed_identity() {
+    with_fake_home(|ssh| {
+      let path = ssh.join("id_ed25519.pub");
+      let mut file = std::fs::File::create(&path).unwrap();
+      writeln!(file, "{TEST_PUBKEY}").unwrap();
+
+      let reference = path.to_string_lossy().to_string();
+      let contents = read_local_public_key(&reference).unwrap();
+      assert_eq!(contents, TEST_PUBKEY);
+    });
+  }
+
+  #[test]
+  fn rejects_a_reference_outside_the_ssh_directory() {
+    with_fake_home(|_ssh| {
+      let outside = TempDir::new().unwrap();
+      let path = outside.path().join("evil.pub");
+      let mut file = std::fs::File::create(&path).unwrap();
+      writeln!(file, "{TEST_PUBKEY}").unwrap();
+
+      let reference = path.to_string_lossy().to_string();
+      let error = read_local_public_key(&reference).unwrap_err();
+      assert!(error.contains("outside"));
+    });
+  }
+
+  #[test]
+  fn rejects_a_non_pub_reference() {
+    with_fake_home(|ssh| {
+      let path = ssh.join("id_ed25519");
+      std::fs::write(&path, "not actually a private key").unwrap();
+      let reference = path.to_string_lossy().to_string();
+      let error = read_local_public_key(&reference).unwrap_err();
+      assert_eq!(error, "Not a public key reference");
+    });
   }
 }

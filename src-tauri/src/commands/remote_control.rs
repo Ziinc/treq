@@ -135,8 +135,15 @@ pub async fn remote_force_cutoff(
   endpoint_id: String,
   reason: CutoffReasonDto,
   state: State<'_, RemoteExecState>,
+  pty_state: State<'_, crate::commands::remote_pty_commands::RemotePtyState>,
 ) -> Result<(), String> {
   state.0.force_cutoff(&endpoint_id, reason.into()).await;
+  // PRD "Hard cutoff on revocation or expiry": tears down open exec *and*
+  // PTY channels for the endpoint. `force_cutoff` above only tears down the
+  // pooled SSH connection itself; the PTY manager's own session map (which
+  // holds a channel handle per session, not the pool) must be swept
+  // separately so no PTY session for this endpoint outlives the cutoff.
+  pty_state.0.close_all_for_endpoint(&endpoint_id).await;
   let _ = app.emit(
     REMOTE_CUTOFF_EVENT,
     RemoteCutoffEvent {
