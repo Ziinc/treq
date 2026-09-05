@@ -88,6 +88,21 @@ struct ItConfig {
 
 fn it_config() -> Option<ItConfig> {
   static PRINT_BANNER: Once = Once::new();
+  static INIT_TRACING: Once = Once::new();
+  // Diagnostic only: `HostKeyVerifier` logs a rejection via `tracing::warn!`
+  // rather than putting the presented fingerprint in the error a test sees
+  // (`ConnectionFailed("... Disconnected")` is deliberately generic - see
+  // `check_server_key`). Without a subscriber that warning is silently
+  // dropped, so a host-key pin mismatch and every other cause of the same
+  // generic error are indistinguishable from CI output alone.
+  INIT_TRACING.call_once(|| {
+    let _ = tracing_subscriber::fmt()
+      .with_env_filter(tracing_subscriber::EnvFilter::new(
+        "treq_lib::core::remote_ssh_transport=debug",
+      ))
+      .with_test_writer()
+      .try_init();
+  });
 
   if std::env::var("TREQ_SSH_SERVER_IT").as_deref() != Ok("1") {
     PRINT_BANNER.call_once(|| {
