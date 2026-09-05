@@ -10,10 +10,6 @@ import { useAutoUpdate } from "../hooks/useAutoUpdate";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
 import { useMutation } from "../hooks/useMutation";
 import { useTwoFingerSwipe } from "../hooks/useTwoFingerSwipe";
-import {
-  useFeaturePreviewStore,
-  usePreviewFeature,
-} from "../stores/featurePreviewStore";
 import { useWorkspaceHierarchy } from "../hooks/useWorkspaceHierarchy";
 import {
   type AgentDeepLinkRequest,
@@ -27,11 +23,11 @@ import {
 import {
   acknowledgeAgentDispatch,
   addPromptHistory,
+  archiveWorkspace,
+  buildExplicitAliasSshEndpoint,
   checkAndRebaseWorkspaces,
-  checkSshHost,
   createSession,
   deleteWorkspace,
-  archiveWorkspace,
   getRepoCurrentBranch,
   getRepoDefaultBranch,
   getRepoSetting,
@@ -45,9 +41,9 @@ import {
   listWorkspaceStatuses,
   moveWorkspaceChanges,
   readLocalSshPublicKey,
-  remoteCloneRepo,
-  remoteOpenRepo,
-  remoteProbeRepo,
+  remoteCloneRepoOverSsh,
+  remoteOpenRepoOverSsh,
+  remoteProbeRepoOverSsh,
   selectFolder,
   setSessionModel,
   setSetting,
@@ -55,7 +51,7 @@ import {
   updateSessionAccess,
   type Workspace,
 } from "../lib/api";
-import type { RemoteReadiness, RemoteRepository } from "../lib/api-types";
+import type { RemoteRepository } from "../lib/api-types";
 import type {
   InstanceStatusResponse,
   RegionCode,
@@ -64,6 +60,23 @@ import type {
   SizePreset,
   SshEndpoint,
 } from "../lib/api-types-remote";
+import { ARTIFACTS_BASE_PATH, artifactsPath } from "../lib/artifactRoutes";
+import {
+  type ChangeFilesMoveRequest,
+  dispatchRefreshWorkspaceChanges,
+} from "../lib/change-file-drag";
+import {
+  GITHUB_BASE_PATH,
+  githubDetailPath,
+  githubListPath,
+  stateFilterForPrState,
+} from "../lib/githubRoutes";
+import { LINEAR_BASE_PATH } from "../lib/linearRoutes";
+import { openRepositoryAtPath as openRepositoryAtPathShared } from "../lib/open-repository";
+import type {
+  GitHubIssueAttachment,
+  LinearIssueAttachment,
+} from "../lib/promptAttachments";
 import {
   deleteInstance as deleteManagedInstance,
   ensureInstance,
@@ -109,35 +122,8 @@ import {
 import { startManagedCertificateRenewal } from "../lib/remote-cert-lifecycle";
 import { useRemoteCutoffStore } from "../stores/remoteCutoffStore";
 import { remoteForceCutoff } from "../lib/api-extra";
-import {
-  RemoteSetupDialog,
-  type LocalKeyIdentity,
-  type UserManagedFormValues,
-} from "./remote/RemoteSetupDialog";
 import { RemoteRepositorySelector } from "./remote/RemoteRepositorySelector";
-import { RemoteReviewPanel } from "./remote/RemoteReviewPanel";
-import {
-  RemoteStatusBanner,
-  connectionStateFromInstanceState,
-} from "./remote/RemoteStatusBanner";
 import { locationFromHostAndPath } from "../lib/remote-query-keys";
-import { ARTIFACTS_BASE_PATH, artifactsPath } from "../lib/artifactRoutes";
-import {
-  type ChangeFilesMoveRequest,
-  dispatchRefreshWorkspaceChanges,
-} from "../lib/change-file-drag";
-import { openRepositoryAtPath as openRepositoryAtPathShared } from "../lib/open-repository";
-import {
-  GITHUB_BASE_PATH,
-  githubDetailPath,
-  githubListPath,
-  stateFilterForPrState,
-} from "../lib/githubRoutes";
-import { LINEAR_BASE_PATH } from "../lib/linearRoutes";
-import type {
-  GitHubIssueAttachment,
-  LinearIssueAttachment,
-} from "../lib/promptAttachments";
 import { invalidateReviewChangeCount } from "../lib/review-change-count";
 import {
   clearSWRCache,
@@ -150,17 +136,31 @@ import {
   buildWorkspaceTree,
   flattenWorkspaceTree,
 } from "../lib/workspace-tree";
+import {
+  useFeaturePreviewStore,
+  usePreviewFeature,
+} from "../stores/featurePreviewStore";
 import { useSidebarWidthStore } from "../stores/sidebarWidthStore";
 import { AgentPromptDialog } from "./AgentPromptDialog";
 import { ArtifactsPage } from "./ArtifactsPage";
 import { CommandPalette } from "./CommandPalette";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { GitHubPanel } from "./GitHubPanel";
-import { LinearPanel } from "./LinearPanel";
 import { KeyboardShortcutsModal } from "./KeyboardShortcutsModal";
+import { LinearPanel } from "./LinearPanel";
 import { MergePreviewPage } from "./MergePreviewPage";
 import { Onboarding } from "./Onboarding";
 import { PromptHistoryModal } from "./PromptHistoryModal";
+import { RemoteReviewPanel } from "./remote/RemoteReviewPanel";
+import {
+  type LocalKeyIdentity,
+  RemoteSetupDialog,
+  type UserManagedFormValues,
+} from "./remote/RemoteSetupDialog";
+import {
+  connectionStateFromInstanceState,
+  RemoteStatusBanner,
+} from "./remote/RemoteStatusBanner";
 import { SettingsPage } from "./SettingsPage";
 import { ShowWorkspace } from "./ShowWorkspace";
 import { StashModal } from "./StashModal";
@@ -184,6 +184,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "./ui/alert-dialog";
+import { Button } from "./ui/button";
 import {
   Dialog,
   DialogContent,
@@ -191,7 +192,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "./ui/dialog";
-import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { SidebarInset, SidebarProvider } from "./ui/sidebar";
 import { useToast } from "./ui/toast";
@@ -336,8 +336,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [remoteSshSubmitting, setRemoteSshSubmitting] = useState(false);
   const [remoteSshStage, setRemoteSshStage] = useState("");
   const [remoteSshHosts, setRemoteSshHosts] = useState<string[]>([]);
-  const [remoteReadiness, setRemoteReadiness] =
-    useState<RemoteReadiness | null>(null);
+  const [remoteSshFingerprint, setRemoteSshFingerprint] = useState("");
   const [activeRemoteRepo, setActiveRemoteRepo] =
     useState<RemoteRepository | null>(null);
 
@@ -1462,7 +1461,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     setRemoteSshPath("~/src/project");
     setRemoteSshRepoUrl("");
     setRemoteSshNeedsClone(false);
-    setRemoteReadiness(null);
+    setRemoteSshFingerprint("");
     setRemoteSshStage("");
     setShowRemoteSshDialog(true);
   };
@@ -1471,10 +1470,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const host = remoteSshHost.trim();
     const remotePath = remoteSshPath.trim();
     const repoUrl = remoteSshRepoUrl.trim();
-    if (!host || !remotePath) {
+    const fingerprint = remoteSshFingerprint.trim();
+    if (!host || !remotePath || !fingerprint) {
       addToast({
         title: "Remote SSH details required",
-        description: "Enter both an SSH host alias and remote directory.",
+        description:
+          "Enter an SSH host alias, remote directory, and the expected host-key fingerprint.",
         type: "error",
       });
       return;
@@ -1482,25 +1483,25 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
     setRemoteSshSubmitting(true);
     try {
-      setRemoteSshStage("Checking remote prerequisites...");
-      const readiness = await checkSshHost(host);
-      setRemoteReadiness(readiness);
-      if (!readiness.connected) {
-        throw new Error("SSH connection failed. Check your SSH configuration.");
-      }
-      const missingTreq = readiness.checks.find(
-        (check) => check.name === "treq" && !check.available,
-      );
-      if (missingTreq) {
-        throw new Error(
-          missingTreq.detail || "Treq is not installed remotely.",
-        );
-      }
+      setRemoteSshStage("Resolving SSH alias and pinning host trust...");
+      // Trust is explicit and pinned here, not inferred from ~/.ssh/known_hosts:
+      // the alias is resolved to hostname/port/user, then paired with the
+      // fingerprint the user just supplied to build a native SshEndpoint whose
+      // HostKeyVerifier enforces exactly that fingerprint (never a system ssh
+      // subprocess, never StrictHostKeyChecking=no).
+      const identities = await listLocalSshIdentities().catch(() => []);
+      const endpoint = await buildExplicitAliasSshEndpoint({
+        endpointId: `alias:${host}`,
+        alias: host,
+        expectedFingerprint: fingerprint,
+        hostKeyAlgorithm: "unknown",
+        keyReference: identities[0]?.reference ?? "id_ed25519",
+      });
 
       setRemoteSshStage("Inspecting repository...");
-      const probe = await remoteProbeRepo(host, remotePath);
+      const probe = await remoteProbeRepoOverSsh(endpoint, remotePath);
       let remoteRepo = probe.is_repo
-        ? await remoteOpenRepo(host, remotePath)
+        ? await remoteOpenRepoOverSsh(endpoint, remotePath)
         : null;
 
       if (!remoteRepo) {
@@ -1510,7 +1511,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
           return;
         }
         setRemoteSshStage("Cloning and inspecting repository...");
-        remoteRepo = await remoteCloneRepo(host, repoUrl, remotePath);
+        remoteRepo = await remoteCloneRepoOverSsh(
+          endpoint,
+          repoUrl,
+          remotePath,
+        );
       }
 
       await rememberRemoteHost(host);
@@ -2362,22 +2367,26 @@ export const Dashboard: React.FC<DashboardProps> = ({
               />
             </label>
           )}
-          {remoteReadiness && (
-            <div className="text-sm text-muted-foreground">
-              <p>
-                {remoteReadiness.connected
-                  ? "SSH connected"
-                  : "SSH unavailable"}
-              </p>
-              <ul className="list-disc pl-4">
-                {remoteReadiness.checks.map((check) => (
-                  <li key={check.name}>
-                    {check.name}: {check.detail}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          <label
+            className="flex flex-col gap-1"
+            htmlFor="remote-ssh-fingerprint"
+          >
+            <span className="text-sm font-medium">
+              Expected host-key fingerprint
+            </span>
+            <Input
+              id="remote-ssh-fingerprint"
+              className="font-mono text-xs"
+              value={remoteSshFingerprint}
+              onChange={(event) => setRemoteSshFingerprint(event.target.value)}
+              placeholder="SHA256:..."
+            />
+            <span className="text-xs text-muted-foreground">
+              Treq pins this fingerprint and never infers trust from your local
+              SSH configuration or known_hosts; a changed key is always
+              rejected.
+            </span>
+          </label>
           {remoteSshStage && (
             <p className="text-sm text-muted-foreground">{remoteSshStage}</p>
           )}
