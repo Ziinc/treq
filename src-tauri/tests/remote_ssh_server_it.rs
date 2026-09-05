@@ -701,16 +701,24 @@ async fn pty_starts_in_the_selected_workspace_directory() {
     return;
   };
   let pool = SshConnectionPool::new();
-  let pty = RemotePtyChannel::open_in_directory(
-    &pool,
-    &cfg.endpoint,
-    "xterm",
-    80,
-    24,
-    Some("pwd"),
-    Some(&workspace),
+  // `open_in_directory` has no built-in deadline (unlike `exec_command`'s
+  // `ExecLimits`) - wrap it here so a server that never replies to the PTY
+  // request fails this test in seconds instead of hanging the whole CI job
+  // until its timeout.
+  let pty = tokio::time::timeout(
+    Duration::from_secs(10),
+    RemotePtyChannel::open_in_directory(
+      &pool,
+      &cfg.endpoint,
+      "xterm",
+      80,
+      24,
+      Some("pwd"),
+      Some(&workspace),
+    ),
   )
   .await
+  .expect("PTY exec in selected directory timed out")
   .expect("PTY exec in selected directory");
   let output = collect_pty_bytes(&pty, Duration::from_secs(3)).await;
   let text = String::from_utf8_lossy(&output);
@@ -725,16 +733,21 @@ async fn pty_starts_in_the_selected_workspace_directory() {
 async fn pty_round_trips_input_output_resize_and_close() {
   let cfg = require_it!();
   let pool = SshConnectionPool::new();
-  let pty = RemotePtyChannel::open_in_directory(
-    &pool,
-    &cfg.endpoint,
-    "xterm",
-    80,
-    24,
-    Some("sh -c 'IFS= read -r line; printf \"got:%s\\n\" \"$line\"; IFS= read -r _; stty size'"),
-    None,
+  // See the deadline comment in pty_starts_in_the_selected_workspace_directory.
+  let pty = tokio::time::timeout(
+    Duration::from_secs(10),
+    RemotePtyChannel::open_in_directory(
+      &pool,
+      &cfg.endpoint,
+      "xterm",
+      80,
+      24,
+      Some("sh -c 'IFS= read -r line; printf \"got:%s\\n\" \"$line\"; IFS= read -r _; stty size'"),
+      None,
+    ),
   )
   .await
+  .expect("PTY open timed out")
   .expect("PTY open");
 
   pty.write(b"hello-pty\n").await.expect("write to PTY");
