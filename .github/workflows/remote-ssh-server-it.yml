@@ -190,20 +190,40 @@ jobs:
           SSH_KEY: src-tauri/tests/fixtures/remote_ssh_it/id_ed25519
         run: |
           set -euo pipefail
+          # A single ssh-keyscan right after the container comes back up can
+          # observe a transient/incomplete key set (sshd still finishing
+          # startup) that still parses as *some* fingerprint - the loop below
+          # used to accept the first non-empty scan, and that scan sometimes
+          # did not match what sshd actually presents moments later. Since
+          # HostKeyVerifier here is fingerprint-only (see
+          # remote_ssh_transport.rs), a wrong pin makes every real connection
+          # fail host-key verification and get disconnected before auth ever
+          # runs - which is exactly the "every success test fails with
+          # Disconnected, every reject test passes" pattern seen in CI.
+          # Requiring two consecutive identical scans is cheap insurance
+          # against that race.
+          scan_fingerprints() {
+            ssh-keyscan -p 2222 127.0.0.1 2>/dev/null \
+              | ssh-keygen -lf - -E sha256 2>/dev/null | awk '{print $2}' | sort | paste -sd, -
+          }
           fingerprints=""
+          previous=""
           for i in $(seq 1 60); do
             if (exec 3<>"/dev/tcp/127.0.0.1/2222") 2>/dev/null; then
               exec 3<&- 3>&-
-              fingerprints=$(ssh-keyscan -p 2222 127.0.0.1 2>/dev/null \
-                | ssh-keygen -lf - -E sha256 2>/dev/null | awk '{print $2}' | paste -sd, - || true)
-              if [ -n "$fingerprints" ]; then
+              current=$(scan_fingerprints || true)
+              if [ -n "$current" ] && [ "$current" = "$previous" ]; then
+                fingerprints="$current"
                 break
               fi
+              previous="$current"
+            else
+              previous=""
             fi
             sleep 1
           done
           if [ -z "$fingerprints" ]; then
-            echo "failed to re-discover the server's host key fingerprints" >&2
+            echo "failed to re-discover a stable set of host key fingerprints" >&2
             exit 1
           fi
           echo "Discovered host key fingerprints: $fingerprints"
