@@ -85,6 +85,13 @@ jobs:
           echo selected > /config/selected-workspace/marker
           INIT
           chmod +x "$INIT_DIR/10-treq-ca-and-workspace.sh"
+          # The image refuses to run custom-cont-init.d scripts that aren't
+          # root-owned (a real security check, not a bug) - files created by
+          # this step are owned by the runner user, so fix that up before
+          # mounting the directory in, or init silently skips with "No
+          # custom services found" and the CA never gets installed.
+          sudo chown -R root:root "$INIT_DIR"
+          sudo chmod 755 "$INIT_DIR"
           echo "init_dir=$INIT_DIR" >> "$GITHUB_OUTPUT"
 
       # A step-managed `docker run` rather than `services:`: sshd needs
@@ -138,8 +145,19 @@ jobs:
         id: hostkey
         run: |
           set -euo pipefail
-          fingerprints=$(ssh-keyscan -p 2222 127.0.0.1 2>/dev/null \
-            | ssh-keygen -lf - -E sha256 2>/dev/null | awk '{print $2}' | sort | paste -sd, -)
+          # The TCP port accepting connections doesn't mean sshd is ready to
+          # negotiate yet - a keyscan run right after can come back empty,
+          # which (with pipefail) aborts the pipeline before the empty-check
+          # even runs. Retry instead of trusting the first attempt.
+          fingerprints=""
+          for i in $(seq 1 30); do
+            fingerprints=$(ssh-keyscan -p 2222 127.0.0.1 2>/dev/null \
+              | ssh-keygen -lf - -E sha256 2>/dev/null | awk '{print $2}' | sort | paste -sd, - || true)
+            if [ -n "$fingerprints" ]; then
+              break
+            fi
+            sleep 1
+          done
           if [ -z "$fingerprints" ]; then
             echo "failed to discover the server's host key fingerprints" >&2
             exit 1
