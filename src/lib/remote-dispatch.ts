@@ -75,17 +75,6 @@ export type TreqCommandKind = (typeof TREQ_COMMAND_KINDS)[number];
 
 export type TreqCommandRequest =
   | { kind: "ProbeRepo"; repo: string }
-  | {
-      kind: "CloneRepo";
-      repo_url: string;
-      destination: string;
-      idempotency_key?: string | null;
-    }
-  | {
-      kind: "InitRepo";
-      repo: string;
-      idempotency_key?: string | null;
-    }
   | { kind: "InspectRepository"; repo: string }
   | { kind: "RepositoryStatus"; repo: string }
   | { kind: "ListBranches"; repo: string }
