@@ -1715,7 +1715,9 @@ pub fn execute_local_request(request: TreqCommandRequest) -> Result<serde_json::
       &repo,
       "commit.split",
       idempotency_key.as_deref(),
-      request_snapshot.as_ref().expect("SplitCommit is a mutation"),
+      request_snapshot
+        .as_ref()
+        .expect("SplitCommit is a mutation"),
       || {
         let mut selected: Vec<String> = files
           .into_iter()
