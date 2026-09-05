@@ -105,10 +105,11 @@ describe("remote PTY API wrappers (src/lib/api-extra.ts)", () => {
     const { remotePtyListen } = await import("./api-extra");
     const callback = vi.fn();
     let capturedHandler: ((event: { payload: string }) => void) | undefined;
+    const unsubscribe = () => {};
     vi.mocked(listen).mockImplementation((eventName, handler) => {
       expect(eventName).toBe("remote-pty-data-sess-1");
       capturedHandler = handler as (event: { payload: string }) => void;
-      return Promise.resolve(() => {});
+      return Promise.resolve(unsubscribe);
     });
 
     await remotePtyListen("sess-1", callback);
@@ -124,12 +125,13 @@ describe("remote PTY API wrappers (src/lib/api-extra.ts)", () => {
     let capturedHandler:
       | ((event: { payload: { exit_status: number | null } }) => void)
       | undefined;
+    const unsubscribe = () => {};
     vi.mocked(listen).mockImplementation((eventName, handler) => {
       expect(eventName).toBe("remote-pty-exit-sess-1");
       capturedHandler = handler as (event: {
         payload: { exit_status: number | null };
       }) => void;
-      return Promise.resolve(() => {});
+      return Promise.resolve(unsubscribe);
     });
 
     await remotePtyListenExit("sess-1", callback);
