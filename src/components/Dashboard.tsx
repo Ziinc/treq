@@ -134,7 +134,10 @@ import {
   stateFilterForPrState,
 } from "../lib/githubRoutes";
 import { LINEAR_BASE_PATH } from "../lib/linearRoutes";
-import type { GitHubIssueAttachment } from "../lib/promptAttachments";
+import type {
+  GitHubIssueAttachment,
+  LinearIssueAttachment,
+} from "../lib/promptAttachments";
 import { invalidateReviewChangeCount } from "../lib/review-change-count";
 import {
   clearSWRCache,
@@ -286,6 +289,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     prompt?: string;
     workspaceId: number | null;
     githubIssue?: GitHubIssueAttachment | null;
+    linearIssue?: LinearIssueAttachment | null;
   } | null>(null);
   const [showBranchSwitcher, setShowBranchSwitcher] = useState(false);
   const [showFilePicker, setShowFilePicker] = useState(false);
@@ -1782,6 +1786,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
     setShowAgentPromptDialog(true);
   };
 
+  const handleStartPromptFromLinearIssue = (issue: LinearIssueAttachment) => {
+    setRunPromptRequest({ workspaceId: null, linearIssue: issue });
+    setShowAgentPromptDialog(true);
+  };
+
   const handleAgentPromptDialogOpenChange = (open: boolean) => {
     setShowAgentPromptDialog(open);
     if (!open) setRunPromptRequest(null);
@@ -2819,6 +2828,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           {viewMode === "linear" && linearIntegrationEnabled && (
             <LinearPanel
               repoPath={repoPath}
+              onStartPromptFromIssue={handleStartPromptFromLinearIssue}
               onOpenWorkspace={async (workspaceId) => {
                 await invalidateQueries(["workspaces", repoPath]);
                 const updatedWorkspaces = await fetchAndCache(
@@ -3003,6 +3013,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         initialPrompt={runPromptRequest?.prompt}
         initialWorkspaceId={runPromptRequest?.workspaceId ?? null}
         initialGitHubIssue={runPromptRequest?.githubIssue ?? null}
+        initialLinearIssue={runPromptRequest?.linearIssue ?? null}
       />
 
       <PromptHistoryModal

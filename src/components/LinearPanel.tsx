@@ -5,9 +5,8 @@ import {
   type LinearIssue,
   linearListIssues,
   linearListTeams,
-  linearOpenOrCreateWorkspaceFromIssue,
 } from "../lib/api-linear";
-import { useToastStore } from "../stores/toastStore";
+import type { LinearIssueAttachment } from "../lib/promptAttachments";
 import { Button } from "./ui/button";
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
 import {
@@ -24,20 +23,20 @@ import { cn } from "../lib/utils";
 interface LinearPanelProps {
   repoPath: string;
   onOpenWorkspace?: (workspaceId: number) => void;
+  onStartPromptFromIssue?: (issue: LinearIssueAttachment) => void;
 }
 
 type ViewMode = "list" | "kanban";
 
 export const LinearPanel: React.FC<LinearPanelProps> = ({
   repoPath,
-  onOpenWorkspace,
+  onStartPromptFromIssue,
 }) => {
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [selectedTeam, setSelectedTeam] = useState<string | undefined>(
     undefined,
   );
-  const [kickoffIssueId, setKickoffIssueId] = useState<string | null>(null);
-  const { addToast } = useToastStore();
+  const kickoffIssueId = null;
 
   const { data: teams = [] } = useSWR(
     repoPath ? ["linear-teams", repoPath] : null,
@@ -57,37 +56,9 @@ export const LinearPanel: React.FC<LinearPanelProps> = ({
   );
 
   const handleKickoff = async (issueId: string, hasSubissues: boolean) => {
-    try {
-      setKickoffIssueId(issueId);
-
-      const results = await linearOpenOrCreateWorkspaceFromIssue(
-        repoPath,
-        issueId,
-        hasSubissues,
-      );
-
-      if (results.length > 0) {
-        const created = results.some((r) => r.created);
-        addToast({
-          title: created
-            ? `Created ${results.length} workspace${results.length > 1 ? "s" : ""}`
-            : `Opened ${results.length} workspace${results.length > 1 ? "s" : ""}`,
-          type: "success",
-        });
-
-        if (onOpenWorkspace && results[0]) {
-          onOpenWorkspace(results[0].workspace_id);
-        }
-      }
-    } catch (err) {
-      addToast({
-        title: "Error opening workspace",
-        description: err instanceof Error ? err.message : String(err),
-        type: "error",
-      });
-    } finally {
-      setKickoffIssueId(null);
-    }
+    const issue = issues.find((candidate) => candidate.id === issueId);
+    if (issue)
+      onStartPromptFromIssue?.({ ...issue, includeSubissues: hasSubissues });
   };
 
   const issuesByState = useMemo(() => {

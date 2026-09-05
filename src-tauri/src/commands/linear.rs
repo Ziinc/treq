@@ -153,11 +153,11 @@ pub async fn open_or_create_workspace_from_linear_issue(
     let base_branch = crate::core::get_repo_default_branch(&repo_path_owned)
       .map_err(|e| format!("Failed to get repo default branch: {e}"))?;
 
-    let (ws, ws_created) = crate::core::open_or_create_workspace_from_pr(
+    let (ws, ws_created) = crate::core::open_or_create_workspace_from_linear_issue(
       &repo_path_owned,
       &branch_name,
       &base_branch,
-      Some(&title),
+      &title,
       description.as_deref(),
     )
     .map_err(|e| {
