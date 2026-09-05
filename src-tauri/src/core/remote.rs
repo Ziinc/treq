@@ -1509,7 +1509,7 @@ pub fn execute_local_request(request: TreqCommandRequest) -> Result<serde_json::
     } => with_idempotency_key(
       &repo,
       "repo.init",
-      idempotency_key.as_deref(),
+      Some(idempotency_key.as_str()),
       request_snapshot.as_ref().expect("InitRepo is a mutation"),
       || json(init_repo_path(&repo)),
     ),
@@ -1520,7 +1520,7 @@ pub fn execute_local_request(request: TreqCommandRequest) -> Result<serde_json::
     } => with_idempotency_key(
       &destination,
       "repo.clone",
-      idempotency_key.as_deref(),
+      Some(idempotency_key.as_str()),
       request_snapshot.as_ref().expect("CloneRepo is a mutation"),
       || json(clone_repo_local(&repo_url, &destination)),
     ),
@@ -1532,7 +1532,7 @@ pub fn execute_local_request(request: TreqCommandRequest) -> Result<serde_json::
     } => with_idempotency_key(
       &repo,
       "workspace.create",
-      idempotency_key.as_deref(),
+      Some(idempotency_key.as_str()),
       request_snapshot
         .as_ref()
         .expect("CreateWorkspace is a mutation"),
@@ -1556,7 +1556,7 @@ pub fn execute_local_request(request: TreqCommandRequest) -> Result<serde_json::
     } => with_idempotency_key(
       &repo,
       "workspace.rename",
-      idempotency_key.as_deref(),
+      Some(idempotency_key.as_str()),
       request_snapshot
         .as_ref()
         .expect("RenameWorkspace is a mutation"),
@@ -1599,7 +1599,7 @@ pub fn execute_local_request(request: TreqCommandRequest) -> Result<serde_json::
     } => with_idempotency_key(
       &repo,
       "workspace.move",
-      idempotency_key.as_deref(),
+      Some(idempotency_key.as_str()),
       request_snapshot
         .as_ref()
         .expect("MoveWorkspaceChanges is a mutation"),
@@ -1625,7 +1625,7 @@ pub fn execute_local_request(request: TreqCommandRequest) -> Result<serde_json::
     } => with_idempotency_key(
       &repo,
       "workspace.rebase",
-      idempotency_key.as_deref(),
+      Some(idempotency_key.as_str()),
       request_snapshot
         .as_ref()
         .expect("RebaseWorkspace is a mutation"),
@@ -1660,7 +1660,7 @@ pub fn execute_local_request(request: TreqCommandRequest) -> Result<serde_json::
     } => with_idempotency_key(
       &repo,
       "file.patch",
-      idempotency_key.as_deref(),
+      Some(idempotency_key.as_str()),
       request_snapshot.as_ref().expect("PatchFile is a mutation"),
       || {
         json(apply_remote_patch(
@@ -1679,7 +1679,7 @@ pub fn execute_local_request(request: TreqCommandRequest) -> Result<serde_json::
     } => with_idempotency_key(
       &repo,
       "commit.create",
-      idempotency_key.as_deref(),
+      Some(idempotency_key.as_str()),
       request_snapshot
         .as_ref()
         .expect("CreateCommit is a mutation"),
@@ -1714,7 +1714,7 @@ pub fn execute_local_request(request: TreqCommandRequest) -> Result<serde_json::
     } => with_idempotency_key(
       &repo,
       "commit.split",
-      idempotency_key.as_deref(),
+      Some(idempotency_key.as_str()),
       request_snapshot
         .as_ref()
         .expect("SplitCommit is a mutation"),
@@ -1752,7 +1752,7 @@ pub fn execute_local_request(request: TreqCommandRequest) -> Result<serde_json::
     } => with_idempotency_key(
       &repo,
       "commit.move",
-      idempotency_key.as_deref(),
+      Some(idempotency_key.as_str()),
       request_snapshot.as_ref().expect("MoveCommit is a mutation"),
       || {
         let source_id =
@@ -1772,7 +1772,7 @@ pub fn execute_local_request(request: TreqCommandRequest) -> Result<serde_json::
     } => with_idempotency_key(
       &repo,
       "commit.abandon",
-      idempotency_key.as_deref(),
+      Some(idempotency_key.as_str()),
       request_snapshot
         .as_ref()
         .expect("AbandonCommit is a mutation"),
@@ -1790,7 +1790,7 @@ pub fn execute_local_request(request: TreqCommandRequest) -> Result<serde_json::
     } => with_idempotency_key(
       &repo,
       "conflict.resolve",
-      idempotency_key.as_deref(),
+      Some(idempotency_key.as_str()),
       request_snapshot
         .as_ref()
         .expect("ResolveConflict is a mutation"),
@@ -1828,7 +1828,7 @@ pub fn execute_local_request(request: TreqCommandRequest) -> Result<serde_json::
     } => with_idempotency_key(
       &repo,
       "git.push",
-      idempotency_key.as_deref(),
+      Some(idempotency_key.as_str()),
       request_snapshot.as_ref().expect("GitPush is a mutation"),
       || {
         json(crate::core::workspaces::push_workspace_to_remote(
@@ -1846,7 +1846,7 @@ pub fn execute_local_request(request: TreqCommandRequest) -> Result<serde_json::
     } => with_idempotency_key(
       &repo,
       "agent.start",
-      idempotency_key.as_deref(),
+      Some(idempotency_key.as_str()),
       request_snapshot.as_ref().expect("AgentStart is a mutation"),
       || {
         let id =
@@ -1869,7 +1869,7 @@ pub fn execute_local_request(request: TreqCommandRequest) -> Result<serde_json::
     } => with_idempotency_key(
       &repo,
       "agent.input",
-      idempotency_key.as_deref(),
+      Some(idempotency_key.as_str()),
       request_snapshot.as_ref().expect("AgentInput is a mutation"),
       || {
         json(crate::core::agent_supervisor::send_agent_input(
@@ -2818,7 +2818,7 @@ mod tests {
       repo: repo.to_string(),
       branch_name: "feature-x".into(),
       source_branch: None,
-      idempotency_key: None,
+      idempotency_key: String::new(),
     }
   }
 
@@ -2875,7 +2875,7 @@ mod tests {
       repo: repo.to_string(),
       branch_name: "different-branch".into(),
       source_branch: None,
-      idempotency_key: None,
+      idempotency_key: String::new(),
     };
     let error = with_idempotency_key(repo, "test.create", Some(&key), &second_request, || {
       panic!("must not execute a mutation reusing a key for a different request")
