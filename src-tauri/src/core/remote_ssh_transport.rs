@@ -470,8 +470,9 @@ impl ClientHandlerTrait for TreqSshClientHandler {
         );
         // Returning Ok(false) lets russh reject the connection cleanly
         // instead of propagating an error that could look like a transport
-        // fault; the caller still learns about the mismatch because
-        // `connect_verified` re-checks and returns `Err` explicitly below.
+        // fault. The `connect()` caller then sees `ConnectionFailed`
+        // ("Disconnected"), so host-key mismatch tests accept that error
+        // as well as `HostKeyMismatch`.
         Ok(false)
       }
     }
@@ -1104,6 +1105,22 @@ impl RemotePtyChannel {
     rows: u16,
     command: Option<&str>,
   ) -> Result<Self, SshTransportError> {
+    Self::open_in_directory(pool, endpoint, term, cols, rows, command, None).await
+  }
+
+  /// Same as [`open`], but starts the remote process in `working_directory`
+  /// when set (PRD: a terminal is bound to `remote_working_directory`).
+  /// OpenSSH has no working-directory channel request, so this execs a
+  /// quoted `cd` followed by the shell or command.
+  pub async fn open_in_directory(
+    pool: &SshConnectionPool,
+    endpoint: &SshEndpoint,
+    term: &str,
+    cols: u16,
+    rows: u16,
+    command: Option<&str>,
+    working_directory: Option<&str>,
+  ) -> Result<Self, SshTransportError> {
     let handle = pool.get_or_connect(endpoint).await?;
     let session = handle.lock().await;
     let channel = session
@@ -1114,7 +1131,7 @@ impl RemotePtyChannel {
       .request_pty(true, term, cols as u32, rows as u32, 0, 0, &[])
       .await
       .map_err(|error| SshTransportError::ChannelError(error.to_string()))?;
-    match command {
+    match pty_startup_command(command, working_directory) {
       Some(command) => channel
         .exec(true, command.as_bytes())
         .await
@@ -1198,6 +1215,25 @@ impl RemotePtyChannel {
       .map_err(|error| SshTransportError::ChannelError(error.to_string()));
     self.metrics.pty_exit_count.fetch_add(1, Ordering::Relaxed);
     result
+  }
+}
+
+/// Builds the remote exec string for a PTY. `None` means a shell request
+/// (no working directory, no explicit command). The directory is quoted
+/// with [`crate::core::remote::shell_quote`]; `command` is caller-owned.
+fn pty_startup_command(command: Option<&str>, working_directory: Option<&str>) -> Option<String> {
+  match (command, working_directory) {
+    (None, None) => None,
+    (Some(command), None) => Some(command.to_string()),
+    (None, Some(dir)) => Some(format!(
+      "cd {} && exec ${{SHELL:-/bin/sh}} -l",
+      crate::core::remote::shell_quote(dir)
+    )),
+    (Some(command), Some(dir)) => Some(format!(
+      "cd {} && {}",
+      crate::core::remote::shell_quote(dir),
+      command
+    )),
   }
 }
 
@@ -1399,6 +1435,34 @@ mod tests {
       _session: &mut ServerSession,
     ) -> Result<(), Self::Error> {
       reply.accept().await;
+      Ok(())
+    }
+
+    async fn pty_request(
+      &mut self,
+      channel: ChannelId,
+      _term: &str,
+      _col_width: u32,
+      _row_height: u32,
+      _pix_width: u32,
+      _pix_height: u32,
+      _modes: &[(russh::Pty, u32)],
+      session: &mut ServerSession,
+    ) -> Result<(), Self::Error> {
+      session.channel_success(channel)?;
+      Ok(())
+    }
+
+    async fn window_change_request(
+      &mut self,
+      channel: ChannelId,
+      _col_width: u32,
+      _row_height: u32,
+      _pix_width: u32,
+      _pix_height: u32,
+      session: &mut ServerSession,
+    ) -> Result<(), Self::Error> {
+      session.channel_success(channel)?;
       Ok(())
     }
 
@@ -1902,6 +1966,55 @@ mod tests {
 
     let snapshot = pool.metrics_snapshot();
     assert_eq!(snapshot.host_key_mismatch_count, 1);
+  }
+
+  #[test]
+  fn pty_startup_command_cds_into_the_selected_directory() {
+    assert_eq!(pty_startup_command(None, None), None);
+    assert_eq!(
+      pty_startup_command(Some("pwd"), None).as_deref(),
+      Some("pwd")
+    );
+    assert_eq!(
+      pty_startup_command(Some("pwd"), Some("/srv/workspace")).as_deref(),
+      Some("cd '/srv/workspace' && pwd")
+    );
+    assert_eq!(
+      pty_startup_command(None, Some("/srv/workspace")).as_deref(),
+      Some("cd '/srv/workspace' && exec ${SHELL:-/bin/sh} -l")
+    );
+  }
+
+  #[tokio::test]
+  async fn pty_open_in_directory_execs_a_quoted_cd_before_the_command() {
+    let (addr, host_key) = start_mock_server(0).await;
+    let client_key = test_host_key();
+    let temp_dir = tempfile::tempdir().unwrap();
+    let key_reference = write_client_key(temp_dir.path(), &client_key);
+    let endpoint = test_endpoint(addr, &host_key, key_reference);
+
+    let pool = SshConnectionPool::new();
+    let pty = RemotePtyChannel::open_in_directory(
+      &pool,
+      &endpoint,
+      "xterm",
+      80,
+      24,
+      Some("pwd"),
+      Some("/srv/workspace"),
+    )
+    .await
+    .unwrap();
+    let chunk = pty.read_chunk().await.unwrap().unwrap();
+    assert!(
+      String::from_utf8_lossy(&chunk).contains("cd '/srv/workspace' && pwd"),
+      "PTY exec must cd into the selected workspace before the command"
+    );
+
+    let _ = pty.close().await;
+    let snapshot = pool.metrics_snapshot();
+    assert_eq!(snapshot.pty_start_count, 1);
+    assert_eq!(snapshot.pty_exit_count, 1);
   }
 
   #[tokio::test]
