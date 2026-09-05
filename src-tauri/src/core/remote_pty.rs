@@ -40,7 +40,10 @@ pub enum PtyLaunchSpec {
   /// Start the user's login shell.
   Shell,
   /// Start an allow-listed coding agent binary with typed arguments.
-  Agent { agent: RemoteAgentId, args: Vec<String> },
+  Agent {
+    agent: RemoteAgentId,
+    args: Vec<String>,
+  },
 }
 
 /// Allow-listed remote agent identifiers. This is a closed set specifically
@@ -95,7 +98,9 @@ pub enum RemotePtyError {
 impl std::fmt::Display for RemotePtyError {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
-      Self::AuthenticationFailed(message) => write!(f, "remote pty authentication failed: {message}"),
+      Self::AuthenticationFailed(message) => {
+        write!(f, "remote pty authentication failed: {message}")
+      }
       Self::TrustFailure(message) => write!(f, "remote pty host trust failed: {message}"),
       Self::Cutoff {
         endpoint_id,
@@ -212,8 +217,15 @@ impl RemotePtyManager {
     }
 
     let command = build_launch_command(&binding.remote_working_directory, &spec);
-    let channel = RemotePtyChannel::open(&self.pool, endpoint, "xterm-256color", cols, rows, Some(&command))
-      .await?;
+    let channel = RemotePtyChannel::open(
+      &self.pool,
+      endpoint,
+      "xterm-256color",
+      cols,
+      rows,
+      Some(&command),
+    )
+    .await?;
     let channel = Arc::new(channel);
     let closed = Arc::new(AtomicBool::new(false));
 
@@ -242,7 +254,9 @@ impl RemotePtyManager {
             // still handed every chunk immediately (streamed), never logged
             // here (PRD: "never log raw terminal data or prompts by
             // default").
-            buffered = buffered.saturating_add(chunk.len()).min(MAX_BUFFERED_OUTPUT_BYTES);
+            buffered = buffered
+              .saturating_add(chunk.len())
+              .min(MAX_BUFFERED_OUTPUT_BYTES);
             let _ = buffered;
             on_output(chunk);
           }
@@ -336,7 +350,10 @@ impl RemotePtyManager {
     Ok(())
   }
 
-  fn live_channel(&self, session_id: &str) -> Result<(Arc<RemotePtyChannel>, String), RemotePtyError> {
+  fn live_channel(
+    &self,
+    session_id: &str,
+  ) -> Result<(Arc<RemotePtyChannel>, String), RemotePtyError> {
     let sessions = self.sessions.lock().unwrap_or_else(|e| e.into_inner());
     match sessions.get(session_id) {
       Some(session) if !session.closed.load(Ordering::SeqCst) => {

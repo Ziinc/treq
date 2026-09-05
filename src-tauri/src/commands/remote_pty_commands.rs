@@ -108,7 +108,9 @@ pub async fn remote_pty_create(
         // Never log raw terminal data (PRD "never log raw terminal output ...
         // by default"); only the event name/session id are logged, in
         // `remote_pty_create`'s entry line above.
-        if let Err(error) = app_for_data.emit(&data_event, String::from_utf8_lossy(&chunk).into_owned()) {
+        if let Err(error) =
+          app_for_data.emit(&data_event, String::from_utf8_lossy(&chunk).into_owned())
+        {
           log::warn!(
             "remote pty emit failed: session_id={}, event={}, error={}",
             sid_for_data,
