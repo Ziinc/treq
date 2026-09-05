@@ -107,15 +107,21 @@ jobs:
       # means the CA - generated per job, so only known once this job is
       # running - has to be mounted in before the container ever starts.
       # `services:` containers start before any step runs, so that ordering
-      # is impossible there. An earlier version of this job used `services:`
-      # and reconfigured + restarted sshd mid-job instead; every real
-      # connection made through the production `russh`-based transport after
-      # that restart failed immediately with "Disconnected", while the same
-      # restarted server kept accepting plain `ssh` CLI connections fine -
-      # some interaction between `docker restart`ing this image and `russh`
-      # specifically, not a config or host-key-pinning problem (both were
-      # independently verified sound). Never restarting sshd at all sidesteps
-      # it entirely.
+      # is impossible there.
+      #
+      # Image pinned below OpenSSH 9.6, not `:latest` (currently OpenSSH
+      # 10.3p1): every real connection through the production `russh`-based
+      # transport against the 10.3p1 image failed immediately with
+      # "Disconnected", with a tracing diagnostic showing `russh` never even
+      # reaching "connection established" - not a config, restart, or
+      # host-key-pinning problem, all independently verified sound (a plain
+      # `ssh` CLI connection to the identical server worked instantly).
+      # OpenSSH 9.6 is where the strict-kex extension (the Terrapin-attack
+      # mitigation) landed; this is `russh` 0.63's client not completing that
+      # negotiation against a strict-kex server. Pinning to 9.1p1 (pre-9.6)
+      # sidesteps it until `russh` is upgraded past whatever version fixes
+      # this - see https://github.com/Eugeny/russh for that fix landing, at
+      # which point this can move back to `:latest`.
       - name: Start sshd container
         id: sshd
         run: |
@@ -131,7 +137,7 @@ jobs:
             -e SUDO_ACCESS=true \
             -v "${{ steps.certsetup.outputs.ca_dir }}/ca.pub:/treq-ci/ca.pub:ro" \
             -v "${{ steps.custominit.outputs.init_dir }}:/custom-cont-init.d:ro" \
-            linuxserver/openssh-server:latest)
+            linuxserver/openssh-server:9.1_p1-r3-ls117)
           echo "container_id=$cid" >> "$GITHUB_OUTPUT"
           echo "Started openssh-server container $cid"
 
