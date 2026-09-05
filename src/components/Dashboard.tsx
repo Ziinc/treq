@@ -10,10 +10,6 @@ import { useAutoUpdate } from "../hooks/useAutoUpdate";
 import { useKeyboardShortcut } from "../hooks/useKeyboard";
 import { useMutation } from "../hooks/useMutation";
 import { useTwoFingerSwipe } from "../hooks/useTwoFingerSwipe";
-import {
-  useFeaturePreviewStore,
-  usePreviewFeature,
-} from "../stores/featurePreviewStore";
 import { useWorkspaceHierarchy } from "../hooks/useWorkspaceHierarchy";
 import {
   type AgentDeepLinkRequest,
@@ -27,11 +23,11 @@ import {
 import {
   acknowledgeAgentDispatch,
   addPromptHistory,
+  archiveWorkspace,
+  buildExplicitAliasSshEndpoint,
   checkAndRebaseWorkspaces,
-  checkSshHost,
   createSession,
   deleteWorkspace,
-  archiveWorkspace,
   getRepoCurrentBranch,
   getRepoDefaultBranch,
   getRepoSetting,
@@ -45,9 +41,9 @@ import {
   listWorkspaceStatuses,
   moveWorkspaceChanges,
   readLocalSshPublicKey,
-  remoteCloneRepo,
-  remoteOpenRepo,
-  remoteProbeRepo,
+  remoteCloneRepoOverSsh,
+  remoteOpenRepoOverSsh,
+  remoteProbeRepoOverSsh,
   selectFolder,
   setSessionModel,
   setSetting,
@@ -55,13 +51,32 @@ import {
   updateSessionAccess,
   type Workspace,
 } from "../lib/api";
-import type { RemoteReadiness, RemoteRepository } from "../lib/api-types";
+import type { RemoteRepository } from "../lib/api-types";
 import type {
   InstanceStatusResponse,
   RegionCode,
+  RemoteRepoProbe,
+  RepositoryInspection,
   SizePreset,
   SshEndpoint,
 } from "../lib/api-types-remote";
+import { ARTIFACTS_BASE_PATH, artifactsPath } from "../lib/artifactRoutes";
+import {
+  type ChangeFilesMoveRequest,
+  dispatchRefreshWorkspaceChanges,
+} from "../lib/change-file-drag";
+import {
+  GITHUB_BASE_PATH,
+  githubDetailPath,
+  githubListPath,
+  stateFilterForPrState,
+} from "../lib/githubRoutes";
+import { LINEAR_BASE_PATH } from "../lib/linearRoutes";
+import { openRepositoryAtPath as openRepositoryAtPathShared } from "../lib/open-repository";
+import type {
+  GitHubIssueAttachment,
+  LinearIssueAttachment,
+} from "../lib/promptAttachments";
 import {
   deleteInstance as deleteManagedInstance,
   ensureInstance,
@@ -75,12 +90,27 @@ import {
   wakeInstance,
 } from "../lib/remote-control-plane";
 import {
+  listUserManagedEndpoints,
   saveUserManagedEndpoint,
-  saveRemoteRepository,
   trustedHostKeyFromFingerprint,
   publicKeyAuthentication,
+  type SavedRemoteRepositoryRecord,
+  type UserManagedEndpointRecord,
 } from "../lib/remote-endpoints";
-import { dispatchOverSsh } from "../lib/remote-dispatch";
+import {
+  dispatchMutationOverSsh,
+  dispatchOverSsh,
+} from "../lib/remote-dispatch";
+import {
+  LAST_OPENED_REMOTE_REPO_ID_KEY,
+  canonicalizeRemotePath,
+  clearLastOpenedRemoteRepository,
+  getSavedRemoteRepository,
+  listSavedRepositoriesForEndpoint,
+  rememberLastOpenedRemoteRepository,
+  restoreSavedRemoteRepository,
+  upsertSavedRemoteRepository,
+} from "../lib/remote-repository";
 import {
   connectExistingReadyInstance,
   connectManagedInstance,
@@ -92,31 +122,8 @@ import {
 import { startManagedCertificateRenewal } from "../lib/remote-cert-lifecycle";
 import { useRemoteCutoffStore } from "../stores/remoteCutoffStore";
 import { remoteForceCutoff } from "../lib/api-extra";
-import {
-  RemoteSetupDialog,
-  type LocalKeyIdentity,
-  type UserManagedFormValues,
-} from "./remote/RemoteSetupDialog";
-import { RemoteReviewPanel } from "./remote/RemoteReviewPanel";
-import {
-  RemoteStatusBanner,
-  connectionStateFromInstanceState,
-} from "./remote/RemoteStatusBanner";
+import { RemoteRepositorySelector } from "./remote/RemoteRepositorySelector";
 import { locationFromHostAndPath } from "../lib/remote-query-keys";
-import { ARTIFACTS_BASE_PATH, artifactsPath } from "../lib/artifactRoutes";
-import {
-  type ChangeFilesMoveRequest,
-  dispatchRefreshWorkspaceChanges,
-} from "../lib/change-file-drag";
-import { openRepositoryAtPath as openRepositoryAtPathShared } from "../lib/open-repository";
-import {
-  GITHUB_BASE_PATH,
-  githubDetailPath,
-  githubListPath,
-  stateFilterForPrState,
-} from "../lib/githubRoutes";
-import { LINEAR_BASE_PATH } from "../lib/linearRoutes";
-import type { GitHubIssueAttachment } from "../lib/promptAttachments";
 import { invalidateReviewChangeCount } from "../lib/review-change-count";
 import {
   clearSWRCache,
@@ -129,17 +136,31 @@ import {
   buildWorkspaceTree,
   flattenWorkspaceTree,
 } from "../lib/workspace-tree";
+import {
+  useFeaturePreviewStore,
+  usePreviewFeature,
+} from "../stores/featurePreviewStore";
 import { useSidebarWidthStore } from "../stores/sidebarWidthStore";
 import { AgentPromptDialog } from "./AgentPromptDialog";
 import { ArtifactsPage } from "./ArtifactsPage";
 import { CommandPalette } from "./CommandPalette";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { GitHubPanel } from "./GitHubPanel";
-import { LinearPanel } from "./LinearPanel";
 import { KeyboardShortcutsModal } from "./KeyboardShortcutsModal";
+import { LinearPanel } from "./LinearPanel";
 import { MergePreviewPage } from "./MergePreviewPage";
 import { Onboarding } from "./Onboarding";
 import { PromptHistoryModal } from "./PromptHistoryModal";
+import { RemoteReviewPanel } from "./remote/RemoteReviewPanel";
+import {
+  type LocalKeyIdentity,
+  RemoteSetupDialog,
+  type UserManagedFormValues,
+} from "./remote/RemoteSetupDialog";
+import {
+  connectionStateFromInstanceState,
+  RemoteStatusBanner,
+} from "./remote/RemoteStatusBanner";
 import { SettingsPage } from "./SettingsPage";
 import { ShowWorkspace } from "./ShowWorkspace";
 import { StashModal } from "./StashModal";
@@ -163,6 +184,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "./ui/alert-dialog";
+import { Button } from "./ui/button";
 import {
   Dialog,
   DialogContent,
@@ -170,7 +192,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "./ui/dialog";
-import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { SidebarInset, SidebarProvider } from "./ui/sidebar";
 import { useToast } from "./ui/toast";
@@ -180,6 +201,29 @@ import {
   WorkspaceTerminalPane,
   type WorkspaceTerminalPaneHandle,
 } from "./WorkspaceTerminalPane";
+
+function sshEndpointFromUserManaged(
+  record: UserManagedEndpointRecord,
+): SshEndpoint {
+  return {
+    id: record.id,
+    instance_id: null,
+    source: { type: "user_managed" },
+    hostname: record.hostname,
+    port: record.port,
+    username: record.username,
+    host_keys: [trustedHostKeyFromFingerprint(record.host_key_fingerprint)],
+    authentication: publicKeyAuthentication(record.auth_identity_reference),
+  };
+}
+
+function generationFromEndpoint(
+  endpoint: SshEndpoint,
+  fallback: number,
+): number {
+  if (endpoint.source.type === "managed") return endpoint.source.generation;
+  return fallback;
+}
 
 type ViewMode =
   | "session"
@@ -245,6 +289,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     prompt?: string;
     workspaceId: number | null;
     githubIssue?: GitHubIssueAttachment | null;
+    linearIssue?: LinearIssueAttachment | null;
   } | null>(null);
   const [showBranchSwitcher, setShowBranchSwitcher] = useState(false);
   const [showFilePicker, setShowFilePicker] = useState(false);
@@ -291,8 +336,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [remoteSshSubmitting, setRemoteSshSubmitting] = useState(false);
   const [remoteSshStage, setRemoteSshStage] = useState("");
   const [remoteSshHosts, setRemoteSshHosts] = useState<string[]>([]);
-  const [remoteReadiness, setRemoteReadiness] =
-    useState<RemoteReadiness | null>(null);
+  const [remoteSshFingerprint, setRemoteSshFingerprint] = useState("");
   const [activeRemoteRepo, setActiveRemoteRepo] =
     useState<RemoteRepository | null>(null);
 
@@ -320,6 +364,61 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [explicitEndpointRepoConnected, setExplicitEndpointRepoConnected] =
     useState(false);
   const [explicitEndpointError, setExplicitEndpointError] = useState<string>();
+  const [savedRemoteRepos, setSavedRemoteRepos] = useState<
+    SavedRemoteRepositoryRecord[]
+  >([]);
+  const [selectedSavedRepoId, setSelectedSavedRepoId] = useState<string | null>(
+    null,
+  );
+  const [explicitEndpointProbe, setExplicitEndpointProbe] =
+    useState<RemoteRepoProbe | null>(null);
+  const [explicitEndpointCloneUrl, setExplicitEndpointCloneUrl] = useState("");
+  const [confirmInitRemoteRepo, setConfirmInitRemoteRepo] = useState(false);
+  const [explicitGenerationTransition, setExplicitGenerationTransition] =
+    useState(false);
+  const [remoteRepoBusy, setRemoteRepoBusy] = useState(false);
+
+  const refreshSavedRemoteRepos = async (
+    endpointId: string,
+    generation: number,
+  ) => {
+    setSavedRemoteRepos(
+      await listSavedRepositoriesForEndpoint(endpointId, generation),
+    );
+  };
+
+  const markRemoteRepoOpen = async (
+    descriptor: SavedRemoteRepositoryRecord,
+  ) => {
+    await rememberLastOpenedRemoteRepository(descriptor.id);
+    setSelectedSavedRepoId(descriptor.id);
+    setExplicitEndpointRepoPath(descriptor.canonical_remote_path);
+    setExplicitEndpointRepoConnected(true);
+    await refreshSavedRemoteRepos(
+      descriptor.endpoint_id,
+      descriptor.endpoint_generation,
+    );
+  };
+
+  const inspectAndRegisterPath = async (
+    endpoint: SshEndpoint,
+    generation: number,
+    path: string,
+  ) => {
+    const canonical = canonicalizeRemotePath(path);
+    await dispatchOverSsh<RepositoryInspection>(endpoint, {
+      kind: "InspectRepository",
+      repo: canonical,
+    });
+    const descriptor = await upsertSavedRemoteRepository({
+      endpoint_id: endpoint.id,
+      endpoint_generation: generation,
+      remote_path: canonical,
+      last_successful_trust_validation: new Date().toISOString(),
+    });
+    await markRemoteRepoOpen(descriptor);
+  };
+
   // The currently registered client key for the managed instance, so a
   // revocation of *this* key (PRD "Revoking the active key must immediately
   // cut off the active endpoint") and reauthentication after a hard cutoff
@@ -390,28 +489,160 @@ export const Dashboard: React.FC<DashboardProps> = ({
     if (!activeSshEndpoint) return;
     setExplicitEndpointError(undefined);
     try {
-      const probe = await dispatchOverSsh<{ is_repo: boolean }>(
-        activeSshEndpoint,
-        { kind: "ProbeRepo", repo: explicitEndpointRepoPath },
-      );
+      const probe = await dispatchOverSsh<RemoteRepoProbe>(activeSshEndpoint, {
+        kind: "ProbeRepo",
+        repo: explicitEndpointRepoPath,
+      });
+      setExplicitEndpointProbe(probe);
       if (!probe.is_repo) {
         setExplicitEndpointError(
-          "No repository found at that path on the remote machine.",
+          probe.needs_clone
+            ? "No repository at that path. Clone or initialize it."
+            : "No repository found at that path on the remote machine.",
         );
         return;
       }
-      await saveRemoteRepository({
-        id: `${activeSshEndpoint.id}:${explicitEndpointRepoPath}`,
-        endpoint_id: activeSshEndpoint.id,
-        remote_path: explicitEndpointRepoPath,
-        display_name: explicitEndpointRepoPath,
-        endpoint_generation: activeEndpointGeneration,
-      });
-      setExplicitEndpointRepoConnected(true);
+      await inspectAndRegisterPath(
+        activeSshEndpoint,
+        activeEndpointGeneration,
+        explicitEndpointRepoPath,
+      );
     } catch (error) {
       setExplicitEndpointError(
         error instanceof Error ? error.message : String(error),
       );
+    }
+  };
+
+  const handleProbeExplicitEndpointRepo = async () => {
+    if (!activeSshEndpoint) return;
+    setExplicitEndpointError(undefined);
+    setRemoteRepoBusy(true);
+    try {
+      const probe = await dispatchOverSsh<RemoteRepoProbe>(activeSshEndpoint, {
+        kind: "ProbeRepo",
+        repo: explicitEndpointRepoPath,
+      });
+      setExplicitEndpointProbe(probe);
+    } catch (error) {
+      setExplicitEndpointError(
+        error instanceof Error ? error.message : String(error),
+      );
+    } finally {
+      setRemoteRepoBusy(false);
+    }
+  };
+
+  const handleCloneExplicitEndpointRepo = async () => {
+    if (!activeSshEndpoint || !explicitEndpointCloneUrl.trim()) return;
+    setExplicitEndpointError(undefined);
+    setRemoteRepoBusy(true);
+    try {
+      const result = await dispatchMutationOverSsh<RepositoryInspection>(
+        activeSshEndpoint,
+        {
+          kind: "CloneRepo",
+          repo_url: explicitEndpointCloneUrl.trim(),
+          destination: canonicalizeRemotePath(explicitEndpointRepoPath),
+          idempotency_key: `clone-${activeSshEndpoint.id}-${Date.now()}`,
+        },
+      );
+      if (result.status === "ambiguous") {
+        setExplicitEndpointError(result.reason);
+        return;
+      }
+      await inspectAndRegisterPath(
+        activeSshEndpoint,
+        activeEndpointGeneration,
+        explicitEndpointRepoPath,
+      );
+    } catch (error) {
+      setExplicitEndpointError(
+        error instanceof Error ? error.message : String(error),
+      );
+    } finally {
+      setRemoteRepoBusy(false);
+    }
+  };
+
+  const handleInitExplicitEndpointRepo = async () => {
+    if (!activeSshEndpoint || !confirmInitRemoteRepo) return;
+    setExplicitEndpointError(undefined);
+    setRemoteRepoBusy(true);
+    try {
+      const result = await dispatchMutationOverSsh<RepositoryInspection>(
+        activeSshEndpoint,
+        {
+          kind: "InitRepo",
+          repo: canonicalizeRemotePath(explicitEndpointRepoPath),
+          idempotency_key: `init-${activeSshEndpoint.id}-${Date.now()}`,
+        },
+      );
+      if (result.status === "ambiguous") {
+        setExplicitEndpointError(result.reason);
+        return;
+      }
+      await inspectAndRegisterPath(
+        activeSshEndpoint,
+        activeEndpointGeneration,
+        explicitEndpointRepoPath,
+      );
+    } catch (error) {
+      setExplicitEndpointError(
+        error instanceof Error ? error.message : String(error),
+      );
+    } finally {
+      setRemoteRepoBusy(false);
+    }
+  };
+
+  const handleSelectSavedRemoteRepo = async (id: string) => {
+    if (!activeSshEndpoint) return;
+    const descriptor = savedRemoteRepos.find((repo) => repo.id === id);
+    if (!descriptor) return;
+    setSelectedSavedRepoId(id);
+    setExplicitEndpointRepoPath(descriptor.canonical_remote_path);
+    setExplicitEndpointError(undefined);
+    setRemoteRepoBusy(true);
+    try {
+      const result = await restoreSavedRemoteRepository({
+        descriptor,
+        currentGeneration: activeEndpointGeneration,
+        explicitGenerationTransition,
+        reconnect: async () => {
+          try {
+            await dispatchOverSsh(activeSshEndpoint, {
+              kind: "ProbeRepo",
+              repo: descriptor.canonical_remote_path,
+            });
+            return true;
+          } catch {
+            return false;
+          }
+        },
+        validateHostKey: async () =>
+          activeSshEndpoint.host_keys.some(
+            (key) => key.fingerprint_sha256.length > 0,
+          ),
+        inspect: (canonicalPath) =>
+          dispatchOverSsh<RepositoryInspection>(activeSshEndpoint, {
+            kind: "InspectRepository",
+            repo: canonicalPath,
+          }),
+      });
+      if (!result.ok) {
+        setExplicitEndpointRepoConnected(false);
+        setExplicitEndpointError(
+          result.reason === "generation_mismatch"
+            ? "Endpoint generation changed. Confirm a trust transition before restoring."
+            : `Restore refused: ${result.reason.replace(/_/g, " ")}.`,
+        );
+        return;
+      }
+      setExplicitGenerationTransition(false);
+      await markRemoteRepoOpen(result.descriptor);
+    } finally {
+      setRemoteRepoBusy(false);
     }
   };
 
@@ -468,9 +699,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
         size,
         keyReference,
       });
+      const status = await getInstanceStatus();
+      setInstanceStatus(status);
+      if (status.endpoint) {
+        const generation = generationFromEndpoint(
+          status.endpoint,
+          status.instance?.generation ?? 0,
+        );
+        setActiveSshEndpoint(status.endpoint);
+        setActiveEndpointGeneration(generation);
+        setExplicitEndpointRepoConnected(false);
+        setShowRemoteSetupDialog(false);
+        void refreshSavedRemoteRepos(status.endpoint.id, generation);
+      }
       renewalControllerRef.current = result.renewal;
       setSelectedKeyReference(keyReference);
-      await refreshInstanceStatus();
     } catch (error) {
       setProvisioningError(
         error instanceof Error ? error.message : String(error),
@@ -578,6 +821,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         size_preset: size,
         idempotency_key: `reprovision-${instanceId}-${Date.now()}`,
       });
+      setExplicitGenerationTransition(true);
       await refreshInstanceStatus();
     } catch (error) {
       setProvisioningError(
@@ -657,19 +901,36 @@ export const Dashboard: React.FC<DashboardProps> = ({
       return;
     }
 
-    const endpoint: SshEndpoint = {
+    const endpoint = sshEndpointFromUserManaged({
       id,
-      instance_id: null,
-      source: { type: "user_managed" },
+      display_name: values.display_name,
       hostname: values.hostname,
       port: values.port,
       username: values.username,
-      host_keys: [trustedHostKeyFromFingerprint(values.host_key_fingerprint)],
-      authentication: publicKeyAuthentication(values.auth_identity_reference),
-    };
+      host_key_fingerprint: values.host_key_fingerprint,
+      auth_identity_reference: values.auth_identity_reference,
+      alias: values.alias,
+      created_at: new Date().toISOString(),
+    });
     setActiveSshEndpoint(endpoint);
     setActiveEndpointGeneration(0);
+    setExplicitEndpointRepoConnected(false);
     setShowRemoteSetupDialog(false);
+    await refreshSavedRemoteRepos(endpoint.id, 0);
+  };
+
+  const handleOpenManagedRepositories = () => {
+    const endpoint = instanceStatus?.endpoint;
+    if (!endpoint) return;
+    const generation = generationFromEndpoint(
+      endpoint,
+      instanceStatus?.instance?.generation ?? 0,
+    );
+    setActiveSshEndpoint(endpoint);
+    setActiveEndpointGeneration(generation);
+    setExplicitEndpointRepoConnected(false);
+    setShowRemoteSetupDialog(false);
+    void refreshSavedRemoteRepos(endpoint.id, generation);
   };
 
   const terminalPaneRef = useRef<WorkspaceTerminalPaneHandle>(null);
@@ -1097,20 +1358,87 @@ export const Dashboard: React.FC<DashboardProps> = ({
     });
   };
 
-  // Restore the last-opened remote SSH repository (if any) when no local repo is active.
+  // Restore the last-opened remote SSH repository only after reconnect and
+  // trust validation. A stored blob or descriptor is not enough on its own.
   useEffect(() => {
-    if (!remoteSshEnabled) {
-      setActiveRemoteRepo(null);
+    if (!remoteSshEnabled || repoPath) {
       return;
     }
-    void getSetting("last_opened_remote_repo").then((saved) => {
-      if (!saved || repoPath) return;
-      try {
-        setActiveRemoteRepo(JSON.parse(saved) as RemoteRepository);
-      } catch {
-        void setSetting("last_opened_remote_repo", "");
+    let cancelled = false;
+    void (async () => {
+      const id = await getSetting(LAST_OPENED_REMOTE_REPO_ID_KEY).catch(
+        () => null,
+      );
+      if (!id || cancelled) return;
+      const descriptor = await getSavedRemoteRepository(id);
+      if (!descriptor || cancelled) return;
+
+      const userManaged = (await listUserManagedEndpoints()).find(
+        (endpoint) => endpoint.id === descriptor.endpoint_id,
+      );
+      let endpoint: SshEndpoint | null = userManaged
+        ? sshEndpointFromUserManaged(userManaged)
+        : null;
+      let generation = descriptor.endpoint_generation;
+      if (!endpoint) {
+        const status = await getInstanceStatus().catch(() => null);
+        const { endpoint: statusEndpoint, instance } = status ?? {};
+        if (statusEndpoint?.id === descriptor.endpoint_id) {
+          endpoint = statusEndpoint;
+          generation = generationFromEndpoint(
+            statusEndpoint,
+            instance?.generation ?? descriptor.endpoint_generation,
+          );
+          if (!cancelled && status) setInstanceStatus(status);
+        }
       }
-    });
+      if (!endpoint || cancelled) return;
+      const activeEndpoint = endpoint;
+
+      const result = await restoreSavedRemoteRepository({
+        descriptor,
+        currentGeneration: generation,
+        explicitGenerationTransition: false,
+        reconnect: async () => {
+          try {
+            await dispatchOverSsh(activeEndpoint, {
+              kind: "ProbeRepo",
+              repo: descriptor.canonical_remote_path,
+            });
+            return true;
+          } catch {
+            return false;
+          }
+        },
+        validateHostKey: async () =>
+          activeEndpoint.host_keys.some(
+            (key) => key.fingerprint_sha256.length > 0,
+          ),
+        inspect: (canonicalPath) =>
+          dispatchOverSsh<RepositoryInspection>(activeEndpoint, {
+            kind: "InspectRepository",
+            repo: canonicalPath,
+          }),
+      });
+      if (cancelled) return;
+      if (!result.ok) {
+        setActiveRemoteRepo(null);
+        setExplicitEndpointRepoConnected(false);
+        return;
+      }
+      setActiveSshEndpoint(activeEndpoint);
+      setActiveEndpointGeneration(result.descriptor.endpoint_generation);
+      setSelectedSavedRepoId(result.descriptor.id);
+      setExplicitEndpointRepoPath(result.descriptor.canonical_remote_path);
+      setExplicitEndpointRepoConnected(true);
+      await refreshSavedRemoteRepos(
+        result.descriptor.endpoint_id,
+        result.descriptor.endpoint_generation,
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [repoPath, remoteSshEnabled]);
 
   const rememberRemoteHost = async (host: string) => {
@@ -1133,7 +1461,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     setRemoteSshPath("~/src/project");
     setRemoteSshRepoUrl("");
     setRemoteSshNeedsClone(false);
-    setRemoteReadiness(null);
+    setRemoteSshFingerprint("");
     setRemoteSshStage("");
     setShowRemoteSshDialog(true);
   };
@@ -1142,10 +1470,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const host = remoteSshHost.trim();
     const remotePath = remoteSshPath.trim();
     const repoUrl = remoteSshRepoUrl.trim();
-    if (!host || !remotePath) {
+    const fingerprint = remoteSshFingerprint.trim();
+    if (!host || !remotePath || !fingerprint) {
       addToast({
         title: "Remote SSH details required",
-        description: "Enter both an SSH host alias and remote directory.",
+        description:
+          "Enter an SSH host alias, remote directory, and the expected host-key fingerprint.",
         type: "error",
       });
       return;
@@ -1153,25 +1483,25 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
     setRemoteSshSubmitting(true);
     try {
-      setRemoteSshStage("Checking remote prerequisites...");
-      const readiness = await checkSshHost(host);
-      setRemoteReadiness(readiness);
-      if (!readiness.connected) {
-        throw new Error("SSH connection failed. Check your SSH configuration.");
-      }
-      const missingTreq = readiness.checks.find(
-        (check) => check.name === "treq" && !check.available,
-      );
-      if (missingTreq) {
-        throw new Error(
-          missingTreq.detail || "Treq is not installed remotely.",
-        );
-      }
+      setRemoteSshStage("Resolving SSH alias and pinning host trust...");
+      // Trust is explicit and pinned here, not inferred from ~/.ssh/known_hosts:
+      // the alias is resolved to hostname/port/user, then paired with the
+      // fingerprint the user just supplied to build a native SshEndpoint whose
+      // HostKeyVerifier enforces exactly that fingerprint (never a system ssh
+      // subprocess, never StrictHostKeyChecking=no).
+      const identities = await listLocalSshIdentities().catch(() => []);
+      const endpoint = await buildExplicitAliasSshEndpoint({
+        endpointId: `alias:${host}`,
+        alias: host,
+        expectedFingerprint: fingerprint,
+        hostKeyAlgorithm: "unknown",
+        keyReference: identities[0]?.reference ?? "id_ed25519",
+      });
 
       setRemoteSshStage("Inspecting repository...");
-      const probe = await remoteProbeRepo(host, remotePath);
+      const probe = await remoteProbeRepoOverSsh(endpoint, remotePath);
       let remoteRepo = probe.is_repo
-        ? await remoteOpenRepo(host, remotePath)
+        ? await remoteOpenRepoOverSsh(endpoint, remotePath)
         : null;
 
       if (!remoteRepo) {
@@ -1181,7 +1511,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
           return;
         }
         setRemoteSshStage("Cloning and inspecting repository...");
-        remoteRepo = await remoteCloneRepo(host, repoUrl, remotePath);
+        remoteRepo = await remoteCloneRepoOverSsh(
+          endpoint,
+          repoUrl,
+          remotePath,
+        );
       }
 
       await rememberRemoteHost(host);
@@ -1454,6 +1788,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
       workspaceId: null,
       githubIssue: issue,
     });
+    setShowAgentPromptDialog(true);
+  };
+
+  const handleStartPromptFromLinearIssue = (issue: LinearIssueAttachment) => {
+    setRunPromptRequest({ workspaceId: null, linearIssue: issue });
     setShowAgentPromptDialog(true);
   };
 
@@ -2028,22 +2367,26 @@ export const Dashboard: React.FC<DashboardProps> = ({
               />
             </label>
           )}
-          {remoteReadiness && (
-            <div className="text-sm text-muted-foreground">
-              <p>
-                {remoteReadiness.connected
-                  ? "SSH connected"
-                  : "SSH unavailable"}
-              </p>
-              <ul className="list-disc pl-4">
-                {remoteReadiness.checks.map((check) => (
-                  <li key={check.name}>
-                    {check.name}: {check.detail}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
+          <label
+            className="flex flex-col gap-1"
+            htmlFor="remote-ssh-fingerprint"
+          >
+            <span className="text-sm font-medium">
+              Expected host-key fingerprint
+            </span>
+            <Input
+              id="remote-ssh-fingerprint"
+              className="font-mono text-xs"
+              value={remoteSshFingerprint}
+              onChange={(event) => setRemoteSshFingerprint(event.target.value)}
+              placeholder="SHA256:..."
+            />
+            <span className="text-xs text-muted-foreground">
+              Treq pins this fingerprint and never infers trust from your local
+              SSH configuration or known_hosts; a changed key is always
+              rejected.
+            </span>
+          </label>
           {remoteSshStage && (
             <p className="text-sm text-muted-foreground">{remoteSshStage}</p>
           )}
@@ -2085,6 +2428,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       onRevokeKey={handleRevokeKey}
       onConnectManaged={handleConnectManaged}
       onRegisterUserManaged={handleRegisterUserManaged}
+      onOpenManagedRepositories={handleOpenManagedRepositories}
     />
   );
 
@@ -2100,7 +2444,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         )
       : "online";
     const closeRemote = () => {
-      void setSetting("last_opened_remote_repo", "");
+      void clearLastOpenedRemoteRepository();
       setActiveRemoteRepo(null);
       setActiveSshEndpoint(null);
       setExplicitEndpointRepoConnected(false);
@@ -2130,6 +2474,34 @@ export const Dashboard: React.FC<DashboardProps> = ({
               onReconnect={() => void refreshInstanceStatus()}
             />
           </div>
+
+          {activeSshEndpoint && (
+            <div className="border-b px-4 py-3">
+              <RemoteRepositorySelector
+                savedRepositories={savedRemoteRepos}
+                selectedId={selectedSavedRepoId}
+                path={explicitEndpointRepoPath}
+                probe={explicitEndpointProbe}
+                cloneUrl={explicitEndpointCloneUrl}
+                confirmInit={confirmInitRemoteRepo}
+                busy={remoteRepoBusy}
+                error={explicitEndpointError}
+                onSelectSaved={(id) => void handleSelectSavedRemoteRepo(id)}
+                onPathChange={(next) => {
+                  setExplicitEndpointRepoPath(next);
+                  setSelectedSavedRepoId(null);
+                  setExplicitEndpointProbe(null);
+                  setExplicitEndpointRepoConnected(false);
+                }}
+                onProbe={() => void handleProbeExplicitEndpointRepo()}
+                onCloneUrlChange={setExplicitEndpointCloneUrl}
+                onConfirmInitChange={setConfirmInitRemoteRepo}
+                onOpenExisting={() => void handleConnectExplicitEndpointRepo()}
+                onClone={() => void handleCloneExplicitEndpointRepo()}
+                onInit={() => void handleInitExplicitEndpointRepo()}
+              />
+            </div>
+          )}
 
           {activeSshEndpoint && cutoffs[activeSshEndpoint.id] && (
             <div className="border-b border-red-500/40 bg-red-500/10 px-4 py-3 text-sm">
@@ -2465,6 +2837,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           {viewMode === "linear" && linearIntegrationEnabled && (
             <LinearPanel
               repoPath={repoPath}
+              onStartPromptFromIssue={handleStartPromptFromLinearIssue}
               onOpenWorkspace={async (workspaceId) => {
                 await invalidateQueries(["workspaces", repoPath]);
                 const updatedWorkspaces = await fetchAndCache(
@@ -2649,6 +3022,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         initialPrompt={runPromptRequest?.prompt}
         initialWorkspaceId={runPromptRequest?.workspaceId ?? null}
         initialGitHubIssue={runPromptRequest?.githubIssue ?? null}
+        initialLinearIssue={runPromptRequest?.linearIssue ?? null}
       />
 
       <PromptHistoryModal

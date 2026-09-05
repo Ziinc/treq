@@ -12,6 +12,7 @@ ignores:
   - "src/lib/api-extra.ts"
   - "src/lib/api-github.ts"
   - "src/lib/api-pr-status.ts"
+  - "src/lib/api-remote-ssh.ts"
 rule:
   all:
     - pattern: invoke($CMD, $$$)

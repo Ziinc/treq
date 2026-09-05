@@ -5,6 +5,14 @@ export interface GitHubIssueAttachment {
   title: string;
 }
 
+export interface LinearIssueAttachment {
+  id: string;
+  identifier: string;
+  url: string;
+  title: string;
+  includeSubissues: boolean;
+}
+
 export function formatPromptWithGitHubIssue(
   text: string,
   issue: GitHubIssueAttachment,
@@ -14,6 +22,19 @@ export function formatPromptWithGitHubIssue(
   if (!trimmed) {
     const titlePart = issue.title.trim() ? `: ${issue.title.trim()}` : "";
     return `Address GitHub issue #${issue.number}${titlePart}\n\n${issue.url}`;
+  }
+  return `${trimmed}\n\n${issueLine}`;
+}
+
+export function formatPromptWithLinearIssue(
+  text: string,
+  issue: LinearIssueAttachment,
+): string {
+  const trimmed = text.trim();
+  const issueLine = `Linear issue ${issue.identifier}: ${issue.url}`;
+  if (!trimmed) {
+    const titlePart = issue.title.trim() ? `: ${issue.title.trim()}` : "";
+    return `Address Linear issue ${issue.identifier}${titlePart}\n\n${issue.url}`;
   }
   return `${trimmed}\n\n${issueLine}`;
 }

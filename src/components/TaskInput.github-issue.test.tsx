@@ -9,6 +9,11 @@ const api = vi.hoisted(() => ({
   getRepoSetting: vi.fn(),
   setRepoSetting: vi.fn(),
   searchWorkspaceFiles: vi.fn(),
+  getWorkspaces: vi.fn(),
+}));
+
+const linearApi = vi.hoisted(() => ({
+  linearOpenOrCreateWorkspaceFromIssue: vi.fn(),
 }));
 
 vi.mock("../lib/api", async (importOriginal) => {
@@ -20,11 +25,17 @@ vi.mock("../lib/api", async (importOriginal) => {
     getRepoSetting: api.getRepoSetting,
     setRepoSetting: api.setRepoSetting,
     searchWorkspaceFiles: api.searchWorkspaceFiles,
+    getWorkspaces: api.getWorkspaces,
   };
 });
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   open: vi.fn(),
+}));
+
+vi.mock("../lib/api-linear", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../lib/api-linear")>()),
+  ...linearApi,
 }));
 
 describe("TaskInput GitHub issue chip", () => {
@@ -38,6 +49,8 @@ describe("TaskInput GitHub issue chip", () => {
     api.getRepoSetting.mockResolvedValue(null);
     api.setRepoSetting.mockResolvedValue(undefined);
     api.searchWorkspaceFiles.mockResolvedValue([]);
+    api.getWorkspaces.mockResolvedValue([]);
+    linearApi.linearOpenOrCreateWorkspaceFromIssue.mockReset();
   });
 
   it("renders a dismissible GitHub issue chip from initialGitHubIssue", async () => {
@@ -96,6 +109,65 @@ describe("TaskInput GitHub issue chip", () => {
     );
     expect(onSessionCreated.mock.calls[0][0].pendingPrompt).toContain(
       "fix auth",
+    );
+  });
+
+  it("creates the Linear issue workspace before creating its agent session", async () => {
+    const onSessionCreated = vi.fn();
+    linearApi.linearOpenOrCreateWorkspaceFromIssue.mockResolvedValue([
+      { issue_id: "issue-id", workspace_id: 7, created: true },
+    ]);
+    api.getWorkspaces.mockResolvedValue([
+      {
+        id: 7,
+        repo_path: "/repo",
+        workspace_name: "treq-281",
+        workspace_path: ".treq/workspaces/treq-281",
+        branch_name: "ty/treq-281-linear-integration",
+        created_at: "now",
+        title: "Linear integration should CRUD issues",
+        not_on_remote: true,
+      },
+    ]);
+    render(
+      <TaskInput
+        repoPath="/repo"
+        workspaceId={null}
+        workspacePath={null}
+        workingDirectory="/repo"
+        onSessionCreated={onSessionCreated}
+        initialLinearIssue={{
+          id: "issue-id",
+          identifier: "TREQ-281",
+          title: "Linear integration should CRUD issues",
+          url: "https://linear.app/treq/issue/TREQ-281",
+          includeSubissues: false,
+        }}
+      />,
+    );
+
+    expect(await screen.findByTestId("linear-issue-chip")).toHaveTextContent(
+      "TREQ-281",
+    );
+    await user.click(screen.getByRole("button", { name: /^edit$/i }));
+
+    await waitFor(() => expect(api.createSession).toHaveBeenCalled());
+    expect(linearApi.linearOpenOrCreateWorkspaceFromIssue).toHaveBeenCalledWith(
+      "/repo",
+      "issue-id",
+      false,
+    );
+    expect(api.createSession).toHaveBeenCalledWith(
+      "/repo",
+      7,
+      expect.stringContaining("TREQ-281"),
+    );
+    expect(onSessionCreated).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: 7,
+        workspacePath: "/repo/.treq/workspaces/treq-281",
+        pendingPrompt: expect.stringContaining("Linear issue TREQ-281"),
+      }),
     );
   });
 });

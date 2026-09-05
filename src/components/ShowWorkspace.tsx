@@ -1977,6 +1977,10 @@ export const ShowWorkspace = ({
                       repoPath={effectiveRepoPath}
                       workspace={workspace}
                       baseBranch={targetBranch ?? defaultTargetBranch}
+                      needsPush={
+                        workspace.not_on_remote ||
+                        workspaceStatusData?.remote_sync.type === "Ahead"
+                      }
                       hasCommits={
                         hasWorkspaceCommits ||
                         (workspaceStatusData?.commits_ahead_of_target?.length ??

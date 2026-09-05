@@ -32,10 +32,12 @@ export interface UserManagedEndpointRecord {
 export interface SavedRemoteRepositoryRecord {
   id: string;
   endpoint_id: string;
-  remote_path: string;
-  display_name: string;
   /** Generation of the endpoint at the time this was saved, for trust-transition detection. */
   endpoint_generation: number;
+  canonical_remote_path: string;
+  display_name: string;
+  /** ISO timestamp of the last successful restore/trust sequence, or null. */
+  last_successful_trust_validation: string | null;
 }
 
 async function readJson<T>(key: string, fallback: T): Promise<T> {
@@ -65,18 +67,56 @@ export async function saveUserManagedEndpoint(
   await setSetting(ENDPOINTS_KEY, JSON.stringify(next));
 }
 
+function normalizeSavedRecord(
+  raw: SavedRemoteRepositoryRecord & { remote_path?: string },
+): SavedRemoteRepositoryRecord {
+  return {
+    id: raw.id,
+    endpoint_id: raw.endpoint_id,
+    endpoint_generation: raw.endpoint_generation,
+    canonical_remote_path: raw.canonical_remote_path ?? raw.remote_path ?? "",
+    display_name: raw.display_name,
+    last_successful_trust_validation:
+      raw.last_successful_trust_validation ?? null,
+  };
+}
+
 export async function listSavedRemoteRepositories(): Promise<
   SavedRemoteRepositoryRecord[]
 > {
-  return readJson(SAVED_REPOS_KEY, []);
+  const raw = await readJson<
+    Array<SavedRemoteRepositoryRecord & { remote_path?: string }>
+  >(SAVED_REPOS_KEY, []);
+  return raw.map(normalizeSavedRecord);
 }
 
 export async function saveRemoteRepository(
   record: SavedRemoteRepositoryRecord,
 ): Promise<void> {
+  const normalized = normalizeSavedRecord(record);
   const existing = await listSavedRemoteRepositories();
-  const next = [record, ...existing.filter((repo) => repo.id !== record.id)];
-  await setSetting(SAVED_REPOS_KEY, JSON.stringify(next));
+  const next = [
+    normalized,
+    ...existing.filter(
+      (repo) =>
+        repo.id !== normalized.id &&
+        !(
+          repo.endpoint_id === normalized.endpoint_id &&
+          repo.endpoint_generation === normalized.endpoint_generation &&
+          repo.canonical_remote_path === normalized.canonical_remote_path
+        ),
+    ),
+  ];
+  await replaceSavedRemoteRepositories(next);
+}
+
+export async function replaceSavedRemoteRepositories(
+  records: SavedRemoteRepositoryRecord[],
+): Promise<void> {
+  await setSetting(
+    SAVED_REPOS_KEY,
+    JSON.stringify(records.map(normalizeSavedRecord)),
+  );
 }
 
 /** Builds the trusted-host-key record from a user-entered fingerprint. */
