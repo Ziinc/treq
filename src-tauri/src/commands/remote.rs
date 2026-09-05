@@ -24,6 +24,19 @@ pub fn list_local_ssh_identities(state: State<AppState>) -> Result<Vec<LocalSshI
   remote_local_keys::list_local_ssh_identities()
 }
 
+/// Reads the raw OpenSSH public-key text for a `list_local_ssh_identities`
+/// reference, so the managed-VM setup flow can register it with the
+/// control plane. Never reads or returns private key material - see
+/// `core::remote_local_keys::read_local_public_key`.
+#[tauri::command]
+pub fn read_local_ssh_public_key(
+  state: State<AppState>,
+  reference: String,
+) -> Result<String, String> {
+  require_remote_ssh(&state)?;
+  remote_local_keys::read_local_public_key(&reference)
+}
+
 #[tauri::command]
 pub async fn check_ssh_host(
   state: State<'_, AppState>,
