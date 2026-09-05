@@ -1515,7 +1515,16 @@ pub fn execute_local_request(request: TreqCommandRequest) -> Result<serde_json::
       destination,
       idempotency_key,
     } => with_idempotency_key(
-      &destination,
+      // `destination` does not exist yet — cloning is the whole point —
+      // so the idempotency store (which eagerly creates `<repo>/.treq/`
+      // when opened) must not be scoped there or `git clone` will refuse
+      // to write into an already-non-empty destination. Its parent
+      // directory is guaranteed to exist since the caller chose a path
+      // under it.
+      Path::new(&destination)
+        .parent()
+        .and_then(|parent| parent.to_str())
+        .unwrap_or("."),
       "repo.clone",
       Some(idempotency_key.as_str()),
       request_snapshot.as_ref().expect("CloneRepo is a mutation"),
