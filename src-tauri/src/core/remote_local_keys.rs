@@ -86,8 +86,8 @@ pub fn read_local_public_key(reference: &str) -> Result<String, String> {
   }
   let canonical_dir = std::fs::canonicalize(&dir)
     .map_err(|_| "Local SSH identity directory is unavailable".to_string())?;
-  let canonical_path = std::fs::canonicalize(&path)
-    .map_err(|_| "Local SSH identity no longer exists".to_string())?;
+  let canonical_path =
+    std::fs::canonicalize(&path).map_err(|_| "Local SSH identity no longer exists".to_string())?;
   if !canonical_path.starts_with(&canonical_dir) {
     return Err("Local SSH identity reference is outside ~/.ssh".to_string());
   }
@@ -128,7 +128,8 @@ mod tests {
     }
   }
 
-  const TEST_PUBKEY: &str = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBWtypxSPtLuNKcOKQ+z0nJXYSjbYyBSCzqDG3TAWZ4z test@example";
+  const TEST_PUBKEY: &str =
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBWtypxSPtLuNKcOKQ+z0nJXYSjbYyBSCzqDG3TAWZ4z test@example";
 
   #[test]
   fn reads_public_key_contents_for_a_listed_identity() {
