@@ -1,3 +1,4 @@
+import { invoke } from "@tauri-apps/api/core";
 import type {
   AgentChat,
   AgentChatSummary,
@@ -9,8 +10,7 @@ import type {
   SqlResult,
   WorkflowInfo,
 } from "./api-types";
-
-import { invoke } from "@tauri-apps/api/core";
+import { invalidateQueries, setQueryData } from "./swr-cache";
 
 // Checks / logs API
 
@@ -149,6 +149,7 @@ export const registerAgentChat = (
   name: string,
   agent: string,
   workspaceId: number | null,
+  initialPrompt?: string,
 ): Promise<AgentChat> =>
   invoke("register_agent_chat", {
     repoPath,
@@ -157,7 +158,8 @@ export const registerAgentChat = (
     name,
     agent,
     workspaceId,
-  });
+    initialPrompt: initialPrompt ?? null,
+  }).then((chat) => cacheAgentChat(repoPath, chat as AgentChat));
 
 export const recordAgentChatUserMessage = (
   repoPath: string,
@@ -170,7 +172,7 @@ export const recordAgentChatUserMessage = (
     sessionId,
     screenBefore,
     text,
-  });
+  }).then((chat) => cacheAgentChat(repoPath, chat as AgentChat));
 
 export const recordAgentChatScreen = (
   repoPath: string,
@@ -181,7 +183,18 @@ export const recordAgentChatScreen = (
     repoPath,
     sessionId,
     screen,
-  });
+  }).then((chat) => cacheAgentChat(repoPath, chat as AgentChat));
+
+async function cacheAgentChat(
+  repoPath: string,
+  chat: AgentChat,
+): Promise<AgentChat> {
+  await Promise.all([
+    setQueryData(["agent-chat", repoPath, chat.session_id], chat),
+    invalidateQueries(["agent-chats", repoPath]),
+  ]);
+  return chat;
+}
 
 export const listAgentChats = (repoPath: string): Promise<AgentChatSummary[]> =>
   invoke("list_agent_chats", { repoPath });
