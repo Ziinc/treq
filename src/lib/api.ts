@@ -561,6 +561,14 @@ export const listLocalSshIdentities = (): Promise<LocalSshIdentity[]> =>
   invoke("list_local_ssh_identities");
 
 /**
+ * Reads the raw OpenSSH public-key text for a `listLocalSshIdentities`
+ * `reference`, so it can be registered with the control plane. Never reads
+ * or returns private key material.
+ */
+export const readLocalSshPublicKey = (reference: string): Promise<string> =>
+  invoke("read_local_ssh_public_key", { reference });
+
+/**
  * Generates (on first call) or loads this device's ed25519 keypair for
  * control-plane registration and certificate-based SSH auth. Mobile-only in
  * practice - desktop uses the user's existing `~/.ssh` identities via

@@ -29,6 +29,8 @@ export interface RemoteManagedSetupPanelProps {
   onReprovision: (region: RegionCode, size: SizePreset) => Promise<void>;
   onDeleteInstance: () => Promise<void>;
   onRevokeKey: (keyReference: string) => Promise<void>;
+  /** Connect action for an existing `ready` managed instance. */
+  onConnectManaged: (keyReference: string) => Promise<void>;
 }
 
 /** Treq-managed VM setup and lifecycle screen (region/size/identity picker, or lifecycle actions once provisioned). */
@@ -45,6 +47,7 @@ export function RemoteManagedSetupPanel({
   onReprovision,
   onDeleteInstance,
   onRevokeKey,
+  onConnectManaged,
 }: RemoteManagedSetupPanelProps) {
   const [region, setRegion] = useState<RegionCode | "">("");
   const [size, setSize] = useState<SizePreset | "">("");
@@ -63,6 +66,16 @@ export function RemoteManagedSetupPanel({
     setSubmitting(true);
     try {
       await onProvisionManaged(region, size, keyReference);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleConnect = async () => {
+    if (!keyReference) return;
+    setSubmitting(true);
+    try {
+      await onConnectManaged(keyReference);
     } finally {
       setSubmitting(false);
     }
@@ -107,6 +120,39 @@ export function RemoteManagedSetupPanel({
               {provisioningError}
             </p>
           )}
+
+          {existingInstance.status === "ready" &&
+            localKeyIdentities.length > 0 && (
+              <div className="flex flex-wrap items-end gap-2">
+                <label className="flex flex-col gap-1">
+                  <span className="text-sm font-medium">SSH identity</span>
+                  <select
+                    value={keyReference}
+                    onChange={(e) => setKeyReference(e.target.value)}
+                    className="rounded-md border border-border/60 bg-background px-2 py-1.5"
+                  >
+                    <option value="" disabled>
+                      Choose a key
+                    </option>
+                    {localKeyIdentities.map((identity) => (
+                      <option
+                        key={identity.reference}
+                        value={identity.reference}
+                      >
+                        {identity.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <Button
+                  size="sm"
+                  disabled={!keyReference || submitting}
+                  onClick={() => void handleConnect()}
+                >
+                  Connect
+                </Button>
+              </div>
+            )}
 
           <div className="flex flex-wrap gap-2">
             {(existingInstance.status === "suspended" ||

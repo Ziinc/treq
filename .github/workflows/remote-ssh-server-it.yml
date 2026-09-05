@@ -78,23 +78,6 @@ jobs:
           echo "sshd never came up on 127.0.0.1:2222" >&2
           exit 1
 
-      - name: Discover the server's real host key fingerprint
-        id: hostkey
-        run: |
-          set -euo pipefail
-          # Deliberately not hardcoded: this is what the test file's
-          # HostKeyVerifier is pinned against, so it must come from the
-          # live server on this run, the same way a real client's first-trust
-          # flow would derive it - never a value nobody actually measured.
-          fingerprint=$(ssh-keyscan -p 2222 -t ed25519 127.0.0.1 2>/dev/null \
-            | ssh-keygen -lf - -E sha256 | awk '{print $2}')
-          if [ -z "$fingerprint" ]; then
-            echo "failed to discover the server's host key fingerprint" >&2
-            exit 1
-          fi
-          echo "Discovered host key fingerprint: $fingerprint"
-          echo "fingerprint=$fingerprint" >> "$GITHUB_OUTPUT"
-
       - name: Install stub treq CLI on the server
         # exec_command always runs `treq <args>` on the far end (see
         # build_remote_command_line in remote_ssh_transport.rs); this
@@ -124,6 +107,33 @@ jobs:
             'sudo mv /tmp/treq-stub.sh /usr/local/bin/treq && sudo chmod +x /usr/local/bin/treq'
           ssh "${ssh_opts[@]}" 'treq --version'
 
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          cache-on-failure: true
+          workspaces: |
+            ./src-tauri -> target
+
+      # Needed to link `treq` at all (see ci.yml's identical step) - not
+      # needed to run it, since the real binary never leaves this runner.
+      - name: install dependencies (ubuntu only)
+        uses: awalsh128/cache-apt-pkgs-action@v1.6.1
+        with:
+          packages: libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          version: webkit-4.1-1
+          execute_install_scripts: true
+
+      # Deliberately last, right before the test run: this step restarts
+      # the sshd container, and the longer the gap between that restart
+      # and the test run, the more likely the container drifts (observed
+      # in CI as every post-restart connection failing with "Disconnected"
+      # once several minutes of Rust/apt work ran in between). Doing the
+      # slow steps above first and this immediately before cargo test
+      # keeps that gap as small as possible.
       - name: Install test-only user CA and selected-workspace directory
         id: certsetup
         env:
@@ -207,26 +217,6 @@ jobs:
           done
           echo "sshd did not accept the bootstrap key after restart" >&2
           exit 1
-
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@v1
-        with:
-          toolchain: stable
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          cache-on-failure: true
-          workspaces: |
-            ./src-tauri -> target
-
-      # Needed to link `treq` at all (see ci.yml's identical step) - not
-      # needed to run it, since the real binary never leaves this runner.
-      - name: install dependencies (ubuntu only)
-        uses: awalsh128/cache-apt-pkgs-action@v1.6.1
-        with:
-          packages: libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-          version: webkit-4.1-1
-          execute_install_scripts: true
 
       - name: Run real-sshd integration tests
         working-directory: src-tauri
