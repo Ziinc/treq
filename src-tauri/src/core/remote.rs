@@ -1112,31 +1112,40 @@ impl TreqCommandTransport for LocalTransport {
 //
 // Mutations that could duplicate work on retry (create, movement, git push,
 // agent start) accept an idempotency key. A repeated call with the same key
-// replays the cached response instead of re-running the mutation. This is an
-// in-process, per-`treq` invocation-boundary cache: on the remote VM the CLI
-// process starting fresh for every exec channel would defeat it, so the
-// process-wide store here matters most for the VM-local agent supervisor
-// (Phase 5 scope) and for local/dev use; a durable cross-process store would
-// be a natural Phase 7 (observability/ops) follow-up.
+// replays the recorded response instead of re-running the mutation.
+//
+// Persisted durably in `core::idempotency_store::IdempotencyStore`, keyed by
+// the same repo-local `.treq/local.db` convention `local_db.rs` uses — not
+// an in-process cache — because the remote VM starts a fresh `treq` CLI
+// process per SSH exec channel, and a process-local cache cannot deduplicate
+// a retry, or a concurrent invocation, that lands in a different process.
 //
 // Naturally idempotent operations (describe/update, which simply overwrite;
 // fetch/inspect/list, which are read-only) do not accept a key at all —
 // adding dedupe machinery for those would be needless per the PRD's own
 // carve-out.
-static IDEMPOTENCY_STORE: std::sync::OnceLock<
-  std::sync::Mutex<std::collections::HashMap<String, serde_json::Value>>,
-> = std::sync::OnceLock::new();
+use crate::core::idempotency_store::{
+  fingerprint, redact_for_storage, IdempotencyStore, RecoveryDecision,
+};
 
-fn idempotency_store(
-) -> &'static std::sync::Mutex<std::collections::HashMap<String, serde_json::Value>> {
-  IDEMPOTENCY_STORE.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()))
-}
-
-/// Runs `run` unless `key` was already used for `operation`, in which case the
-/// previously recorded response is replayed and `run` is never invoked again.
+/// Runs `run` unless `key` was already used for `operation` on an equivalent
+/// `request`, in which case the previously recorded (or verification-derived)
+/// response is replayed and `run` is never invoked again. Durable across CLI
+/// process boundaries: `repo` selects the same `.treq/local.db` any other
+/// invocation against that repository would open.
+///
+/// Reusing `key` for a different operation, or the same operation with a
+/// different request body, returns a structured `idempotency_conflict`
+/// error. A pending claim left behind by a process that died mid-mutation
+/// (lost SSH connection, crashed CLI) is resolved by re-running the
+/// mutation's existing observable-state verification recipe
+/// ([`verification_for`]) once it goes stale, exactly as a post-reconnect
+/// retry would.
 fn with_idempotency_key<F>(
+  repo: &str,
   operation: &str,
   key: Option<&str>,
+  request: &TreqCommandRequest,
   run: F,
 ) -> Result<serde_json::Value, String>
 where
@@ -1145,16 +1154,60 @@ where
   let Some(key) = key.filter(|k| !k.trim().is_empty()) else {
     return run();
   };
-  let cache_key = format!("{operation}:{key}");
-  if let Some(cached) = idempotency_store().lock().unwrap().get(&cache_key) {
-    return Ok(cached.clone());
+
+  let request_json = serde_json::to_value(request).map_err(|e| e.to_string())?;
+  let request_fingerprint = fingerprint(&request_json);
+  let store = IdempotencyStore::open(repo)?;
+
+  let claim = store.claim_or_replay(
+    operation,
+    key,
+    &request_fingerprint,
+    crate::core::idempotency_store::DEFAULT_STALE_AFTER,
+    || recover_stale_claim(request),
+  )?;
+  if let Some(replay) = claim {
+    return Ok(replay);
   }
-  let result = run()?;
-  idempotency_store()
-    .lock()
-    .unwrap()
-    .insert(cache_key, result.clone());
-  Ok(result)
+
+  let outcome = match run() {
+    Ok(result) => {
+      store.complete(operation, key, &redact_for_storage(&result))?;
+      Ok(result)
+    }
+    Err(error) => {
+      // A structured failure, not a "did it land?" ambiguity: free the key
+      // for reuse rather than leaving a pending claim behind forever.
+      store.abandon(operation, key)?;
+      Err(error)
+    }
+  };
+  // Best-effort, bounded retention: opportunistically sweep old completed
+  // records on the same connection rather than running a separate cleanup
+  // process. A failure here must never mask the mutation's own outcome.
+  let _ = store.cleanup(crate::core::idempotency_store::DEFAULT_RETENTION);
+  outcome
+}
+
+/// Resolves a stale pending claim by running the mutation's existing
+/// observable-state verification recipe locally (the same recipe
+/// [`verification_for`] builds for the async post-reconnect retry path,
+/// applied here via a synchronous local dispatch instead of an SSH read).
+fn recover_stale_claim(request: &TreqCommandRequest) -> Result<RecoveryDecision, String> {
+  let Some(verification) = verification_for(request) else {
+    return Ok(RecoveryDecision::Ambiguous);
+  };
+  let observed = match execute_local_request(verification.read_request) {
+    Ok(value) => value,
+    Err(_) => return Ok(RecoveryDecision::Ambiguous),
+  };
+  match (verification.check)(&observed) {
+    MutationVerificationOutcome::AlreadyApplied => {
+      Ok(RecoveryDecision::AlreadyApplied { observed })
+    }
+    MutationVerificationOutcome::NotApplied => Ok(RecoveryDecision::VerifiedNotApplied),
+    MutationVerificationOutcome::Ambiguous => Ok(RecoveryDecision::Ambiguous),
+  }
 }
 
 fn resolve_workspace_path(repo: &str, id: Option<i64>) -> Result<String, String> {
@@ -1192,6 +1245,14 @@ pub fn execute_local_request(request: TreqCommandRequest) -> Result<serde_json::
   fn json<T: Serialize>(result: Result<T, String>) -> Result<serde_json::Value, String> {
     serde_json::to_value(result?).map_err(|error| error.to_string())
   }
+  // Snapshotted before the match consumes `request` by value: mutation arms
+  // need the whole original request both for the idempotency store's
+  // fingerprint and, on a stale claim, for `verification_for`.
+  let request_snapshot = if request.is_mutation() {
+    Some(clone_request(&request))
+  } else {
+    None
+  };
   match request {
     TreqCommandRequest::InspectRepository { repo } => json(inspect_repository_path(&repo)),
     TreqCommandRequest::RepositoryStatus { repo } => {
@@ -1260,32 +1321,48 @@ pub fn execute_local_request(request: TreqCommandRequest) -> Result<serde_json::
     TreqCommandRequest::InitRepo {
       repo,
       idempotency_key,
-    } => with_idempotency_key("repo.init", idempotency_key.as_deref(), || {
-      json(init_repo_path(&repo))
-    }),
+    } => with_idempotency_key(
+      &repo,
+      "repo.init",
+      idempotency_key.as_deref(),
+      request_snapshot.as_ref().expect("InitRepo is a mutation"),
+      || json(init_repo_path(&repo)),
+    ),
     TreqCommandRequest::CloneRepo {
       repo_url,
       destination,
       idempotency_key,
-    } => with_idempotency_key("repo.clone", idempotency_key.as_deref(), || {
-      json(clone_repo_local(&repo_url, &destination))
-    }),
+    } => with_idempotency_key(
+      &destination,
+      "repo.clone",
+      idempotency_key.as_deref(),
+      request_snapshot.as_ref().expect("CloneRepo is a mutation"),
+      || json(clone_repo_local(&repo_url, &destination)),
+    ),
     TreqCommandRequest::CreateWorkspace {
       repo,
       branch_name,
       source_branch,
       idempotency_key,
-    } => with_idempotency_key("workspace.create", idempotency_key.as_deref(), || {
-      json(crate::core::workspaces::create_workspace(
-        &repo,
-        &branch_name,
-        None,
-        None,
-        source_branch.as_deref(),
-        None,
-        None,
-      ))
-    }),
+    } => with_idempotency_key(
+      &repo,
+      "workspace.create",
+      idempotency_key.as_deref(),
+      request_snapshot
+        .as_ref()
+        .expect("CreateWorkspace is a mutation"),
+      || {
+        json(crate::core::workspaces::create_workspace(
+          &repo,
+          &branch_name,
+          None,
+          None,
+          source_branch.as_deref(),
+          None,
+          None,
+        ))
+      },
+    ),
     TreqCommandRequest::RenameWorkspace {
       repo,
       workspace,
@@ -1323,19 +1400,27 @@ pub fn execute_local_request(request: TreqCommandRequest) -> Result<serde_json::
       destination,
       commits,
       idempotency_key,
-    } => with_idempotency_key("workspace.move", idempotency_key.as_deref(), || {
-      let request = crate::core::workspaces::WorkspaceMoveRequest {
-        files: vec![],
-        hunks: vec![],
-        commits: commits.iter().filter(|c| !c.is_empty()).cloned().collect(),
-      };
-      json(crate::core::workspaces::move_workspace_changes(
-        &repo,
-        &workspace,
-        &destination,
-        request,
-      ))
-    }),
+    } => with_idempotency_key(
+      &repo,
+      "workspace.move",
+      idempotency_key.as_deref(),
+      request_snapshot
+        .as_ref()
+        .expect("MoveWorkspaceChanges is a mutation"),
+      || {
+        let request = crate::core::workspaces::WorkspaceMoveRequest {
+          files: vec![],
+          hunks: vec![],
+          commits: commits.iter().filter(|c| !c.is_empty()).cloned().collect(),
+        };
+        json(crate::core::workspaces::move_workspace_changes(
+          &repo,
+          &workspace,
+          &destination,
+          request,
+        ))
+      },
+    ),
     TreqCommandRequest::RebaseWorkspace {
       repo,
       workspace,
@@ -1366,26 +1451,40 @@ pub fn execute_local_request(request: TreqCommandRequest) -> Result<serde_json::
       path,
       patch_base64,
       idempotency_key,
-    } => with_idempotency_key("file.patch", idempotency_key.as_deref(), || {
-      json(apply_remote_patch(
-        &repo,
-        workspace_id(workspace.as_ref())?,
-        &path,
-        &patch_base64,
-      ))
-    }),
+    } => with_idempotency_key(
+      &repo,
+      "file.patch",
+      idempotency_key.as_deref(),
+      request_snapshot.as_ref().expect("PatchFile is a mutation"),
+      || {
+        json(apply_remote_patch(
+          &repo,
+          workspace_id(workspace.as_ref())?,
+          &path,
+          &patch_base64,
+        ))
+      },
+    ),
     TreqCommandRequest::CreateCommit {
       repo,
       workspace,
       message,
       idempotency_key,
-    } => with_idempotency_key("commit.create", idempotency_key.as_deref(), || {
-      json(crate::core::workspaces::commit_workspace_with_auto_push(
-        &repo,
-        workspace_id(workspace.as_ref())?,
-        &message,
-      ))
-    }),
+    } => with_idempotency_key(
+      &repo,
+      "commit.create",
+      idempotency_key.as_deref(),
+      request_snapshot
+        .as_ref()
+        .expect("CreateCommit is a mutation"),
+      || {
+        json(crate::core::workspaces::commit_workspace_with_auto_push(
+          &repo,
+          workspace_id(workspace.as_ref())?,
+          &message,
+        ))
+      },
+    ),
     TreqCommandRequest::DescribeCommit {
       repo,
       workspace,
@@ -1456,29 +1555,42 @@ pub fn execute_local_request(request: TreqCommandRequest) -> Result<serde_json::
       repo,
       workspace,
       idempotency_key,
-    } => with_idempotency_key("git.push", idempotency_key.as_deref(), || {
-      json(crate::core::workspaces::push_workspace_to_remote(
-        &repo,
-        workspace_id(workspace.as_ref())?,
-      ))
-    }),
+    } => with_idempotency_key(
+      &repo,
+      "git.push",
+      idempotency_key.as_deref(),
+      request_snapshot.as_ref().expect("GitPush is a mutation"),
+      || {
+        json(crate::core::workspaces::push_workspace_to_remote(
+          &repo,
+          workspace_id(workspace.as_ref())?,
+        ))
+      },
+    ),
     TreqCommandRequest::AgentStart {
       repo,
       workspace,
       agent,
       prompt,
       idempotency_key,
-    } => with_idempotency_key("agent.start", idempotency_key.as_deref(), || {
-      let id = workspace_id(Some(&workspace))?.ok_or("invalid_arguments: workspace is required")?;
-      let workspace_path = resolve_workspace_path(&repo, Some(id))?;
-      json(crate::core::agent_supervisor::start_agent(
-        &repo,
-        &workspace,
-        &workspace_path,
-        &agent,
-        &prompt,
-      ))
-    }),
+    } => with_idempotency_key(
+      &repo,
+      "agent.start",
+      idempotency_key.as_deref(),
+      request_snapshot.as_ref().expect("AgentStart is a mutation"),
+      || {
+        let id =
+          workspace_id(Some(&workspace))?.ok_or("invalid_arguments: workspace is required")?;
+        let workspace_path = resolve_workspace_path(&repo, Some(id))?;
+        json(crate::core::agent_supervisor::start_agent(
+          &repo,
+          &workspace,
+          &workspace_path,
+          &agent,
+          &prompt,
+        ))
+      },
+    ),
     TreqCommandRequest::AgentInput {
       repo,
       workspace,
@@ -2422,8 +2534,20 @@ mod tests {
 
   // -- Idempotency ------------------------------------------------------------
 
+  fn test_request(repo: &str) -> TreqCommandRequest {
+    TreqCommandRequest::CreateWorkspace {
+      repo: repo.to_string(),
+      branch_name: "feature-x".into(),
+      source_branch: None,
+      idempotency_key: None,
+    }
+  }
+
   #[test]
   fn idempotency_key_replays_cached_result_for_a_create_style_mutation_instead_of_rerunning() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let repo = dir.path().to_str().unwrap();
+    let request = test_request(repo);
     let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let calls_clone = calls.clone();
     let run = move || {
@@ -2431,8 +2555,9 @@ mod tests {
       Ok(serde_json::json!({ "created_count": n }))
     };
     let key = format!("test-create-{}", uuid_like());
-    let first = with_idempotency_key("test.create", Some(&key), run.clone()).unwrap();
-    let second = with_idempotency_key("test.create", Some(&key), run).unwrap();
+    let first =
+      with_idempotency_key(repo, "test.create", Some(&key), &request, run.clone()).unwrap();
+    let second = with_idempotency_key(repo, "test.create", Some(&key), &request, run).unwrap();
     // The second call must replay the first response rather than invoking
     // `run` again — a retried "create" mutation must not duplicate work.
     assert_eq!(first, second);
@@ -2441,16 +2566,66 @@ mod tests {
 
   #[test]
   fn missing_idempotency_key_always_reruns_the_operation() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let repo = dir.path().to_str().unwrap();
+    let request = test_request(repo);
     let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
     for _ in 0..2 {
       let calls_clone = calls.clone();
-      with_idempotency_key("test.no-key", None, move || {
+      with_idempotency_key(repo, "test.no-key", None, &request, move || {
         calls_clone.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         Ok(serde_json::json!(null))
       })
       .unwrap();
     }
     assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 2);
+  }
+
+  #[test]
+  fn reusing_key_for_a_different_request_is_a_structured_conflict() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let repo = dir.path().to_str().unwrap();
+    let key = format!("test-conflict-{}", uuid_like());
+    let first_request = test_request(repo);
+    with_idempotency_key(repo, "test.create", Some(&key), &first_request, || {
+      Ok(serde_json::json!({ "id": 1 }))
+    })
+    .unwrap();
+
+    let second_request = TreqCommandRequest::CreateWorkspace {
+      repo: repo.to_string(),
+      branch_name: "different-branch".into(),
+      source_branch: None,
+      idempotency_key: None,
+    };
+    let error = with_idempotency_key(repo, "test.create", Some(&key), &second_request, || {
+      panic!("must not execute a mutation reusing a key for a different request")
+    })
+    .unwrap_err();
+    assert!(error.starts_with("idempotency_conflict:"), "{error}");
+  }
+
+  #[test]
+  fn a_failed_mutation_frees_its_idempotency_key_for_reuse() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let repo = dir.path().to_str().unwrap();
+    let request = test_request(repo);
+    let key = format!("test-fail-{}", uuid_like());
+
+    let error = with_idempotency_key(repo, "test.create", Some(&key), &request, || {
+      Err("workspace_not_found: boom".to_string())
+    })
+    .unwrap_err();
+    assert_eq!(error, "workspace_not_found: boom");
+
+    // The failed attempt must not leave a pending claim behind: a retry
+    // with the same key runs the mutation again rather than replaying or
+    // conflicting.
+    let result = with_idempotency_key(repo, "test.create", Some(&key), &request, || {
+      Ok(serde_json::json!({ "id": 2 }))
+    })
+    .unwrap();
+    assert_eq!(result, serde_json::json!({ "id": 2 }));
   }
 
   /// `describe_commit`'s CLI dispatch takes no idempotency key at all: it is
