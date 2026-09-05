@@ -45,6 +45,7 @@ export interface RemoteSetupDialogProps {
   onReprovision: (region: RegionCode, size: SizePreset) => Promise<void>;
   onDeleteInstance: () => Promise<void>;
   onRevokeKey: (keyReference: string) => Promise<void>;
+  onConnectManaged: (keyReference: string) => Promise<void>;
 
   onRegisterUserManaged: (values: UserManagedFormValues) => Promise<void>;
   /** Open repositories on the existing managed instance without provisioning another. */
@@ -74,6 +75,7 @@ export function RemoteSetupDialog({
   onReprovision,
   onDeleteInstance,
   onRevokeKey,
+  onConnectManaged,
   onRegisterUserManaged,
   onOpenManagedRepositories,
 }: RemoteSetupDialogProps) {
@@ -144,6 +146,7 @@ export function RemoteSetupDialog({
               onDeleteInstance={onDeleteInstance}
               onRevokeKey={onRevokeKey}
               onOpenRepositories={onOpenManagedRepositories}
+              onConnectManaged={onConnectManaged}
             />
           </>
         )}

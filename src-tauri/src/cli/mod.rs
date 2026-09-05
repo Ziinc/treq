@@ -149,6 +149,8 @@ fn classify_cli_error(message: &str) -> &'static str {
     "invalid_remote_json",
     "jj_command_failed",
     "git_command_failed",
+    "idempotency_conflict",
+    "idempotency_ambiguous",
   ];
   for code in KNOWN_CODES {
     if message.starts_with(code) || message.contains(&format!("{code}:")) {

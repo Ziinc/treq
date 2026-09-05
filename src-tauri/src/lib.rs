@@ -49,9 +49,13 @@ use crate::core::remote::TreqCommandRequest;
 #[cfg(feature = "tauri-test")]
 use crate::core::remote_control_plane::SshEndpoint;
 #[cfg(feature = "tauri-test")]
+use crate::core::remote_pty::PtyLaunchSpec;
+#[cfg(feature = "tauri-test")]
 use crate::core::skills::SkillInstallScope;
 #[cfg(feature = "tauri-test")]
 use commands::RemoteExecState;
+#[cfg(feature = "tauri-test")]
+use commands::RemotePtyState;
 
 #[cfg(feature = "tauri-test")]
 #[tauri_test::setup(init = tauri_test_bridge::init_test_state)]
@@ -428,7 +432,11 @@ pub fn run() {
             );
 
             app.manage(app_state);
-            app.manage(commands::remote_control::RemoteExecState::default());
+            let remote_exec_state = commands::remote_control::RemoteExecState::default();
+            app.manage(commands::remote_pty_commands::RemotePtyState::new(
+              &remote_exec_state,
+            ));
+            app.manage(remote_exec_state);
             start_agent_ipc_listener(app.handle().clone(), dispatch_listener);
             start_instance_registry_heartbeat(app.handle().clone());
 
@@ -802,6 +810,11 @@ pub fn run() {
             commands::pty_write_suppress_echo,
             commands::pty_resize,
             commands::pty_close,
+            commands::remote_pty_create,
+            commands::remote_pty_write,
+            commands::remote_pty_resize,
+            commands::remote_pty_close,
+            commands::remote_pty_session_exists,
             commands::read_file,
             commands::write_send_review_image,
             commands::write_agent_cli_files,
@@ -850,6 +863,7 @@ pub fn run() {
             commands::sync_browser_webview_bounds,
             commands::list_ssh_hosts,
             commands::list_local_ssh_identities,
+            commands::read_local_ssh_public_key,
             commands::check_ssh_host,
             commands::remote_probe_repo,
             commands::remote_clone_repo,
