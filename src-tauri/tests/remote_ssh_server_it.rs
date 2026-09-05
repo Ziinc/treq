@@ -726,7 +726,10 @@ async fn pty_starts_in_the_selected_workspace_directory() {
     text.contains(workspace.trim_end_matches('/')),
     "PTY pwd must report the selected workspace, got {text:?}"
   );
-  pty.close().await.unwrap();
+  tokio::time::timeout(Duration::from_secs(5), pty.close())
+    .await
+    .expect("PTY close timed out")
+    .unwrap();
 }
 
 #[tokio::test]
@@ -786,10 +789,18 @@ async fn pty_round_trips_input_output_resize_and_close() {
     "after resize, stty size must report 12 40, got {text:?}"
   );
 
-  pty.close().await.expect("close");
-  let after_close = pty.read_chunk().await;
+  tokio::time::timeout(Duration::from_secs(5), pty.close())
+    .await
+    .expect("PTY close timed out")
+    .expect("close");
+  // Unlike every other read in this test, this one had no deadline - if the
+  // server never signals the channel closed after our close request, this
+  // just hangs forever with no error, which is exactly what happened in CI:
+  // the job ran to its 20-minute timeout with no further output after
+  // "resize". Bound it like the others.
+  let after_close = tokio::time::timeout(Duration::from_secs(5), pty.read_chunk()).await;
   assert!(
-    matches!(after_close, Ok(None) | Err(_)),
-    "closed PTY must not keep yielding data"
+    matches!(after_close, Ok(Ok(None)) | Ok(Err(_)) | Err(_)),
+    "closed PTY must not keep yielding data, got {after_close:?}"
   );
 }

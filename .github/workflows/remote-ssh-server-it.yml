@@ -257,6 +257,22 @@ jobs:
           version: webkit-4.1-1
           execute_install_scripts: true
 
+      - name: Build real-sshd integration tests
+        working-directory: src-tauri
+        run: cargo test --locked --test remote_ssh_server_it --no-run
+
+      # Split from the build step and wrapped in `timeout`: the PTY tests
+      # have hung with no further output and no error at least twice in a
+      # row, consuming this job's entire 20-minute budget each time even
+      # though open_in_directory is itself wrapped in a 10s
+      # tokio::time::timeout in the test file - which means whatever's
+      # actually stuck isn't yielding back to the async runtime, so that
+      # inner timeout never gets a chance to fire. `timeout --signal=ABRT`
+      # here forces the process to die (with a core-dumpable signal) after
+      # a bound well under the job's own limit, and --nocapture streams
+      # output live instead of only showing it for a test that finishes
+      # (which a hung test never does), so a rerun's log shows exactly
+      # what ran last before it stuck instead of nothing at all.
       - name: Run real-sshd integration tests
         working-directory: src-tauri
         env:
@@ -271,7 +287,9 @@ jobs:
           TREQ_SSH_IT_CA_KEY_PATH: ${{ steps.certsetup.outputs.ca_dir }}/ca
           TREQ_SSH_IT_CERT_KEY_PATH: ${{ steps.certsetup.outputs.ca_dir }}/cert_client
           TREQ_SSH_IT_WORKSPACE_DIR: /config/selected-workspace
-        run: cargo test --locked --test remote_ssh_server_it -- --test-threads=1
+        run: |
+          timeout --signal=ABRT 120 \
+            cargo test --locked --test remote_ssh_server_it -- --test-threads=1 --nocapture
 
       - name: Show sshd container logs
         if: always()
