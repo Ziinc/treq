@@ -2,15 +2,15 @@ name: Remote SSH Server Integration
 
 # Real-`sshd` counterpart to the in-process mock-server unit tests in
 # `core::remote_ssh_transport`'s `mod tests`. Starts an actual OpenSSH
-# server as a job service (not a step-managed `docker run`, so the
-# container's lifecycle is owned by the Actions runner the same way any
-# other job service is) and runs `src-tauri/tests/remote_ssh_server_it.rs`
-# against it: publickey and certificate auth, host-key presentation
-# (accepted and rejected before authentication), connection pooling,
-# exec-channel round-tripping, and PTY start/IO/resize/close in a selected
-# directory. See that test file's header for exactly what this does and
-# does not prove, including that sshd KRLs are not used for client-key
-# revocation (client cutoff is tested separately).
+# server via a step-managed `docker run` (not `services:` - see the "Start
+# sshd container" step for why) and runs
+# `src-tauri/tests/remote_ssh_server_it.rs` against it: publickey and
+# certificate auth, host-key presentation (accepted and rejected before
+# authentication), connection pooling, exec-channel round-tripping, and PTY
+# start/IO/resize/close in a selected directory. See that test file's
+# header for exactly what this does and does not prove, including that
+# sshd KRLs are not used for client-key revocation (client cutoff is
+# tested separately).
 
 defaults:
   run:
@@ -36,34 +36,89 @@ jobs:
     name: Real sshd integration
     runs-on: ubuntu-22.04
     timeout-minutes: 20
-    services:
-      sshd:
-        image: linuxserver/openssh-server:latest
-        ports:
-          - 2222:2222
-        env:
-          PUID: "1000"
-          PGID: "1000"
-          TZ: "Etc/UTC"
-          USER_NAME: "treq"
-          # This is the public half of the throwaway keypair committed at
-          # src-tauri/tests/fixtures/remote_ssh_it/id_ed25519 - see the
-          # README next to it for why that is not a secret. `services:`
-          # containers start before any step runs, so this cannot be
-          # computed dynamically from a step output; it is pinned here and
-          # must be updated together if that key is ever rotated.
-          PUBLIC_KEY: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG6V1MZP6t97dWKMoMfmUOi/082R/d1r9CsNzIIvv5m1 treq-ci-remote-ssh-it (test-only, no real access)"
-          PASSWORD_ACCESS: "false"
-          # Needed only so the "install stub treq CLI" step below can place
-          # the stub on PATH at /usr/local/bin without also needing a
-          # root-owned image variant.
-          SUDO_ACCESS: "true"
 
     steps:
       - uses: actions/checkout@v4
 
       - name: Restrict test private key permissions
         run: chmod 600 src-tauri/tests/fixtures/remote_ssh_it/id_ed25519
+
+      - name: Generate test-only user CA and cert-only client key
+        id: certsetup
+        run: |
+          set -euo pipefail
+          # Throwaway CA + cert-only client key: generated per job, never
+          # committed, never uploaded. The authorized bootstrap key remains
+          # the fixture pair; the cert-only key is not in authorized_keys, so
+          # certificate tests cannot accidentally succeed via publickey.
+          umask 077
+          CA_DIR="${RUNNER_TEMP:-/tmp}/treq-ssh-it-ca"
+          mkdir -p "$CA_DIR"
+          ssh-keygen -q -t ed25519 -N "" -C "treq-ci-user-ca (test-only, no real access)" -f "$CA_DIR/ca"
+          ssh-keygen -q -t ed25519 -N "" -C "treq-ci-cert-only (test-only, no real access)" -f "$CA_DIR/cert_client"
+          chmod 600 "$CA_DIR/ca" "$CA_DIR/cert_client"
+          chmod 644 "$CA_DIR/ca.pub"
+          echo "ca_dir=$CA_DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Write custom-cont-init script (TrustedUserCAKeys + workspace dir)
+        id: custominit
+        run: |
+          set -euo pipefail
+          # linuxserver images run every executable script under
+          # /custom-cont-init.d *during* init, before sshd itself starts -
+          # see https://docs.linuxserver.io/general/container-customization.
+          # Doing this at first boot (rather than editing sshd_config over
+          # SSH and restarting/reloading sshd afterwards, as an earlier
+          # version of this job did) means sshd only ever starts once with
+          # its final config - see "Start sshd container" below for why a
+          # restart is not an option here.
+          INIT_DIR="${RUNNER_TEMP:-/tmp}/treq-ssh-it-custom-init"
+          mkdir -p "$INIT_DIR"
+          cat > "$INIT_DIR/10-treq-ca-and-workspace.sh" <<'INIT'
+          #!/bin/sh
+          set -eu
+          mkdir -p /config/sshd
+          cp /treq-ci/ca.pub /config/sshd/treq_ca.pub
+          chmod 644 /config/sshd/treq_ca.pub
+          chown "$(id -u treq 2>/dev/null || echo 1000)" /config/sshd/treq_ca.pub 2>/dev/null || true
+          mkdir -p /config/selected-workspace
+          echo selected > /config/selected-workspace/marker
+          INIT
+          chmod +x "$INIT_DIR/10-treq-ca-and-workspace.sh"
+          echo "init_dir=$INIT_DIR" >> "$GITHUB_OUTPUT"
+
+      # A step-managed `docker run` rather than `services:`: sshd needs
+      # TrustedUserCAKeys present on its very first boot (see above), which
+      # means the CA - generated per job, so only known once this job is
+      # running - has to be mounted in before the container ever starts.
+      # `services:` containers start before any step runs, so that ordering
+      # is impossible there. An earlier version of this job used `services:`
+      # and reconfigured + restarted sshd mid-job instead; every real
+      # connection made through the production `russh`-based transport after
+      # that restart failed immediately with "Disconnected", while the same
+      # restarted server kept accepting plain `ssh` CLI connections fine -
+      # some interaction between `docker restart`ing this image and `russh`
+      # specifically, not a config or host-key-pinning problem (both were
+      # independently verified sound). Never restarting sshd at all sidesteps
+      # it entirely.
+      - name: Start sshd container
+        id: sshd
+        run: |
+          set -euo pipefail
+          cid=$(docker run -d \
+            -p 2222:2222 \
+            -e PUID=1000 \
+            -e PGID=1000 \
+            -e TZ=Etc/UTC \
+            -e USER_NAME=treq \
+            -e PUBLIC_KEY="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIG6V1MZP6t97dWKMoMfmUOi/082R/d1r9CsNzIIvv5m1 treq-ci-remote-ssh-it (test-only, no real access)" \
+            -e PASSWORD_ACCESS=false \
+            -e SUDO_ACCESS=true \
+            -v "${{ steps.certsetup.outputs.ca_dir }}/ca.pub:/treq-ci/ca.pub:ro" \
+            -v "${{ steps.custominit.outputs.init_dir }}:/custom-cont-init.d:ro" \
+            linuxserver/openssh-server:latest)
+          echo "container_id=$cid" >> "$GITHUB_OUTPUT"
+          echo "Started openssh-server container $cid"
 
       - name: Wait for sshd to accept connections
         run: |
@@ -76,7 +131,36 @@ jobs:
             sleep 1
           done
           echo "sshd never came up on 127.0.0.1:2222" >&2
+          docker logs "${{ steps.sshd.outputs.container_id }}" || true
           exit 1
+
+      - name: Discover the server's real host key fingerprints
+        id: hostkey
+        run: |
+          set -euo pipefail
+          fingerprints=$(ssh-keyscan -p 2222 127.0.0.1 2>/dev/null \
+            | ssh-keygen -lf - -E sha256 2>/dev/null | awk '{print $2}' | sort | paste -sd, -)
+          if [ -z "$fingerprints" ]; then
+            echo "failed to discover the server's host key fingerprints" >&2
+            exit 1
+          fi
+          echo "Discovered host key fingerprints: $fingerprints"
+          echo "fingerprint=$fingerprints" >> "$GITHUB_OUTPUT"
+
+      - name: Confirm sshd accepts the bootstrap key and the CA was installed
+        env:
+          SSH_KEY: src-tauri/tests/fixtures/remote_ssh_it/id_ed25519
+        run: |
+          set -euo pipefail
+          ssh_opts=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -i "$SSH_KEY" -p 2222 treq@127.0.0.1)
+          for i in $(seq 1 30); do
+            if ssh "${ssh_opts[@]}" 'true'; then
+              break
+            fi
+            sleep 1
+          done
+          ssh "${ssh_opts[@]}" 'test -f /config/sshd/treq_ca.pub && test -d /config/selected-workspace'
+          ssh "${ssh_opts[@]}" 'grep -q "^TrustedUserCAKeys /config/sshd/treq_ca.pub" /config/sshd/sshd_config'
 
       - name: Install stub treq CLI on the server
         # exec_command always runs `treq <args>` on the far end (see
@@ -127,117 +211,6 @@ jobs:
           version: webkit-4.1-1
           execute_install_scripts: true
 
-      # Deliberately last, right before the test run: this step restarts
-      # the sshd container, and the longer the gap between that restart
-      # and the test run, the more likely the container drifts (observed
-      # in CI as every post-restart connection failing with "Disconnected"
-      # once several minutes of Rust/apt work ran in between). Doing the
-      # slow steps above first and this immediately before cargo test
-      # keeps that gap as small as possible.
-      - name: Install test-only user CA and selected-workspace directory
-        id: certsetup
-        env:
-          SSH_KEY: src-tauri/tests/fixtures/remote_ssh_it/id_ed25519
-        run: |
-          set -euo pipefail
-          # Throwaway CA + cert-only client key: generated per job, never
-          # committed, never uploaded. The authorized bootstrap key remains
-          # the fixture pair; the cert-only key is not in authorized_keys, so
-          # certificate tests cannot accidentally succeed via publickey.
-          umask 077
-          CA_DIR="${RUNNER_TEMP:-/tmp}/treq-ssh-it-ca"
-          mkdir -p "$CA_DIR"
-          ssh-keygen -q -t ed25519 -N "" -C "treq-ci-user-ca (test-only, no real access)" -f "$CA_DIR/ca"
-          ssh-keygen -q -t ed25519 -N "" -C "treq-ci-cert-only (test-only, no real access)" -f "$CA_DIR/cert_client"
-          chmod 600 "$CA_DIR/ca" "$CA_DIR/cert_client"
-          echo "ca_dir=$CA_DIR" >> "$GITHUB_OUTPUT"
-
-          ssh_opts=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i "$SSH_KEY" -p 2222 treq@127.0.0.1)
-          # Public half only. linuxserver sshd runs as USER_NAME and reads
-          # /config/sshd/sshd_config, not /etc/ssh/sshd_config.
-          ssh "${ssh_opts[@]}" "sudo tee /config/sshd/treq_ca.pub >/dev/null" < "$CA_DIR/ca.pub"
-          ssh "${ssh_opts[@]}" 'sudo chmod 644 /config/sshd/treq_ca.pub'
-
-          ssh "${ssh_opts[@]}" 'cat > /tmp/install-ca.sh' <<'INSTALL'
-          #!/bin/sh
-          set -eu
-          cfg=/config/sshd/sshd_config
-          if [ -f "$cfg" ] && ! grep -q '^TrustedUserCAKeys /config/sshd/treq_ca.pub' "$cfg"; then
-            printf '\nTrustedUserCAKeys /config/sshd/treq_ca.pub\n' | sudo tee -a "$cfg" >/dev/null
-          fi
-          mkdir -p "$HOME/selected-workspace"
-          echo selected > "$HOME/selected-workspace/marker"
-          echo "$HOME/selected-workspace"
-          INSTALL
-          workspace=$(ssh "${ssh_opts[@]}" 'sh /tmp/install-ca.sh' | tr -d '\r' | tail -n 1)
-          echo "workspace_dir=$workspace" >> "$GITHUB_OUTPUT"
-
-          # Full container restart (not SIGHUP): this image starts sshd as
-          # the unprivileged user with `sshd -h` host keys. SIGHUP made it
-          # reread HostKey from the config file, so russh saw a different
-          # algorithm than the pinned ed25519 fingerprint.
-          cid=$(docker ps --format '{{.ID}} {{.Image}}' | awk '/openssh-server/{print $1; exit}')
-          if [ -z "$cid" ]; then
-            echo "could not find the openssh-server container" >&2
-            exit 1
-          fi
-          docker restart "$cid"
-          echo "Restarted openssh-server container $cid"
-
-      - name: Re-discover host key and confirm sshd still accepts the bootstrap key
-        id: hostkey_after_ca
-        env:
-          SSH_KEY: src-tauri/tests/fixtures/remote_ssh_it/id_ed25519
-        run: |
-          set -euo pipefail
-          # A single ssh-keyscan right after the container comes back up can
-          # observe a transient/incomplete key set (sshd still finishing
-          # startup) that still parses as *some* fingerprint - the loop below
-          # used to accept the first non-empty scan, and that scan sometimes
-          # did not match what sshd actually presents moments later. Since
-          # HostKeyVerifier here is fingerprint-only (see
-          # remote_ssh_transport.rs), a wrong pin makes every real connection
-          # fail host-key verification and get disconnected before auth ever
-          # runs - which is exactly the "every success test fails with
-          # Disconnected, every reject test passes" pattern seen in CI.
-          # Requiring two consecutive identical scans is cheap insurance
-          # against that race.
-          scan_fingerprints() {
-            ssh-keyscan -p 2222 127.0.0.1 2>/dev/null \
-              | ssh-keygen -lf - -E sha256 2>/dev/null | awk '{print $2}' | sort | paste -sd, -
-          }
-          fingerprints=""
-          previous=""
-          for i in $(seq 1 60); do
-            if (exec 3<>"/dev/tcp/127.0.0.1/2222") 2>/dev/null; then
-              exec 3<&- 3>&-
-              current=$(scan_fingerprints || true)
-              if [ -n "$current" ] && [ "$current" = "$previous" ]; then
-                fingerprints="$current"
-                break
-              fi
-              previous="$current"
-            else
-              previous=""
-            fi
-            sleep 1
-          done
-          if [ -z "$fingerprints" ]; then
-            echo "failed to re-discover a stable set of host key fingerprints" >&2
-            exit 1
-          fi
-          echo "Discovered host key fingerprints: $fingerprints"
-          echo "fingerprint=$fingerprints" >> "$GITHUB_OUTPUT"
-          ssh_opts=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -i "$SSH_KEY" -p 2222 treq@127.0.0.1)
-          for i in $(seq 1 30); do
-            if ssh "${ssh_opts[@]}" 'treq --version'; then
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "sshd did not accept the bootstrap key after restart" >&2
-          exit 1
-
       - name: Run real-sshd integration tests
         working-directory: src-tauri
         env:
@@ -248,8 +221,16 @@ jobs:
           TREQ_SSH_IT_USERNAME: "treq"
           TREQ_SSH_IT_KEY_PATH: ${{ github.workspace }}/src-tauri/tests/fixtures/remote_ssh_it/id_ed25519
           TREQ_SSH_IT_HOST_KEY_ALGORITHM: "ssh-ed25519"
-          TREQ_SSH_IT_HOST_KEY_FINGERPRINT: ${{ steps.hostkey_after_ca.outputs.fingerprint }}
+          TREQ_SSH_IT_HOST_KEY_FINGERPRINT: ${{ steps.hostkey.outputs.fingerprint }}
           TREQ_SSH_IT_CA_KEY_PATH: ${{ steps.certsetup.outputs.ca_dir }}/ca
           TREQ_SSH_IT_CERT_KEY_PATH: ${{ steps.certsetup.outputs.ca_dir }}/cert_client
-          TREQ_SSH_IT_WORKSPACE_DIR: ${{ steps.certsetup.outputs.workspace_dir }}
+          TREQ_SSH_IT_WORKSPACE_DIR: /config/selected-workspace
         run: cargo test --locked --test remote_ssh_server_it -- --test-threads=1
+
+      - name: Show sshd container logs
+        if: always()
+        run: docker logs "${{ steps.sshd.outputs.container_id }}" || true
+
+      - name: Stop sshd container
+        if: always()
+        run: docker rm -f "${{ steps.sshd.outputs.container_id }}" || true
