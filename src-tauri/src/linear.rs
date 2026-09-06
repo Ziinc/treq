@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -67,6 +68,14 @@ pub struct LinearDocument {
   pub content: Option<String>,
   pub url: String,
   pub updated_at: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct LinearComment {
+  pub id: String,
+  pub body: String,
+  pub user: Option<LinearUser>,
+  pub created_at: String,
 }
 
 pub enum LinearClientSource {
@@ -675,6 +684,129 @@ pub async fn linear_list_project_documents_impl(
       })
       .collect(),
   )
+}
+
+#[derive(Deserialize)]
+struct CommentNode {
+  id: String,
+  body: String,
+  #[serde(default)]
+  user: Option<LinearUserNode>,
+  #[serde(rename = "createdAt")]
+  created_at: String,
+}
+
+#[derive(Deserialize)]
+struct CommentsConnection {
+  nodes: Vec<CommentNode>,
+}
+
+fn map_comment_node(node: CommentNode) -> LinearComment {
+  LinearComment {
+    id: node.id,
+    body: node.body,
+    user: node.user.map(|u| LinearUser {
+      id: u.id,
+      name: u.name,
+    }),
+    created_at: node.created_at,
+  }
+}
+
+async fn fetch_comments_for_entity(
+  api_key: &str,
+  entity_field: &str,
+  entity_id: &str,
+) -> Result<Vec<LinearComment>, String> {
+  let query = format!(
+    r#"query {{
+      {entity_field}(id: "{entity_id}") {{
+        comments(first: 100) {{
+          nodes {{
+            id
+            body
+            user {{ id name }}
+            createdAt
+          }}
+        }}
+      }}
+    }}"#
+  );
+
+  #[derive(Deserialize)]
+  struct EntityCommentsData {
+    #[serde(flatten)]
+    entity: HashMap<String, Option<EntityCommentsNode>>,
+  }
+
+  #[derive(Deserialize)]
+  struct EntityCommentsNode {
+    comments: CommentsConnection,
+  }
+
+  let client = reqwest::Client::new();
+  let response = client
+    .post("https://api.linear.app/graphql")
+    .header("Authorization", api_key)
+    .json(&serde_json::json!({ "query": query }))
+    .send()
+    .await
+    .map_err(|e| format!("Failed to fetch Linear comments: {e}"))?;
+
+  let result: LinearGraphqlResponse<EntityCommentsData> = response
+    .json()
+    .await
+    .map_err(|e| format!("Failed to parse Linear response: {e}"))?;
+
+  if let Some(errors) = result.errors {
+    return Err(format!(
+      "Linear API error: {}",
+      errors
+        .iter()
+        .map(|e| e.message.as_str())
+        .collect::<Vec<_>>()
+        .join("; ")
+    ));
+  }
+
+  let mut data = result
+    .data
+    .ok_or_else(|| "No data in Linear response".to_string())?;
+  let node = data
+    .entity
+    .remove(entity_field)
+    .flatten()
+    .ok_or_else(|| format!("{entity_field} {entity_id} not found"))?;
+
+  Ok(
+    node
+      .comments
+      .nodes
+      .into_iter()
+      .map(map_comment_node)
+      .collect(),
+  )
+}
+
+pub async fn linear_list_issue_comments_impl(
+  api_key: &str,
+  issue_id: &str,
+) -> Result<Vec<LinearComment>, String> {
+  fetch_comments_for_entity(api_key, "issue", issue_id).await
+}
+
+pub async fn linear_list_project_comments_impl(
+  api_key: &str,
+  project_id: &str,
+) -> Result<Vec<LinearComment>, String> {
+  fetch_comments_for_entity(api_key, "project", project_id).await
+}
+
+pub async fn linear_list_document_comments_impl(
+  api_key: &str,
+  document_id: &str,
+) -> Result<Vec<LinearComment>, String> {
+  fetch_comments_for_entity(api_key, "document", document_id).await
 }
 
 const KICKOFF_POLL_INTERVAL: Duration = Duration::from_secs(60);

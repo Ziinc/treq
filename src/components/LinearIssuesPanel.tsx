@@ -211,7 +211,7 @@ export const LinearIssuesSection: React.FC<{
         </Tabs>
       </div>
 
-      <div className="px-4 pb-2 shrink-0">
+      <div className="flex items-center gap-2 px-4 pb-2 shrink-0 flex-wrap">
         <Tabs
           value={viewMode}
           onValueChange={(v) => setViewMode(v as ViewMode)}
@@ -221,9 +221,7 @@ export const LinearIssuesSection: React.FC<{
             <TabsTrigger value="kanban">Kanban</TabsTrigger>
           </TabsList>
         </Tabs>
-      </div>
 
-      <div className="flex items-center gap-2 px-4 pb-2 shrink-0 flex-wrap">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -364,10 +362,9 @@ export const LinearIssuesSection: React.FC<{
           filteredIssues.length > 0 &&
           viewMode === "list" && (
             <LinearIssuesList
+              repoPath={repoPath}
               issues={rootIssues}
               subissuesMap={issuesByState.subissues}
-              kickoffIssueId={kickoffIssueId}
-              onKickoff={handleKickoff}
             />
           )}
 

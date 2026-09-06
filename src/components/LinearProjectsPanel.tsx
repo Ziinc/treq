@@ -2,13 +2,18 @@ import { Loader2, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import useSWR from "swr";
 import {
+  type LinearComment,
   type LinearDocument,
   type LinearProject,
+  linearListDocumentComments,
+  linearListProjectComments,
   linearListProjectDocuments,
   linearListProjects,
 } from "../lib/api-linear";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
+import { LinearComments } from "./LinearComments";
+import { MarkdownContent } from "./MarkdownContent";
 import { cn } from "../lib/utils";
 
 export const LinearProjectsSection: React.FC<{ repoPath: string }> = ({
@@ -39,6 +44,19 @@ export const LinearProjectsSection: React.FC<{ repoPath: string }> = ({
       : null,
     async ([, path, projectId]) =>
       await linearListProjectDocuments(path, projectId),
+    { revalidateOnFocus: false },
+  );
+
+  const {
+    data: projectComments = [],
+    isLoading: isLoadingProjectComments,
+    error: projectCommentsError,
+  } = useSWR(
+    repoPath && selectedProject
+      ? (["linear-project-comments", repoPath, selectedProject.id] as const)
+      : null,
+    async ([, path, projectId]) =>
+      await linearListProjectComments(path, projectId),
     { revalidateOnFocus: false },
   );
 
@@ -118,6 +136,9 @@ export const LinearProjectsSection: React.FC<{ repoPath: string }> = ({
             documents={documents}
             isLoadingDocuments={isLoadingDocuments}
             onOpenDocument={setOpenDocument}
+            comments={projectComments}
+            isLoadingComments={isLoadingProjectComments}
+            commentsError={projectCommentsError}
           />
         ) : (
           <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
@@ -126,19 +147,11 @@ export const LinearProjectsSection: React.FC<{ repoPath: string }> = ({
         )}
       </div>
 
-      <Dialog
-        open={openDocument !== null}
-        onOpenChange={(open) => !open && setOpenDocument(null)}
-      >
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{openDocument?.title}</DialogTitle>
-          </DialogHeader>
-          <div className="whitespace-pre-wrap text-sm">
-            {openDocument?.content || "No content"}
-          </div>
-        </DialogContent>
-      </Dialog>
+      <DocumentDialog
+        repoPath={repoPath}
+        document={openDocument}
+        onClose={() => setOpenDocument(null)}
+      />
     </div>
   );
 };
@@ -148,7 +161,18 @@ const ProjectDetail: React.FC<{
   documents: LinearDocument[];
   isLoadingDocuments: boolean;
   onOpenDocument: (document: LinearDocument) => void;
-}> = ({ project, documents, isLoadingDocuments, onOpenDocument }) => (
+  comments: LinearComment[];
+  isLoadingComments: boolean;
+  commentsError: unknown;
+}> = ({
+  project,
+  documents,
+  isLoadingDocuments,
+  onOpenDocument,
+  comments,
+  isLoadingComments,
+  commentsError,
+}) => (
   <div className="p-4" data-testid="linear-project-detail">
     <div className="flex items-center gap-2 flex-wrap">
       <h2 className="text-lg font-semibold">{project.name}</h2>
@@ -169,8 +193,14 @@ const ProjectDetail: React.FC<{
       {project.lead && <span>Lead: {project.lead.name}</span>}
       {project.target_date && <span>Target: {project.target_date}</span>}
     </div>
+
     {project.description && (
-      <p className="text-sm mt-3 whitespace-pre-wrap">{project.description}</p>
+      <div className="mt-4 pt-4 border-t border-border">
+        <MarkdownContent
+          content={project.description}
+          className="text-sm prose-p:my-1"
+        />
+      </div>
     )}
 
     <div className="mt-6">
@@ -183,13 +213,13 @@ const ProjectDetail: React.FC<{
       {!isLoadingDocuments && documents.length === 0 && (
         <p className="text-sm text-muted-foreground">No documents</p>
       )}
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-wrap gap-2">
         {documents.map((doc) => (
           <button
             key={doc.id}
             type="button"
             data-testid={`linear-document-item-${doc.id}`}
-            className="text-left text-sm text-primary hover:underline w-fit"
+            className="text-sm px-3 py-1 rounded-full bg-muted hover:bg-muted/70 text-foreground transition-colors"
             onClick={() => onOpenDocument(doc)}
           >
             {doc.title}
@@ -197,5 +227,57 @@ const ProjectDetail: React.FC<{
         ))}
       </div>
     </div>
+
+    <div className="mt-6">
+      <h3 className="text-sm font-medium text-muted-foreground mb-2">
+        Comments
+      </h3>
+      <LinearComments
+        comments={comments}
+        isLoading={isLoadingComments}
+        error={commentsError}
+      />
+    </div>
   </div>
 );
+
+const DocumentDialog: React.FC<{
+  repoPath: string;
+  document: LinearDocument | null;
+  onClose: () => void;
+}> = ({ repoPath, document: doc, onClose }) => {
+  const {
+    data: comments = [],
+    isLoading: isLoadingComments,
+    error: commentsError,
+  } = useSWR(
+    repoPath && doc
+      ? (["linear-document-comments", repoPath, doc.id] as const)
+      : null,
+    async ([, path, documentId]) =>
+      await linearListDocumentComments(path, documentId),
+    { revalidateOnFocus: false },
+  );
+
+  return (
+    <Dialog open={doc !== null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{doc?.title}</DialogTitle>
+        </DialogHeader>
+        <MarkdownContent content={doc?.content || "No content"} />
+
+        <div className="mt-6 pt-4 border-t border-border">
+          <h3 className="text-sm font-medium text-muted-foreground mb-2">
+            Comments
+          </h3>
+          <LinearComments
+            comments={comments}
+            isLoading={isLoadingComments}
+            error={commentsError}
+          />
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+};

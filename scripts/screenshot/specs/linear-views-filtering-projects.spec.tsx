@@ -8,6 +8,7 @@ import userEvent from "@testing-library/user-event";
 import { it, vi } from "vitest";
 import { LinearPanel } from "../../../src/components/LinearPanel";
 import type {
+  LinearComment,
   LinearDocument,
   LinearIssue,
   LinearProject,
@@ -24,12 +25,18 @@ const {
   mockLinearGetViewer,
   mockLinearListProjects,
   mockLinearListProjectDocuments,
+  mockLinearListIssueComments,
+  mockLinearListProjectComments,
+  mockLinearListDocumentComments,
 } = vi.hoisted(() => ({
   mockLinearListTeams: vi.fn(),
   mockLinearListIssues: vi.fn(),
   mockLinearGetViewer: vi.fn(),
   mockLinearListProjects: vi.fn(),
   mockLinearListProjectDocuments: vi.fn(),
+  mockLinearListIssueComments: vi.fn(),
+  mockLinearListProjectComments: vi.fn(),
+  mockLinearListDocumentComments: vi.fn(),
 }));
 
 vi.mock("../../../src/lib/api-linear", async () => {
@@ -43,6 +50,9 @@ vi.mock("../../../src/lib/api-linear", async () => {
     linearGetViewer: mockLinearGetViewer,
     linearListProjects: mockLinearListProjects,
     linearListProjectDocuments: mockLinearListProjectDocuments,
+    linearListIssueComments: mockLinearListIssueComments,
+    linearListProjectComments: mockLinearListProjectComments,
+    linearListDocumentComments: mockLinearListDocumentComments,
   };
 });
 
@@ -139,6 +149,24 @@ const DOCUMENTS: LinearDocument[] = [
   },
 ];
 
+const ISSUE_COMMENTS: LinearComment[] = [
+  {
+    id: "comment-1",
+    body: "Started profiling the ranking pipeline, **p95 is 800ms** today.",
+    user: VIEWER,
+    created_at: "2026-08-02T10:00:00Z",
+  },
+];
+
+const DOCUMENT_COMMENTS: LinearComment[] = [
+  {
+    id: "comment-2",
+    body: "Looks good, one nit on the caching section.",
+    user: ALICE,
+    created_at: "2026-08-03T09:00:00Z",
+  },
+];
+
 it("filters issues by standard view and AND-combined filters, and browses projects/documents", async () => {
   const { repoPath } = createTestRepo(false);
 
@@ -147,6 +175,9 @@ it("filters issues by standard view and AND-combined filters, and browses projec
   mockLinearGetViewer.mockResolvedValue(VIEWER);
   mockLinearListProjects.mockResolvedValue(PROJECTS);
   mockLinearListProjectDocuments.mockResolvedValue(DOCUMENTS);
+  mockLinearListIssueComments.mockResolvedValue(ISSUE_COMMENTS);
+  mockLinearListProjectComments.mockResolvedValue([]);
+  mockLinearListDocumentComments.mockResolvedValue(DOCUMENT_COMMENTS);
 
   const user = userEvent.setup();
   render(<LinearPanel repoPath={repoPath} />);
@@ -156,10 +187,23 @@ it("filters issues by standard view and AND-combined filters, and browses projec
   await captureDocument(document, {
     name: "linear-views-filtering-01-issues-default",
     expectations: [
-      'The Issues tab is active with standard-view subtabs "All Issues", "Active", "My Issues", "Backlog" visible above the List/Kanban toggle.',
-      "All three issues (ENG-101, ENG-102, ENG-103) are visible in the list.",
+      'The Issues tab is active with standard-view subtabs "All Issues", "Active", "My Issues", "Backlog" visible above a row that combines the List/Kanban toggle with the team and filter dropdowns.',
+      "All three issues (ENG-101, ENG-102, ENG-103) are visible in the list, each without a Kick off button.",
     ],
   });
+
+  await user.click(screen.getByText("Rework the ranking pipeline"));
+  await screen.findByTestId("linear-issue-expanded");
+
+  await captureDocument(document, {
+    name: "linear-views-filtering-01b-issue-expanded",
+    expectations: [
+      "Clicking issue ENG-101 expanded an inline panel below it showing an \"Activity\" section.",
+      'The activity panel shows a comment from "Ty" with bolded text "p95 is 800ms".',
+    ],
+  });
+
+  await user.click(screen.getByText("Rework the ranking pipeline"));
 
   await user.click(screen.getByRole("tab", { name: "Active" }));
   await screen.findByText("Rework the ranking pipeline");
@@ -192,8 +236,8 @@ it("filters issues by standard view and AND-combined filters, and browses projec
   await captureDocument(document, {
     name: "linear-views-filtering-04-projects-dual-column",
     expectations: [
-      "A dual-column Projects layout is visible: a project list on the left (Search Revamp, Billing) and a detail panel on the right for the selected project.",
-      'The right panel shows "Search Revamp" with its description, lead "Ty", and a Documents section listing "Search Revamp - Design Doc".',
+      "A dual-column Projects layout is visible: a project list on the left (Search Revamp, Billing) and a detail panel on the right for the selected project, with its description rendered below the metadata row and a Comments section below Documents.",
+      'The Documents section shows "Search Revamp - Design Doc" as a rounded pill/chip button, not a plain underlined link.',
     ],
   });
 
@@ -206,7 +250,8 @@ it("filters issues by standard view and AND-combined filters, and browses projec
   await captureDocument(document, {
     name: "linear-views-filtering-05-document-dialog",
     expectations: [
-      'A dialog is open titled "Search Revamp - Design Doc" showing the document content, including the text "Cut p95 search latency in half".',
+      'A dialog is open titled "Search Revamp - Design Doc" showing the document content rendered as formatted markdown (a "Goals" heading, not raw "## Goals" text).',
+      'A Comments section below the content shows a comment from "Alice" about "the caching section".',
     ],
   });
 }, 60000);

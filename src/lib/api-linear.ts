@@ -58,6 +58,13 @@ export type LinearDocument = {
   updated_at: string;
 };
 
+export type LinearComment = {
+  id: string;
+  body: string;
+  user?: LinearUser | null;
+  created_at: string;
+};
+
 export type LinearKickoffResult = {
   issue_id: string;
   workspace_id: number;
@@ -119,3 +126,21 @@ export const linearListProjectDocuments = (
   projectId: string,
 ): Promise<LinearDocument[]> =>
   invoke("linear_list_project_documents", { repoPath, projectId });
+
+export const linearListIssueComments = (
+  repoPath: string,
+  issueId: string,
+): Promise<LinearComment[]> =>
+  invoke("linear_list_issue_comments", { repoPath, issueId });
+
+export const linearListProjectComments = (
+  repoPath: string,
+  projectId: string,
+): Promise<LinearComment[]> =>
+  invoke("linear_list_project_comments", { repoPath, projectId });
+
+export const linearListDocumentComments = (
+  repoPath: string,
+  documentId: string,
+): Promise<LinearComment[]> =>
+  invoke("linear_list_document_comments", { repoPath, documentId });
