@@ -61,11 +61,6 @@ describe("ShowWorkspace - Code tab", () => {
     const backButton = await screen.findByRole("button", { name: /back/i });
     expect(backButton).toBeTruthy();
 
-    // The click triggers a real `readFile` round trip through the NAPI
-    // bridge before the file content (and its "code-line" rows) render.
-    // That round trip is occasionally slow enough under load to exceed the
-    // suite-wide 4s asyncUtilTimeout, so give this specific wait more room
-    // rather than raising the global default for every other assertion.
     await waitFor(
       () => {
         const el = document.querySelector('[data-testid="code-line"]');
