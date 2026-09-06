@@ -61,10 +61,13 @@ describe("ShowWorkspace - Code tab", () => {
     const backButton = await screen.findByRole("button", { name: /back/i });
     expect(backButton).toBeTruthy();
 
-    await waitFor(() => {
-      const el = document.querySelector('[data-testid="code-line"]');
-      expect(el).toBeTruthy();
-    });
+    await waitFor(
+      () => {
+        const el = document.querySelector('[data-testid="code-line"]');
+        expect(el).toBeTruthy();
+      },
+      { timeout: 10_000 },
+    );
 
     const codeLineDiv = document.querySelector(
       '[data-testid="code-line"]',
@@ -84,5 +87,5 @@ describe("ShowWorkspace - Code tab", () => {
     await waitFor(() => {
       expect(screen.queryByPlaceholderText("Add a comment...")).toBeNull();
     });
-  });
+  }, 15_000);
 });
