@@ -288,4 +288,31 @@ describe("ShowWorkspace Commits tab label", () => {
       );
     });
   });
+
+  it("shows the Diff/Browser switcher only on the Changes tab", async () => {
+    const user = userEvent.setup();
+    render(
+      <ShowWorkspace
+        repositoryPath={workspace.repo_path}
+        workspace={workspace}
+        mainRepoBranch="main"
+        initialSelectedFile={null}
+      />,
+    );
+
+    await screen.findByRole("tab", { name: /changes/i });
+    expect(
+      screen.queryByRole("button", { name: "Switch review view" }),
+    ).toBeNull();
+
+    await user.click(screen.getByRole("tab", { name: /changes/i }));
+    expect(
+      screen.getByRole("button", { name: "Switch review view" }),
+    ).toBeTruthy();
+
+    await user.click(commitsTab());
+    expect(
+      screen.queryByRole("button", { name: "Switch review view" }),
+    ).toBeNull();
+  });
 });
