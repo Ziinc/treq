@@ -121,7 +121,7 @@ describe("skill library", () => {
     expect(await screen.findByText("demo skill")).toBeTruthy();
   }, 30000);
 
-  it("materializes installed library skills when stacking a workspace", async () => {
+  it("materializes installed library skills when creating a stacked workspace", async () => {
     const BRANCH_NAME = "feat/skill-materialize";
     await openSkillsTab();
     await user.click(await screen.findByRole("button", { name: /^install/i }));
@@ -131,7 +131,8 @@ describe("skill library", () => {
     await user.click(await screen.findByRole("button", { name: /^close$/i }));
 
     await screen.findByTestId("show-workspace-header");
-    await user.click(await screen.findByRole("button", { name: "Stack" }));
+    await user.keyboard("{Control>}k{/Control}");
+    await user.click(await screen.findByText("Create Workspace"));
     const dialog = await screen.findByTestId("modal");
     await user.type(within(dialog).getByLabelText("Branch Name"), BRANCH_NAME);
     await user.click(
