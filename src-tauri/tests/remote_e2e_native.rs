@@ -384,7 +384,7 @@ async fn native_certificate_auth_two_repos_mutations_pty_reconnect_and_reprovisi
     &endpoint,
     TreqCommandRequest::InitRepo {
       repo: repo_a.clone(),
-      idempotency_key: Some(e2e_tag()),
+      idempotency_key: e2e_tag(),
     },
   )
   .await;
@@ -393,7 +393,7 @@ async fn native_certificate_auth_two_repos_mutations_pty_reconnect_and_reprovisi
     &endpoint,
     TreqCommandRequest::InitRepo {
       repo: repo_b.clone(),
-      idempotency_key: Some(e2e_tag()),
+      idempotency_key: e2e_tag(),
     },
   )
   .await;
@@ -425,7 +425,7 @@ async fn native_certificate_auth_two_repos_mutations_pty_reconnect_and_reprovisi
       repo: repo_a.clone(),
       branch_name: format!("feat/{tag}"),
       source_branch: None,
-      idempotency_key: Some(e2e_tag()),
+      idempotency_key: e2e_tag(),
     },
   )
   .await;
