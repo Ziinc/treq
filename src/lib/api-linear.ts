@@ -63,6 +63,7 @@ export type LinearComment = {
   body: string;
   user?: LinearUser | null;
   created_at: string;
+  quoted_text?: string | null;
 };
 
 export type LinearKickoffResult = {

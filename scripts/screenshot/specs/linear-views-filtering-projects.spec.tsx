@@ -173,6 +173,17 @@ const DOCUMENT_COMMENTS: LinearComment[] = [
     body: "Looks good, one nit on the caching section.",
     user: ALICE,
     created_at: "2026-08-03T09:00:00Z",
+    quoted_text: "Cut p95 search latency in half",
+  },
+];
+
+const PROJECT_COMMENTS: LinearComment[] = [
+  {
+    id: "comment-3",
+    body: "What's the target p99, not just p95?",
+    user: ALICE,
+    created_at: "2026-08-04T09:00:00Z",
+    quoted_text: "Improve search relevance and latency.",
   },
 ];
 
@@ -185,7 +196,7 @@ it("filters issues by standard view and AND-combined filters, and browses projec
   mockLinearListProjects.mockResolvedValue(PROJECTS);
   mockLinearListProjectDocuments.mockResolvedValue(DOCUMENTS);
   mockLinearListIssueComments.mockResolvedValue(ISSUE_COMMENTS);
-  mockLinearListProjectComments.mockResolvedValue([]);
+  mockLinearListProjectComments.mockResolvedValue(PROJECT_COMMENTS);
   mockLinearListDocumentComments.mockResolvedValue(DOCUMENT_COMMENTS);
 
   const user = userEvent.setup();
@@ -250,7 +261,7 @@ it("filters issues by standard view and AND-combined filters, and browses projec
     name: "linear-views-filtering-04-projects-dual-column",
     expectations: [
       'A dual-column Projects layout is visible: preset-view subtabs ("All", "Mine", "Active", "Backlog") and a Filter button sit above a project list on the left (Search Revamp, Billing), with a detail panel on the right for the selected project.',
-      "The project body is rendered below the metadata row and a Comments section sits below Documents, whose entry is a rounded pill/chip button.",
+      'Below the project body, a phrase ("Improve search relevance and latency.") is highlighted with a yellow mark, and a right-hand comments column shows a quoted excerpt of that same phrase above a reply from "Alice".',
     ],
   });
 
@@ -299,13 +310,13 @@ it("filters issues by standard view and AND-combined filters, and browses projec
   await user.click(
     within(projectDetail).getByText("Search Revamp - Design Doc"),
   );
-  await screen.findByText(/Cut p95 search latency/);
+  await screen.findAllByText(/Cut p95 search latency/);
 
   await captureDocument(document, {
     name: "linear-views-filtering-05-document-dialog",
     expectations: [
-      'A dialog is open titled "Search Revamp - Design Doc" showing the document content rendered as formatted markdown (a "Goals" heading, not raw "## Goals" text).',
-      'A Comments section below the content shows a comment from "Alice" about "the caching section".',
+      'A dialog is open titled "Search Revamp - Design Doc" with the document content on the left (a "Goals" heading, not raw "## Goals" text) and a comments column on the right.',
+      'The phrase "Cut p95 search latency in half" is highlighted with a yellow mark in the document, and the comments column shows that same phrase as a quoted excerpt above a reply from "Alice" about "the caching section".',
     ],
   });
 }, 60000);

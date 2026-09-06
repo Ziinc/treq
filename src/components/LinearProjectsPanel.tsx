@@ -15,8 +15,7 @@ import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { LinearFilterMenu } from "./LinearFilterMenu";
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
-import { LinearComments } from "./LinearComments";
-import { MarkdownContent } from "./MarkdownContent";
+import { LinearCommentedContent } from "./LinearCommentedContent";
 import { cn } from "../lib/utils";
 
 type ProjectFilters = {
@@ -328,15 +327,6 @@ const ProjectDetail: React.FC<{
       {project.target_date && <span>Target: {project.target_date}</span>}
     </div>
 
-    {project.description && (
-      <div className="mt-4 pt-4 border-t border-border">
-        <MarkdownContent
-          content={project.description}
-          className="text-sm prose-p:my-1"
-        />
-      </div>
-    )}
-
     <div className="mt-6">
       <h3 className="text-sm font-medium text-muted-foreground mb-2">
         Documents
@@ -362,14 +352,12 @@ const ProjectDetail: React.FC<{
       </div>
     </div>
 
-    <div className="mt-6">
-      <h3 className="text-sm font-medium text-muted-foreground mb-2">
-        Comments
-      </h3>
-      <LinearComments
+    <div className="mt-6 pt-4 border-t border-border">
+      <LinearCommentedContent
+        content={project.description || "_No description._"}
         comments={comments}
-        isLoading={isLoadingComments}
-        error={commentsError}
+        isLoadingComments={isLoadingComments}
+        commentsError={commentsError}
       />
     </div>
   </div>
@@ -395,22 +383,16 @@ const DocumentDialog: React.FC<{
 
   return (
     <Dialog open={doc !== null} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{doc?.title}</DialogTitle>
         </DialogHeader>
-        <MarkdownContent content={doc?.content || "No content"} />
-
-        <div className="mt-6 pt-4 border-t border-border">
-          <h3 className="text-sm font-medium text-muted-foreground mb-2">
-            Comments
-          </h3>
-          <LinearComments
-            comments={comments}
-            isLoading={isLoadingComments}
-            error={commentsError}
-          />
-        </div>
+        <LinearCommentedContent
+          content={doc?.content || "No content"}
+          comments={comments}
+          isLoadingComments={isLoadingComments}
+          commentsError={commentsError}
+        />
       </DialogContent>
     </Dialog>
   );

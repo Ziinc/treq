@@ -76,6 +76,9 @@ pub struct LinearComment {
   pub body: String,
   pub user: Option<LinearUser>,
   pub created_at: String,
+  /// The excerpt of the document/project body this comment is anchored to,
+  /// when Linear reports one (inline "highlight and comment" threads).
+  pub quoted_text: Option<String>,
 }
 
 pub enum LinearClientSource {
@@ -694,6 +697,8 @@ struct CommentNode {
   user: Option<LinearUserNode>,
   #[serde(rename = "createdAt")]
   created_at: String,
+  #[serde(default, rename = "quotedText")]
+  quoted_text: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -710,6 +715,7 @@ fn map_comment_node(node: CommentNode) -> LinearComment {
       name: u.name,
     }),
     created_at: node.created_at,
+    quoted_text: node.quoted_text,
   }
 }
 
@@ -727,6 +733,7 @@ async fn fetch_comments_for_entity(
             body
             user {{ id name }}
             createdAt
+            quotedText
           }}
         }}
       }}
