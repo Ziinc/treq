@@ -161,7 +161,7 @@ it("filters issues by standard view and AND-combined filters, and browses projec
     ],
   });
 
-  await user.click(screen.getByTestId("linear-view-active"));
+  await user.click(screen.getByRole("tab", { name: "Active" }));
   await screen.findByText("Rework the ranking pipeline");
 
   await captureDocument(document, {
@@ -174,7 +174,8 @@ it("filters issues by standard view and AND-combined filters, and browses projec
 
   const projectFilter = screen.getByTestId("linear-filter-project");
   await user.click(projectFilter);
-  await user.click(await screen.findByText("Search Revamp"));
+  const projectMenu = await screen.findByRole("menu");
+  await user.click(within(projectMenu).getByText("Search Revamp"));
   await screen.findByText("Rework the ranking pipeline");
 
   await captureDocument(document, {
@@ -185,7 +186,7 @@ it("filters issues by standard view and AND-combined filters, and browses projec
     ],
   });
 
-  await user.click(screen.getByTestId("linear-section-projects"));
+  await user.click(screen.getByRole("tab", { name: "Projects" }));
   await screen.findByTestId("linear-project-detail");
 
   await captureDocument(document, {

@@ -233,9 +233,7 @@ pub async fn linear_list_projects(
   };
 
   match client_source {
-    LinearClientSource::ApiKey(api_key) => {
-      crate::linear::linear_list_projects_impl(&api_key).await
-    }
+    LinearClientSource::ApiKey(api_key) => crate::linear::linear_list_projects_impl(&api_key).await,
     LinearClientSource::ProxyToken => {
       Err("Linear integration not yet configured (OAuth proxy not ready)".to_string())
     }
