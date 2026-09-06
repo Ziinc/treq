@@ -1,5 +1,5 @@
-import { Loader2, RefreshCw } from "lucide-react";
-import { useState } from "react";
+import { Check, Filter, Loader2, RefreshCw } from "lucide-react";
+import { useMemo, useState } from "react";
 import useSWR from "swr";
 import {
   type LinearComment,
@@ -12,9 +12,43 @@ import {
 } from "../lib/api-linear";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { LinearComments } from "./LinearComments";
 import { MarkdownContent } from "./MarkdownContent";
 import { cn } from "../lib/utils";
+
+type ProjectFilters = {
+  state?: string;
+  leadId?: string;
+};
+
+const EMPTY_PROJECT_FILTERS: ProjectFilters = {};
+
+function deriveProjectFilterOptions(projects: LinearProject[]) {
+  const stateSet = new Set<string>();
+  const leadMap = new Map<string, string>();
+
+  projects.forEach((project) => {
+    stateSet.add(project.state);
+    if (project.lead) leadMap.set(project.lead.id, project.lead.name);
+  });
+
+  return {
+    states: Array.from(stateSet).sort(),
+    leads: Array.from(leadMap, ([id, name]) => ({ id, name })),
+  };
+}
+
+function applyProjectFilters(
+  projects: LinearProject[],
+  filters: ProjectFilters,
+): LinearProject[] {
+  return projects.filter((project) => {
+    if (filters.state && project.state !== filters.state) return false;
+    if (filters.leadId && project.lead?.id !== filters.leadId) return false;
+    return true;
+  });
+}
 
 export const LinearProjectsSection: React.FC<{ repoPath: string }> = ({
   repoPath,
@@ -23,6 +57,7 @@ export const LinearProjectsSection: React.FC<{ repoPath: string }> = ({
     null,
   );
   const [openDocument, setOpenDocument] = useState<LinearDocument | null>(null);
+  const [filters, setFilters] = useState<ProjectFilters>(EMPTY_PROJECT_FILTERS);
 
   const {
     data: projects = [],
@@ -35,8 +70,23 @@ export const LinearProjectsSection: React.FC<{ repoPath: string }> = ({
     { revalidateOnFocus: false },
   );
 
+  const filterOptions = useMemo(
+    () => deriveProjectFilterOptions(projects),
+    [projects],
+  );
+
+  const filteredProjects = useMemo(
+    () => applyProjectFilters(projects, filters),
+    [projects, filters],
+  );
+
+  const hasActiveFilters =
+    filters.state !== undefined || filters.leadId !== undefined;
+
   const selectedProject =
-    projects.find((p) => p.id === selectedProjectId) ?? projects[0] ?? null;
+    filteredProjects.find((p) => p.id === selectedProjectId) ??
+    filteredProjects[0] ??
+    null;
 
   const { data: documents = [], isLoading: isLoadingDocuments } = useSWR(
     repoPath && selectedProject
@@ -67,18 +117,26 @@ export const LinearProjectsSection: React.FC<{ repoPath: string }> = ({
           <span className="text-sm font-medium text-muted-foreground">
             Projects
           </span>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7"
-            onClick={() => void refetch()}
-            title="Refresh"
-            disabled={isLoading}
-          >
-            <RefreshCw
-              className={cn("w-3.5 h-3.5", isLoading && "animate-spin")}
+          <div className="flex items-center gap-1">
+            <ProjectFilterPopover
+              filters={filters}
+              setFilters={setFilters}
+              options={filterOptions}
+              hasActiveFilters={hasActiveFilters}
             />
-          </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => void refetch()}
+              title="Refresh"
+              disabled={isLoading}
+            >
+              <RefreshCw
+                className={cn("w-3.5 h-3.5", isLoading && "animate-spin")}
+              />
+            </Button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto">
@@ -96,14 +154,14 @@ export const LinearProjectsSection: React.FC<{ repoPath: string }> = ({
             </div>
           )}
 
-          {!isLoading && !error && projects.length === 0 && (
+          {!isLoading && !error && filteredProjects.length === 0 && (
             <div className="p-4 text-sm text-muted-foreground">
               No projects found
             </div>
           )}
 
           <div className="divide-y divide-border">
-            {projects.map((project) => (
+            {filteredProjects.map((project) => (
               <button
                 key={project.id}
                 type="button"
@@ -155,6 +213,100 @@ export const LinearProjectsSection: React.FC<{ repoPath: string }> = ({
     </div>
   );
 };
+
+const ProjectFilterPopover: React.FC<{
+  filters: ProjectFilters;
+  setFilters: React.Dispatch<React.SetStateAction<ProjectFilters>>;
+  options: ReturnType<typeof deriveProjectFilterOptions>;
+  hasActiveFilters: boolean;
+}> = ({ filters, setFilters, options, hasActiveFilters }) => (
+  <Popover>
+    <PopoverTrigger asChild>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7 relative"
+        title="Filter projects"
+        data-testid="linear-project-filter-button"
+      >
+        <Filter className="w-3.5 h-3.5" />
+        {hasActiveFilters && (
+          <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-primary" />
+        )}
+      </Button>
+    </PopoverTrigger>
+    <PopoverContent align="start" className="w-64">
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-sm font-medium">Filters</span>
+        {hasActiveFilters && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 px-2 text-xs"
+            onClick={() => setFilters(EMPTY_PROJECT_FILTERS)}
+          >
+            Clear
+          </Button>
+        )}
+      </div>
+
+      <ProjectFilterGroup
+        label="Status"
+        value={filters.state}
+        options={options.states.map((state) => ({
+          value: state,
+          label: state,
+        }))}
+        onChange={(value) => setFilters((f) => ({ ...f, state: value }))}
+        testId="linear-project-filter-status"
+      />
+
+      <ProjectFilterGroup
+        label="Lead"
+        value={filters.leadId}
+        options={options.leads.map((lead) => ({
+          value: lead.id,
+          label: lead.name,
+        }))}
+        onChange={(value) => setFilters((f) => ({ ...f, leadId: value }))}
+        testId="linear-project-filter-lead"
+      />
+    </PopoverContent>
+  </Popover>
+);
+
+const ProjectFilterGroup: React.FC<{
+  label: string;
+  value: string | undefined;
+  options: { value: string; label: string }[];
+  onChange: (value: string | undefined) => void;
+  testId: string;
+}> = ({ label, value, options, onChange, testId }) => (
+  <div className="mt-3 first:mt-0" data-testid={testId}>
+    <p className="text-xs font-medium text-muted-foreground mb-1.5">{label}</p>
+    <div className="flex flex-col gap-0.5">
+      <button
+        type="button"
+        className="flex items-center justify-between text-sm px-2 py-1 rounded hover:bg-muted/70 text-left capitalize"
+        onClick={() => onChange(undefined)}
+      >
+        Any
+        {value === undefined && <Check className="w-3.5 h-3.5" />}
+      </button>
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          className="flex items-center justify-between text-sm px-2 py-1 rounded hover:bg-muted/70 text-left capitalize"
+          onClick={() => onChange(option.value)}
+        >
+          {option.label}
+          {value === option.value && <Check className="w-3.5 h-3.5" />}
+        </button>
+      ))}
+    </div>
+  </div>
+);
 
 const ProjectDetail: React.FC<{
   project: LinearProject;

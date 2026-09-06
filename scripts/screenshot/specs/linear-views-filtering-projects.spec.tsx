@@ -241,6 +241,34 @@ it("filters issues by standard view and AND-combined filters, and browses projec
     ],
   });
 
+  await user.click(screen.getByTestId("linear-project-filter-button"));
+  const statusFilterGroup = await screen.findByTestId(
+    "linear-project-filter-status",
+  );
+
+  await captureDocument(document, {
+    name: "linear-views-filtering-06-project-filter-popover",
+    expectations: [
+      "A popover is open below the filter icon button in the left project-list column header, titled \"Filters\", with \"Status\" and \"Lead\" filter groups.",
+      'The Status group lists "planned" and "started" as options (the two project states in the fixture data).',
+    ],
+  });
+
+  await user.click(within(statusFilterGroup).getByText("planned"));
+  await screen.findByTestId("linear-project-item-project-b");
+
+  await captureDocument(document, {
+    name: "linear-views-filtering-07-project-filter-applied",
+    expectations: [
+      "With the Status filter set to \"planned\" (checkmarked in the popover), only the Billing project is listed in the left column -- Search Revamp is gone.",
+      'A "Clear" button is now visible in the popover header next to "Filters".',
+    ],
+  });
+
+  await user.click(await screen.findByText("Clear"));
+  await user.keyboard("{Escape}");
+  await screen.findByTestId("linear-project-item-project-a");
+
   const projectDetail = screen.getByTestId("linear-project-detail");
   await user.click(
     within(projectDetail).getByText("Search Revamp - Design Doc"),
