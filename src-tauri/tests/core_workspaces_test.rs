@@ -953,6 +953,54 @@ fn test_sync_workspaces_delete_forgotten_directories() {
 }
 
 #[test]
+fn test_sync_workspaces_deletes_forgotten_workspace_with_stash() {
+  let repo = TestRepo::new().expect("Failed to create test repo");
+  let workspace = treq_lib::core::create_workspace(
+    &repo.repo_path,
+    "feat/forgotten-with-stash",
+    Some("Forgotten with stash".to_string()),
+    None,
+    None,
+    None,
+    None,
+  )
+  .expect("Failed to create workspace");
+  let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+  TestRepo::write_workspace_file(
+    workspace_path.to_str().expect("utf-8 workspace path"),
+    "README.md",
+    "# preserved stash\n",
+  )
+  .expect("write workspace change");
+  let stash = treq_lib::core::stash_workspace_changes(&repo.repo_path, Some(workspace.id))
+    .expect("stash workspace changes");
+
+  treq_lib::jj::forget_workspace(
+    &repo.repo_path,
+    workspace_path.to_str().expect("utf-8 workspace path"),
+  )
+  .expect("forget jj workspace while retaining directory");
+  assert!(
+    workspace_path.exists(),
+    "forgotten directory should remain before sync"
+  );
+
+  treq_lib::core::sync_workspaces(&repo.repo_path).expect("sync should recover stale workspace");
+
+  assert!(
+    !workspace_path.exists(),
+    "sync should remove the stale directory"
+  );
+  assert!(treq_lib::core::list_workspaces(&repo.repo_path)
+    .expect("list workspaces")
+    .is_empty());
+  let preserved = treq_lib::core::list_stashes(&repo.repo_path).expect("list preserved stashes");
+  assert_eq!(preserved.len(), 1);
+  assert_eq!(preserved[0].id, stash.id);
+  assert_eq!(preserved[0].workspace_id, None);
+}
+
+#[test]
 fn test_jj_get_changed_files_ignores_treq_skills_but_keeps_user_skills() {
   let repo = TestRepo::new().expect("Failed to create test repo");
   let gitignore = repo.read_gitignore().expect("Failed to read .gitignore");

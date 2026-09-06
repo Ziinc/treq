@@ -564,11 +564,50 @@ pub fn init_local_db(repo_path: &str) -> Result<PathBuf, String> {
             additions INTEGER NOT NULL DEFAULT 0,
             deletions INTEGER NOT NULL DEFAULT 0,
             files_changed TEXT NOT NULL DEFAULT '[]',
-            FOREIGN KEY (workspace_id) REFERENCES workspaces(id)
+            FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE SET NULL
         )",
       [],
     )
     .map_err(|e| format!("Failed to create stashes table: {}", e))?;
+
+  let stash_foreign_keys_without_set_null: i64 = conn
+    .query_row(
+      "SELECT COUNT(*) FROM pragma_foreign_key_list('stashes')
+       WHERE \"from\" = 'workspace_id' AND on_delete != 'SET NULL'",
+      [],
+      |row| row.get(0),
+    )
+    .map_err(|e| format!("Failed to inspect stashes foreign keys: {}", e))?;
+  if stash_foreign_keys_without_set_null > 0 {
+    conn
+      .execute_batch(
+        "BEGIN;
+         CREATE TABLE stashes_new (
+           id INTEGER PRIMARY KEY AUTOINCREMENT,
+           workspace_id INTEGER,
+           workspace_label TEXT NOT NULL,
+           commit_id TEXT NOT NULL,
+           change_id TEXT NOT NULL,
+           short_commit_id TEXT NOT NULL,
+           bookmark_name TEXT NOT NULL,
+           created_at TEXT NOT NULL,
+           additions INTEGER NOT NULL DEFAULT 0,
+           deletions INTEGER NOT NULL DEFAULT 0,
+           files_changed TEXT NOT NULL DEFAULT '[]',
+           FOREIGN KEY (workspace_id) REFERENCES workspaces(id) ON DELETE SET NULL
+         );
+         INSERT INTO stashes_new
+           (id, workspace_id, workspace_label, commit_id, change_id, short_commit_id,
+            bookmark_name, created_at, additions, deletions, files_changed)
+           SELECT id, workspace_id, workspace_label, commit_id, change_id, short_commit_id,
+                  bookmark_name, created_at, additions, deletions, files_changed
+           FROM stashes;
+         DROP TABLE stashes;
+         ALTER TABLE stashes_new RENAME TO stashes;
+         COMMIT;",
+      )
+      .map_err(|e| format!("Failed to migrate stashes delete behavior: {}", e))?;
+  }
 
   conn
     .execute(
@@ -2098,6 +2137,119 @@ mod tests {
       cached_at: "2026-08-26T00:00:00Z".to_string(),
       mtime: None,
     }
+  }
+
+  #[test]
+  fn migrates_legacy_stashes_foreign_key_to_set_null() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let repo_path = temp_dir.path().to_str().unwrap();
+    let db_path = get_local_db_path(repo_path);
+    fs::create_dir_all(db_path.parent().unwrap()).expect("create .treq directory");
+    let conn = Connection::open(&db_path).expect("open legacy database");
+    conn
+      .execute_batch(
+        "CREATE TABLE workspaces (
+           id INTEGER PRIMARY KEY AUTOINCREMENT,
+           workspace_name TEXT NOT NULL,
+           workspace_path TEXT NOT NULL UNIQUE,
+           branch_name TEXT NOT NULL,
+           created_at TEXT NOT NULL,
+           metadata TEXT,
+           target_branch TEXT
+         );
+         INSERT INTO workspaces
+           (id, workspace_name, workspace_path, branch_name, created_at)
+           VALUES (7, 'legacy', 'legacy', 'feat/legacy', '2026-01-01T00:00:00Z');
+         CREATE TABLE stashes (
+           id INTEGER PRIMARY KEY AUTOINCREMENT,
+           workspace_id INTEGER,
+           workspace_label TEXT NOT NULL,
+           commit_id TEXT NOT NULL,
+           change_id TEXT NOT NULL,
+           short_commit_id TEXT NOT NULL,
+           bookmark_name TEXT NOT NULL,
+           created_at TEXT NOT NULL,
+           additions INTEGER NOT NULL DEFAULT 0,
+           deletions INTEGER NOT NULL DEFAULT 0,
+           files_changed TEXT NOT NULL DEFAULT '[]',
+           FOREIGN KEY (workspace_id) REFERENCES workspaces(id)
+         );
+         INSERT INTO stashes
+           (id, workspace_id, workspace_label, commit_id, change_id, short_commit_id,
+            bookmark_name, created_at, additions, deletions, files_changed)
+           VALUES (11, 7, 'Legacy workspace', 'commit', 'change', 'short',
+                   'treq-stash-11', '2026-01-02T00:00:00Z', 3, 4, '[\"src/lib.rs\"]');",
+      )
+      .expect("create legacy schema");
+    drop(conn);
+
+    init_local_db(repo_path).expect("migrate legacy database");
+
+    let conn = Connection::open(&db_path).expect("reopen migrated database");
+    let on_delete: String = conn
+      .query_row(
+        "SELECT on_delete FROM pragma_foreign_key_list('stashes') WHERE \"from\" = 'workspace_id'",
+        [],
+        |row| row.get(0),
+      )
+      .expect("stash foreign key");
+    assert_eq!(on_delete, "SET NULL");
+
+    let stash = get_stash_by_id(repo_path, 11)
+      .expect("read migrated stash")
+      .expect("stash should survive migration");
+    assert_eq!(stash.workspace_id, Some(7));
+    assert_eq!(stash.workspace_label, "Legacy workspace");
+    assert_eq!(stash.commit_id, "commit");
+    assert_eq!(stash.change_id, "change");
+    assert_eq!(stash.short_commit_id, "short");
+    assert_eq!(stash.bookmark_name, "treq-stash-11");
+    assert_eq!(stash.created_at, "2026-01-02T00:00:00Z");
+    assert_eq!(stash.additions, 3);
+    assert_eq!(stash.deletions, 4);
+    assert_eq!(stash.files_changed, vec!["src/lib.rs"]);
+  }
+
+  #[test]
+  fn deletes_workspace_and_nulls_stash_workspace_id() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let repo_path = temp_dir.path().to_str().unwrap();
+    let workspace_id = add_workspace(
+      repo_path,
+      "stash-owner".to_string(),
+      "stash-owner".to_string(),
+      "feat/stash-owner".to_string(),
+      None,
+      None,
+      None,
+    )
+    .expect("add workspace");
+    let stash = add_stash(
+      repo_path,
+      Some(workspace_id),
+      "Stash owner",
+      "commit",
+      "change",
+      "short",
+      "treq-stash-owner",
+      5,
+      2,
+      &["README.md".to_string()],
+    )
+    .expect("add stash");
+
+    delete_workspace(repo_path, workspace_id).expect("delete workspace with stash");
+
+    assert!(get_workspace_by_id(repo_path, workspace_id)
+      .expect("lookup workspace")
+      .is_none());
+    let preserved = get_stash_by_id(repo_path, stash.id)
+      .expect("lookup stash")
+      .expect("stash should survive");
+    assert_eq!(preserved.workspace_id, None);
+    assert_eq!(preserved.workspace_label, "Stash owner");
+    assert_eq!(preserved.commit_id, "commit");
+    assert_eq!(preserved.bookmark_name, "treq-stash-owner");
   }
 
   #[test]
