@@ -126,7 +126,7 @@ describe("remote workspace UI", () => {
     expect(await screen.findByText(/hello remote/)).toBeTruthy();
     await user.click(await screen.findByRole("tab", { name: /^Commits/ }));
     expect(screen.getByTestId("remote-capability-notice")).toHaveTextContent(
-      "Commit split is not yet available",
+      "Interactive remote terminals require native SSH PTY support",
     );
   });
 

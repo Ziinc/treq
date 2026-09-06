@@ -1,5 +1,3 @@
-import { isRemoteActionSupported } from "./remote-dispatch";
-
 /**
  * Capabilities the current client may offer for a remote repository.
  * Native interactive PTY over russh is not wired on this client; the UI
@@ -35,15 +33,8 @@ export function remoteCapabilities(): RemoteCapabilities {
       reason: NATIVE_REMOTE_PTY_REASON,
     },
     agentLifecycle: { supported: true },
-    splitCommit: {
-      supported: isRemoteActionSupported("SplitCommit"),
-      reason: "Commit split is not yet available on remote repositories.",
-    },
-    agentInput: {
-      supported: isRemoteActionSupported("AgentInput"),
-      reason:
-        "Sending agent input is not yet available on remote repositories.",
-    },
+    splitCommit: { supported: true },
+    agentInput: { supported: true },
   };
 }
 
