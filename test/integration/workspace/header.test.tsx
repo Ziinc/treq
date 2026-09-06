@@ -157,6 +157,18 @@ describe("ShowWorkspace - header", () => {
     expect(await within(header).findByText("feat/header-test")).toBeTruthy();
   });
 
+  it("does not show the Stack action in the workspace header", async () => {
+    await createWorkspace(repoPath, "feat/no-header-stack");
+    render(<Dashboard />);
+
+    await user.click(await findSidebarBranchElement("feat/no-header-stack"));
+
+    const header = await screen.findByTestId("show-workspace-header");
+    expect(
+      within(header).queryByRole("button", { name: "Stack" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("rebases workspace bookmark lineage when changing target branch from header flow", async () => {
     await createWorkspace(repoPath, "feat/alpha");
     await createWorkspace(repoPath, "feat/beta");

@@ -1771,32 +1771,6 @@ export const ShowWorkspace = ({
                   />
                 </>
               )}
-              {workspace && onCreateStackedWorkspace && (
-                <TooltipProvider delayDuration={200}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="default"
-                        size="sm"
-                        onClick={onCreateStackedWorkspace}
-                        disabled={rebasing || conflictCount > 0}
-                      >
-                        <Layers2 className="w-4 h-4" />
-                        Stack
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      {rebasing
-                        ? "Rebasing in progress..."
-                        : conflictCount > 0
-                          ? `Cannot stack: ${conflictCount} conflict${
-                              conflictCount === 1 ? "" : "s"
-                            } detected`
-                          : `Create stacked workspace from ${branchTitle}`}
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              )}
               {workspace && workspaceScheduling && (
                 <TooltipProvider delayDuration={200}>
                   <Tooltip>
