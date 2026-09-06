@@ -55,6 +55,60 @@ fn test_can_delete_workspace() {
 }
 
 #[test]
+fn deletes_workspace_with_stash_and_preserves_applicable_stash() {
+  let repo = TestRepo::new().expect("Failed to create test repo");
+  let workspace = treq_lib::core::create_workspace(
+    &repo.repo_path,
+    "feat/delete-stashed",
+    Some("Stashed workspace".to_string()),
+    None,
+    None,
+    None,
+    None,
+  )
+  .expect("Failed to create workspace");
+  let workspace_path = repo.workspaces_dir().join(&workspace.workspace_path);
+  TestRepo::write_workspace_file(
+    workspace_path.to_str().expect("utf-8 workspace path"),
+    "README.md",
+    "# saved before deletion\n",
+  )
+  .expect("write workspace change");
+  let stash = treq_lib::core::stash_workspace_changes(&repo.repo_path, Some(workspace.id))
+    .expect("stash workspace changes");
+
+  treq_lib::core::delete_workspace(&repo.repo_path, &workspace.id)
+    .expect("delete workspace with stash");
+
+  assert!(
+    !workspace_path.exists(),
+    "workspace directory should be removed"
+  );
+  assert!(
+    treq_lib::local_db::get_workspace_by_id(&repo.repo_path, workspace.id)
+      .expect("lookup workspace")
+      .is_none()
+  );
+  let preserved = treq_lib::core::list_stashes(&repo.repo_path).expect("list preserved stashes");
+  assert_eq!(preserved.len(), 1);
+  assert_eq!(preserved[0].id, stash.id);
+  assert_eq!(preserved[0].workspace_id, None);
+
+  let target = treq_lib::core::create_workspace(
+    &repo.repo_path,
+    "feat/apply-preserved",
+    None,
+    None,
+    None,
+    None,
+    None,
+  )
+  .expect("create target workspace");
+  treq_lib::core::apply_stash(&repo.repo_path, stash.id, &target.branch_name)
+    .expect("preserved stash should remain applicable");
+}
+
+#[test]
 fn test_archive_workspace_leaving_directory_keeps_db_record() {
   let repo = TestRepo::new().expect("Failed to create test repo");
 
