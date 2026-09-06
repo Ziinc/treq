@@ -1311,44 +1311,48 @@ export const ShowWorkspace = ({
               )}
             </TabsList>
           </Tabs>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="gap-1.5"
-                aria-label="Switch review view"
-              >
-                {reviewSubView === "browser" ? (
-                  <Globe className="w-4 h-4" />
-                ) : (
-                  <FileDiff className="w-4 h-4" />
-                )}
-                <span>{reviewSubView === "browser" ? "Browser" : "Diff"}</span>
-                <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" sideOffset={4}>
-              <DropdownMenuItem
-                onSelect={() => {
-                  setReviewSubView("diff");
-                  setActiveTab("changes");
-                }}
-              >
-                <FileDiff className="w-4 h-4 mr-2" />
-                Diff
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onSelect={() => {
-                  setReviewSubView("browser");
-                  setActiveTab("changes");
-                }}
-              >
-                <Globe className="w-4 h-4 mr-2" />
-                Browser
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {activeTab === "changes" && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="gap-1.5"
+                  aria-label="Switch review view"
+                >
+                  {reviewSubView === "browser" ? (
+                    <Globe className="w-4 h-4" />
+                  ) : (
+                    <FileDiff className="w-4 h-4" />
+                  )}
+                  <span>
+                    {reviewSubView === "browser" ? "Browser" : "Diff"}
+                  </span>
+                  <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" sideOffset={4}>
+                <DropdownMenuItem
+                  onSelect={() => {
+                    setReviewSubView("diff");
+                    setActiveTab("changes");
+                  }}
+                >
+                  <FileDiff className="w-4 h-4 mr-2" />
+                  Diff
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => {
+                    setReviewSubView("browser");
+                    setActiveTab("changes");
+                  }}
+                >
+                  <Globe className="w-4 h-4 mr-2" />
+                  Browser
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
         <div
           ref={setBrowserToolbarSlot}
