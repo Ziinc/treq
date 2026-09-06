@@ -15,9 +15,18 @@ import type {
   LinearTeam,
   LinearUser,
 } from "../../../src/lib/api-linear";
-import { render, screen, within } from "../../../test/test-utils";
+import { render, screen, waitFor, within } from "../../../test/test-utils";
 import { createTestRepo } from "../../../test/utils";
 import { captureDocument } from "../capture";
+
+/** Waits for a nested Radix dropdown submenu to mount alongside its parent menu. */
+async function waitForMenuCount(count: number): Promise<HTMLElement[]> {
+  return waitFor(() => {
+    const menus = screen.getAllByRole("menu");
+    if (menus.length < count) throw new Error("submenu not open yet");
+    return menus;
+  });
+}
 
 const {
   mockLinearListTeams,
@@ -216,16 +225,20 @@ it("filters issues by standard view and AND-combined filters, and browses projec
     ],
   });
 
-  const projectFilter = screen.getByTestId("linear-filter-project");
-  await user.click(projectFilter);
-  const projectMenu = await screen.findByRole("menu");
-  await user.click(within(projectMenu).getByText("Search Revamp"));
+  await user.click(screen.getByTestId("linear-issues-filter-trigger"));
+  await screen.findByTestId("linear-filter-project");
+  await user.keyboard(
+    "{ArrowDown}{ArrowDown}{ArrowDown}{ArrowDown}{ArrowRight}",
+  );
+  const projectMenus = await waitForMenuCount(2);
+  const projectSubmenu = projectMenus[projectMenus.length - 1]!;
+  await user.click(within(projectSubmenu).getByText("Search Revamp"));
   await screen.findByText("Rework the ranking pipeline");
 
   await captureDocument(document, {
     name: "linear-views-filtering-03-project-filter-applied",
     expectations: [
-      'The Project filter button reads "Project: Search Revamp" and a "Clear filters" button is now visible.',
+      'A "Project: Search Revamp" chip is visible next to the Filter button.',
       "Only issues belonging to the Search Revamp project (ENG-101, ENG-102) are listed.",
     ],
   });
@@ -236,37 +249,50 @@ it("filters issues by standard view and AND-combined filters, and browses projec
   await captureDocument(document, {
     name: "linear-views-filtering-04-projects-dual-column",
     expectations: [
-      "A dual-column Projects layout is visible: a project list on the left (Search Revamp, Billing) and a detail panel on the right for the selected project, with its description rendered below the metadata row and a Comments section below Documents.",
-      'The Documents section shows "Search Revamp - Design Doc" as a rounded pill/chip button, not a plain underlined link.',
+      'A dual-column Projects layout is visible: preset-view subtabs ("All", "Mine", "Active", "Backlog") and a Filter button sit above a project list on the left (Search Revamp, Billing), with a detail panel on the right for the selected project.',
+      "The project body is rendered below the metadata row and a Comments section sits below Documents, whose entry is a rounded pill/chip button.",
     ],
   });
 
-  await user.click(screen.getByTestId("linear-project-filter-button"));
-  const statusFilterGroup = await screen.findByTestId(
-    "linear-project-filter-status",
-  );
+  await user.click(screen.getByRole("tab", { name: "Active" }));
+  await screen.findByTestId("linear-project-item-project-a");
 
   await captureDocument(document, {
-    name: "linear-views-filtering-06-project-filter-popover",
+    name: "linear-views-filtering-06-projects-active-view",
     expectations: [
-      "A popover is open below the filter icon button in the left project-list column header, titled \"Filters\", with \"Status\" and \"Lead\" filter groups.",
-      'The Status group lists "planned" and "started" as options (the two project states in the fixture data).',
+      'With the "Active" preset view selected, only the started project Search Revamp is listed -- the planned Billing project is gone.',
     ],
   });
 
-  await user.click(within(statusFilterGroup).getByText("planned"));
+  await user.click(screen.getByRole("tab", { name: "All" }));
+  await screen.findByTestId("linear-project-item-project-b");
+
+  await user.click(screen.getByTestId("linear-projects-filter-trigger"));
+  await screen.findByTestId("linear-filter-status");
+  await user.keyboard("{ArrowDown}{ArrowRight}");
+  const statusMenus = await waitForMenuCount(2);
+  const statusSubmenu = statusMenus[statusMenus.length - 1]!;
+
+  await captureDocument(document, {
+    name: "linear-views-filtering-07-project-filter-nested-menu",
+    expectations: [
+      'An open submenu lists "Any", "planned", and "started" as selectable status options (opened from a "Status" entry in the main Filter menu).',
+    ],
+  });
+
+  await user.click(within(statusSubmenu).getByText("planned"));
   await screen.findByTestId("linear-project-item-project-b");
 
   await captureDocument(document, {
-    name: "linear-views-filtering-07-project-filter-applied",
+    name: "linear-views-filtering-08-project-filter-chip",
     expectations: [
-      "With the Status filter set to \"planned\" (checkmarked in the popover), only the Billing project is listed in the left column -- Search Revamp is gone.",
-      'A "Clear" button is now visible in the popover header next to "Filters".',
+      'A "Status: planned" chip is visible next to the Filter button, and only the Billing project is listed in the left column.',
     ],
   });
 
-  await user.click(await screen.findByText("Clear"));
-  await user.keyboard("{Escape}");
+  await user.click(
+    screen.getByRole("button", { name: /clear status filter/i }),
+  );
   await screen.findByTestId("linear-project-item-project-a");
 
   const projectDetail = screen.getByTestId("linear-project-detail");

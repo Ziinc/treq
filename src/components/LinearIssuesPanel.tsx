@@ -1,4 +1,4 @@
-import { Loader2, RefreshCw, ChevronDown } from "lucide-react";
+import { Loader2, RefreshCw } from "lucide-react";
 import { useMemo, useState } from "react";
 import useSWR from "swr";
 import {
@@ -9,15 +9,7 @@ import {
 import type { LinearIssueAttachment } from "../lib/promptAttachments";
 import { Button } from "./ui/button";
 import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from "./ui/dropdown-menu";
+import { LinearFilterMenu } from "./LinearFilterMenu";
 import { LinearIssuesList, LinearKanbanView } from "./LinearIssueRows";
 import { cn } from "../lib/utils";
 
@@ -179,12 +171,6 @@ export const LinearIssuesSection: React.FC<{
     [filteredIssues],
   );
 
-  const hasActiveFilters =
-    filters.assigneeId !== undefined ||
-    filters.priority !== undefined ||
-    filters.label !== undefined ||
-    filters.projectId !== undefined;
-
   return (
     <>
       <div className="px-4 pb-2 shrink-0">
@@ -213,66 +199,60 @@ export const LinearIssuesSection: React.FC<{
           </TabsList>
         </Tabs>
 
-        <FilterDropdown
-          label="Assignee"
-          testId="linear-filter-assignee"
-          value={filters.assigneeId}
-          options={filterOptions.assignees.map((a) => ({
-            value: a.id,
-            label: a.name,
-          }))}
-          onChange={(value) => setFilters((f) => ({ ...f, assigneeId: value }))}
+        <LinearFilterMenu
+          testId="linear-issues-filter-trigger"
+          groups={[
+            {
+              key: "assignee",
+              label: "Assignee",
+              value: filters.assigneeId,
+              options: filterOptions.assignees.map((a) => ({
+                value: a.id,
+                label: a.name,
+              })),
+              onChange: (value) =>
+                setFilters((f) => ({ ...f, assigneeId: value })),
+            },
+            {
+              key: "priority",
+              label: "Priority",
+              value:
+                filters.priority !== undefined
+                  ? String(filters.priority)
+                  : undefined,
+              options: filterOptions.priorities.map((p) => ({
+                value: String(p.value),
+                label: p.label,
+              })),
+              onChange: (value) =>
+                setFilters((f) => ({
+                  ...f,
+                  priority: value !== undefined ? Number(value) : undefined,
+                })),
+            },
+            {
+              key: "label",
+              label: "Label",
+              value: filters.label,
+              options: filterOptions.labels.map((l) => ({
+                value: l,
+                label: l,
+              })),
+              onChange: (value) => setFilters((f) => ({ ...f, label: value })),
+            },
+            {
+              key: "project",
+              label: "Project",
+              value: filters.projectId,
+              options: filterOptions.projects.map((p) => ({
+                value: p.id,
+                label: p.name,
+              })),
+              onChange: (value) =>
+                setFilters((f) => ({ ...f, projectId: value })),
+            },
+          ]}
         />
-
-        <FilterDropdown
-          label="Priority"
-          testId="linear-filter-priority"
-          value={
-            filters.priority !== undefined
-              ? String(filters.priority)
-              : undefined
-          }
-          options={filterOptions.priorities.map((p) => ({
-            value: String(p.value),
-            label: p.label,
-          }))}
-          onChange={(value) =>
-            setFilters((f) => ({
-              ...f,
-              priority: value !== undefined ? Number(value) : undefined,
-            }))
-          }
-        />
-
-        <FilterDropdown
-          label="Label"
-          testId="linear-filter-label"
-          value={filters.label}
-          options={filterOptions.labels.map((l) => ({ value: l, label: l }))}
-          onChange={(value) => setFilters((f) => ({ ...f, label: value }))}
-        />
-
-        <FilterDropdown
-          label="Project"
-          testId="linear-filter-project"
-          value={filters.projectId}
-          options={filterOptions.projects.map((p) => ({
-            value: p.id,
-            label: p.name,
-          }))}
-          onChange={(value) => setFilters((f) => ({ ...f, projectId: value }))}
-        />
-
-        {hasActiveFilters && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-sm"
-            onClick={() => setFilters(EMPTY_FILTERS)}
-          >
-            Clear filters
-          </Button>
-        )}
 
         <div className="flex-1" />
         <Button
@@ -335,49 +315,5 @@ export const LinearIssuesSection: React.FC<{
           )}
       </div>
     </>
-  );
-};
-
-const FilterDropdown: React.FC<{
-  label: string;
-  testId: string;
-  value: string | undefined;
-  options: { value: string; label: string }[];
-  onChange: (value: string | undefined) => void;
-}> = ({ label, testId, value, options, onChange }) => {
-  const selectedLabel = options.find((o) => o.value === value)?.label;
-
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          className="gap-2 text-sm"
-          data-testid={testId}
-        >
-          {selectedLabel ? `${label}: ${selectedLabel}` : label}
-          <ChevronDown className="w-4 h-4 text-muted-foreground" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start">
-        <DropdownMenuLabel>{label}</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuRadioGroup value={value ?? ""}>
-          <DropdownMenuRadioItem value="" onSelect={() => onChange(undefined)}>
-            Any
-          </DropdownMenuRadioItem>
-          {options.map((option) => (
-            <DropdownMenuRadioItem
-              key={option.value}
-              value={option.value}
-              onSelect={() => onChange(option.value)}
-            >
-              {option.label}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
   );
 };

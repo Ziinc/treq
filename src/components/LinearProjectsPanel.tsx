@@ -1,10 +1,11 @@
-import { Check, Filter, Loader2, RefreshCw } from "lucide-react";
+import { Loader2, RefreshCw } from "lucide-react";
 import { useMemo, useState } from "react";
 import useSWR from "swr";
 import {
   type LinearComment,
   type LinearDocument,
   type LinearProject,
+  linearGetViewer,
   linearListDocumentComments,
   linearListProjectComments,
   linearListProjectDocuments,
@@ -12,7 +13,8 @@ import {
 } from "../lib/api-linear";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
-import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import { LinearFilterMenu } from "./LinearFilterMenu";
+import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
 import { LinearComments } from "./LinearComments";
 import { MarkdownContent } from "./MarkdownContent";
 import { cn } from "../lib/utils";
@@ -23,6 +25,34 @@ type ProjectFilters = {
 };
 
 const EMPTY_PROJECT_FILTERS: ProjectFilters = {};
+
+type ProjectStandardView = "all" | "my-projects" | "active" | "backlog";
+
+const PROJECT_STANDARD_VIEWS: { value: ProjectStandardView; label: string }[] =
+  [
+    { value: "all", label: "All" },
+    { value: "my-projects", label: "Mine" },
+    { value: "active", label: "Active" },
+    { value: "backlog", label: "Backlog" },
+  ];
+
+function applyProjectStandardView(
+  projects: LinearProject[],
+  view: ProjectStandardView,
+  viewerId: string | undefined,
+): LinearProject[] {
+  switch (view) {
+    case "active":
+      return projects.filter((p) => p.state === "started");
+    case "backlog":
+      return projects.filter((p) => p.state === "planned");
+    case "my-projects":
+      return viewerId ? projects.filter((p) => p.lead?.id === viewerId) : [];
+    case "all":
+    default:
+      return projects;
+  }
+}
 
 function deriveProjectFilterOptions(projects: LinearProject[]) {
   const stateSet = new Set<string>();
@@ -57,6 +87,7 @@ export const LinearProjectsSection: React.FC<{ repoPath: string }> = ({
     null,
   );
   const [openDocument, setOpenDocument] = useState<LinearDocument | null>(null);
+  const [standardView, setStandardView] = useState<ProjectStandardView>("all");
   const [filters, setFilters] = useState<ProjectFilters>(EMPTY_PROJECT_FILTERS);
 
   const {
@@ -70,18 +101,26 @@ export const LinearProjectsSection: React.FC<{ repoPath: string }> = ({
     { revalidateOnFocus: false },
   );
 
+  const { data: viewer } = useSWR(
+    repoPath ? ["linear-viewer", repoPath] : null,
+    async () => await linearGetViewer(repoPath),
+    { revalidateOnFocus: false, shouldRetryOnError: false },
+  );
+
+  const viewFilteredProjects = useMemo(
+    () => applyProjectStandardView(projects, standardView, viewer?.id),
+    [projects, standardView, viewer?.id],
+  );
+
   const filterOptions = useMemo(
-    () => deriveProjectFilterOptions(projects),
-    [projects],
+    () => deriveProjectFilterOptions(viewFilteredProjects),
+    [viewFilteredProjects],
   );
 
   const filteredProjects = useMemo(
-    () => applyProjectFilters(projects, filters),
-    [projects, filters],
+    () => applyProjectFilters(viewFilteredProjects, filters),
+    [viewFilteredProjects, filters],
   );
-
-  const hasActiveFilters =
-    filters.state !== undefined || filters.leadId !== undefined;
 
   const selectedProject =
     filteredProjects.find((p) => p.id === selectedProjectId) ??
@@ -117,26 +156,63 @@ export const LinearProjectsSection: React.FC<{ repoPath: string }> = ({
           <span className="text-sm font-medium text-muted-foreground">
             Projects
           </span>
-          <div className="flex items-center gap-1">
-            <ProjectFilterPopover
-              filters={filters}
-              setFilters={setFilters}
-              options={filterOptions}
-              hasActiveFilters={hasActiveFilters}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => void refetch()}
+            title="Refresh"
+            disabled={isLoading}
+          >
+            <RefreshCw
+              className={cn("w-3.5 h-3.5", isLoading && "animate-spin")}
             />
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => void refetch()}
-              title="Refresh"
-              disabled={isLoading}
-            >
-              <RefreshCw
-                className={cn("w-3.5 h-3.5", isLoading && "animate-spin")}
-              />
-            </Button>
-          </div>
+          </Button>
+        </div>
+
+        <div className="px-4 pb-2 shrink-0">
+          <Tabs
+            value={standardView}
+            onValueChange={(v) => setStandardView(v as ProjectStandardView)}
+          >
+            <TabsList className="text-sm">
+              {PROJECT_STANDARD_VIEWS.map((view) => (
+                <TabsTrigger key={view.value} value={view.value}>
+                  {view.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        </div>
+
+        <div className="px-4 pb-2 shrink-0">
+          <LinearFilterMenu
+            testId="linear-projects-filter-trigger"
+            groups={[
+              {
+                key: "status",
+                label: "Status",
+                value: filters.state,
+                options: filterOptions.states.map((state) => ({
+                  value: state,
+                  label: state,
+                })),
+                onChange: (value) =>
+                  setFilters((f) => ({ ...f, state: value })),
+              },
+              {
+                key: "lead",
+                label: "Lead",
+                value: filters.leadId,
+                options: filterOptions.leads.map((lead) => ({
+                  value: lead.id,
+                  label: lead.name,
+                })),
+                onChange: (value) =>
+                  setFilters((f) => ({ ...f, leadId: value })),
+              },
+            ]}
+          />
         </div>
 
         <div className="flex-1 overflow-y-auto">
@@ -213,100 +289,6 @@ export const LinearProjectsSection: React.FC<{ repoPath: string }> = ({
     </div>
   );
 };
-
-const ProjectFilterPopover: React.FC<{
-  filters: ProjectFilters;
-  setFilters: React.Dispatch<React.SetStateAction<ProjectFilters>>;
-  options: ReturnType<typeof deriveProjectFilterOptions>;
-  hasActiveFilters: boolean;
-}> = ({ filters, setFilters, options, hasActiveFilters }) => (
-  <Popover>
-    <PopoverTrigger asChild>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-7 w-7 relative"
-        title="Filter projects"
-        data-testid="linear-project-filter-button"
-      >
-        <Filter className="w-3.5 h-3.5" />
-        {hasActiveFilters && (
-          <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-primary" />
-        )}
-      </Button>
-    </PopoverTrigger>
-    <PopoverContent align="start" className="w-64">
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-sm font-medium">Filters</span>
-        {hasActiveFilters && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 px-2 text-xs"
-            onClick={() => setFilters(EMPTY_PROJECT_FILTERS)}
-          >
-            Clear
-          </Button>
-        )}
-      </div>
-
-      <ProjectFilterGroup
-        label="Status"
-        value={filters.state}
-        options={options.states.map((state) => ({
-          value: state,
-          label: state,
-        }))}
-        onChange={(value) => setFilters((f) => ({ ...f, state: value }))}
-        testId="linear-project-filter-status"
-      />
-
-      <ProjectFilterGroup
-        label="Lead"
-        value={filters.leadId}
-        options={options.leads.map((lead) => ({
-          value: lead.id,
-          label: lead.name,
-        }))}
-        onChange={(value) => setFilters((f) => ({ ...f, leadId: value }))}
-        testId="linear-project-filter-lead"
-      />
-    </PopoverContent>
-  </Popover>
-);
-
-const ProjectFilterGroup: React.FC<{
-  label: string;
-  value: string | undefined;
-  options: { value: string; label: string }[];
-  onChange: (value: string | undefined) => void;
-  testId: string;
-}> = ({ label, value, options, onChange, testId }) => (
-  <div className="mt-3 first:mt-0" data-testid={testId}>
-    <p className="text-xs font-medium text-muted-foreground mb-1.5">{label}</p>
-    <div className="flex flex-col gap-0.5">
-      <button
-        type="button"
-        className="flex items-center justify-between text-sm px-2 py-1 rounded hover:bg-muted/70 text-left capitalize"
-        onClick={() => onChange(undefined)}
-      >
-        Any
-        {value === undefined && <Check className="w-3.5 h-3.5" />}
-      </button>
-      {options.map((option) => (
-        <button
-          key={option.value}
-          type="button"
-          className="flex items-center justify-between text-sm px-2 py-1 rounded hover:bg-muted/70 text-left capitalize"
-          onClick={() => onChange(option.value)}
-        >
-          {option.label}
-          {value === option.value && <Check className="w-3.5 h-3.5" />}
-        </button>
-      ))}
-    </div>
-  </div>
-);
 
 const ProjectDetail: React.FC<{
   project: LinearProject;
