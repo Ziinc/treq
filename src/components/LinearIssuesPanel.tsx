@@ -5,7 +5,6 @@ import {
   type LinearIssue,
   linearGetViewer,
   linearListIssues,
-  linearListTeams,
 } from "../lib/api-linear";
 import type { LinearIssueAttachment } from "../lib/promptAttachments";
 import { Button } from "./ui/button";
@@ -107,21 +106,13 @@ function applyIssueFilters(
 
 export const LinearIssuesSection: React.FC<{
   repoPath: string;
+  selectedTeam: string | undefined;
   onStartPromptFromIssue?: (issue: LinearIssueAttachment) => void;
-}> = ({ repoPath, onStartPromptFromIssue }) => {
+}> = ({ repoPath, selectedTeam, onStartPromptFromIssue }) => {
   const [viewMode, setViewMode] = useState<ViewMode>("list");
   const [standardView, setStandardView] = useState<StandardView>("all");
-  const [selectedTeam, setSelectedTeam] = useState<string | undefined>(
-    undefined,
-  );
   const [filters, setFilters] = useState<IssueFilters>(EMPTY_FILTERS);
   const kickoffIssueId = null;
-
-  const { data: teams = [] } = useSWR(
-    repoPath ? ["linear-teams", repoPath] : null,
-    async () => await linearListTeams(repoPath),
-    { revalidateOnFocus: false },
-  );
 
   const { data: viewer } = useSWR(
     repoPath ? ["linear-viewer", repoPath] : null,
@@ -221,44 +212,6 @@ export const LinearIssuesSection: React.FC<{
             <TabsTrigger value="kanban">Kanban</TabsTrigger>
           </TabsList>
         </Tabs>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="gap-2 text-sm"
-              data-testid="linear-team-selector"
-            >
-              {selectedTeam
-                ? teams.find((t) => t.key === selectedTeam)?.name ||
-                  selectedTeam
-                : "All Teams"}
-              <ChevronDown className="w-4 h-4 text-muted-foreground" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start">
-            <DropdownMenuLabel>Teams</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuRadioGroup value={selectedTeam || ""}>
-              <DropdownMenuRadioItem
-                value=""
-                onSelect={() => setSelectedTeam(undefined)}
-              >
-                All Teams
-              </DropdownMenuRadioItem>
-              {teams.map((team) => (
-                <DropdownMenuRadioItem
-                  key={team.key}
-                  value={team.key}
-                  onSelect={() => setSelectedTeam(team.key)}
-                >
-                  {team.name}
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuContent>
-        </DropdownMenu>
 
         <FilterDropdown
           label="Assignee"
