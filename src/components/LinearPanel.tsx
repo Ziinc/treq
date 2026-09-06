@@ -2,8 +2,13 @@ import { Loader2, RefreshCw, Zap, ChevronDown } from "lucide-react";
 import { useMemo, useState } from "react";
 import useSWR from "swr";
 import {
+  type LinearDocument,
   type LinearIssue,
+  type LinearProject,
+  linearGetViewer,
   linearListIssues,
+  linearListProjectDocuments,
+  linearListProjects,
   linearListTeams,
 } from "../lib/api-linear";
 import type { LinearIssueAttachment } from "../lib/promptAttachments";
@@ -18,6 +23,12 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "./ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "./ui/dialog";
 import { cn } from "../lib/utils";
 
 interface LinearPanelProps {
@@ -27,21 +38,48 @@ interface LinearPanelProps {
 }
 
 type ViewMode = "list" | "kanban";
+type MainSection = "issues" | "projects";
+type StandardView = "all" | "active" | "my-issues" | "backlog";
+
+const STANDARD_VIEWS: { value: StandardView; label: string }[] = [
+  { value: "all", label: "All Issues" },
+  { value: "active", label: "Active" },
+  { value: "my-issues", label: "My Issues" },
+  { value: "backlog", label: "Backlog" },
+];
+
+type IssueFilters = {
+  assigneeId?: string;
+  priority?: number;
+  label?: string;
+  projectId?: string;
+};
+
+const EMPTY_FILTERS: IssueFilters = {};
 
 export const LinearPanel: React.FC<LinearPanelProps> = ({
   repoPath,
   onStartPromptFromIssue,
 }) => {
+  const [section, setSection] = useState<MainSection>("issues");
   const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [standardView, setStandardView] = useState<StandardView>("all");
   const [selectedTeam, setSelectedTeam] = useState<string | undefined>(
     undefined,
   );
+  const [filters, setFilters] = useState<IssueFilters>(EMPTY_FILTERS);
   const kickoffIssueId = null;
 
   const { data: teams = [] } = useSWR(
     repoPath ? ["linear-teams", repoPath] : null,
     async () => await linearListTeams(repoPath),
     { revalidateOnFocus: false },
+  );
+
+  const { data: viewer } = useSWR(
+    repoPath ? ["linear-viewer", repoPath] : null,
+    async () => await linearGetViewer(repoPath),
+    { revalidateOnFocus: false, shouldRetryOnError: false },
   );
 
   const {
@@ -61,11 +99,26 @@ export const LinearPanel: React.FC<LinearPanelProps> = ({
       onStartPromptFromIssue?.({ ...issue, includeSubissues: hasSubissues });
   };
 
+  const viewFilteredIssues = useMemo(
+    () => applyStandardView(issues, standardView, viewer?.id),
+    [issues, standardView, viewer?.id],
+  );
+
+  const filterOptions = useMemo(
+    () => deriveFilterOptions(viewFilteredIssues),
+    [viewFilteredIssues],
+  );
+
+  const filteredIssues = useMemo(
+    () => applyIssueFilters(viewFilteredIssues, filters),
+    [viewFilteredIssues, filters],
+  );
+
   const issuesByState = useMemo(() => {
     const grouped: Record<string, LinearIssue[]> = {};
     const parentMap = new Map<string, LinearIssue[]>();
 
-    issues.forEach((issue) => {
+    filteredIssues.forEach((issue) => {
       if (!grouped[issue.state.name]) {
         grouped[issue.state.name] = [];
       }
@@ -81,11 +134,11 @@ export const LinearPanel: React.FC<LinearPanelProps> = ({
     });
 
     return { byState: grouped, subissues: parentMap };
-  }, [issues]);
+  }, [filteredIssues]);
 
   const rootIssues = useMemo(
-    () => issues.filter((i) => !i.parent_id),
-    [issues],
+    () => filteredIssues.filter((i) => !i.parent_id),
+    [filteredIssues],
   );
 
   return (
@@ -101,6 +154,173 @@ export const LinearPanel: React.FC<LinearPanelProps> = ({
       </div>
 
       <div className="px-4 pb-2 shrink-0">
+        <Tabs value={section} onValueChange={(v) => setSection(v as MainSection)}>
+          <TabsList className="text-base">
+            <TabsTrigger value="issues" data-testid="linear-section-issues">
+              Issues
+            </TabsTrigger>
+            <TabsTrigger value="projects" data-testid="linear-section-projects">
+              Projects
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+      </div>
+
+      {section === "issues" ? (
+        <IssuesSection
+          teams={teams}
+          selectedTeam={selectedTeam}
+          setSelectedTeam={setSelectedTeam}
+          standardView={standardView}
+          setStandardView={setStandardView}
+          viewMode={viewMode}
+          setViewMode={setViewMode}
+          filters={filters}
+          setFilters={setFilters}
+          filterOptions={filterOptions}
+          isLoading={isLoading}
+          error={error}
+          refetch={refetch}
+          filteredIssues={filteredIssues}
+          rootIssues={rootIssues}
+          issuesByState={issuesByState}
+          kickoffIssueId={kickoffIssueId}
+          handleKickoff={handleKickoff}
+        />
+      ) : (
+        <ProjectsSection repoPath={repoPath} />
+      )}
+    </div>
+  );
+};
+
+function applyStandardView(
+  issues: LinearIssue[],
+  view: StandardView,
+  viewerId: string | undefined,
+): LinearIssue[] {
+  switch (view) {
+    case "active":
+      return issues.filter(
+        (i) => i.state.type === "started" || i.state.type === "unstarted",
+      );
+    case "backlog":
+      return issues.filter((i) => i.state.type === "backlog");
+    case "my-issues":
+      return viewerId ? issues.filter((i) => i.assignee?.id === viewerId) : [];
+    case "all":
+    default:
+      return issues;
+  }
+}
+
+function deriveFilterOptions(issues: LinearIssue[]) {
+  const assigneeMap = new Map<string, string>();
+  const priorityMap = new Map<number, string>();
+  const labelSet = new Set<string>();
+  const projectMap = new Map<string, string>();
+
+  issues.forEach((issue) => {
+    if (issue.assignee) assigneeMap.set(issue.assignee.id, issue.assignee.name);
+    if (issue.priority !== undefined)
+      priorityMap.set(issue.priority, issue.priority_label || String(issue.priority));
+    issue.labels.forEach((label) => labelSet.add(label));
+    if (issue.project) projectMap.set(issue.project.id, issue.project.name);
+  });
+
+  return {
+    assignees: Array.from(assigneeMap, ([id, name]) => ({ id, name })),
+    priorities: Array.from(priorityMap, ([value, label]) => ({ value, label })).sort(
+      (a, b) => a.value - b.value,
+    ),
+    labels: Array.from(labelSet).sort(),
+    projects: Array.from(projectMap, ([id, name]) => ({ id, name })),
+  };
+}
+
+function applyIssueFilters(
+  issues: LinearIssue[],
+  filters: IssueFilters,
+): LinearIssue[] {
+  return issues.filter((issue) => {
+    if (filters.assigneeId && issue.assignee?.id !== filters.assigneeId)
+      return false;
+    if (filters.priority !== undefined && issue.priority !== filters.priority)
+      return false;
+    if (filters.label && !issue.labels.includes(filters.label)) return false;
+    if (filters.projectId && issue.project?.id !== filters.projectId)
+      return false;
+    return true;
+  });
+}
+
+const IssuesSection: React.FC<{
+  teams: { key: string; name: string }[];
+  selectedTeam: string | undefined;
+  setSelectedTeam: (v: string | undefined) => void;
+  standardView: StandardView;
+  setStandardView: (v: StandardView) => void;
+  viewMode: ViewMode;
+  setViewMode: (v: ViewMode) => void;
+  filters: IssueFilters;
+  setFilters: React.Dispatch<React.SetStateAction<IssueFilters>>;
+  filterOptions: ReturnType<typeof deriveFilterOptions>;
+  isLoading: boolean;
+  error: unknown;
+  refetch: () => unknown;
+  filteredIssues: LinearIssue[];
+  rootIssues: LinearIssue[];
+  issuesByState: { byState: Record<string, LinearIssue[]>; subissues: Map<string, LinearIssue[]> };
+  kickoffIssueId: string | null;
+  handleKickoff: (issueId: string, hasSubissues: boolean) => Promise<void>;
+}> = ({
+  teams,
+  selectedTeam,
+  setSelectedTeam,
+  standardView,
+  setStandardView,
+  viewMode,
+  setViewMode,
+  filters,
+  setFilters,
+  filterOptions,
+  isLoading,
+  error,
+  refetch,
+  filteredIssues,
+  rootIssues,
+  issuesByState,
+  kickoffIssueId,
+  handleKickoff,
+}) => {
+  const hasActiveFilters =
+    filters.assigneeId !== undefined ||
+    filters.priority !== undefined ||
+    filters.label !== undefined ||
+    filters.projectId !== undefined;
+
+  return (
+    <>
+      <div className="px-4 pb-2 shrink-0">
+        <Tabs
+          value={standardView}
+          onValueChange={(v) => setStandardView(v as StandardView)}
+        >
+          <TabsList className="text-base">
+            {STANDARD_VIEWS.map((view) => (
+              <TabsTrigger
+                key={view.value}
+                value={view.value}
+                data-testid={`linear-view-${view.value}`}
+              >
+                {view.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
+      </div>
+
+      <div className="px-4 pb-2 shrink-0">
         <Tabs
           value={viewMode}
           onValueChange={(v) => setViewMode(v as ViewMode)}
@@ -112,7 +332,7 @@ export const LinearPanel: React.FC<LinearPanelProps> = ({
         </Tabs>
       </div>
 
-      <div className="flex items-center gap-2 px-4 pb-2 shrink-0">
+      <div className="flex items-center gap-2 px-4 pb-2 shrink-0 flex-wrap">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -150,6 +370,68 @@ export const LinearPanel: React.FC<LinearPanelProps> = ({
             </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        <FilterDropdown
+          label="Assignee"
+          testId="linear-filter-assignee"
+          value={filters.assigneeId}
+          options={filterOptions.assignees.map((a) => ({
+            value: a.id,
+            label: a.name,
+          }))}
+          onChange={(value) =>
+            setFilters((f) => ({ ...f, assigneeId: value }))
+          }
+        />
+
+        <FilterDropdown
+          label="Priority"
+          testId="linear-filter-priority"
+          value={filters.priority !== undefined ? String(filters.priority) : undefined}
+          options={filterOptions.priorities.map((p) => ({
+            value: String(p.value),
+            label: p.label,
+          }))}
+          onChange={(value) =>
+            setFilters((f) => ({
+              ...f,
+              priority: value !== undefined ? Number(value) : undefined,
+            }))
+          }
+        />
+
+        <FilterDropdown
+          label="Label"
+          testId="linear-filter-label"
+          value={filters.label}
+          options={filterOptions.labels.map((l) => ({ value: l, label: l }))}
+          onChange={(value) => setFilters((f) => ({ ...f, label: value }))}
+        />
+
+        <FilterDropdown
+          label="Project"
+          testId="linear-filter-project"
+          value={filters.projectId}
+          options={filterOptions.projects.map((p) => ({
+            value: p.id,
+            label: p.name,
+          }))}
+          onChange={(value) =>
+            setFilters((f) => ({ ...f, projectId: value }))
+          }
+        />
+
+        {hasActiveFilters && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-sm"
+            onClick={() => setFilters(EMPTY_FILTERS)}
+          >
+            Clear filters
+          </Button>
+        )}
+
         <div className="flex-1" />
         <Button
           variant="ghost"
@@ -172,7 +454,7 @@ export const LinearPanel: React.FC<LinearPanelProps> = ({
           </div>
         )}
 
-        {error && (
+        {error !== undefined && error !== null && (
           <div className="flex flex-col items-center justify-center h-full text-center p-8 gap-3">
             <p className="text-base text-destructive">
               {error instanceof Error ? error.message : "Failed to load issues"}
@@ -180,13 +462,13 @@ export const LinearPanel: React.FC<LinearPanelProps> = ({
           </div>
         )}
 
-        {!isLoading && !error && issues.length === 0 && (
+        {!isLoading && !error && filteredIssues.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center p-8 gap-3">
             <p className="text-base text-muted-foreground">No issues found</p>
           </div>
         )}
 
-        {!isLoading && !error && issues.length > 0 && viewMode === "list" && (
+        {!isLoading && !error && filteredIssues.length > 0 && viewMode === "list" && (
           <LinearIssuesList
             issues={rootIssues}
             subissuesMap={issuesByState.subissues}
@@ -195,7 +477,7 @@ export const LinearPanel: React.FC<LinearPanelProps> = ({
           />
         )}
 
-        {!isLoading && !error && issues.length > 0 && viewMode === "kanban" && (
+        {!isLoading && !error && filteredIssues.length > 0 && viewMode === "kanban" && (
           <LinearKanbanView
             issues={rootIssues}
             subissuesMap={issuesByState.subissues}
@@ -205,7 +487,51 @@ export const LinearPanel: React.FC<LinearPanelProps> = ({
           />
         )}
       </div>
-    </div>
+    </>
+  );
+};
+
+const FilterDropdown: React.FC<{
+  label: string;
+  testId: string;
+  value: string | undefined;
+  options: { value: string; label: string }[];
+  onChange: (value: string | undefined) => void;
+}> = ({ label, testId, value, options, onChange }) => {
+  const selectedLabel = options.find((o) => o.value === value)?.label;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2 text-sm"
+          data-testid={testId}
+        >
+          {selectedLabel ? `${label}: ${selectedLabel}` : label}
+          <ChevronDown className="w-4 h-4 text-muted-foreground" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start">
+        <DropdownMenuLabel>{label}</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuRadioGroup value={value ?? ""}>
+          <DropdownMenuRadioItem value="" onSelect={() => onChange(undefined)}>
+            Any
+          </DropdownMenuRadioItem>
+          {options.map((option) => (
+            <DropdownMenuRadioItem
+              key={option.value}
+              value={option.value}
+              onSelect={() => onChange(option.value)}
+            >
+              {option.label}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 };
 
@@ -260,7 +586,7 @@ const LinearIssueRow: React.FC<{
       )}
     >
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <a
             href={issue.url}
             target="_blank"
@@ -272,6 +598,21 @@ const LinearIssueRow: React.FC<{
           <span className="text-xs font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
             {issue.state.name}
           </span>
+          {issue.priority_label && issue.priority !== 0 && (
+            <span className="text-xs font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
+              {issue.priority_label}
+            </span>
+          )}
+          {issue.project && (
+            <span className="text-xs font-medium px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
+              {issue.project.name}
+            </span>
+          )}
+          {issue.assignee && (
+            <span className="text-xs text-muted-foreground">
+              {issue.assignee.name}
+            </span>
+          )}
         </div>
         <p className="text-base mt-1 truncate">{issue.title}</p>
         {issue.labels.length > 0 && (
@@ -417,3 +758,192 @@ const LinearKanbanCard: React.FC<{
     </div>
   );
 };
+
+const ProjectsSection: React.FC<{ repoPath: string }> = ({ repoPath }) => {
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
+    null,
+  );
+  const [openDocument, setOpenDocument] = useState<LinearDocument | null>(
+    null,
+  );
+
+  const {
+    data: projects = [],
+    isLoading,
+    error,
+    mutate: refetch,
+  } = useSWR(
+    repoPath ? ["linear-projects", repoPath] : null,
+    async () => await linearListProjects(repoPath),
+    { revalidateOnFocus: false },
+  );
+
+  const selectedProject =
+    projects.find((p) => p.id === selectedProjectId) ?? projects[0] ?? null;
+
+  const { data: documents = [], isLoading: isLoadingDocuments } = useSWR(
+    repoPath && selectedProject
+      ? ["linear-project-documents", repoPath, selectedProject.id]
+      : null,
+    async () =>
+      await linearListProjectDocuments(repoPath, selectedProject!.id),
+    { revalidateOnFocus: false },
+  );
+
+  return (
+    <div className="flex-1 flex min-h-0" data-testid="linear-projects-section">
+      <div className="w-72 shrink-0 border-r border-border flex flex-col min-h-0">
+        <div className="flex items-center justify-between px-4 py-2 shrink-0">
+          <span className="text-sm font-medium text-muted-foreground">
+            Projects
+          </span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={() => void refetch()}
+            title="Refresh"
+            disabled={isLoading}
+          >
+            <RefreshCw
+              className={cn("w-3.5 h-3.5", isLoading && "animate-spin")}
+            />
+          </Button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          {isLoading && (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+            </div>
+          )}
+
+          {error !== undefined && error !== null && (
+            <div className="p-4 text-sm text-destructive">
+              {error instanceof Error
+                ? error.message
+                : "Failed to load projects"}
+            </div>
+          )}
+
+          {!isLoading && !error && projects.length === 0 && (
+            <div className="p-4 text-sm text-muted-foreground">
+              No projects found
+            </div>
+          )}
+
+          <div className="divide-y divide-border">
+            {projects.map((project) => (
+              <button
+                key={project.id}
+                type="button"
+                data-testid={`linear-project-item-${project.id}`}
+                className={cn(
+                  "w-full text-left px-4 py-3 hover:bg-muted/50 transition-colors",
+                  selectedProject?.id === project.id && "bg-muted",
+                )}
+                onClick={() => setSelectedProjectId(project.id)}
+              >
+                <p className="text-sm font-medium truncate">{project.name}</p>
+                <div className="flex items-center gap-2 mt-1">
+                  <span className="text-xs px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground capitalize">
+                    {project.state}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {Math.round((project.progress || 0) * 100)}%
+                  </span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-y-auto">
+        {selectedProject ? (
+          <ProjectDetail
+            project={selectedProject}
+            documents={documents}
+            isLoadingDocuments={isLoadingDocuments}
+            onOpenDocument={setOpenDocument}
+          />
+        ) : (
+          <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+            Select a project
+          </div>
+        )}
+      </div>
+
+      <Dialog
+        open={openDocument !== null}
+        onOpenChange={(open) => !open && setOpenDocument(null)}
+      >
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{openDocument?.title}</DialogTitle>
+          </DialogHeader>
+          <div className="whitespace-pre-wrap text-sm">
+            {openDocument?.content || "No content"}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+const ProjectDetail: React.FC<{
+  project: LinearProject;
+  documents: LinearDocument[];
+  isLoadingDocuments: boolean;
+  onOpenDocument: (document: LinearDocument) => void;
+}> = ({ project, documents, isLoadingDocuments, onOpenDocument }) => (
+  <div className="p-4" data-testid="linear-project-detail">
+    <div className="flex items-center gap-2 flex-wrap">
+      <h2 className="text-lg font-semibold">{project.name}</h2>
+      <a
+        href={project.url}
+        target="_blank"
+        rel="noreferrer"
+        className="text-xs text-primary hover:underline"
+      >
+        Open in Linear
+      </a>
+    </div>
+    <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground flex-wrap">
+      <span className="px-1.5 py-0.5 rounded-full bg-muted capitalize">
+        {project.state}
+      </span>
+      <span>{Math.round((project.progress || 0) * 100)}% complete</span>
+      {project.lead && <span>Lead: {project.lead.name}</span>}
+      {project.target_date && <span>Target: {project.target_date}</span>}
+    </div>
+    {project.description && (
+      <p className="text-sm mt-3 whitespace-pre-wrap">{project.description}</p>
+    )}
+
+    <div className="mt-6">
+      <h3 className="text-sm font-medium text-muted-foreground mb-2">
+        Documents
+      </h3>
+      {isLoadingDocuments && (
+        <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+      )}
+      {!isLoadingDocuments && documents.length === 0 && (
+        <p className="text-sm text-muted-foreground">No documents</p>
+      )}
+      <div className="flex flex-col gap-1">
+        {documents.map((doc) => (
+          <button
+            key={doc.id}
+            type="button"
+            data-testid={`linear-document-item-${doc.id}`}
+            className="text-left text-sm text-primary hover:underline w-fit"
+            onClick={() => onOpenDocument(doc)}
+          >
+            {doc.title}
+          </button>
+        ))}
+      </div>
+    </div>
+  </div>
+);
