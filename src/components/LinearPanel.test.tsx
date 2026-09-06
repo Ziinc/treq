@@ -7,6 +7,7 @@ import { LinearPanel } from "./LinearPanel";
 const api = vi.hoisted(() => ({
   linearListIssues: vi.fn(),
   linearListTeams: vi.fn(),
+  linearGetViewer: vi.fn(),
   linearOpenOrCreateWorkspaceFromIssue: vi.fn(),
 }));
 
@@ -32,6 +33,7 @@ describe("LinearPanel issue kickoff", () => {
   beforeEach(() => {
     api.linearListTeams.mockResolvedValue([]);
     api.linearListIssues.mockResolvedValue([issue]);
+    api.linearGetViewer.mockResolvedValue({ id: "viewer-id", name: "Viewer" });
     api.linearOpenOrCreateWorkspaceFromIssue.mockReset();
   });
 
@@ -45,6 +47,7 @@ describe("LinearPanel issue kickoff", () => {
       />,
     );
 
+    await user.click(await screen.findByRole("tab", { name: "Kanban" }));
     await user.click(await screen.findByRole("button", { name: "Kick off" }));
 
     expect(onStartPromptFromIssue).toHaveBeenCalledWith({

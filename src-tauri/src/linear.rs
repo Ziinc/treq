@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -16,6 +17,10 @@ pub struct LinearIssue {
   pub parent_id: Option<String>,
   pub sub_issue_ids: Vec<String>,
   pub url: String,
+  pub assignee: Option<LinearUser>,
+  pub priority: i32,
+  pub priority_label: String,
+  pub project: Option<LinearProjectRef>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -30,6 +35,50 @@ pub struct LinearState {
   pub name: String,
   #[serde(rename = "type")]
   pub state_type: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct LinearUser {
+  pub id: String,
+  pub name: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct LinearProjectRef {
+  pub id: String,
+  pub name: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct LinearProject {
+  pub id: String,
+  pub name: String,
+  pub description: Option<String>,
+  pub state: String,
+  pub target_date: Option<String>,
+  pub progress: f64,
+  pub url: String,
+  pub lead: Option<LinearUser>,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct LinearDocument {
+  pub id: String,
+  pub title: String,
+  pub content: Option<String>,
+  pub url: String,
+  pub updated_at: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct LinearComment {
+  pub id: String,
+  pub body: String,
+  pub user: Option<LinearUser>,
+  pub created_at: String,
+  /// The excerpt of the document/project body this comment is anchored to,
+  /// when Linear reports one (inline "highlight and comment" threads).
+  pub quoted_text: Option<String>,
 }
 
 pub enum LinearClientSource {
@@ -90,6 +139,26 @@ struct LinearIssueNode {
   #[serde(default, rename = "children")]
   sub_issues: LinearSubIssuesConnection,
   url: String,
+  #[serde(default)]
+  assignee: Option<LinearUserNode>,
+  #[serde(default)]
+  priority: i32,
+  #[serde(default, rename = "priorityLabel")]
+  priority_label: String,
+  #[serde(default)]
+  project: Option<LinearProjectRefNode>,
+}
+
+#[derive(Deserialize)]
+struct LinearUserNode {
+  id: String,
+  name: String,
+}
+
+#[derive(Deserialize)]
+struct LinearProjectRefNode {
+  id: String,
+  name: String,
 }
 
 #[derive(Deserialize)]
@@ -235,6 +304,10 @@ pub async fn linear_list_issues_impl(
             parent {{ id }}
             children(first: 50) {{ nodes {{ id }} }}
             url
+            assignee {{ id name }}
+            priority
+            priorityLabel
+            project {{ id name }}
           }}
         }}
       }}"#,
@@ -254,6 +327,10 @@ pub async fn linear_list_issues_impl(
           parent { id }
           children(first: 50) { nodes { id } }
           url
+          assignee { id name }
+          priority
+          priorityLabel
+          project { id name }
         }
       }
     }"#
@@ -289,28 +366,35 @@ pub async fn linear_list_issues_impl(
     .data
     .ok_or_else(|| "No data in Linear response".to_string())?;
 
-  Ok(
-    data
-      .issues
-      .nodes
-      .into_iter()
-      .map(|node| LinearIssue {
-        id: node.id,
-        identifier: node.identifier,
-        title: node.title,
-        description: node.description,
-        state: LinearState {
-          name: node.state.name,
-          state_type: node.state.state_type,
-        },
-        labels: node.labels.nodes.into_iter().map(|l| l.name).collect(),
-        branch_name: node.branch_name,
-        parent_id: node.parent_id.map(|p| p.id),
-        sub_issue_ids: node.sub_issues.nodes.into_iter().map(|s| s.id).collect(),
-        url: node.url,
-      })
-      .collect(),
-  )
+  Ok(data.issues.nodes.into_iter().map(map_issue_node).collect())
+}
+
+fn map_issue_node(node: LinearIssueNode) -> LinearIssue {
+  LinearIssue {
+    id: node.id,
+    identifier: node.identifier,
+    title: node.title,
+    description: node.description,
+    state: LinearState {
+      name: node.state.name,
+      state_type: node.state.state_type,
+    },
+    labels: node.labels.nodes.into_iter().map(|l| l.name).collect(),
+    branch_name: node.branch_name,
+    parent_id: node.parent_id.map(|p| p.id),
+    sub_issue_ids: node.sub_issues.nodes.into_iter().map(|s| s.id).collect(),
+    url: node.url,
+    assignee: node.assignee.map(|a| LinearUser {
+      id: a.id,
+      name: a.name,
+    }),
+    priority: node.priority,
+    priority_label: node.priority_label,
+    project: node.project.map(|p| LinearProjectRef {
+      id: p.id,
+      name: p.name,
+    }),
+  }
 }
 
 pub async fn linear_get_issue_impl(api_key: &str, issue_id: &str) -> Result<LinearIssue, String> {
@@ -327,6 +411,10 @@ pub async fn linear_get_issue_impl(api_key: &str, issue_id: &str) -> Result<Line
         parent {{ id }}
         children(first: 50) {{ nodes {{ id }} }}
         url
+        assignee {{ id name }}
+        priority
+        priorityLabel
+        project {{ id name }}
       }}
     }}"#,
     issue_id
@@ -369,21 +457,363 @@ pub async fn linear_get_issue_impl(api_key: &str, issue_id: &str) -> Result<Line
     .issue
     .ok_or_else(|| format!("Issue {issue_id} not found"))?;
 
-  Ok(LinearIssue {
-    id: node.id,
-    identifier: node.identifier,
-    title: node.title,
-    description: node.description,
-    state: LinearState {
-      name: node.state.name,
-      state_type: node.state.state_type,
-    },
-    labels: node.labels.nodes.into_iter().map(|l| l.name).collect(),
-    branch_name: node.branch_name,
-    parent_id: node.parent_id.map(|p| p.id),
-    sub_issue_ids: node.sub_issues.nodes.into_iter().map(|s| s.id).collect(),
-    url: node.url,
+  Ok(map_issue_node(node))
+}
+
+pub async fn linear_get_viewer_impl(api_key: &str) -> Result<LinearUser, String> {
+  let query = r#"query { viewer { id name } }"#;
+
+  #[derive(Deserialize)]
+  struct ViewerData {
+    viewer: LinearUserNode,
+  }
+
+  let client = reqwest::Client::new();
+  let response = client
+    .post("https://api.linear.app/graphql")
+    .header("Authorization", api_key)
+    .json(&serde_json::json!({ "query": query }))
+    .send()
+    .await
+    .map_err(|e| format!("Failed to fetch Linear viewer: {e}"))?;
+
+  let result: LinearGraphqlResponse<ViewerData> = response
+    .json()
+    .await
+    .map_err(|e| format!("Failed to parse Linear response: {e}"))?;
+
+  if let Some(errors) = result.errors {
+    return Err(format!(
+      "Linear API error: {}",
+      errors
+        .iter()
+        .map(|e| e.message.as_str())
+        .collect::<Vec<_>>()
+        .join("; ")
+    ));
+  }
+
+  let data = result
+    .data
+    .ok_or_else(|| "No data in Linear response".to_string())?;
+
+  Ok(LinearUser {
+    id: data.viewer.id,
+    name: data.viewer.name,
   })
+}
+
+pub async fn linear_list_projects_impl(api_key: &str) -> Result<Vec<LinearProject>, String> {
+  let query = r#"query {
+    projects(first: 100) {
+      nodes {
+        id
+        name
+        description
+        state
+        targetDate
+        progress
+        url
+        lead { id name }
+      }
+    }
+  }"#;
+
+  #[derive(Deserialize)]
+  struct ProjectsData {
+    projects: ProjectsConnection,
+  }
+
+  #[derive(Deserialize)]
+  struct ProjectsConnection {
+    nodes: Vec<ProjectNode>,
+  }
+
+  #[derive(Deserialize)]
+  struct ProjectNode {
+    id: String,
+    name: String,
+    description: Option<String>,
+    state: String,
+    #[serde(rename = "targetDate")]
+    target_date: Option<String>,
+    #[serde(default)]
+    progress: f64,
+    url: String,
+    #[serde(default)]
+    lead: Option<LinearUserNode>,
+  }
+
+  let client = reqwest::Client::new();
+  let response = client
+    .post("https://api.linear.app/graphql")
+    .header("Authorization", api_key)
+    .json(&serde_json::json!({ "query": query }))
+    .send()
+    .await
+    .map_err(|e| format!("Failed to fetch Linear projects: {e}"))?;
+
+  let result: LinearGraphqlResponse<ProjectsData> = response
+    .json()
+    .await
+    .map_err(|e| format!("Failed to parse Linear response: {e}"))?;
+
+  if let Some(errors) = result.errors {
+    return Err(format!(
+      "Linear API error: {}",
+      errors
+        .iter()
+        .map(|e| e.message.as_str())
+        .collect::<Vec<_>>()
+        .join("; ")
+    ));
+  }
+
+  let data = result
+    .data
+    .ok_or_else(|| "No data in Linear response".to_string())?;
+
+  Ok(
+    data
+      .projects
+      .nodes
+      .into_iter()
+      .map(|node| LinearProject {
+        id: node.id,
+        name: node.name,
+        description: node.description,
+        state: node.state,
+        target_date: node.target_date,
+        progress: node.progress,
+        url: node.url,
+        lead: node.lead.map(|l| LinearUser {
+          id: l.id,
+          name: l.name,
+        }),
+      })
+      .collect(),
+  )
+}
+
+pub async fn linear_list_project_documents_impl(
+  api_key: &str,
+  project_id: &str,
+) -> Result<Vec<LinearDocument>, String> {
+  let query = format!(
+    r#"query {{
+      project(id: "{}") {{
+        documents(first: 100) {{
+          nodes {{
+            id
+            title
+            content
+            url
+            updatedAt
+          }}
+        }}
+      }}
+    }}"#,
+    project_id
+  );
+
+  #[derive(Deserialize)]
+  struct ProjectDocumentsData {
+    project: Option<ProjectDocumentsNode>,
+  }
+
+  #[derive(Deserialize)]
+  struct ProjectDocumentsNode {
+    documents: DocumentsConnection,
+  }
+
+  #[derive(Deserialize)]
+  struct DocumentsConnection {
+    nodes: Vec<DocumentNode>,
+  }
+
+  #[derive(Deserialize)]
+  struct DocumentNode {
+    id: String,
+    title: String,
+    content: Option<String>,
+    url: String,
+    #[serde(rename = "updatedAt")]
+    updated_at: String,
+  }
+
+  let client = reqwest::Client::new();
+  let response = client
+    .post("https://api.linear.app/graphql")
+    .header("Authorization", api_key)
+    .json(&serde_json::json!({ "query": query }))
+    .send()
+    .await
+    .map_err(|e| format!("Failed to fetch Linear documents: {e}"))?;
+
+  let result: LinearGraphqlResponse<ProjectDocumentsData> = response
+    .json()
+    .await
+    .map_err(|e| format!("Failed to parse Linear response: {e}"))?;
+
+  if let Some(errors) = result.errors {
+    return Err(format!(
+      "Linear API error: {}",
+      errors
+        .iter()
+        .map(|e| e.message.as_str())
+        .collect::<Vec<_>>()
+        .join("; ")
+    ));
+  }
+
+  let data = result
+    .data
+    .ok_or_else(|| "No data in Linear response".to_string())?;
+  let project = data
+    .project
+    .ok_or_else(|| format!("Project {project_id} not found"))?;
+
+  Ok(
+    project
+      .documents
+      .nodes
+      .into_iter()
+      .map(|node| LinearDocument {
+        id: node.id,
+        title: node.title,
+        content: node.content,
+        url: node.url,
+        updated_at: node.updated_at,
+      })
+      .collect(),
+  )
+}
+
+#[derive(Deserialize)]
+struct CommentNode {
+  id: String,
+  body: String,
+  #[serde(default)]
+  user: Option<LinearUserNode>,
+  #[serde(rename = "createdAt")]
+  created_at: String,
+  #[serde(default, rename = "quotedText")]
+  quoted_text: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct CommentsConnection {
+  nodes: Vec<CommentNode>,
+}
+
+fn map_comment_node(node: CommentNode) -> LinearComment {
+  LinearComment {
+    id: node.id,
+    body: node.body,
+    user: node.user.map(|u| LinearUser {
+      id: u.id,
+      name: u.name,
+    }),
+    created_at: node.created_at,
+    quoted_text: node.quoted_text,
+  }
+}
+
+async fn fetch_comments_for_entity(
+  api_key: &str,
+  entity_field: &str,
+  entity_id: &str,
+) -> Result<Vec<LinearComment>, String> {
+  let query = format!(
+    r#"query {{
+      {entity_field}(id: "{entity_id}") {{
+        comments(first: 100) {{
+          nodes {{
+            id
+            body
+            user {{ id name }}
+            createdAt
+            quotedText
+          }}
+        }}
+      }}
+    }}"#
+  );
+
+  #[derive(Deserialize)]
+  struct EntityCommentsData {
+    #[serde(flatten)]
+    entity: HashMap<String, Option<EntityCommentsNode>>,
+  }
+
+  #[derive(Deserialize)]
+  struct EntityCommentsNode {
+    comments: CommentsConnection,
+  }
+
+  let client = reqwest::Client::new();
+  let response = client
+    .post("https://api.linear.app/graphql")
+    .header("Authorization", api_key)
+    .json(&serde_json::json!({ "query": query }))
+    .send()
+    .await
+    .map_err(|e| format!("Failed to fetch Linear comments: {e}"))?;
+
+  let result: LinearGraphqlResponse<EntityCommentsData> = response
+    .json()
+    .await
+    .map_err(|e| format!("Failed to parse Linear response: {e}"))?;
+
+  if let Some(errors) = result.errors {
+    return Err(format!(
+      "Linear API error: {}",
+      errors
+        .iter()
+        .map(|e| e.message.as_str())
+        .collect::<Vec<_>>()
+        .join("; ")
+    ));
+  }
+
+  let mut data = result
+    .data
+    .ok_or_else(|| "No data in Linear response".to_string())?;
+  let node = data
+    .entity
+    .remove(entity_field)
+    .flatten()
+    .ok_or_else(|| format!("{entity_field} {entity_id} not found"))?;
+
+  Ok(
+    node
+      .comments
+      .nodes
+      .into_iter()
+      .map(map_comment_node)
+      .collect(),
+  )
+}
+
+pub async fn linear_list_issue_comments_impl(
+  api_key: &str,
+  issue_id: &str,
+) -> Result<Vec<LinearComment>, String> {
+  fetch_comments_for_entity(api_key, "issue", issue_id).await
+}
+
+pub async fn linear_list_project_comments_impl(
+  api_key: &str,
+  project_id: &str,
+) -> Result<Vec<LinearComment>, String> {
+  fetch_comments_for_entity(api_key, "project", project_id).await
+}
+
+pub async fn linear_list_document_comments_impl(
+  api_key: &str,
+  document_id: &str,
+) -> Result<Vec<LinearComment>, String> {
+  fetch_comments_for_entity(api_key, "document", document_id).await
 }
 
 const KICKOFF_POLL_INTERVAL: Duration = Duration::from_secs(60);

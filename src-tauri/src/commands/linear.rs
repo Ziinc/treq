@@ -1,4 +1,7 @@
-use crate::linear::{LinearClientSource, LinearIssue, LinearTeam};
+use crate::linear::{
+  LinearClientSource, LinearComment, LinearDocument, LinearIssue, LinearProject, LinearTeam,
+  LinearUser,
+};
 use crate::AppState;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -192,6 +195,150 @@ pub async fn open_or_create_workspace_from_linear_issue(
     workspace_id: workspace.id,
     created,
   })
+}
+
+#[tauri::command]
+pub async fn linear_get_viewer(
+  state: State<'_, AppState>,
+  repo_path: String,
+) -> Result<LinearUser, String> {
+  crate::commands::feature_preview::require(
+    &state,
+    crate::core::feature_preview::PreviewFeature::LinearIntegration,
+  )?;
+  let client_source = {
+    let db = state.db.lock().unwrap();
+    crate::linear::resolve_linear_client(&repo_path, &db)?
+  };
+
+  match client_source {
+    LinearClientSource::ApiKey(api_key) => crate::linear::linear_get_viewer_impl(&api_key).await,
+    LinearClientSource::ProxyToken => {
+      Err("Linear integration not yet configured (OAuth proxy not ready)".to_string())
+    }
+  }
+}
+
+#[tauri::command]
+pub async fn linear_list_projects(
+  state: State<'_, AppState>,
+  repo_path: String,
+) -> Result<Vec<LinearProject>, String> {
+  crate::commands::feature_preview::require(
+    &state,
+    crate::core::feature_preview::PreviewFeature::LinearIntegration,
+  )?;
+  let client_source = {
+    let db = state.db.lock().unwrap();
+    crate::linear::resolve_linear_client(&repo_path, &db)?
+  };
+
+  match client_source {
+    LinearClientSource::ApiKey(api_key) => crate::linear::linear_list_projects_impl(&api_key).await,
+    LinearClientSource::ProxyToken => {
+      Err("Linear integration not yet configured (OAuth proxy not ready)".to_string())
+    }
+  }
+}
+
+#[tauri::command]
+pub async fn linear_list_project_documents(
+  state: State<'_, AppState>,
+  repo_path: String,
+  project_id: String,
+) -> Result<Vec<LinearDocument>, String> {
+  crate::commands::feature_preview::require(
+    &state,
+    crate::core::feature_preview::PreviewFeature::LinearIntegration,
+  )?;
+  let client_source = {
+    let db = state.db.lock().unwrap();
+    crate::linear::resolve_linear_client(&repo_path, &db)?
+  };
+
+  match client_source {
+    LinearClientSource::ApiKey(api_key) => {
+      crate::linear::linear_list_project_documents_impl(&api_key, &project_id).await
+    }
+    LinearClientSource::ProxyToken => {
+      Err("Linear integration not yet configured (OAuth proxy not ready)".to_string())
+    }
+  }
+}
+
+#[tauri::command]
+pub async fn linear_list_issue_comments(
+  state: State<'_, AppState>,
+  repo_path: String,
+  issue_id: String,
+) -> Result<Vec<LinearComment>, String> {
+  crate::commands::feature_preview::require(
+    &state,
+    crate::core::feature_preview::PreviewFeature::LinearIntegration,
+  )?;
+  let client_source = {
+    let db = state.db.lock().unwrap();
+    crate::linear::resolve_linear_client(&repo_path, &db)?
+  };
+
+  match client_source {
+    LinearClientSource::ApiKey(api_key) => {
+      crate::linear::linear_list_issue_comments_impl(&api_key, &issue_id).await
+    }
+    LinearClientSource::ProxyToken => {
+      Err("Linear integration not yet configured (OAuth proxy not ready)".to_string())
+    }
+  }
+}
+
+#[tauri::command]
+pub async fn linear_list_project_comments(
+  state: State<'_, AppState>,
+  repo_path: String,
+  project_id: String,
+) -> Result<Vec<LinearComment>, String> {
+  crate::commands::feature_preview::require(
+    &state,
+    crate::core::feature_preview::PreviewFeature::LinearIntegration,
+  )?;
+  let client_source = {
+    let db = state.db.lock().unwrap();
+    crate::linear::resolve_linear_client(&repo_path, &db)?
+  };
+
+  match client_source {
+    LinearClientSource::ApiKey(api_key) => {
+      crate::linear::linear_list_project_comments_impl(&api_key, &project_id).await
+    }
+    LinearClientSource::ProxyToken => {
+      Err("Linear integration not yet configured (OAuth proxy not ready)".to_string())
+    }
+  }
+}
+
+#[tauri::command]
+pub async fn linear_list_document_comments(
+  state: State<'_, AppState>,
+  repo_path: String,
+  document_id: String,
+) -> Result<Vec<LinearComment>, String> {
+  crate::commands::feature_preview::require(
+    &state,
+    crate::core::feature_preview::PreviewFeature::LinearIntegration,
+  )?;
+  let client_source = {
+    let db = state.db.lock().unwrap();
+    crate::linear::resolve_linear_client(&repo_path, &db)?
+  };
+
+  match client_source {
+    LinearClientSource::ApiKey(api_key) => {
+      crate::linear::linear_list_document_comments_impl(&api_key, &document_id).await
+    }
+    LinearClientSource::ProxyToken => {
+      Err("Linear integration not yet configured (OAuth proxy not ready)".to_string())
+    }
+  }
 }
 
 #[tauri::command]
