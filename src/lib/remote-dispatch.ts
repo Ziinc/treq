@@ -220,6 +220,13 @@ export type TreqCommandRequest =
       idempotency_key: string;
     }
   | {
+      kind: "CreateCommit";
+      repo: string;
+      workspace?: string | null;
+      message: string;
+      idempotency_key?: string | null;
+    }
+  | {
       kind: "AgentStart";
       repo: string;
       workspace: string;
